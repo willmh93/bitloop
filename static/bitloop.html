@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ImGui WASM App</title>
+  <base href="/main/">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      height: 100%;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- This canvas must match the ID used in Module.canvas -->
+  <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+
+  <script type="text/javascript">
+    var Module = {
+      preRun: [function() {
+        var canvas = document.getElementById("canvas");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }],
+      canvas: (function() {
+        var canvas = document.getElementById('canvas');
+        canvas.addEventListener('webglcontextlost', function(e) {
+          alert('WebGL context lost. Please reload the page.');
+          e.preventDefault();
+        }, false);
+        return canvas;
+      })()
+    };
+    window.addEventListener('resize', () => {
+      if (Module.setCanvasSize) {
+        Module.setCanvasSize(window.innerWidth, window.innerHeight);
+      }
+    });
+
+    // Set initial size
+    if (Module.setCanvasSize) {
+      Module.setCanvasSize(window.innerWidth, window.innerHeight);
+    }
+  </script>
+
+  <script async type="text/javascript" src="bitloop.js"></script>
+
+</body>
+</html>
