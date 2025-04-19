@@ -4,6 +4,7 @@ project(imgui LANGUAGES CXX)
 # Instead of hardcoding, let top-level CMake tell us where ImGui is
 set(IMGUI_SRC_DIR "" CACHE PATH "Path to fetched ImGui source")
 
+message(STATUS "SDL2_DIR == ${SDL2_DIR} @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 2")
 
 add_library(imgui STATIC
     ${IMGUI_SRC_DIR}/imgui.cpp

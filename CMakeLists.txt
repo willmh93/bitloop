@@ -6,7 +6,7 @@ include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_MESSAGE_LOG_LEVEL WARNING)
+cmake_policy(SET CMP0169 OLD)
 
 # sets default startup project in Visual Studio
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT bitloop)
@@ -31,12 +31,13 @@ file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg/*.h"
 )
 
+source_group("Simulations" FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
+
 add_executable(bitloop
     ${CORE_SOURCES}
     ${SIMULATION_HEADERS}
     ${SIMULATION_SOURCES}
     ${GRAPHICS_SOURCES}
-   # src/main.cpp
 )
 
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -44,6 +45,7 @@ target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad/KHR)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/simulations)
 
 
 if (MSVC)
@@ -58,11 +60,11 @@ target_compile_definitions(bitloop PRIVATE
     NANOVG_IMPLEMENTATION
 )
 
-if (EMSCRIPTEN)
-    target_compile_definitions(bitloop PRIVATE NANOVG_GLES3_IMPLEMENTATION)
-else()
-    target_compile_definitions(bitloop PRIVATE NANOVG_GL3_IMPLEMENTATION)
-endif()
+#if (EMSCRIPTEN)
+#    target_compile_definitions(bitloop PRIVATE NANOVG_GLES3_IMPLEMENTATION)
+#else()
+#    target_compile_definitions(bitloop PRIVATE NANOVG_GL3_IMPLEMENTATION)
+#endif()
 
 # Include directories
 include_directories(${CMAKE_SYSROOT}/include ${CMAKE_SYSROOT}/include/SDL2)
@@ -154,9 +156,11 @@ set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/build_fetched)
 #message(STATUS "CONFIG: ${CONFIG}")
 
 function(add_sdl2)
+    message(STATUS "@@@@@@@@@@@@@@@@@@@@ add_sdl2() @@@@@@@@@@@@@@@@@@@@")
     set(SDL2_BASE_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/SDL2)
 
     if (NOT EMSCRIPTEN)
+        message(STATUS "@@@@@@@@@@@@@@@@@@@@ if (NOT EMSCRIPTEN) @@@@@@@@@@@@@@@@@@@@")
         set(SDL2_SOURCE_DIR  "${SDL2_BASE_DIR}/src")
         set(SDL2_BUILD_DIR   "${SDL2_BASE_DIR}/build")
         set(SDL2_INSTALL_DIR "${SDL2_BASE_DIR}/install")
@@ -210,7 +214,12 @@ function(add_sdl2)
         endif()
 
         # Point CMake to installed config
-        set(SDL2_DIR "${SDL2_INSTALL_DIR}/cmake")
+        message(STATUS "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ SDL2_DIR = ${SDL2_INSTALL_DIR}/cmake")
+        set(SDL2_DIR "${SDL2_INSTALL_DIR}/cmake" CACHE PATH "Path to SDL2Config.cmake")
+
+        #set(SDL2_DIR "${SDL2_INSTALL_DIR}/cmake")
+        message(STATUS "SDL2_DIR == ${SDL2_DIR} @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0")
+
         find_package(SDL2 REQUIRED)
 
         target_link_libraries(bitloop PRIVATE SDL2::SDL2 SDL2::SDL2main)
@@ -224,50 +233,64 @@ function(add_sdl2)
 endfunction()
 
 function(add_imgui)
-    if(EMSCRIPTEN)
-        # For WASM builds, just add ImGui directly as a static lib in-tree
-        message(STATUS "Adding ImGui directly for Emscripten build")
-
-        set(IMGUI_DIR "${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/imgui/src")
-
-        add_library(imgui STATIC
-            ${IMGUI_DIR}/imgui.cpp
-            ${IMGUI_DIR}/imgui_draw.cpp
-            ${IMGUI_DIR}/imgui_tables.cpp
-            ${IMGUI_DIR}/imgui_widgets.cpp
-            ${IMGUI_DIR}/imgui_demo.cpp
-            ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
-            ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
-        )
-
-        target_include_directories(imgui PUBLIC
-            ${IMGUI_DIR}
-            ${IMGUI_DIR}/backends
-        )
-
-        target_link_libraries(bitloop PRIVATE imgui)
-
-        return()
-    endif()
-
     set(IMGUI_BASE_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/imgui)
     set(IMGUI_SOURCE_DIR "${IMGUI_BASE_DIR}/src")
     set(IMGUI_BUILD_DIR  "${IMGUI_BASE_DIR}/build")
+    set(IMGUI_SUBBUILD_DIR  "${IMGUI_BASE_DIR}/subbuild")
     set(IMGUI_INSTALL_DIR "${IMGUI_BASE_DIR}/install")
     set(IMGUI_CONFIG_PATH "${IMGUI_INSTALL_DIR}/lib/cmake/imgui/imguiConfig.cmake")
-    set(SDL2_DIR "${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/SDL2/install/cmake")
 
-    # Only download the source (can be your wrapper or original repo)
-    FetchContent_Declare(imgui
+    # Declare it using custom SOURCE_DIR
+    #if(NOT DEFINED IMGUI_ALREADY_DECLARED)
+    #  set(IMGUI_ALREADY_DECLARED TRUE CACHE INTERNAL "")
+      FetchContent_Declare(imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
         GIT_TAG docking
         SOURCE_DIR ${IMGUI_SOURCE_DIR}
-    )
-    FetchContent_MakeAvailable(imgui)
+        BINARY_DIR ${IMGUI_BUILD_DIR}
+        SUBBUILD_DIR ${IMGUI_SUBBUILD_DIR}
+      )
+    #endif()
 
-    # Install the wrapped version (only once)
+    if(EMSCRIPTEN)
+        message(STATUS "Adding ImGui statically for Emscripten")
+
+        FetchContent_GetProperties(imgui)
+        if(NOT imgui_POPULATED)
+            FetchContent_Populate(imgui)
+        endif()
+
+        add_library(imgui STATIC
+            ${IMGUI_SOURCE_DIR}/imgui.cpp
+            ${IMGUI_SOURCE_DIR}/imgui_draw.cpp
+            ${IMGUI_SOURCE_DIR}/imgui_tables.cpp
+            ${IMGUI_SOURCE_DIR}/imgui_widgets.cpp
+            ${IMGUI_SOURCE_DIR}/imgui_demo.cpp
+            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+        )
+
+        target_include_directories(imgui PUBLIC
+            ${IMGUI_SOURCE_DIR}
+            ${IMGUI_SOURCE_DIR}/backends
+        )
+
+        target_link_libraries(bitloop PRIVATE imgui)
+        return()
+    endif()
+
+
+    # Populate safely
+    FetchContent_GetProperties(imgui)
+    #if(NOT imgui_POPULATED)
+      message(STATUS "Cloning ImGui to ${IMGUI_SOURCE_DIR}")
+      FetchContent_Populate(imgui)
+    #endif()
+
+    #set(IMGUI_SOURCE_DIR "${imgui_SOURCE_DIR}")
+
     if(NOT EXISTS "${IMGUI_CONFIG_PATH}")
-        message(STATUS "Building ImGui wrapper for first time...")
+        message(STATUS "Installing ImGui for native build...")
         execute_process(COMMAND ${CMAKE_COMMAND}
             -S "${CMAKE_SOURCE_DIR}/cmake/imgui"
             -B ${IMGUI_BUILD_DIR}
@@ -275,20 +298,20 @@ function(add_imgui)
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-            -DSDL2_DIR=${SDL2_DIR}  # So it can find SDL2::SDL2
+            -DSDL2_DIR=${SDL2_DIR}
             -DIMGUI_SRC_DIR=${IMGUI_SOURCE_DIR}
         )
+
         execute_process(COMMAND ${CMAKE_COMMAND}
             --build ${IMGUI_BUILD_DIR} --target install
         )
     endif()
 
-    # Make ImGui available
     set(imgui_DIR "${IMGUI_INSTALL_DIR}/lib/cmake/imgui")
     find_package(imgui CONFIG REQUIRED)
-
     target_link_libraries(bitloop PRIVATE imgui::imgui)
 endfunction()
+
 
 #function(add_imgui)
 #    set(IMGUI_BASE_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/imgui)
@@ -406,6 +429,7 @@ endfunction()
 #    target_link_libraries(bitloop PRIVATE imgui)
 #endfunction()
 
+message(STATUS "Downloading/Installing external dependencies...")
 add_sdl2()
 add_imgui()
 

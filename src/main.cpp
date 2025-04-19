@@ -32,21 +32,30 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 /// NanoVG
-#include "nanovg.h"
-#include "nanovg_gl.h"
+//#include "nanovg.h"
+//#include "nanovg_gl.h"
+
+#include "project.h"
+#include "nanovg_canvas.h"
+
+#include "TestSim.h"
 
 SDL_Window* window;
 SDL_GLContext gl_context;
 int client_width = 0, client_height = 0;
 bool done = false;
 
-NVGcontext* vg;
-GLuint fbo = 0, tex = 0, rbo = 0;
-int fb_width = 800, fb_height = 600;
+Canvas canvas;
 
-std::thread sim_thread;
+Project* active_project = new TestSim();
+std::thread project_thread;
+
+std::condition_variable data_ready_cv;
+std::mutex data_mutex;
+bool ready_to_render = false;
 
 int calculate_heavy_prime(int target_index) {
     int count = 0;
@@ -68,9 +77,17 @@ int calculate_heavy_prime(int target_index) {
 
 void sim_worker()
 {
-    while (!done) 
+    while (!done)
     {
-        int prime = calculate_heavy_prime(40000 + (rand() % 40000));
+        //int prime = calculate_heavy_prime(40000 + (rand() % 40000));
+
+        {
+            std::unique_lock<std::mutex> lock(data_mutex);
+            active_project->process();
+        }
+
+        ready_to_render = true;
+        data_ready_cv.notify_one();
 
         SDL_Delay(16);
     }
@@ -78,10 +95,10 @@ void sim_worker()
 
 void init_simulation_thread()
 {
-    sim_thread = std::thread(sim_worker);
+    project_thread = std::thread(sim_worker);
 }
 
-void create_fbo()
+/*void create_fbo()
 {
     if (fbo) glDeleteFramebuffers(1, &fbo);
     if (tex) glDeleteTextures(1, &tex);
@@ -120,7 +137,7 @@ void render_nanovg()
     nvgEndFrame(vg);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
+}*/
 
 void set_imgui_styles()
 {
@@ -137,6 +154,22 @@ void set_imgui_styles()
     style.TabRounding = 6.0f;
 
     ImVec4* colors = ImGui::GetStyle().Colors;
+    colors[ImGuiCol_WindowBg] = ImVec4(0.19f, 0.20f, 0.21f, 0.85f);
+    colors[ImGuiCol_TitleBg] = ImVec4(0.25f, 0.28f, 0.38f, 0.83f);
+    colors[ImGuiCol_TitleBgActive] = ImVec4(0.32f, 0.43f, 0.63f, 0.87f);
+    colors[ImGuiCol_Header] = ImVec4(0.44f, 0.62f, 0.85f, 0.45f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.45f, 0.69f, 0.90f, 0.80f);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.53f, 0.68f, 0.87f, 0.80f);
+    colors[ImGuiCol_TabHovered] = ImVec4(0.45f, 0.67f, 0.90f, 0.80f);
+    colors[ImGuiCol_Tab] = ImVec4(0.34f, 0.47f, 0.68f, 0.79f);
+    colors[ImGuiCol_TabSelected] = ImVec4(0.40f, 0.59f, 0.73f, 0.84f);
+    colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.53f, 0.72f, 0.87f, 0.80f);
+    colors[ImGuiCol_TabDimmed] = ImVec4(0.28f, 0.41f, 0.57f, 0.82f);
+    colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.35f, 0.46f, 0.65f, 0.84f);
+
+
+
+    /*ImVec4* colors = ImGui::GetStyle().Colors;
     colors[ImGuiCol_Text] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
     colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
     colors[ImGuiCol_WindowBg] = ImVec4(0.04f, 0.05f, 0.05f, 0.85f);
@@ -196,7 +229,7 @@ void set_imgui_styles()
     colors[ImGuiCol_NavCursor] = ImVec4(0.45f, 0.45f, 0.90f, 0.80f);
     colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
     colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-    colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
+    colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);*/
 }
 
 
@@ -291,37 +324,34 @@ void process_ui()
     }
     ImGui::End();
 
-    static ImVec2 lastViewportSize = ImVec2(0, 0);
+    //static ImVec2 lastViewportSize = ImVec2(0, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3,3));
     if (ImGui::Begin("Viewport"))
     {
         //ImVec2 size = ImGui::GetWindowSize();
         ImVec2 size = ImGui::GetContentRegionAvail();
+        int width = static_cast<int>(size.x);
+        int height = static_cast<int>(size.y);
 
-        if (size.x != lastViewportSize.x || 
-            size.y != lastViewportSize.y)
+        if (canvas.resize(width, height))
         {
-            lastViewportSize = size;
-
-            fb_width = static_cast<int>(size.x);
-            fb_height = static_cast<int>(size.y);
-
-            if (fb_width <= 0) fb_width = 1;
-            if (fb_height <= 0) fb_height = 1;
-
-            // Recreate FBO
-            create_fbo();
-            render_nanovg();
+            canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+            active_project->draw(&canvas);
+            canvas.end();
         }
 
-        ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(fb_width, fb_height));
-
-
-        
+        //ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(fb_width, fb_height));
+        ImGui::Image(canvas.texture(), ImVec2(canvas.width(), canvas.height()),
+            ImVec2(0, 1),   // UV top-left (flipped)
+            ImVec2(1, 0)    // UV bottom-right);
+        );
     }
-    ImGui::End();
 
-    ///static bool demo_open = true;
-    ///ImGui::ShowDemoWindow(&demo_open);
+    ImGui::End();
+    ImGui::PopStyleVar();
+
+    static bool demo_open = true;
+    ImGui::ShowDemoWindow(&demo_open);
 }
 
 void main_loop() 
@@ -333,7 +363,22 @@ void main_loop()
             done = true;
     }
 
-    render_nanovg();
+    //render_nanovg();
+
+    if (active_project)
+    {
+        std::unique_lock<std::mutex> lock(data_mutex);
+        data_ready_cv.wait(lock, [] { return ready_to_render; });
+
+        canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+        active_project->draw(&canvas);
+        canvas.end();
+
+        ready_to_render = false;
+
+        lock.unlock();
+    }
+
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -419,14 +464,14 @@ int main(int argc, char* argv[])
     // Initialize imgui & nanovg
     #ifdef __EMSCRIPTEN__
     ImGui_ImplOpenGL3_Init("#version 300 es");
-    vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    //vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     #else
     ImGui_ImplOpenGL3_Init();
-    vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    //vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     #endif
 
-
-    create_fbo();
+    canvas.create();
+    //create_fbo();
 
     set_imgui_styles();
 
@@ -445,7 +490,7 @@ int main(int argc, char* argv[])
         SDL_Delay(16);
     }
 
-    sim_thread.join();
+    project_thread.join();
 
     // Desktop cleanup
     ImGui_ImplOpenGL3_Shutdown();
