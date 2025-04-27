@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.16)
 project(bitloop LANGUAGES C CXX)
 include(FetchContent)
 
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 cmake_policy(SET CMP0169 OLD)
@@ -19,6 +18,8 @@ list(SORT SIMULATION_SOURCES)
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.h"
 )
@@ -33,6 +34,7 @@ file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
 
 source_group("Simulations" FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
 
+
 add_executable(bitloop
     ${CORE_SOURCES}
     ${SIMULATION_HEADERS}
@@ -41,6 +43,7 @@ add_executable(bitloop
 )
 
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ui)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad)
@@ -60,12 +63,6 @@ target_compile_definitions(bitloop PRIVATE
     NANOVG_IMPLEMENTATION
 )
 
-#if (EMSCRIPTEN)
-#    target_compile_definitions(bitloop PRIVATE NANOVG_GLES3_IMPLEMENTATION)
-#else()
-#    target_compile_definitions(bitloop PRIVATE NANOVG_GL3_IMPLEMENTATION)
-#endif()
-
 # Include directories
 include_directories(${CMAKE_SYSROOT}/include ${CMAKE_SYSROOT}/include/SDL2)
 target_include_directories(bitloop PRIVATE
@@ -77,16 +74,28 @@ if(WIN32)
     target_link_libraries(bitloop PRIVATE opengl32)
 endif()
 
+# ~~~~~ Data Management ~~~~~
+
+if (NOT EMSCRIPTEN)
+    file(COPY ${CMAKE_SOURCE_DIR}/data DESTINATION ${CMAKE_BINARY_DIR})
+endif()
+
 # ~~~~~ Webassembly ~~~~~
 
 if (EMSCRIPTEN)
+    message(STATUS "Linking emscripten SDL2")
+
     # Link SDL2
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
 
-    add_compile_options("-sUSE_SDL=2")
-    #target_compile_options(bitloop PRIVATE
-    #    "-sUSE_SDL=2"
-    #)
+    # Compilation flags
+    target_compile_options(bitloop PRIVATE
+        "-sUSE_PTHREADS=1"
+        "-pthread"          # Recommended: expands to -matomics and -mbulk-memory
+        "-matomics"
+        "-mbulk-memory"
+    )
+
     target_link_options(bitloop PRIVATE
         "-sUSE_SDL=2"
         "-sUSE_WEBGL2=1"
@@ -94,45 +103,9 @@ if (EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sUSE_PTHREADS=1"
         "-sPTHREAD_POOL_SIZE=16"
-        "--shell-file=${CMAKE_SOURCE_DIR}/static/bitloop_local.html"
+        "--shell-file=${CMAKE_SOURCE_DIR}/static/bitloop.html"
+        "--preload-file=${CMAKE_SOURCE_DIR}/data@/data"
     )
-
-
-    #target_compile_options(bitloop PRIVATE "-Wno-unused-command-line-argument")
-    #set(EMSDK_COMMON_FLAGS
-    #    "-sUSE_SDL=2"           # SDL2 with mixer, image, etc. if present
-    #    "-sUSE_WEBGL2=1"        # request WebGL2 context
-    #    "-sFULL_ES3=1"          # expose all GLES3 functions
-    #    "-sALLOW_MEMORY_GROWTH" # grow heap when needed
-    #    "-sPTHREAD_POOL_SIZE=4" # example threading flag
-    #)
-
-    # ---------------- Compile flags ----------------
-    #   - forward the Emscripten switches
-    #   - disable the “ignored during compilation” warning they trigger
-    #target_compile_options(bitloop PRIVATE
-    #    ${EMSDK_COMMON_FLAGS}
-    #    "-Wno-unused-command-line-argument"
-    #)
-
-    # ---------------- Link flags -------------------
-    #   - same ‑s… flags again
-    #   - anything that is *link‑only* (e.g. shell file)
-    #target_link_options(bitloop PRIVATE
-    #    ${EMSDK_COMMON_FLAGS}
-    #    "--shell-file=${CMAKE_SOURCE_DIR}/static/bitloop_local.html"
-    #)
-
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --shell-file ${CMAKE_SOURCE_DIR}/static/bitloop_local.html -s USE_SDL=2 -s USE_WEBGL2=1 -s FULL_ES3=1 -s ALLOW_MEMORY_GROWTH=1 -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=16")
-
-
-    #add_link_options(
-    #    "-sUSE_WEBGL2=1"
-    #    "-sFULL_ES3=1"
-    #    "-sALLOW_MEMORY_GROWTH=1"
-    #    "-sPTHREAD_POOL_SIZE=4"
-    #    "--shell-file=${CMAKE_SOURCE_DIR}/web/shell.html"
-    #)
 
     include_directories($ENV{EMSDK}/upstream/emscripten/cache/sysroot/include)
 endif()
@@ -149,294 +122,96 @@ else()
 endif()
 set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/build_fetched)
 
-#message(STATUS "CMAKE_GENERATOR: ${CMAKE_GENERATOR}")
-#message(STATUS "FETCHCONTENT_BASE_DIR: ${FETCHCONTENT_BASE_DIR}")
-#message(STATUS "BUILD_SYSTEM_NAME: ${BUILD_SYSTEM_NAME}")
-#message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-#message(STATUS "CONFIG: ${CONFIG}")
 
-function(add_sdl2)
-    message(STATUS "@@@@@@@@@@@@@@@@@@@@ add_sdl2() @@@@@@@@@@@@@@@@@@@@")
-    set(SDL2_BASE_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/SDL2)
 
-    if (NOT EMSCRIPTEN)
-        message(STATUS "@@@@@@@@@@@@@@@@@@@@ if (NOT EMSCRIPTEN) @@@@@@@@@@@@@@@@@@@@")
-        set(SDL2_SOURCE_DIR  "${SDL2_BASE_DIR}/src")
-        set(SDL2_BUILD_DIR   "${SDL2_BASE_DIR}/build")
-        set(SDL2_INSTALL_DIR "${SDL2_BASE_DIR}/install")
-        set(SDL2_SUBBUILD_DIR "${SDL2_BASE_DIR}/subbuild")
+function(add_deps)
+    set(DEPS_BASE_DIR "${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/deps")
 
-        # Declare SDL2 but do not add to build tree
-        FetchContent_Declare(SDL2
-            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-            GIT_TAG release-2.30.0
-            SOURCE_DIR ${SDL2_SOURCE_DIR}
-            BINARY_DIR ${SDL2_BUILD_DIR}
-            SUBBUILD_DIR ${SDL2_SUBBUILD_DIR}
+    set(deps_SOURCE_DIR "${CMAKE_SOURCE_DIR}/cmake/deps")
+    #set(deps_BUILD_DIR  "${DEPS_BASE_DIR}/build")
+
+    # Create a generator-safe suffix (e.g. "Ninja" → "build-Ninja")
+    string(REPLACE " " "_" SAFE_GENERATOR "${CMAKE_GENERATOR}")
+    set(deps_BUILD_DIR  "${DEPS_BASE_DIR}/build-${SAFE_GENERATOR}")
+    set(deps_INSTALL_DIR "${DEPS_BASE_DIR}/install")
+
+
+    # Make it visible **now** and for the caller
+    list(PREPEND CMAKE_PREFIX_PATH "${deps_INSTALL_DIR}")
+    list(PREPEND CMAKE_PREFIX_PATH "${deps_INSTALL_DIR}" PARENT_SCOPE)
+
+    # Check if install already exists
+    #set(bitloopDeps_CONFIG_PATH "${deps_INSTALL_DIR}/lib/cmake/bitloopDeps/bitloopDepsConfig.cmake")
+
+
+    file(MAKE_DIRECTORY "${deps_BUILD_DIR}")
+
+    message(STATUS "Executing Deps...")
+    if (EMSCRIPTEN)
+        set(TOOLCHAIN_FLAGS
+            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+            -DCMAKE_SYSTEM_NAME=Emscripten
         )
+    else()
+        set(TOOLCHAIN_FLAGS "")
+    endif()
 
-        # Download SDL2 if not already
-        FetchContent_GetProperties(SDL2)
-        if(NOT SDL2_POPULATED)
-            message(STATUS "Fetching SDL2...")
-            FetchContent_Populate(SDL2)
-        endif()
-
-        # Guard to prevent rebuild
-        if(NOT SDL2_ALREADY_BUILT AND NOT EXISTS "${SDL2_INSTALL_DIR}/cmake/SDL2/SDL2Config.cmake")
-            message(STATUS "Building SDL2 for the first time...")
-
-            set(SDL2_ALREADY_BUILT TRUE CACHE BOOL "Prevent rebuilding SDL2")
-
-            execute_process(COMMAND ${CMAKE_COMMAND}
-                -S ${SDL2_SOURCE_DIR}
-                -B ${SDL2_BUILD_DIR}
-                -DCMAKE_INSTALL_PREFIX=${SDL2_INSTALL_DIR}
+    execute_process(
+        COMMAND ${CMAKE_COMMAND}
+                -G "${CMAKE_GENERATOR}"
+                -S "${deps_SOURCE_DIR}"
+                -B "${deps_BUILD_DIR}"
+                -DCMAKE_INSTALL_PREFIX=${deps_INSTALL_DIR}
+                ${TOOLCHAIN_FLAGS}
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-                -DSDL_TEST=OFF
-                -DSDL_SHARED=ON
-                RESULT_VARIABLE configure_result
-            )
-            if(NOT configure_result EQUAL 0)
-                message(FATAL_ERROR "Failed to configure SDL2")
-            endif()
+        RESULT_VARIABLE _cfg_result
+    )
 
-            execute_process(COMMAND ${CMAKE_COMMAND}
-                --build ${SDL2_BUILD_DIR}
-                --target install
-                RESULT_VARIABLE build_result
-            )
-            if(NOT build_result EQUAL 0)
-                message(FATAL_ERROR "Failed to build and install SDL2")
-            endif()
-        endif()
+    if(NOT _cfg_result EQUAL 0)
+        message(FATAL_ERROR "Failed to configure bitloopDeps project")
+    endif()
 
-        # Point CMake to installed config
-        message(STATUS "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ SDL2_DIR = ${SDL2_INSTALL_DIR}/cmake")
-        set(SDL2_DIR "${SDL2_INSTALL_DIR}/cmake" CACHE PATH "Path to SDL2Config.cmake")
+    # Build + install
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} --build "${deps_BUILD_DIR}" --target install
+        RESULT_VARIABLE _bld_result
+    )
+    if(NOT _bld_result EQUAL 0)
+        message(FATAL_ERROR "Failed to build and install bitloopDeps")
+    endif()
 
-        #set(SDL2_DIR "${SDL2_INSTALL_DIR}/cmake")
-        message(STATUS "SDL2_DIR == ${SDL2_DIR} @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0")
 
-        find_package(SDL2 REQUIRED)
+    message(STATUS "Findings Deps package...")
+    unset(bitloopDeps_DIR CACHE)
 
-        target_link_libraries(bitloop PRIVATE SDL2::SDL2 SDL2::SDL2main)
+    find_package(bitloopDeps CONFIG REQUIRED
+                 PATHS "${deps_INSTALL_DIR}"
+                 NO_DEFAULT_PATH           # only look at the path we give
+                 NO_CMAKE_FIND_ROOT_PATH   # do NOT prepend the sys‑root
+    )
 
-        add_custom_command(TARGET bitloop POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_FILE:SDL2::SDL2>
-                    $<TARGET_FILE_DIR:bitloop>
+    if (EMSCRIPTEN)
+        target_link_libraries(bitloop PRIVATE
+            deps::freetype
+            deps::imgui_freetype
+            deps::glm
+        )
+    else()
+        target_link_libraries(bitloop PRIVATE
+            deps::SDL2-static
+            deps::SDL2main
+            deps::freetype
+            deps::imgui_freetype
+            deps::glm
         )
     endif()
 endfunction()
 
-function(add_imgui)
-    set(IMGUI_BASE_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/imgui)
-    set(IMGUI_SOURCE_DIR "${IMGUI_BASE_DIR}/src")
-    set(IMGUI_BUILD_DIR  "${IMGUI_BASE_DIR}/build")
-    set(IMGUI_SUBBUILD_DIR  "${IMGUI_BASE_DIR}/subbuild")
-    set(IMGUI_INSTALL_DIR "${IMGUI_BASE_DIR}/install")
-    set(IMGUI_CONFIG_PATH "${IMGUI_INSTALL_DIR}/lib/cmake/imgui/imguiConfig.cmake")
-
-    # Declare it using custom SOURCE_DIR
-    #if(NOT DEFINED IMGUI_ALREADY_DECLARED)
-    #  set(IMGUI_ALREADY_DECLARED TRUE CACHE INTERNAL "")
-      FetchContent_Declare(imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG docking
-        SOURCE_DIR ${IMGUI_SOURCE_DIR}
-        BINARY_DIR ${IMGUI_BUILD_DIR}
-        SUBBUILD_DIR ${IMGUI_SUBBUILD_DIR}
-      )
-    #endif()
-
-    if(EMSCRIPTEN)
-        message(STATUS "Adding ImGui statically for Emscripten")
-
-        FetchContent_GetProperties(imgui)
-        if(NOT imgui_POPULATED)
-            FetchContent_Populate(imgui)
-        endif()
-
-        add_library(imgui STATIC
-            ${IMGUI_SOURCE_DIR}/imgui.cpp
-            ${IMGUI_SOURCE_DIR}/imgui_draw.cpp
-            ${IMGUI_SOURCE_DIR}/imgui_tables.cpp
-            ${IMGUI_SOURCE_DIR}/imgui_widgets.cpp
-            ${IMGUI_SOURCE_DIR}/imgui_demo.cpp
-            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-        )
-
-        target_include_directories(imgui PUBLIC
-            ${IMGUI_SOURCE_DIR}
-            ${IMGUI_SOURCE_DIR}/backends
-        )
-
-        target_link_libraries(bitloop PRIVATE imgui)
-        return()
-    endif()
-
-
-    # Populate safely
-    FetchContent_GetProperties(imgui)
-    #if(NOT imgui_POPULATED)
-      message(STATUS "Cloning ImGui to ${IMGUI_SOURCE_DIR}")
-      FetchContent_Populate(imgui)
-    #endif()
-
-    #set(IMGUI_SOURCE_DIR "${imgui_SOURCE_DIR}")
-
-    if(NOT EXISTS "${IMGUI_CONFIG_PATH}")
-        message(STATUS "Installing ImGui for native build...")
-        execute_process(COMMAND ${CMAKE_COMMAND}
-            -S "${CMAKE_SOURCE_DIR}/cmake/imgui"
-            -B ${IMGUI_BUILD_DIR}
-            -DCMAKE_INSTALL_PREFIX=${IMGUI_INSTALL_DIR}
-            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-            -DSDL2_DIR=${SDL2_DIR}
-            -DIMGUI_SRC_DIR=${IMGUI_SOURCE_DIR}
-        )
-
-        execute_process(COMMAND ${CMAKE_COMMAND}
-            --build ${IMGUI_BUILD_DIR} --target install
-        )
-    endif()
-
-    set(imgui_DIR "${IMGUI_INSTALL_DIR}/lib/cmake/imgui")
-    find_package(imgui CONFIG REQUIRED)
-    target_link_libraries(bitloop PRIVATE imgui::imgui)
-endfunction()
-
-
-#function(add_imgui)
-#    set(IMGUI_BASE_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/imgui)
-#    set(IMGUI_SOURCE_DIR "${IMGUI_BASE_DIR}/src")
-#    set(IMGUI_POPULATE_DIR "${IMGUI_BASE_DIR}/subbuild")
-#
-#    # Only fetch once
-#    if(NOT IMGUI_ALREADY_POPULATED)
-#        set(IMGUI_ALREADY_POPULATED TRUE CACHE BOOL "Prevent re-fetching ImGui")
-#        FetchContent_Declare(
-#            imgui
-#            GIT_REPOSITORY https://github.com/ocornut/imgui.git
-#            GIT_TAG docking #v1.91.9
-#            SOURCE_DIR ${IMGUI_SOURCE_DIR}
-#            BINARY_DIR "${IMGUI_BASE_DIR}/build"
-#            SUBBUILD_DIR ${IMGUI_POPULATE_DIR}
-#        )
-#        FetchContent_Populate(imgui)
-#    endif()
-#
-#    # Avoid redefining the target every time
-#    if(NOT TARGET imgui)
-#        add_library(imgui STATIC
-#            ${IMGUI_SOURCE_DIR}/imconfig.h
-#            ${IMGUI_SOURCE_DIR}/imgui.h
-#            ${IMGUI_SOURCE_DIR}/imgui.cpp
-#            ${IMGUI_SOURCE_DIR}/imgui_internal.h
-#            ${IMGUI_SOURCE_DIR}/imstb_rectpack.h
-#            ${IMGUI_SOURCE_DIR}/imstb_textedit.h
-#            ${IMGUI_SOURCE_DIR}/imstb_truetype.h
-#            ${IMGUI_SOURCE_DIR}/imgui_draw.cpp
-#            ${IMGUI_SOURCE_DIR}/imgui_tables.cpp
-#            ${IMGUI_SOURCE_DIR}/imgui_widgets.cpp
-#            ${IMGUI_SOURCE_DIR}/imgui_demo.cpp
-#            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.h
-#            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-#            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_sdl2.h
-#            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-#        )
-#
-#        # Optional for IDE support
-#        target_sources(imgui PRIVATE
-#            ${IMGUI_SOURCE_DIR}/imgui.h
-#            ${IMGUI_SOURCE_DIR}/imconfig.h
-#            ${IMGUI_SOURCE_DIR}/imgui_internal.h
-#            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.h
-#            ${IMGUI_SOURCE_DIR}/backends/imgui_impl_sdl2.h
-#        )
-#
-#        # Includes and linkage
-#        target_include_directories(imgui PUBLIC
-#            ${IMGUI_SOURCE_DIR}
-#            ${IMGUI_SOURCE_DIR}/backends
-#        )
-#
-#        if(NOT EMSCRIPTEN)
-#            target_link_libraries(imgui PUBLIC SDL2::SDL2 SDL2::SDL2main)
-#        endif()
-#    endif()
-#
-#    target_link_libraries(bitloop PRIVATE imgui)
-#endfunction()
-
-#function(add_imgui)
-#    set(IMGUI_BUILD_DIR ${FETCHCONTENT_BASE_DIR}/${BUILD_SYSTEM_NAME}/imgui)
-#    FetchContent_Declare(
-#        imgui
-#        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-#        GIT_TAG docking #v1.91.9
-#    )
-#    FetchContent_Populate(
-#        imgui
-#        SOURCE_DIR ${IMGUI_BUILD_DIR}/src
-#        BINARY_DIR ${IMGUI_BUILD_DIR}/build
-#        SUBBUILD_DIR ${IMGUI_BUILD_DIR}/subbuild
-#    )
-#
-#    add_library(imgui STATIC
-#        ${imgui_SOURCE_DIR}/imconfig.h
-#        ${imgui_SOURCE_DIR}/imgui.h
-#        ${imgui_SOURCE_DIR}/imgui.cpp
-#        ${imgui_SOURCE_DIR}/imgui_internal.h
-#        ${imgui_SOURCE_DIR}/imstb_rectpack.h
-#        ${imgui_SOURCE_DIR}/imstb_textedit.h
-#        ${imgui_SOURCE_DIR}/imstb_truetype.h
-#        ${imgui_SOURCE_DIR}/imgui_draw.cpp
-#        ${imgui_SOURCE_DIR}/imgui_tables.cpp
-#        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-#        ${imgui_SOURCE_DIR}/imgui_demo.cpp
-#        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.h
-#        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-#        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.h
-#        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-#    )
-#
-#    # Add headers only for clarity or IDE support (optional)
-#    target_sources(imgui PRIVATE
-#        ${imgui_SOURCE_DIR}/imgui.h
-#        ${imgui_SOURCE_DIR}/imconfig.h
-#        ${imgui_SOURCE_DIR}/imgui_internal.h
-#        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.h
-#        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.h
-#    )
-#
-#    # Make ImGui headers available to targets that link to it
-#    target_include_directories(imgui PUBLIC
-#        ${imgui_SOURCE_DIR}
-#        ${imgui_SOURCE_DIR}/backends
-#    )
-#
-#    if (NOT EMSCRIPTEN)
-#        target_link_libraries(imgui PUBLIC SDL2::SDL2 SDL2::SDL2main)
-#    endif()
-#
-#    target_link_libraries(bitloop PRIVATE imgui)
-#endfunction()
-
-message(STATUS "Downloading/Installing external dependencies...")
-add_sdl2()
-add_imgui()
+message(STATUS "Fetching and building external dependencies...")
+add_deps()
 
 include(GNUInstallDirs)
 install(TARGETS bitloop
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-
-

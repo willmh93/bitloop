@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/bitloopDepsTargets.cmake")
+
+# Re‑create user‑friendly aliases
+if(NOT TARGET deps::glm AND TARGET deps::deps_glm)
+    add_library(deps::glm ALIAS deps::deps_glm)
+endif()

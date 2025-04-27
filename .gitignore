@@ -34,3 +34,8 @@
 build
 build_fetched
 deployed
+/scripts/internal
+/scripts/web_deploy_production.bat
+/Caddyfile
+/caddy.exe
+/CMakeLists.txt.user

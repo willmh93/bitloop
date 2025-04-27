@@ -1,0 +1,2 @@
+
+//void getDrawableSize(int*, int*);

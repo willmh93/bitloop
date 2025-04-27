@@ -1,60 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>ImGui WASM App</title>
-  <base href="/main/">
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #000;
-      height: 100%;
-    }
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      image-rendering: pixelated;
-    }
-  </style>
+    <meta charset="utf-8" />
+    <title>ImGui WASM App</title>
+    
+    
+
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    
+    <style>
+        html, body {
+            margin: 0;
+            background-color: black
+        }
+
+        canvas, #content {
+            position: absolute;
+            display: block;
+            top: 0px;
+            left: 0px;
+            width: 100dvw;
+            height: 100dvh;
+            image-rendering: pixelated;
+            image-rendering: optimizeSpeed;
+            -ms-interpolation-mode: nearest-neighbor;
+        }
+
+        /*.emscripten {
+                position: absolute;
+                top: 0px;
+                left: 0px;
+                margin: 0px;
+                border: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                display: block;
+                image-rendering: optimizeSpeed;
+                image-rendering: crisp-edges;
+                -ms-interpolation-mode: nearest-neighbor;
+            }*/
+    </style>
 </head>
 <body>
 
-  <!-- This canvas must match the ID used in Module.canvas -->
-  <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    
+    <div id="content">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    </div>
 
-  <script type="text/javascript">
-    var Module = {
-      preRun: [function() {
-        var canvas = document.getElementById("canvas");
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }],
-      canvas: (function() {
-        var canvas = document.getElementById('canvas');
-        canvas.addEventListener('webglcontextlost', function(e) {
-          alert('WebGL context lost. Please reload the page.');
-          e.preventDefault();
-        }, false);
-        return canvas;
-      })()
-    };
-    window.addEventListener('resize', () => {
-      if (Module.setCanvasSize) {
-        Module.setCanvasSize(window.innerWidth, window.innerHeight);
-      }
-    });
+    <script type="text/javascript">
 
-    // Set initial size
-    if (Module.setCanvasSize) {
-      Module.setCanvasSize(window.innerWidth, window.innerHeight);
-    }
-  </script>
+        /*var Module = {
+            preRun: [],
+            postRun: [],
+            print: (function () {
+                return function (text) {
+                    text = Array.prototype.slice.call(arguments).join(' ');
+                    console.log(text);
+                };
+            })(),
+            printErr: function (text) {
+                text = Array.prototype.slice.call(arguments).join(' ');
+                console.error(text);
+            },
+            canvas: (function () {
+                var canvas = document.getElementById('canvas');
+                canvas.addEventListener("webglcontextlost", function (e) {
+                    alert('WebGL context lost, please reload the page');
+                    e.preventDefault();
+                }, false);
 
-  <script async type="text/javascript" src="bitloop.js"></script>
+                // Explicitly create a WebGL 2 context with stencil buffer enabled.
+                if (typeof WebGL2RenderingContext !== 'undefined') {
+                    var gl = canvas.getContext('webgl2', { stencil: true });
+                    if (!gl) {
+                        console.error('WebGL 2 not available, falling back to WebGL');
+                        gl = canvas.getContext('webgl', { stencil: true });
+                    }
+                    if (!gl) {
+                        alert('WebGL not available with stencil buffer');
+                    }
+                    return canvas;
+                } else {
+                    alert('WebGL 2 not supported by this browser');
+                }
+            })(),
+            setStatus: function (text) {
+                console.log("status: " + text);
+            },
+            monitorRunDependencies: function (left) {
+                // no run dependencies to log
+            }
+        };
+        window.onerror = function () {
+            console.log("onerror: " + event);
+        };*/
+
+        const canvas = document.getElementById('canvas');
+        var Module = { canvas };
+
+        function resizeCanvas() {
+            const container = document.getElementById('content');
+            const canvas = document.getElementById('canvas');
+
+            //canvas.style.width = container.clientWidth + "px";
+            //canvas.style.height = container.clientHeight + "px";
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('DOMContentLoaded', resizeCanvas);
+
+    </script>
+
+    {{{ SCRIPT }}}
+
 
 </body>
 </html>

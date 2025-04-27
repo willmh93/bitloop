@@ -6,6 +6,9 @@
 
 #include "nanovg_canvas.h"
 
+
+std::shared_ptr<NanoFont> SimplePainter::default_font;
+
 void Canvas::create()
 {
     #ifdef __EMSCRIPTEN__
@@ -13,6 +16,8 @@ void Canvas::create()
     #else
     vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     #endif
+
+    SimplePainter::default_font = NanoFont::create("/data/fonts/Roboto-Regular.ttf");
 }
 
 bool Canvas::resize(int w, int h)
