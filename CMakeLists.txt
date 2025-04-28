@@ -24,7 +24,7 @@ file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.h"
 )
 
-file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
+file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/glad/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/glad/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/glad/KHR/*.h"
@@ -32,19 +32,29 @@ file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg/*.h"
 )
 
+file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.h"
+)
+
+source_group("Project"     FILES ${CORE_SOURCES})
+source_group("Graphics"    FILES ${GRAPHICS_SOURCES})
+source_group("External"    FILES ${EXTERNAL_SOURCES})
 source_group("Simulations" FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
 
 
 add_executable(bitloop
     ${CORE_SOURCES}
+    ${GRAPHICS_SOURCES}
     ${SIMULATION_HEADERS}
     ${SIMULATION_SOURCES}
-    ${GRAPHICS_SOURCES}
+    ${EXTERNAL_SOURCES}
 )
 
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ui)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/graphics)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad/KHR)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nanovg_canvas.h"
+#include "nano_canvas.h"
 #include "project.h"
 
 class ProjectManager

@@ -39,3 +39,4 @@ deployed
 /Caddyfile
 /caddy.exe
 /CMakeLists.txt.user
+/scripts/_cmd.bat

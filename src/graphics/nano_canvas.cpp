@@ -4,7 +4,7 @@
 #define NANOVG_GL3_IMPLEMENTATION
 #endif
 
-#include "nanovg_canvas.h"
+#include "nano_canvas.h"
 
 
 std::shared_ptr<NanoFont> SimplePainter::default_font;

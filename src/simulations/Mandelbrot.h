@@ -1,8 +1,9 @@
 #ifndef MANDELBROT_H
 #define MANDELBROT_H
 #include "project.h"
-SIM_BEG(Mandelbrot)
+#include "nano_bitmap.h"
 
+SIM_BEG(Mandelbrot)
 
 struct Mandelbrot_Scene : public Scene
 {
@@ -15,6 +16,14 @@ struct Mandelbrot_Scene : public Scene
     Mandelbrot_Scene(Config& info) //:
         //speed(info.speed)
     {}
+
+    CanvasImage bmp;
+
+    double camera_x = 0;
+    double camera_y = 0;
+    double camera_rotation = 0;
+    double zoom_x = 1;
+    double zoom_y = 1;
 
     // Scene management
     void sceneAttributes() override;

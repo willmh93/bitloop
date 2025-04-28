@@ -42,7 +42,7 @@
 #include "project.h"
 #include "project_manager.h"
 
-#include "nanovg_canvas.h"
+#include "nano_canvas.h"
 
 #include "TestSim.h"
 //#include "imgui_debug_ui.h"

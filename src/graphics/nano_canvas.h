@@ -14,6 +14,8 @@
 #include "nanovg.h"
 #include "nanovg_gl.h"
 
+#include "nano_bitmap.h"
+
 #include "camera.h"
 
 class Viewport;
@@ -95,11 +97,6 @@ public:
     NanoFont(const char* virtual_path)
     {
         path = Platform::get()->path(virtual_path);
-        //#ifdef __EMSCRIPTEN__
-        //path = virtual_path;
-        //#else
-        //path = virtual_path + 1; // Skip first '/'
-        //#endif
     }
 };
 
@@ -336,6 +333,13 @@ public:
         nvgRect(vg, x, y, w, h);
         nvgStroke(vg);
     }
+
+    void drawImage(Image &bmp, double x, double y, double w=0, double h=0)
+    {
+        if (w <= 0) w = bmp.bmp_width;
+        if (h <= 0) h = bmp.bmp_height;
+        bmp.draw(vg, x, y, w, h);
+    }
 };
 
 //using PathWinding  = SimplePainter::PathWinding;
@@ -548,12 +552,57 @@ public:
         SimplePainter::fill();
     }
 
-    // expose unchanged methods/enums
-    //using SimplePainter::PathWinding;
-    //using SimplePainter::LineCap;
-    //using SimplePainter::LineJoin;
-    //using SimplePainter::TextAlign;
-    //using SimplePainter::TextBaseline;
+    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0)
+    {
+        if (w <= 0) w = bmp.bmp_width;
+        if (h <= 0) h = bmp.bmp_height;
+        SimplePainter::drawImage(bmp, x, y, w, h);
+    }
+
+    void drawImage(CanvasImage& bmp)
+    {
+        camera.saveCameraTransform();
+        if (bmp.coordinate_type == CoordinateType::STAGE)
+        {
+            camera.stageTransform();
+        }
+        else
+        {
+            camera.worldTransform();
+        }
+
+        if (camera.transform_coordinates)
+        {
+            save();
+
+            translate(bmp.x, bmp.y);
+            rotate(bmp.rotation);
+            translate(bmp.localAlignOffsetX(), bmp.localAlignOffsetY());
+            scale(bmp.w / bmp.bmp_width, bmp.h / bmp.bmp_height);
+
+            SimplePainter::drawImage(bmp, 0, 0);
+
+            restore();
+        }
+        else
+        {
+            glm::mat3 cur_transform = currentTransform();
+            resetTransform();
+            transform(default_viewport_transform);
+
+            translate(bmp.x, bmp.y);
+            rotate(bmp.rotation);
+            translate(bmp.localAlignOffsetX(), bmp.localAlignOffsetY());
+            scale(bmp.w / bmp.bmp_width, bmp.h / bmp.bmp_height);
+
+            SimplePainter::drawImage(bmp, 0, 0);
+
+            resetTransform();
+            transform(cur_transform);
+        }
+
+        camera.restoreCameraTransform();
+    }
 
     using SimplePainter::setRenderTarget;
     using SimplePainter::getRenderTarget;

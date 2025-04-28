@@ -7,6 +7,7 @@ include(FetchContent)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(FETCHCONTENT_TRY_ENABLE_BY_DEFAULT OFF)
+set(CMAKE_INSTALL_MESSAGE NEVER)
 
 
 # ─────────────────────────  SDL2  ─────────────────────────

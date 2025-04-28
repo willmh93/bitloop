@@ -10,7 +10,7 @@
 
 #include "types.h"
 #include "camera.h"
-#include "nanovg_canvas.h"
+#include "nano_canvas.h"
 #include "imgui_custom.h"
 
 
