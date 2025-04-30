@@ -40,3 +40,5 @@ deployed
 /caddy.exe
 /CMakeLists.txt.user
 /scripts/_cmd.bat
+/local_debug.Caddyfile
+/local_release.Caddyfile

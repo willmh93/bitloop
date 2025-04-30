@@ -3,8 +3,6 @@
 <head>
     <meta charset="utf-8" />
     <title>ImGui WASM App</title>
-    
-    
 
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     
@@ -25,77 +23,15 @@
             image-rendering: optimizeSpeed;
             -ms-interpolation-mode: nearest-neighbor;
         }
-
-        /*.emscripten {
-                position: absolute;
-                top: 0px;
-                left: 0px;
-                margin: 0px;
-                border: 0;
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-                display: block;
-                image-rendering: optimizeSpeed;
-                image-rendering: crisp-edges;
-                -ms-interpolation-mode: nearest-neighbor;
-            }*/
     </style>
 </head>
 <body>
 
-    
     <div id="content">
         <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
     </div>
 
     <script type="text/javascript">
-
-        /*var Module = {
-            preRun: [],
-            postRun: [],
-            print: (function () {
-                return function (text) {
-                    text = Array.prototype.slice.call(arguments).join(' ');
-                    console.log(text);
-                };
-            })(),
-            printErr: function (text) {
-                text = Array.prototype.slice.call(arguments).join(' ');
-                console.error(text);
-            },
-            canvas: (function () {
-                var canvas = document.getElementById('canvas');
-                canvas.addEventListener("webglcontextlost", function (e) {
-                    alert('WebGL context lost, please reload the page');
-                    e.preventDefault();
-                }, false);
-
-                // Explicitly create a WebGL 2 context with stencil buffer enabled.
-                if (typeof WebGL2RenderingContext !== 'undefined') {
-                    var gl = canvas.getContext('webgl2', { stencil: true });
-                    if (!gl) {
-                        console.error('WebGL 2 not available, falling back to WebGL');
-                        gl = canvas.getContext('webgl', { stencil: true });
-                    }
-                    if (!gl) {
-                        alert('WebGL not available with stencil buffer');
-                    }
-                    return canvas;
-                } else {
-                    alert('WebGL 2 not supported by this browser');
-                }
-            })(),
-            setStatus: function (text) {
-                console.log("status: " + text);
-            },
-            monitorRunDependencies: function (left) {
-                // no run dependencies to log
-            }
-        };
-        window.onerror = function () {
-            console.log("onerror: " + event);
-        };*/
 
         const canvas = document.getElementById('canvas');
         var Module = { canvas };

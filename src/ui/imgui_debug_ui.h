@@ -1,3 +1,5 @@
+#pragma once
+
 #include <imgui.h>
 #include <SDL2/SDL.h>
 #include "platform.h"

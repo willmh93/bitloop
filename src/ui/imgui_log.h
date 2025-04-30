@@ -4,55 +4,49 @@
 #include <string>
 #include <imgui.h>
 
-struct LogWindow
+struct ImDebugLog
 {
     std::deque<std::string> logLines;
     bool autoScroll = true;
 
-    void Clear()
+    void clear()
     {
         logLines.clear();
     }
 
-    void Log(const char* fmt, ...)
+    void vlog(const char* fmt, va_list ap)
     {
         char buffer[1024];
-
-        va_list args;
-        va_start(args, fmt);
-        vsnprintf(buffer, sizeof(buffer), fmt, args);
-        va_end(args);
-
-        buffer[sizeof(buffer) - 1] = 0; // ensure null-termination
-
-        if (logLines.size() >= 128)
+        vsnprintf(buffer, sizeof(buffer), fmt, ap); 
+        if (logLines.size() >= 256)
             logLines.pop_front();
         logLines.emplace_back(buffer);
     }
 
-    void Log(const std::string& message) {
-        if (logLines.size() >= 128)
+    void log(const std::string& message) 
+    {
+        if (logLines.size() >= 256)
             logLines.pop_front();
         logLines.emplace_back(message);
     }
 
-    void Draw(const char* title = "Log Window")
+    void log(const char* fmt, ...)
     {
-        ImGuiIO& io = ImGui::GetIO();
-        ImVec2 initSize(io.DisplaySize.x * 0.25f, io.DisplaySize.y * 1.0f);
-        ImGui::SetNextWindowPos(ImVec2(10, 30), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(initSize, ImGuiCond_FirstUseEver);
+        va_list ap;
+        va_start(ap, fmt);
+        vlog(fmt, ap);        // forward
+        va_end(ap);
+    }
 
-        if (ImGui::Begin(title)) {
-            ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
-            for (const auto& line : logLines)
-                ImGui::TextUnformatted(line.c_str());
+    void draw()
+    {
+        ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+        for (const auto& line : logLines)
+            ImGui::TextUnformatted(line.c_str());
 
-            if (autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-                ImGui::SetScrollHereY(1.0f); // scroll to bottom
+        if (autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f); // scroll to bottom
 
-            ImGui::EndChild();
-        }
-        ImGui::End();
+        ImGui::EndChild();
     }
 };

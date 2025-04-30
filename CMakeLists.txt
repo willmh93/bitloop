@@ -23,36 +23,43 @@ list(SORT SIMULATION_SOURCES)
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.hpp"
 )
 
-file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/glad/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/glad/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/glad/KHR/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg/*.h"
+file(GLOB UI_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.h"
 )
 
 file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.hpp"
 )
 
-source_group("Project"     FILES ${CORE_SOURCES})
-source_group("Graphics"    FILES ${GRAPHICS_SOURCES})
-source_group("External"    FILES ${EXTERNAL_SOURCES})
-source_group("Simulations" FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
+file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/KHR/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/nanovg/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/nanovg/*.h"
+)
+
+source_group("3rd party"            FILES ${EXTERNAL_SOURCES})
+source_group("CMakeLists (main)"    FILES ${CMAKE_SOURCE_DIR}/CMakeLists.txt)
+source_group("Core"                 FILES ${CORE_SOURCES})
+source_group("Graphics"             FILES ${GRAPHICS_SOURCES})
+source_group("ImGui (custom)"       FILES ${UI_SOURCES})
+source_group("Simulations"          FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
 
 
 add_executable(bitloop
     ${CORE_SOURCES}
+    ${UI_SOURCES}
     ${GRAPHICS_SOURCES}
     ${SIMULATION_HEADERS}
     ${SIMULATION_SOURCES}
@@ -63,10 +70,11 @@ target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ui)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/graphics)
-target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/nanovg)
-target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad)
-target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad/KHR)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/simulations)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/nanovg)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad)
+target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/KHR)
 
 
 if (MSVC)
@@ -223,6 +231,22 @@ function(add_deps)
             deps::glm
         )
     endif()
+
+    # Add custom target + filter
+    include("${deps_BUILD_DIR}/imgui_sources.cmake")
+
+    set(DEPS_CMAKE_FILES
+        "${CMAKE_SOURCE_DIR}/cmake/deps/CMakeLists.txt"
+        "${CMAKE_SOURCE_DIR}/cmake/deps/DepsConfig.cmake.in"
+    )
+
+    add_custom_target(bitloop_deps SOURCES
+        ${DEPS_CMAKE_FILES}
+        ${IMGUI_SOURCES}
+    )
+
+    source_group("CMakeLists (deps)" FILES ${DEPS_CMAKE_FILES})
+    source_group("ImGui" FILES ${IMGUI_SOURCES})
 endfunction()
 
 message(STATUS "Fetching and building external dependencies...")

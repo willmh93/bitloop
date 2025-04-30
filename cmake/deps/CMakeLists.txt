@@ -76,14 +76,24 @@ FetchContent_Declare(imgui
 FetchContent_MakeAvailable(imgui)
 FetchContent_GetProperties(imgui) # get imgui_SOURCE_DIR
 
-add_library(imgui_freetype STATIC
+set(IMGUI_SOURCES
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-    ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp)
+    ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp
+)
+
+add_library(imgui_freetype STATIC ${IMGUI_SOURCES})
+
+file(WRITE "${CMAKE_BINARY_DIR}/imgui_sources.cmake" "set(IMGUI_SOURCES\n")
+foreach(src IN LISTS IMGUI_SOURCES)
+    file(APPEND "${CMAKE_BINARY_DIR}/imgui_sources.cmake" "    \"${src}\"\n")
+endforeach()
+file(APPEND "${CMAKE_BINARY_DIR}/imgui_sources.cmake" ")\n")
+
 
 # link SDL2/freetype to ImGui
 if(NOT EMSCRIPTEN)
@@ -115,8 +125,6 @@ install(TARGETS imgui_freetype EXPORT depsTargets)
 install(DIRECTORY ${imgui_SOURCE_DIR}/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/imgui
         FILES_MATCHING PATTERN "*.h")
-
-
 
 # ─────────────────────────   GLM  ─────────────────────────
 FetchContent_Declare(glm
