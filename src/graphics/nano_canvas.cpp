@@ -62,7 +62,11 @@ void Canvas::begin(float r, float g, float b, float a)
     glClearColor(r, g, b, a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    nvgBeginFrame(vg, fbo_width, fbo_height, 1.0f);
+    nvgBeginFrame(vg, 
+        static_cast<float>(fbo_width), 
+        static_cast<float>(fbo_height),
+        1.0f
+    );
 }
 
 void Canvas::end()
@@ -70,3 +74,5 @@ void Canvas::end()
     nvgEndFrame(vg);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+

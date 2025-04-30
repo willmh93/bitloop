@@ -460,7 +460,7 @@ namespace ImSpline
 					path.push_back({ px, py });
 				}
 
-				t = fmod(t, 1.0);
+				t = fmod(t, 1.0f);
 			}
 
 			path_bounds = ImRect(x0, y0, x1, y1);
@@ -600,7 +600,7 @@ namespace ImSpline
 			const char* pos = std::strchr(base64_chars, c);
 			if (!pos)
 				throw std::runtime_error("Invalid character in Base64 string");
-			return pos - base64_chars;
+			return static_cast<unsigned int>(pos - base64_chars);
 		}
 
 		static std::vector<unsigned char> base64_decode(const std::string& encoded)
@@ -1066,8 +1066,8 @@ namespace ImSpline
 			gradient = (points[i + 1].y - points[i].y) / (points[i + 1].x - points[i].x);
 
 			// Use the point at index i as the reference to compute the intercept.
-			double x0 = points[i].x;
-			double y0 = points[i].y;
+			float x0 = points[i].x;
+			float y0 = points[i].y;
 			intercept = y0 - gradient * x0;
 
 			// Validate each point in the dataset.
@@ -1370,7 +1370,7 @@ namespace ImSpline
 		{
 			float abs_ideal_step = fabs(ideal_step);
 			float exponent = floor(log10(abs_ideal_step));
-			float factor = pow(10.0, exponent);
+			float factor = powf(10.0f, exponent);
 			float base = abs_ideal_step / factor;
 			float niceMultiplier;
 
@@ -1387,9 +1387,9 @@ namespace ImSpline
 		float step_y = roundStep(view_rect->GetHeight() / (bb.GetHeight()/100.0f));
 		float grid_x = floor(view_rect->Min.x / step_x) * step_x;
 		float grid_y = floor(view_rect->Min.y / step_y) * step_y;
-		int grid_count_x = 2 + floor(fabs(view_rect->GetWidth()) / fabs(step_x));
-		int grid_count_y = 2 + floor(fabs(view_rect->GetHeight()) / fabs(step_y));
-		float eps = 1e-5;
+		int grid_count_x = 2 + static_cast<int>(floor(fabs(view_rect->GetWidth()) / fabs(step_x)));
+		int grid_count_y = 2 + static_cast<int>(floor(fabs(view_rect->GetHeight()) / fabs(step_y)));
+		float eps = 1e-5f;
 		for (int i = 0; i < grid_count_x; i++)
 		{
 			bool is_origin = fabs(grid_x) < eps;
@@ -1444,7 +1444,7 @@ namespace ImSpline
 		// Draw Spline
 		ImVector<ImVec2> spline_path;
 		//spline_path.push_back(fromGraph({ 0.0f, spline->intersectY(0.0f) }));
-		for (size_t i = 0; i < path.size(); i++)
+		for (int i = 0; i < path.size(); i++)
 			spline_path.push_back(fromGraph(path[i]));
 		DrawList->AddPolyline(spline_path.Data, spline_path.Size, purple, false, 4);
 

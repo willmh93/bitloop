@@ -158,7 +158,11 @@ public:
 
     void setPixelSafe(int x, int y, uint32_t rgba)
     {
-        if ((unsigned)x >= bmp_width || (unsigned)y >= bmp_height) return;
+        if ((unsigned)x >= (unsigned)bmp_width ||
+            (unsigned)y >= (unsigned)bmp_height)
+        {
+            return;
+        }
         size_t i = (size_t(y) * bmp_width + x) * 4;
         pixels[i + 0] = rgba & 0xFF;
         pixels[i + 1] = (rgba >> 8) & 0xFF;
@@ -168,7 +172,11 @@ public:
 
     void setPixelSafe(int x, int y, int r, int g, int b, int a = 255)
     {
-        if ((unsigned)x >= bmp_width || (unsigned)y >= bmp_height) return;
+        if ((unsigned)x >= (unsigned)bmp_width ||
+            (unsigned)y >= (unsigned)bmp_height)
+        {
+            return;
+        }
         size_t i = (size_t(y) * bmp_width + x) * 4;
         pixels[i + 0] = r;
         pixels[i + 1] = g;
@@ -188,7 +196,12 @@ public:
 
     uint32_t getPixelSafe(int x, int y) const
     {
-        if ((unsigned)x >= bmp_width || (unsigned)y >= bmp_height) return 0;
+        if ((unsigned)x >= (unsigned)bmp_width ||
+            (unsigned)y >= (unsigned)bmp_height)
+        {
+            return 0;
+        }
+
         size_t i = (size_t(y) * bmp_width + x) * 4;
         return
             pixels[i] | 
@@ -222,7 +235,7 @@ protected:
 
         NVGpaint p = nvgImagePattern(vg, _x, _y, _w, _h, 0.0f, nano_img, 1.0f);
         nvgBeginPath(vg);
-        nvgRect(vg, x, y, _w, _h);
+        nvgRect(vg, _x, _y, _w, _h);
         nvgFillPaint(vg, p);
         nvgFill(vg);
     }
@@ -309,8 +322,8 @@ public:
         {
             for (int ti = 0; ti < thread_count; ++ti)
             {
-                auto& row_range = row_ranges[ti];
-                futures[ti] = ThreadPool::submit([&, row_range]()
+                auto row_range = row_ranges[ti];
+                futures[ti] = Thread::pool().submit_task([&, row_range]()
                 {
                     double ax = world_quad.a.x;
                     double ay = world_quad.a.y;

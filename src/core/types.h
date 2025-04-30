@@ -414,6 +414,20 @@ struct TriangleEqual
     }
 };*/
 
+struct Color
+{
+    union {
+        struct { uint8_t r, g, b, a; };
+        uint32_t u32 = 0;
+    };
+
+    Color(uint32_t rgba) : u32(rgba) {}
+    Color(uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _a=255) 
+        : r(_r), g(_g), b(_b), a(_a) {}
+
+    Color& operator =(const Color& rhs) { u32 = rhs.u32; return *this; }
+    bool operator ==(const Color& rhs) const { return u32 == rhs.u32; }
+};
 
 struct Size
 {
@@ -531,7 +545,7 @@ struct Rect
         y2 = r.y2;
     }
 
-    void set(double _x1, double _y1, double _x2, double _y2)
+    void set(int _x1, int _y1, int _x2, int _y2)
     {
         x1 = _x1;
         y1 = _y1;

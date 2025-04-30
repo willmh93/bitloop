@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imgui_debug_ui.h"
 #include "nano_canvas.h"
 #include "project.h"
 
@@ -7,6 +8,7 @@ class ProjectManager
 {
     Project* active_project = nullptr;
     Canvas* canvas = nullptr;
+    ImDebugLog* debug_log = nullptr;
 
 public:
 
@@ -27,8 +29,15 @@ public:
         canvas = shared_canvas;
     }
 
+    void setSharedDebugLog(ImDebugLog* shared_log)
+    {
+        debug_log = shared_log;
+    }
+
     void setActiveProject(int sim_uid)
     {
+        debug_log->clear();
+
         if (active_project)
         {
             active_project->_projectDestroy();
@@ -37,8 +46,13 @@ public:
         }
 
         active_project = Project::findProjectInfo(sim_uid)->creator();
-        active_project->configure(sim_uid, canvas);
+        active_project->configure(sim_uid, canvas, debug_log);
         active_project->_projectPrepare();
+    }
+
+    Project* getActiveProject()
+    {
+        return active_project;
     }
 
     void destroyProject()

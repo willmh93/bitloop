@@ -92,14 +92,13 @@ void Viewport::draw()
     setTextAlign(TextAlign::ALIGN_LEFT);
     setTextBaseline(TextBaseline::BASELINE_TOP);
 
-    // Take snapshot of default transformation
+    // Snapshot default transformation (unscaled unrotated top-left viewport)
     default_viewport_transform = currentTransform();
 
     // When resizing window, world coordinate is fixed given viewport anchor
     // If TOP_LEFT, the world coordinate at top left remains fixed
     // If CENTER, world coordinate at middle of viewport remains fixed
 
-    /// QNanoPainter transformations
     translate(
         floor(camera.originPixelOffset().x + camera.panPixelOffset().x),
         floor(camera.originPixelOffset().y + camera.panPixelOffset().y)
@@ -157,6 +156,263 @@ void Viewport::draw()
     restore();
 }
 
+double roundAxisTickStep(double ideal_step)
+{
+    if (ideal_step <= 0)
+        return 0; // or handle error
+
+    // Determine the order of magnitude of 'ideal_step'
+    double exponent = floor(log10(ideal_step));
+    double factor = pow(10.0, exponent);
+
+    // Normalize ideal_step to the range [1, 10)
+    double base = ideal_step / factor;
+    double niceMultiplier;
+
+    // 0.5, 1
+
+    // Choose the largest candidate from {1, 2, 2.5, 5, 10} that is <= base.
+    if (base >= 5)
+        niceMultiplier = 5;
+    else
+        niceMultiplier = 1;
+
+    /*if (base >= 10.0)
+        niceMultiplier = 10.0;
+    else if (base >= 5.0)
+        niceMultiplier = 5.0;
+    else if (base >= 2.5)
+        niceMultiplier = 2.5;
+    else if (base >= 2.0)
+        niceMultiplier = 2.0;
+    else
+        niceMultiplier = 1.0;*/
+
+    return niceMultiplier * factor;
+}
+
+double roundAxisValue(double v, double step)
+{
+    return floor(v / step) * step;
+}
+
+double ceilAxisValue(double v, double step)
+{
+    return ceil(v / step) * step;
+}
+
+double getAngle(Vec2 a, Vec2 b)
+{
+    return (b - a).angle();
+}
+
+
+void Viewport::drawWorldAxis(
+    double axis_opacity,
+    double grid_opacity,
+    double text_opacity)
+{
+    save();
+
+    // Fist, draw axis
+    Vec2 stage_origin = camera.toStage(0, 0);
+    FRect stage_rect = { 0, 0, width, height };
+
+    // World quad
+    Vec2 world_tl = camera.toWorld(0, 0);
+    Vec2 world_tr = camera.toWorld(width, 0);
+    Vec2 world_br = camera.toWorld(width, height);
+    Vec2 world_bl = camera.toWorld(0, height);
+
+    double world_w = world_br.x - world_tl.x;
+    double world_h = world_br.y - world_tl.y;
+
+    double stage_size = sqrt(width * width + height * height);
+    double world_size = sqrt(world_w * world_w + world_h * world_h);
+    double world_zoom = (world_size / stage_size);
+    double angle = camera.rotation;
+
+    // Get +positive Axis rays
+    Ray axis_rayX = { stage_origin, angle + 0 };
+    Ray axis_rayY = { stage_origin, angle + Math::HALF_PI };
+
+    // Get axis intersection with viewport rect
+    Vec2 negX_intersect, posX_intersect, negY_intersect, posY_intersect;
+    bool x_axis_visible = Math::rayRectIntersection(&negX_intersect, &posX_intersect, stage_rect, axis_rayX);
+    bool y_axis_visible = Math::rayRectIntersection(&negY_intersect, &posY_intersect, stage_rect, axis_rayY);
+
+    // Convert to world coordinates
+    Vec2 negX_intersect_world = camera.toWorld(negX_intersect);
+    Vec2 posX_intersect_world = camera.toWorld(posX_intersect);
+    Vec2 negY_intersect_world = camera.toWorld(negY_intersect);
+    Vec2 posY_intersect_world = camera.toWorld(posY_intersect);
+
+    // Draw with world coordinates, without line scaling
+    camera.setTransformFilters(true, false, false, false);
+
+    // Draw main axis lines
+    setStrokeStyle(255, 255, 255, static_cast<int>(255.0 * axis_opacity));
+    setLineWidth(1);
+
+    beginPath();
+    moveToSharp(negX_intersect_world.x, negX_intersect_world.y);
+    lineToSharp(posX_intersect_world.x, posX_intersect_world.y);
+    moveToSharp(negY_intersect_world.x, negY_intersect_world.y);
+    lineToSharp(posY_intersect_world.x, posY_intersect_world.y);
+    stroke();
+
+    double aspect_ratio = width / height;
+
+    // Draw axis ticks
+    camera.setTransformFilters(false);
+    double ideal_step_wx = ((width / aspect_ratio) / 7.0) / camera.zoom_x;
+    double ideal_step_wy = (height / 7.0) / camera.zoom_y;
+    double step_wx = roundAxisTickStep(ideal_step_wx);
+    double step_wy = roundAxisTickStep(ideal_step_wy);
+    /*double step, ideal_step;
+    if (step_wx < step_wy)
+    {
+        ideal_step = ideal_step_wx;
+        step = step_wy = step_wx;
+    }
+    else
+    {
+        ideal_step = ideal_step_wy;
+        step = step_wx = step_wy;
+    }*/
+
+    //double upperTickStep = 
+
+    //double prev_step = fmod(step, ideal_step *2.0);
+    //double next_step = roundAxisTickStep(prev_step * 5.0);
+    //double step_stretch = (ideal_step - prev_step) / (next_step - prev_step);
+    double big_step_wx = step_wx * 5.0;
+    double big_step_wy = step_wy * 5.0;
+
+
+
+
+    /*fillText("ideal_step: " + QString::number(ideal_step), 0, 0);
+    fillText("prev_step: " + QString::number(prev_step), 0, 20);
+    fillText("next_step: " + QString::number(next_step), 0, 40);
+    fillText("step_stretch: " + QString::number(step_stretch), 0, 60);*/
+
+    double big_angle = 0;// step_stretch* M_PI * 2;
+    double small_angle = (big_angle)+M_PI / 2;
+
+    double big_visibility = 1;// sin(big_angle) / 2 + 0.5;
+    double small_visibility = 0;// sin(small_angle) / 2 + 0.5;
+
+    /*fillText("big_angle: " + QString::number((int)(big_angle*180.0/M_PI)), 0, 100);
+    fillText("big_visibility: " + QString::number(big_visibility), 0, 120);
+
+    fillText("small_angle: " + QString::number((int)(small_angle * 180.0 / M_PI)), 0, 160);
+    fillText("small_visibility: " + QString::number(small_visibility), 0, 180);*/
+
+    Vec2 x_perp_off = camera.toStageOffset(0, 6 * world_zoom);
+    Vec2 x_perp_norm = camera.toStageOffset(0, 1).normalized();
+
+    Vec2 y_perp_off = camera.toStageOffset(6 * world_zoom, 0);
+    Vec2 y_perp_norm = camera.toStageOffset(1, 0).normalized();
+
+    setTextAlign(TextAlign::ALIGN_CENTER);
+    setTextBaseline(TextBaseline::BASELINE_MIDDLE);
+
+    ///QNanoFont font(QNanoFont::FontId::DEFAULT_FONT_NORMAL);
+    ///font.setPixelSize(12);
+    ///setFont(font);
+
+    double spacing = 8;
+
+    // Get world bounds, regardless of rotation
+    double world_minX = std::min({ world_tl.x, world_tr.x, world_br.x, world_bl.x });
+    double world_maxX = std::max({ world_tl.x, world_tr.x, world_br.x, world_bl.x });
+    double world_minY = std::min({ world_tl.y, world_tr.y, world_br.y, world_bl.y });
+    double world_maxY = std::max({ world_tl.y, world_tr.y, world_br.y, world_bl.y });
+
+    // Draw gridlines (big step)
+    if (grid_opacity > 0)
+    {
+
+        setFillStyle(255, 255, 255, static_cast<int>(big_visibility * 5.0));
+
+        bool offset = false;
+        Vec2 p1, p2;
+
+        for (double wy = ceilAxisValue(world_minY, big_step_wy); wy < world_maxY; wy += big_step_wy)
+        {
+            offset = !offset;
+
+            int64_t iy = static_cast<int64_t>(wy / big_step_wy);
+
+            Ray line_ray_y(camera.toStage(0, wy), angle);
+            if (!Math::rayRectIntersection(&p1, &p2, stage_rect, line_ray_y)) break;
+
+            for (double wx = ceilAxisValue(world_minX, big_step_wx); wx < world_maxX; wx += big_step_wx)
+            {
+                int64_t ix = static_cast<int64_t>(wx / big_step_wx);
+                //int64_t i = ix + (iy % 2 ? 1 : 0);
+
+                Ray line_ray_x(camera.toStage(wx, 0), angle + Math::HALF_PI);
+                if (!Math::rayRectIntersection(&p1, &p2, stage_rect, line_ray_x)) break;
+
+                if ((ix + iy) % 2 == 0)
+                    fillRect(wx, wy, big_step_wx, big_step_wy);
+            }
+
+        }
+    }
+
+    if (axis_opacity > 0 && text_opacity > 0)
+    {
+        setStrokeStyle(255, 255, 255, static_cast<int>(255.0 * axis_opacity));
+        setFillStyle(255, 255, 255, static_cast<int>(255.0 * text_opacity));
+        beginPath();
+
+        bool draw_text = (text_opacity > 0.01);
+
+        // Draw x-axis labels
+        for (double wx = ceilAxisValue(world_minX, step_wx); wx < world_maxX; wx += step_wx)
+        {
+            if (abs(wx) < 1e-9) continue;
+
+            Vec2 stage_pos = camera.toStage(wx, 0);
+            Vec2 txt_size = boundingBoxNumberScientific(wx).size();
+
+            double txt_dist = (abs(cos(angle)) * txt_size.y + abs(sin(angle)) * txt_size.x) * 0.5 + spacing;
+
+            Vec2 tick_anchor = stage_pos + x_perp_off + (x_perp_norm * txt_dist);
+
+            moveToSharp(stage_pos - x_perp_off);
+            lineToSharp(stage_pos + x_perp_off);
+            if (draw_text) fillNumberScientific(wx, tick_anchor);
+        }
+
+        // Draw y-axis labels
+        for (double wy = ceilAxisValue(world_minY, step_wy); wy < world_maxY; wy += step_wy)
+        {
+            if (abs(wy) < 1e-9) continue;
+
+            Vec2 stage_pos = camera.toStage(0, wy);
+            //Vec2 txt_size = measureText(txt);
+            Vec2 txt_size = boundingBoxNumberScientific(wy).size();
+
+            double txt_dist = (abs(cos(angle)) * txt_size.y + abs(sin(angle)) * txt_size.x) * 0.5 + spacing;
+
+            Vec2 tick_anchor = stage_pos + y_perp_off + (y_perp_norm * txt_dist);
+
+            moveToSharp(stage_pos - y_perp_off);
+            lineToSharp(stage_pos + y_perp_off);
+            if (draw_text) fillNumberScientific(wy, tick_anchor);
+        }
+
+        stroke();
+    }
+
+    restore();
+    camera.setTransformFilters(true);
+}
+
 /// Layout
 
 void Layout::add(int _viewport_index, int _grid_x, int _grid_y)
@@ -165,13 +421,13 @@ void Layout::add(int _viewport_index, int _grid_x, int _grid_y)
     viewports.push_back(viewport);
 }
 
-void Layout::resize(int viewport_count)
+void Layout::resize(size_t viewport_count)
 {
     if (targ_viewports_x <= 0 || targ_viewports_y <= 0)
     {
         // Spread proportionally
-        rows = sqrt(viewport_count);
-        cols = viewport_count / rows;
+        rows = static_cast<int>(sqrt(viewport_count));
+        cols = static_cast<int>(viewport_count) / rows;
     }
     else if (targ_viewports_y <= 0)
     {
@@ -227,10 +483,11 @@ void Layout::expandCheck(size_t count)
 
 /// Project
 
-void Project::configure(int _sim_uid, Canvas* _canvas)
+void Project::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
 {
     sim_uid = _sim_uid;
     canvas = _canvas;
+    debug_log = shared_log;
 
     viewports.project = this;
 
@@ -239,6 +496,7 @@ void Project::configure(int _sim_uid, Canvas* _canvas)
 
     started = false;
     paused = false;
+    done_single_populate_attributes = false;
 }
 
 void Project::_populateAttributes()
@@ -268,12 +526,17 @@ void Project::_populateAttributes()
             ImGui::PopID();
         }
     }
+    if (!done_single_populate_attributes)
+    {
+        done_single_populate_attributes = true;
+        logMessage("done_single_populate_attributes = true;");
+    }
 }
 
 void Project::_projectPrepare()
 {
+    logMessage("_projectPrepare()");
     viewports.clear();
-
 
     //ImGui::updatePointerValues();
 
@@ -285,6 +548,7 @@ void Project::_projectPrepare()
 
 void Project::_projectStart()
 {
+    logMessage("_projectStart()");
     if (paused)
     {
         // If paused - just resume, don't restart
@@ -292,7 +556,7 @@ void Project::_projectStart()
         return;
     }
 
-    ///done_single_process = false;
+    done_single_process = false;
 
     // Prepare layout
     _projectPrepare();
@@ -313,7 +577,7 @@ void Project::_projectStart()
         ///scene->dt_scene_ma_list.clear();
         ///scene->dt_project_ma_list.clear();
         ///scene->dt_project_draw_ma_list.clear();
-        ///scene->variableChangedClearMaps();
+        scene->variableChangedClearMaps();
 
         scene->sceneStart();
     }
@@ -403,6 +667,8 @@ void Project::_projectProcess()
 {
     updateViewportRects();
 
+    bool did_first_process = false;
+
     // Determine whether to process project this frame or not (depends on recording status)
     //if (!record_manager.attachingEncoder() && !record_manager.encoderBusy())
     {
@@ -427,7 +693,7 @@ void Project::_projectProcess()
             }
         }
 
-        if (!paused)
+        if (!paused && done_single_populate_attributes)
         {
             ///timer_projectProcess.start();
 
@@ -458,25 +724,38 @@ void Project::_projectProcess()
             }
 
             // Post-Process each scene
-            ///for (Scene* scene : viewports.all_scenes)
-            ///{
-            ///    scene->variableChangedUpdateCurrent();
-            ///}
-            ///
+            for (Scene* scene : viewports.all_scenes)
+            {
+                scene->variableChangedUpdateCurrent();
+            }
+            
             ///dt_projectProcess = timer_projectProcess.elapsed();
 
             // Prepare to encode the next frame
             ///encode_next_paint = true;
+            if (!done_single_process)
+            {
+                did_first_process = true;
+                logMessage("did_project_process = true;");
+            }
         }
     }
 
-    ///done_single_process = true;
+    if (did_first_process)
+        done_single_process = true;
 }
 
 void Project::_projectDraw()
 {
-    ///if (!done_single_process) return;
-    if (!started) return;
+    if (!done_single_process)
+    {
+        logMessage("Waiting for single process()...");
+    }
+    if (!started)
+    {
+        return;
+    }
+    
 
     ///if (!shaders_loaded)
     ///{
@@ -570,5 +849,31 @@ Layout& Project::newLayout(int targ_viewports_x, int targ_viewports_y)
     viewports.setSize(targ_viewports_x, targ_viewports_y);
 
     return viewports;
+}
+
+void Scene::logMessage(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    project->debug_log->vlog(fmt, ap);
+    va_end(ap);
+}
+
+void Project::logMessage(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    debug_log->vlog(fmt, ap);
+    va_end(ap);
+}
+
+void Scene::logClear()
+{
+    project->debug_log->clear();
+}
+
+void Project::logClear()
+{
+    debug_log->clear();
 }
 

@@ -152,6 +152,9 @@ void Camera::focusWorldRect(
             targ_zoom_x = zoom_x;
             targ_zoom_y = zoom_y;
 
+            assert(zoom_x > 0.0);
+            assert(zoom_y > 0.0);
+
             Vec2 _originWorldOffset = originWorldOffset();
 
             double world_ox = 0;
@@ -166,6 +169,9 @@ void Camera::focusWorldRect(
             zoom_x = zoom_y = (viewport_h / world_h);
             targ_zoom_x = zoom_x;
             targ_zoom_y = zoom_y;
+
+            assert(zoom_x > 0.0);
+            assert(zoom_y > 0.0);
 
             Vec2 _originWorldOffset = originWorldOffset();
 

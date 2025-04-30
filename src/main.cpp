@@ -1,3 +1,4 @@
+#define _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR 
 #include "main.h"
 
 /// emscripten
@@ -38,18 +39,17 @@
 #include <mutex>
 
 #include "platform.h"
-
 #include "project.h"
 #include "project_manager.h"
-
 #include "nano_canvas.h"
 
-#include "TestSim.h"
-//#include "imgui_debug_ui.h"
+#include "debug.h"
+#include "imgui_debug_ui.h"
+
 
 SDL_Window* window;
 SDL_GLContext gl_context;
-bool done = false;
+std::atomic<bool> done = false;
 
 
 ToolbarButtonState play = { ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
@@ -58,45 +58,17 @@ ToolbarButtonState pause = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1, 1, 1, 1),
 ToolbarButtonState record = { ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1, 1, 1, 1), false };
 
 Canvas canvas;
-LogWindow logWindow;
+ImDebugLog debug_log;
 
 ProjectManager project_manager;
 std::thread project_thread;
 std::condition_variable data_ready_cv;
 std::mutex data_mutex;
 
-bool ready_to_render = false;
+std::atomic<bool> project_thread_started = false;
+std::atomic<bool> ready_to_render = false;
 bool imgui_initialized = false;
 bool update_docking_layout = false;
-
-
-
-
-
-void sim_worker()
-{
-    while (!done)
-    {
-        {
-            std::unique_lock<std::mutex> lock(data_mutex);
-            project_manager.process();
-        }
-
-        ready_to_render = true;
-        data_ready_cv.notify_one();
-
-        SDL_Delay(16);
-    }
-}
-
-void init_simulation_thread()
-{
-    project_manager.setSharedCanvas(&canvas);
-    project_manager.setActiveProject(0);
-    project_manager.startProject();
-
-    project_thread = std::thread(sim_worker);
-}
 
 void update_imgui_styles()
 {
@@ -128,7 +100,6 @@ void update_imgui_styles()
     colors[ImGuiCol_TabDimmed] = ImVec4(0.28f, 0.41f, 0.57f, 0.82f);
     colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.35f, 0.46f, 0.65f, 0.84f);
 
-    
     style.ScaleAllSizes(Platform::get()->ui_scale_factor());
 }
 
@@ -158,12 +129,12 @@ void show_toolbar()
 void show_tree_node(ProjectInfoNode& node, int& i, int depth)
 {
     ImGui::PushID(i++);
-    //if (ImGui::TreeNodeEx("", ImGuiTreeNodeFlags_DefaultOpen, node.name.c_str()))
     if (node.project_info)
     {
         // Leaf project node
         if (ImGui::Button(node.name.c_str()))
         {
+            std::unique_lock<std::mutex> lock(data_mutex);
             project_manager.setActiveProject(node.project_info->sim_uid);
             project_manager.startProject();
         }
@@ -171,8 +142,6 @@ void show_tree_node(ProjectInfoNode& node, int& i, int depth)
     else
     {
         int flags = ImGuiTreeNodeFlags_DefaultOpen;
-
-        
         if (ImGui::CollapsingHeader(node.name.c_str(), flags))
         {
             ImGui::Indent();
@@ -188,10 +157,10 @@ void show_tree_node(ProjectInfoNode& node, int& i, int depth)
 
 void show_project_tree(bool expand_vertical)
 {
-    ImVec2 frameSize = ImVec2(0, expand_vertical ? 0 : 150); // Let height auto-expand
+    ImVec2 frameSize = ImVec2(0.0f, expand_vertical ? 0 : 150.0f); // Let height auto-expand
     ImVec4 bgColor = ImVec4(0.1f, 0.1f, 0.1f, 1.0f); // Custom background
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     {
         ImGui::BeginChild("TreeFrame", frameSize, 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
@@ -199,7 +168,7 @@ void show_project_tree(bool expand_vertical)
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, bgColor);
 
-        ImGui::BeginChild("TreeFrameInner", ImVec2(0, 0), true);
+        ImGui::BeginChild("TreeFrameInner", ImVec2(0.0f, 0.0f), true);
 
         auto& tree = Project::projectTreeRootInfo();
         int i = 0;
@@ -208,24 +177,6 @@ void show_project_tree(bool expand_vertical)
             int depth = 0;
             show_tree_node(tree.children[child_i], i, depth);
         }
-        //{
-        //    static ImGuiTreeNodeFlags base_flags =
-        //        ImGuiTreeNodeFlags_OpenOnArrow |
-        //        ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        //        ImGuiTreeNodeFlags_SpanAvailWidth;
-        //
-        //    static int selection_mask = (1 << 2);
-        //
-        //    for (int i = 0; i < 5; i++)
-        //    {
-        //        ImGui::PushID(i);
-        //        if (ImGui::TreeNodeEx("", ImGuiTreeNodeFlags_DefaultOpen, "Child Node %d", i))
-        //        {
-        //            ImGui::TreePop();
-        //        }
-        //        ImGui::PopID();
-        //    }
-        //}
 
         ImGui::EndChild();
         ImGui::PopStyleColor();
@@ -235,12 +186,41 @@ void show_project_tree(bool expand_vertical)
     ImGui::PopStyleVar(2);
 }
 
+void sim_worker()
+{
+    while (!done.load())
+    {
+        {
+            std::unique_lock<std::mutex> lock(data_mutex);
+            if (project_manager.getActiveProject())
+                project_manager.process();
+        }
+
+        ready_to_render.store(true);
+        data_ready_cv.notify_one();
+
+        SDL_Delay(16);
+    }
+}
+
+void init_simulation_thread()
+{
+    std::unique_lock<std::mutex> lock(data_mutex);
+    project_manager.setSharedCanvas(&canvas);
+    project_manager.setSharedDebugLog(&debug_log);
+    project_thread = std::thread(sim_worker);
+    project_thread_started.store(true);
+}
+
 void show_project_attributes()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
     ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
 
-    project_manager.populateAttributes();
+    {
+        std::unique_lock<std::mutex> lock(data_mutex);   // blocks the worker
+        project_manager.populateAttributes();            // safe read
+    }
 
     ImGui::EndChild();
     ImGui::PopStyleVar();
@@ -294,12 +274,16 @@ void show_ui()
         initialized = true;
         update_docking_layout = false;
 
+        if (ImGui::GetMainViewport()->Size.x <= 0 ||
+            ImGui::GetMainViewport()->Size.y <= 0)
+        {
+            return;
+        }
+
         ImGui::DockBuilderRemoveNode(dockspace_id); // clear any previous layout
         ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
 
         ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
-
-        
 
         ImGuiID dock_main_id = dockspace_id;
         ImGuiID dock_sidebar = ImGui::DockBuilderSplitNode(
@@ -311,10 +295,11 @@ void show_ui()
         );
 
         //ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.3f, nullptr, &dock_main_id);
-        ImGuiID dock_top_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Up, 0.07f, nullptr, &dock_main_id);
+        //ImGuiID dock_top_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Up, 0.07f, nullptr, &dock_main_id);
 
         ImGui::DockBuilderDockWindow("Projects", dock_sidebar);
         ImGui::DockBuilderDockWindow("Active", dock_sidebar);
+        ImGui::DockBuilderDockWindow("Debug", dock_sidebar);
         //ImGui::DockBuilderDockWindow("Right Window", dock_right_id);
         //ImGui::DockBuilderDockWindow("Timeline", dock_top_id);
         ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
@@ -360,16 +345,6 @@ void show_ui()
     }
 
     ImGui::PopStyleVar();
-
-    //if (ImGui::Begin("Right Window"))
-    //    ImGui::Text("Hello from the right docked window!");
-    //ImGui::End();
-
-    ///if (ImGui::Begin("Timeline"))
-    ///{
-    ///
-    ///}
-    ///ImGui::End();
     
     ImGuiWindowClass wc{};
     wc.DockNodeFlagsOverrideSet = (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiWindowFlags_NoDocking;
@@ -382,28 +357,54 @@ void show_ui()
         int width = static_cast<int>(size.x);
         int height = static_cast<int>(size.y);
 
+        static bool done_first_size = false;
+        
         canvas.resize(width, height);
-
-        // Data mutex scope
+        
         {
             std::unique_lock<std::mutex> lock(data_mutex);
-            data_ready_cv.wait(lock, [] { return ready_to_render; });
+            data_ready_cv.wait(lock, [] { return ready_to_render.load(); });
 
-            canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-            project_manager.draw();
-            canvas.end();
+            if (!done_first_size)
+            {
+                done_first_size = true;
+            }
+            else if (project_thread_started.load())
+            {
+                // Launch initial simulation 1 frame late (background thread)
+                if (!project_manager.getActiveProject())
+                {
+                    project_manager.setActiveProject(0);
+                    project_manager.startProject();
+                }
+            }
 
-            ready_to_render = false;
+            // Data mutex scope
+            if (project_manager.getActiveProject())
+            {
+                data_ready_cv.wait(lock, [] { return ready_to_render.load(); });
 
-            lock.unlock();
+                canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+                project_manager.draw();
+                canvas.end();
+            }
+
+            ready_to_render.store(false);
         }
 
-        //ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(fb_width, fb_height));
-        ImGui::Image(canvas.texture(), ImVec2(canvas.width(), canvas.height()),
-            ImVec2(0, 1),   // UV top-left (flipped)
-            ImVec2(1, 0)    // UV bottom-right);
+        ImGui::Image(canvas.texture(), ImVec2(
+            static_cast<float>(canvas.width()), 
+            static_cast<float>(canvas.height())),
+            ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
+            ImVec2(1.0f, 0.0f)    // UV bottom-right);
         );
     }
+
+    if (ImGui::Begin("Debug"))
+    {
+        debug_log.draw();
+    }
+    ImGui::End();
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -415,8 +416,8 @@ void show_ui()
     /// Debugging
     {
         // Debug Log
-        //logWindow.Log("%d", rand());
-        //logWindow.Draw();
+        //debug_log.log("%d", rand());
+        //debug_log.Draw();
 
         // Debug DPI
         //dpiDebugInfo();
@@ -431,7 +432,7 @@ void main_loop()
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
         if (event.type == SDL_QUIT)
-            done = true;
+            done.store(true);
     }
 
 
@@ -514,6 +515,9 @@ EM_BOOL on_client_resized(int, const EmscriptenUiEvent* e, void* userData)
 
 int main(int argc, char* argv[])
 {
+    //DebugMessage("main() called");
+    //std::unique_lock<std::mutex> lock(data_mutex);
+
     // SDL Window setup
     {
         //SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0"); // "0" = nearest pixel sampling, NO bilinear
@@ -601,10 +605,9 @@ int main(int argc, char* argv[])
 
     canvas.create();
 
-    // Launch simulation (background thread)
+    
     init_simulation_thread();
-
-    logWindow.Log("Simulation started");
+    //debug_log.Log("Simulation started");
 
     // Start main ui loop (main thread)
     {
@@ -615,13 +618,14 @@ int main(int argc, char* argv[])
         #else
         {
             // Desktop build, handle main loop and shutdown
-            while (!done)
+            while (!done.load())
             {
                 main_loop();
                 SDL_Delay(16);
             }
 
-            project_thread.join();
+            if (project_thread_started.load())
+                project_thread.join();
 
             // Shutdown
             {

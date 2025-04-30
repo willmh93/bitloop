@@ -204,7 +204,7 @@ void Test_Scene::viewportDraw(Viewport* ctx)
     Vec2 p = Vec2(100, 100) + Offset(50, 50);
     ctx->circle(p, 2);
     ctx->fill();
-    ///ctx->fillText("Fixed pixel offset", p);
+    ctx->fillText("Fixed pixel offset", p);
 
     ctx->setStrokeStyle(0, 255, 0);
     ctx->beginPath();
@@ -234,7 +234,7 @@ void Test_Scene::viewportDraw(Viewport* ctx)
     ctx->circle(camera->x, camera->y, 5);
     ctx->fill();
     //
-    //ctx->fillText("Camera", Vec2(camera->x, camera->y) + Offset(20, 20));
+    ctx->fillText("Camera", Vec2(camera->x, camera->y) + Offset(20, 20));
 
     camera->stageTransform();
 

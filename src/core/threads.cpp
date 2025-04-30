@@ -1,3 +1,4 @@
 #include "threads.h"
 
-ThreadPool ThreadPool::singleton;
+//thread_pool::dynamic_pool Thread::pool;
+//ThreadPool ThreadPool::singleton;

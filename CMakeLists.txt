@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 cmake_policy(SET CMP0169 OLD)
 
+if (MSVC)
+    add_compile_options(/MP) # Multi-threaded compilation
+    add_compile_options(/permissive- /W3 /WX /D_CRT_SECURE_NO_WARNINGS)
+endif()
+
 # sets default startup project in Visual Studio
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT bitloop)
 
@@ -18,10 +23,12 @@ list(SORT SIMULATION_SOURCES)
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.hpp"
 )
 
 file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
@@ -35,6 +42,7 @@ file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
 file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.hpp"
 )
 
 source_group("Project"     FILES ${CORE_SOURCES})

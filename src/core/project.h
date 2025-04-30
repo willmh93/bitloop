@@ -7,13 +7,14 @@
 #include <functional>
 #include <random>
 
-
+#include "helpers.h"
 #include "types.h"
 #include "camera.h"
 #include "nano_canvas.h"
 #include "imgui_custom.h"
 
-
+using std::max;
+using std::min;
 
 // Provide macros for easy Project registration
 template<typename... Ts>
@@ -24,13 +25,13 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
 #define SIM_END(ns) } using ns::ns##_Project;
 
 class Project;
-
 class Layout;
 class Viewport;
 class Project;
 class ProjectManager;
+struct ImDebugLog;
 
-class Scene
+class Scene : public VariableChangedTracker
 {
     std::random_device rd;
     std::mt19937 gen;
@@ -77,6 +78,14 @@ public:
     virtual void viewportProcess(Viewport* ctx) {}
     virtual void viewportDraw(Viewport* ctx) = 0;
 
+    virtual void mouseDown() {}
+    virtual void mouseUp() {}
+    virtual void mouseMove() {}
+    virtual void mouseWheel() {}
+
+    //virtual void keyPressed(QKeyEvent* e) {};
+    //virtual void keyReleased(QKeyEvent* e) {};
+
     virtual std::string name() { return "Scene"; }
     int sceneIndex() { return scene_index; }
 
@@ -90,6 +99,9 @@ public:
     {
         return camera->toWorldOffset({ stage_offX, stage_offY });
     }
+
+    void logMessage(const char* fmt, ...);
+    void logClear();
 };
 
 class Viewport : public Painter
@@ -136,7 +148,6 @@ public:
     T* construct(Args&&... args)
     {
         ///qDebug() << "Scene constructed. Mounting to Viewport: " << viewport_index;
-
         scene = new T(std::forward<Args>(args)...);
         scene->registerMount(this);
         return dynamic_cast<T*>(scene);
@@ -151,6 +162,13 @@ public:
         scene->registerMount(this);
         return _sim;
     }
+
+    // Viewport-specific draw helpers (i.e. size of viewport needed)
+    void drawWorldAxis(
+        double axis_opacity = 0.3,
+        double grid_opacity = 0.04,
+        double text_opacity = 0.4
+    );
 };
 
 class Layout
@@ -215,7 +233,7 @@ public:
         return this;
     }
 
-    Viewport* operator[](int i)
+    Viewport* operator[](size_t i)
     {
         expandCheck(i + 1);
         return viewports[i];
@@ -227,7 +245,7 @@ public:
         return *this;
     }
 
-    void resize(int viewport_count);
+    void resize(size_t viewport_count);
     void expandCheck(size_t count);
 
     iterator begin() { return viewports.begin(); }
@@ -275,14 +293,18 @@ protected:
 
     friend class ProjectManager;
     friend class Layout;
+    friend class Scene;
 
     Canvas* canvas = nullptr;
-    
+    ImDebugLog* debug_log = nullptr;
 
     bool started = false;
     bool paused = false;
 
-    void configure(int sim_uid, Canvas* canvas);
+    bool done_single_process = false;
+    bool done_single_populate_attributes = false;
+
+    void configure(int sim_uid, Canvas* canvas, ImDebugLog* debug_log);
 
     void updateViewportRects();
     Vec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
@@ -490,7 +512,8 @@ public:
     virtual void projectStop() {}
     virtual void projectDestroy() {}
 
-
+    void logMessage(const char* fmt, ...);
+    void logClear();
 };
 
 template <typename T>
@@ -498,6 +521,7 @@ struct AutoRegisterProject
 {
     AutoRegisterProject(const std::vector<std::string>& tree_path)
     {
+        DebugMessage("AutoRegisterProject() called");
         Project::addProjectInfo(tree_path, []() -> Project* {
             return (Project*)(new T());
         });

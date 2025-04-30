@@ -130,7 +130,7 @@ float Platform::touch_accuracy()
     // Measure size of a thumb relative to screen size
     // 0 = poor accuracy (thumb on small screen)
     // 1 = perfect accuracy (pointer)
-    return 1.0 - (1.0f / window_size_inches());
+    return 1.0f - (1.0f / window_size_inches());
 }
 
 float Platform::font_scale()
