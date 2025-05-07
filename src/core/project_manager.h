@@ -6,11 +6,23 @@
 
 class ProjectManager
 {
-    Project* active_project = nullptr;
+    ProjectBase* active_project = nullptr;
     Canvas* canvas = nullptr;
     ImDebugLog* debug_log = nullptr;
 
 public:
+
+    void updateLiveAttributes()
+    {
+        if (active_project)
+            active_project->updateAllLiveAttributes();
+    }
+
+    void updateShadowAttributes()
+    {
+        if (active_project)
+            active_project->updateAllShadowAttributes();
+    }
 
     void process()
     {
@@ -45,12 +57,13 @@ public:
             active_project = nullptr;
         }
 
-        active_project = Project::findProjectInfo(sim_uid)->creator();
+        DebugPrint("-------- Switching Project --------");
+        active_project = ProjectBase::findProjectInfo(sim_uid)->creator();
         active_project->configure(sim_uid, canvas, debug_log);
         active_project->_projectPrepare();
     }
 
-    Project* getActiveProject()
+    ProjectBase* getActiveProject()
     {
         return active_project;
     }
@@ -89,9 +102,15 @@ public:
             active_project->_projectPause();
     }
 
-    void populateAttributes()
+    void populateAttributes(bool show_ui)
     {
         if (active_project)
-            active_project->_populateAttributes();
+            active_project->_populateAllAttributes(show_ui);
+    }
+
+    void _onEvent(SDL_Event& e)
+    {
+        if (active_project)
+            active_project->_onEvent(e);
     }
 };

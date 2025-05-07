@@ -4,9 +4,21 @@
 #include <array>
 #include <tuple>
 #include <typeindex>
+#include <functional>
+#include <unordered_map>
+#include <memory>
 
 #include "debug.h"
 
+
+namespace Helpers
+{
+    std::string floatToCleanString(float value, int decimal_places = 6, float precision = 0.0f, bool minimize = true);
+
+    // Wrapping/Unwrapping strings with '\n' at given length
+    std::string wrapString(const std::string& input, size_t width);
+    std::string unwrapString(const std::string& input);
+}
 
 ///--------------------------------///
 /// constexpr function dispatcher  ///
@@ -75,10 +87,6 @@ void dispatchBooleans(F&& f, Bools... flags)
 
 #define boolsTemplate(func, capture, ...) capture<typename... Bools>(Bools... passed) { func<Bools::value...>(__VA_ARGS__); }
 
-
-
-
-
 class VariableChangedTracker
 {
 
@@ -142,7 +150,7 @@ public:
     }
 
     /// Returns true if 'var' differs from its last committed value, false otherwise.
-    template <typename T>
+    /*template <typename T>
     bool variableChanged(T& var) const
     {
         using NonConstT = typename std::remove_const<T>::type;
@@ -166,7 +174,28 @@ public:
             maps.current[key] = var;
             return false;
         }
+    }*/
+
+    template <typename T>
+    bool variableChanged(T& var) const
+    {
+        using NonConstT = std::remove_const_t<T>;
+        auto& maps = getStateMap<NonConstT>();
+
+        auto key = const_cast<NonConstT*>(std::addressof(var));
+
+        auto it = maps.previous.find(key);
+        if (it != maps.previous.end()) {
+            bool changed = (var != it->second);
+            maps.current[key] = var;
+            return changed;
+        }
+        else {
+            maps.current[key] = var;        // first sighting
+            return false;
+        }
     }
+
 
     /// Returns true if any variable among args... has changed
     template <typename... Args>

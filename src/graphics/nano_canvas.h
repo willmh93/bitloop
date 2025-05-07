@@ -87,6 +87,7 @@ protected:
     std::string path;
     int id = 0;
     bool created = false;
+    float size = 16.0f;
 
 public:
 
@@ -97,8 +98,13 @@ public:
 
     NanoFont(const char* virtual_path)
     {
-        DebugMessage("NanoFont() called");
-        path = Platform::get()->path(virtual_path);
+        DebugPrint("NanoFont() called");
+        path = PlatformManager::get()->path(virtual_path);
+    }
+
+    void setSize(double size_pts)
+    {
+        size = ScaleSize((float)size_pts);
     }
 };
 
@@ -141,6 +147,11 @@ public:
     NVGcontext* getRenderTarget()
     {
         return vg;
+    }
+
+    std::shared_ptr<NanoFont> getDefaultFont()
+    {
+        return active_font;
     }
 
     // --- Transforms ---
@@ -375,13 +386,25 @@ public:
 
     void setFont(std::shared_ptr<NanoFont> font)
     {
+        if (font == active_font)
+            return;
+
         if (!font->created)
         {
+            // Todo: Check if font changed and update even if already created
+            nvgFontSize(vg, font->size);
+
             font->id = nvgCreateFont(vg, font->path.c_str(), font->path.c_str());
             font->created = true;
         }
 
         nvgFontFaceId(vg, font->id);
+        active_font = font;
+    }
+
+    void setFontSize(double size_pts)
+    {
+        nvgFontSize(vg, ScaleSize((float)size_pts));
     }
 
     FRect boundingBox(const std::string& txt)
@@ -437,6 +460,7 @@ public:
     Camera camera;
     glm::mat3 default_viewport_transform;
     double line_width = 1;
+
 
     Vec2 PT(double x, double y)
     {
@@ -864,16 +888,60 @@ public:
         fillText(txt, p.x, p.y);
     }
 
-    std::string formatScientificMinimal(double v)
+    FRect boundingBox(const std::string& txt)
     {
-        std::ostringstream oss;
-        oss << std::scientific << v;
-        std::string s = oss.str();
+        save();
+        resetTransform();
+        transform(default_viewport_transform);
+        auto r = SimplePainter::boundingBox(txt);
+        restore();
+        return r;
+    }
+
+    std::string format_number(double v) {
+        char buffer[32];
+        double abs_v = std::abs(v);
+
+        if ((abs_v != 0.0 && abs_v < 1e-3) || abs_v >= 1e4) {
+            // Use scientific notation
+            std::snprintf(buffer, sizeof(buffer), "%.5e", v);
+        }
+        else {
+            // Use fixed-point
+            std::snprintf(buffer, sizeof(buffer), "%.5f", v);
+        }
+
+        std::string s(buffer);
+
+        // Trim trailing zeros (both fixed and scientific cases)
+        size_t dot_pos = s.find('.');
+        if (dot_pos != std::string::npos) {
+            size_t end = s.find_first_of("eE", dot_pos); // handle scientific part separately
+            size_t trim_end = (end == std::string::npos) ? s.size() : end;
+
+            // Trim zeros in the fractional part
+            size_t last_nonzero = s.find_last_not_of('0', trim_end - 1);
+            if (last_nonzero != std::string::npos && s[last_nonzero] == '.') {
+                last_nonzero--; // also remove the decimal point
+            }
+
+            s.erase(last_nonzero + 1, trim_end - last_nonzero - 1);
+        }
+
+        return s;
+    }
+
+    /*std::string formatScientificMinimal(double v)
+    {
+        //std::ostringstream oss;
+        //oss << std::scientific << v;
+        //std::string s = oss.str();
+        std::string s = format_number(v);
 
         // Example: "4.000000e-01"
         std::size_t ePos = s.find('e');
-        if (ePos == std::string::npos)
-            return s; // should not happen
+        //if (ePos == std::string::npos)
+        //    return s; // should not happen
 
         std::string mantissa = s.substr(0, ePos);
         std::string exponent = s.substr(ePos); // includes 'e'
@@ -892,11 +960,14 @@ public:
         }
 
         return mantissa + exponent;
-    }
+    }*/
 
     void fillNumberScientific(double v, Vec2 pos, float fontSize = 12)
     {
-        std::string txt = formatScientificMinimal(v);
+        std::string txt = format_number(v);
+
+        double scale = ScaleSize(1.0);
+        double exponent_spacing = 3.0 * scale;
 
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
@@ -911,15 +982,25 @@ public:
             pos.x = floor(pos.x);
             pos.y = floor(pos.y);
 
-            double mantissaWidth = boundingBox(mantissa_txt).x2 + 1;
+            double mantissaWidth = boundingBox(mantissa_txt).x2 + (1.0 * scale);
+
+            /// todo: Take whatever alignment you're given and adjust right bound
+            setTextAlign(TextAlign::ALIGN_CENTER);
+            setFontSize(fontSize);
             fillTextSharp(mantissa_txt.c_str(), pos);
 
-            pos.x += mantissaWidth;
-            pos.y -= (int)(fontSize * 0.7 + 1);
+            pos.x += mantissaWidth/2.0f + exponent_spacing;
+            pos.y -= (int)(fontSize * 0.7 + (1.0 * scale));
 
             //font.setPixelSize((int)(fontSize * 0.85));
             //painter->setFont(font);
+            setTextAlign(TextAlign::ALIGN_LEFT);
+            setFontSize(fontSize * 0.85);
+
             fillTextSharp(exponent_txt.c_str(), pos);
+
+            setFontSize(fontSize);
+            setTextAlign(TextAlign::ALIGN_CENTER);
 
             //font.setPixelSize(fontSize);
             //painter->setFont(font);
@@ -934,7 +1015,10 @@ public:
 
     FRect boundingBoxNumberScientific(double v, float fontSize = 12)
     {
-        std::string txt = formatScientificMinimal(v);
+        std::string txt = format_number(v);
+
+        double scale = ScaleSize(1.0);
+        double exponent_spacing = 3.0 * scale;
 
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
@@ -954,8 +1038,8 @@ public:
             FRect exponentRect = boundingBox(exponent_txt);
             FRect ret = mantissaRect;
 
-            ret.y1 -= (int)(fontSize * 0.7 + 1);
-            ret.x2 += exponentRect.width();
+            ret.y1 -= (int)(fontSize * 0.7 + (1.0 * scale));
+            ret.x2 += exponentRect.width() + exponent_spacing;
 
             //font.setPixelSize(fontSize);
             //painter->setFont(font);
@@ -967,6 +1051,8 @@ public:
             return boundingBox(txt);
         }
     }
+
+   
 
     // --- Sharp variants ---
 
@@ -1008,6 +1094,7 @@ public:
 
     using SimplePainter::setRenderTarget;
     using SimplePainter::getRenderTarget;
+    using SimplePainter::getDefaultFont;
     //
     using SimplePainter::save;
     using SimplePainter::restore;
@@ -1023,6 +1110,8 @@ public:
     using SimplePainter::setClipRect;
     using SimplePainter::resetClipping;
     //
+    using SimplePainter::setFont;
+    using SimplePainter::setFontSize;
     using SimplePainter::setTextAlign;
     using SimplePainter::setTextBaseline;
     //

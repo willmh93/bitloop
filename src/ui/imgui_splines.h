@@ -6,6 +6,9 @@
 
 #include <functional>
 #include <string>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
 #include <stdio.h>
 
 // Cubic polynomial segment data:
@@ -364,40 +367,41 @@ namespace ImSpline
 
 		};
 
-		bool bInitialized = false;
-
 		// Editor states
 		bool panning = false;
 		ImVec2 pan_mouse_down_pos;        // Mouse position on middle click (drag)
 		ImRect pan_mouse_down_vr;         // Viewport rect on middle click (drag)
 		int dragging_index = -1;          // Point index of handle/knot being dragged
 		ImVec2 h1_offset, h2_offset;      // Handle offsets (when dragging knot)
-		float opposite_handle_dist;       // Opposite knot handle dist when moving handle
+		float opposite_handle_dist = 0;   // Opposite knot handle dist when moving handle
+		float xy_precision = 0.001f;// 1e-6f;
+
+		bool bInitialized = false;
 
 		// Externally provided x/y point buffer
-		float* points;
-		int point_count;
-		int point_count_max;
+		float* points = nullptr;
+		int point_count = 0;
+		//int point_count_max = 0;
 
 		inline ImVec2* pointVecArray() { return reinterpret_cast<ImVec2*>(points); }
 
 		// Generated path info
 		ImVector<ImVec2> path;
-		int path_length;
+		int path_length = 0;
 		ImRect path_bounds;
-		float path_bounds_left; // Store left-bound seperately for efficient index calculation
+		float path_bounds_left = 0; // Store left-bound seperately for efficient index calculation
 
 		// Generated spline path segment index lookup.
 		// (used for quickly finding which segments might intersect at a given x-value)
 		bool col_segments_dirty = true;
-		int col_count;
-		float col_x_snap;
+		int col_count = 0;
+		float col_x_snap = 0;
 		ImVector<ImVector<int>> col_segments;
 
 		// Optimization
-		OptimizationType optimization_type;
-		float linear_gradient;
-		float linear_intercept;
+		OptimizationType optimization_type = OptimizationType::NONE;
+		float linear_gradient = 0;
+		float linear_intercept = 0;
 
 		// Each time spline changes a hash value is generated. Useful for checking if 
 		// spline has changed by comparing against previous value
@@ -659,7 +663,63 @@ namespace ImSpline
 	public:
 
 		std::function<float(float)> equation;
+
+		Spline() = default;
+		Spline(const Spline& rhs)
+		{
+			*this = rhs;
+		}
+
+		// Assumes both lhs/rhs have preallocated point arrays
+		Spline& operator =(const Spline& rhs)
+		{
+			//deserialize(rhs.serialize());
+
+			//if (spline_hash != rhs.spline_hash)
+			{
+				bInitialized = rhs.bInitialized;
+				point_count = rhs.point_count;
+				memcpy(points, rhs.points, point_count * 2 * sizeof(float));
+
+				path = rhs.path;
+				path_length = rhs.path_length;
+				path_bounds = rhs.path_bounds;
+				path_bounds_left = rhs.path_bounds_left;
+
+				col_segments_dirty = rhs.col_segments_dirty;
+				col_count = rhs.col_count;
+				col_x_snap = rhs.col_x_snap;
+
+				// 2D deep clone
+				col_segments.resize(rhs.col_segments.size());
+				for (int i = 0; i < rhs.col_segments.size(); i++)
+				{
+					col_segments[i].clear();
+
+					const ImVector<int>& src_segments = rhs.col_segments[i];
+					ImVector<int>& targ_segments = col_segments[i];
+
+					for (int j=0; j<src_segments.size(); j++)
+						targ_segments.push_back(src_segments[j]);
+				}
+
+				//col_segments = rhs.col_segments;
+
+				optimization_type = rhs.optimization_type;
+				linear_gradient = rhs.linear_gradient;
+				linear_intercept = rhs.linear_intercept;
+
+				spline_hash = rhs.spline_hash;
+			}
+
+			return *this;
+		}
 		
+		void copyFrom(const Spline& rhs)
+		{
+			operator=(rhs);
+		}
+
 		void fromEquation(
 			float xStart,
 			float xEnd,
@@ -813,7 +873,7 @@ namespace ImSpline
 
 			points = xy_points;
 			point_count = num_points;
-			point_count_max = max_points;
+			//point_count_max = max_points;
 			path_length = segment_count;
 
 			bInitialized = true;
@@ -1030,6 +1090,31 @@ namespace ImSpline
 				}
 			}
 
+			/// DEBUG TEST NAN
+			/*//assert(false);
+			if (col >= 0 && col <= col_count)
+			{
+				const ImVector<int>& segments = col_segments[col];
+				int segment_count = segments.size();
+
+				for (int i = 0; i < segment_count; i++)
+				{
+					int segment_i = segments[i];
+					const ImVec2& p0 = path[segment_i];
+					const ImVec2& p1 = path[segment_i + 1];
+					float p_min_x = std::min(p0.x, p1.x);
+					float p_max_x = std::max(p0.x, p1.x);
+					float dx = p_max_x - p_min_x;
+
+					if (dx > 1e-9 && x >= p_min_x && x < p_max_x)
+					{
+						float t = (x - p0.x) / dx;
+						if (t >= 0.0f && t <= 1.0f)
+							return p0.y + t * (p1.y - p0.y);
+					}
+				}
+			}*/
+
 			return std::numeric_limits<float>::quiet_NaN();
 		}
 
@@ -1096,20 +1181,28 @@ namespace ImSpline
 
 		// Base64 serialization/deserialization
 
-		std::string serialize()
+		/*std::string serialize(bool base64=true) const
 		{
-			// Calculate total size
-			size_t dataSize = sizeof(int) + (point_count * 2 * sizeof(float));
-			std::vector<unsigned char> buffer(dataSize);
+			if (base64)
+			{
+				// Calculate total size
+				size_t dataSize = sizeof(int) + (point_count * 2 * sizeof(float));
+				std::vector<unsigned char> buffer(dataSize);
 
-			// Copy data to buffer
-			std::memcpy(buffer.data(), &point_count, sizeof(int));
-			std::memcpy(buffer.data() + sizeof(int), points, point_count * 2 * sizeof(float));
+				// Copy data to buffer
+				std::memcpy(buffer.data(), &point_count, sizeof(int));
+				if (point_count > 0 && points)
+					std::memcpy(buffer.data() + sizeof(int), points, point_count * 2 * sizeof(float));
 
-			// Encode
-			return base64_encode(buffer.data(), buffer.size());
+				// Encode
+				return base64_encode(buffer.data(), buffer.size());
+			}
+			else
+			{
+				
+			}
 		}
-
+		
 		static size_t deserializePointCount(const std::string& base64Str)
 		{
 			// Decode
@@ -1122,8 +1215,8 @@ namespace ImSpline
 			return point_count;
 		}
 
-		// Deserialize Base64 string to Spline
-		void deserialize(const std::string& base64Str) 
+
+		void deserialize(const std::string& base64Str)
 		{
 			size_t old_hash = hash();
 
@@ -1132,7 +1225,192 @@ namespace ImSpline
 
 			// Read data
 			std::memcpy(&point_count, buffer.data(), sizeof(int));
-			std::memcpy(points, buffer.data() + sizeof(int), point_count * 2 * sizeof(float));
+			if (point_count > 0)
+				std::memcpy(points, buffer.data() + sizeof(int), point_count * 2 * sizeof(float));
+			else
+				points = nullptr;
+
+			updateHash();
+
+			if (hash() != old_hash)
+			{
+				onChanged();
+			}
+		}*/
+
+		std::string floatToCleanString(float value, int max_decimal_places, float precision, bool minimize) const
+		{
+			// Optional snapping
+			if (precision > 0.0f) {
+				value = std::round(value / precision) * precision;
+			}
+
+			// Use fixed formatting
+			std::ostringstream oss;
+			oss << std::fixed << std::setprecision(max_decimal_places) << value;
+			std::string str = oss.str();
+
+			// Remove trailing zeros
+			size_t dot = str.find('.');
+			if (dot != std::string::npos) {
+				size_t last_non_zero = str.find_last_not_of('0');
+				if (last_non_zero != std::string::npos) {
+					str.erase(last_non_zero + 1);
+				}
+				// Remove trailing dot
+				if (str.back() == '.') {
+					str.pop_back();
+				}
+			}
+
+			if (minimize)
+			{
+				// 4a. Collapse “-0” to “0”
+				if (str == "-0") {
+					str = "0";
+				}
+
+				// 4b. Remove the leading ‘0’ for numbers between -1 and 1
+				//     (e.g. "0.7351"  -> ".7351",   "-0.42" -> "-.42")
+				if (!str.empty()) {
+					bool negative = (str[0] == '-');
+					std::size_t first = negative ? 1 : 0;
+					if (first + 1 < str.size() && str[first] == '0' && str[first + 1] == '.') {
+						str.erase(first, 1);
+					}
+				}
+			}
+
+			return str;
+		}
+
+		std::string serialize(int try_shortest=false) const
+		{
+			// First try binary
+			std::string base64_txt;
+			std::string raw_txt;
+
+			// Base-64
+			{
+				std::ostringstream oss(std::ios::binary);
+
+				// Write point count
+				oss.write(reinterpret_cast<const char*>(&point_count), sizeof(int));
+
+				// Write points array if it exists
+				if (point_count > 0 && points)
+				{
+					oss.write(reinterpret_cast<const char*>(points), point_count * 2 * sizeof(float));
+				}
+
+				// Convert stream to string
+				std::string binaryData = oss.str();
+
+				// Encode as base64
+				base64_txt = base64_encode(reinterpret_cast<const unsigned char*>(binaryData.data()), binaryData.size());
+				if (!try_shortest)
+					return "B" + base64_txt;
+			}
+			
+			// Text
+			{
+				std::ostringstream oss;
+				oss << point_count << "_";
+				int flt_count = point_count * 2;
+				for (int i = 0; i < flt_count; i++)
+				{
+					oss << floatToCleanString(points[i], 12, 1e-14f, true);
+					if (i < flt_count-1)
+						oss << "_";
+				}
+				raw_txt = oss.str();
+			}
+
+			// Compare shortest
+			if (raw_txt.size() < base64_txt.size())
+			{
+				return "A" + raw_txt;
+			}
+			else
+			{
+				return "B" + base64_txt;
+			}
+		}
+
+		static size_t deserializePointCount(const std::string& txt)
+		{
+			if (txt[0] == 'B')
+			{
+				std::string base64 = txt.substr(1);
+				std::vector<unsigned char> buffer = base64_decode(base64);
+				std::istringstream iss(std::string(buffer.begin(), buffer.end()), std::ios::binary);
+
+				int count = 0;
+				iss.read(reinterpret_cast<char*>(&count), sizeof(int));
+
+				return static_cast<size_t>(count);
+			}
+			else
+			{
+				std::string t = txt.substr(1);
+				std::replace(t.begin(), t.end(), '_', ' '); // todo: use getline and skip this
+				std::istringstream iss(txt);
+				iss.ignore(); // Skip first char
+				int point_count;
+				iss >> point_count;
+				return point_count;
+			}
+		}
+
+		// Deserialize Base64 string to Spline
+		void deserialize(const std::string& txt)
+		{
+			size_t old_hash = hash();
+
+			// Determine serialization type
+			if (txt[0] == 'B')
+			{
+				std::string base64 = txt.substr(1);
+				std::vector<unsigned char> buffer = base64_decode(base64);
+				std::istringstream iss(std::string(buffer.begin(), buffer.end()), std::ios::binary);
+
+				// Read point_count
+				iss.read(reinterpret_cast<char*>(&point_count), sizeof(int));
+
+				// Allocate or nullify points based on count
+				if (point_count > 0)
+				{
+					//if (!points)
+					//	points = new float[point_count * 2]; // You must manage this externally
+
+					iss.read(reinterpret_cast<char*>(points), point_count * 2 * sizeof(float));
+				}
+				//else
+				//{
+				//	points = nullptr;
+				//}
+			}
+			else
+			{
+				std::string t = txt;
+				std::replace(t.begin(), t.end(), '_', ' ');
+				std::istringstream iss(t);
+				iss.ignore(); // Skip first char
+
+				iss >> point_count;
+				if (point_count > 0)
+				{
+					for (int i = 0; i < point_count; i++)
+					{
+						iss >> points[i * 2];
+						iss >> points[i * 2 + 1];
+					}
+				}
+				//else
+				//{
+				//	points = nullptr;
+				//}
+			}
 
 			updateHash();
 
@@ -1142,10 +1420,16 @@ namespace ImSpline
 			}
 		}
 
-
 		friend int SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
 	};
 
+
+	inline ImColor adjustBrightness(ImColor c, float mult)
+	{
+		ImVec4 ret = c.Value * 0.9f;
+		ret.w = c.Value.w;
+		return ret;
+	}
 
 	inline int SplineEditor(const char* label, Spline* spline, ImRect* view_rect, float max_editor_size=300.0f)
 	{
@@ -1160,19 +1444,27 @@ namespace ImSpline
 
 		int hovered = IsItemActive() || IsItemHovered();
 
+		ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
+		ImVec4 dim_bg = bg * 0.85f;
+		dim_bg.w = bg.w;
+
 		ImColor green(0.0f, 1.0f, 0.0f, 1.0);
 		ImColor pink(1.0f, 0.0f, 0.75f, 1.0);
 		ImColor red_dim(1.0f, 0.0f, 0.0f, 0.5);
 		ImColor red(1.0f, 0.0f, 0.0f, 1.0);
 		ImColor blue(0.2f, 0.1f, 1.0f, 1.0);
-		ImColor purple(0.65f, 0.0f, 1.0f, 1.0);
 		ImColor cyan_inactive(0.00f, 0.5f, 1.0f, 1.0f);
 		ImColor cyan_active(0.0f, 0.75f, 1.0f, 1.0f);
-		ImColor grid_color(0.5f, 0.5f, 0.5f, 1.0f);
-		ImColor bright_grid_color(0.8f, 0.8f, 0.8f, 1.0f);
+		ImColor grid_color(1.0f, 1.0f, 1.0f, 0.1f);
+		ImColor bright_grid_color(1.0f, 1.0f, 1.0f, 0.3f);
 		ImColor white(1.0f, 1.0f, 1.0f, 1.0f);
-		ImColor white_dim(1.0f, 1.0f, 1.0f, 1.0f);
+		ImColor white_faded(1.0f, 1.0f, 1.0f, 0.4f);
+		ImColor light_gray(0.7f, 0.7f, 0.7f, 1.0f);
 
+		ImColor spline_path_color = white_faded;// GetColorU32(ImGuiCol_SliderGrab, 1);
+		ImColor handle_line_color = white;
+		ImColor handle_grabber_color = white;
+		ImColor handle_grabber_pressed_color = light_gray;
 
 		float* points = spline->points;
 		int numPoints = spline->point_count;
@@ -1192,7 +1484,7 @@ namespace ImSpline
 
 		hovered |= 0 != ItemHoverable(ImRect(bb.Min, bb.Min + ImVec2(dim, dim)), id, ImGui::GetCurrentContext()->LastItemData.ItemFlags);
 
-		ImVec2 mouse = IO.MousePos;
+		ImVec2 pointer = IO.MousePos;
 		bool spline_changed = false;
 
 		if (hovered)
@@ -1218,7 +1510,7 @@ namespace ImSpline
 			{
 				spline->panning = true;
 				spline->pan_mouse_down_vr = *view_rect;
-				spline->pan_mouse_down_pos = mouse;
+				spline->pan_mouse_down_pos = pointer;
 			}
 			else if (ImGui::IsMouseReleased(ImGuiMouseButton_Middle) ||
 				!ImGui::IsMouseDown(ImGuiMouseButton_Middle))
@@ -1228,14 +1520,15 @@ namespace ImSpline
 
 			if (spline->panning)
 			{
-				ImVec2 pixel_offset = (mouse - spline->pan_mouse_down_pos);
+				ImVec2 pixel_offset = (pointer - spline->pan_mouse_down_pos);
 				ImVec2 graph_offset = pixel_offset * (view_rect->Max - view_rect->Min) / bb.GetSize();
 				view_rect->Min = spline->pan_mouse_down_vr.Min - graph_offset;
 				view_rect->Max = spline->pan_mouse_down_vr.Max - graph_offset;
 			}
 		}
 
-		RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg, 1), true, Style.FrameRounding);
+		//RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg, 1), true, Style.FrameRounding);
+		RenderFrame(bb.Min, bb.Max, GetColorU32(dim_bg), true, Style.FrameRounding);
 
 		auto fromGraph = [&bb, view_rect](ImVec2 p)
 		{
@@ -1247,82 +1540,105 @@ namespace ImSpline
 			ImVec2 r = (p - bb.Min) / (bb.Max - bb.Min);
 			return view_rect->Min + (r * view_rect->GetSize());
 		};
+		auto snap = [](ImVec2& p, float step)
+		{
+			p.x = floor(p.x / step) * step;
+			p.y = floor(p.y / step) * step;
+		};
 
 		// Cast float* to ImVec2*
 		ImVec2* point_arr = spline->pointVecArray();
 
 		// Handle knot/handle dragging
-		ImVec2 graph_mouse = toGraph(mouse);
-		float handle_size = 5;
+		ImVec2 graph_mouse = toGraph(pointer);
+		float handle_size = ImGui::GetFontSize() / 4.0f;
 		float handle_size_sq = handle_size * handle_size;
+
+
+		if (IsMouseClicked(0) && bb.Contains(pointer))
+		{
+			float nearest_d2 = std::numeric_limits<float>::max();
+			int nearest_i = -1;
+			for (int i = 0; i < numPoints; i++)
+			{
+				ImVec2& p = point_arr[i];
+				ImVec2 client_pos = fromGraph(p);
+				ImVec2 mouse_dist = pointer - client_pos;
+				float d2 = mouse_dist.x * mouse_dist.x + mouse_dist.y * mouse_dist.y;
+				if (d2 < nearest_d2)
+				{
+					nearest_d2 = d2;
+					nearest_i = i;
+				}
+			}
+			if (nearest_i >= 0)
+			{
+				spline->dragging_index = nearest_i;
+				ImVec2& p = point_arr[nearest_i];
+
+				bool isKnot = spline->isKnot(nearest_i);
+				if (isKnot)
+				{
+					// Clicked on knot
+					ImVec2& h1_p = point_arr[nearest_i - 1];
+					ImVec2& h2_p = point_arr[nearest_i + 1];
+					spline->h1_offset = h1_p - p;
+					spline->h2_offset = h2_p - p;
+				}
+				else
+				{
+					// Clicked on handle. Get opposite handle dist for rotation
+					int knot_point_index = (nearest_i / 3) * 3 + 1;
+					int h1_index = knot_point_index - 1;
+					int h2_index = knot_point_index + 1;
+					ImVec2& knot = point_arr[knot_point_index];
+
+					if (nearest_i == h1_index)
+					{
+						// handle h1 clicked, cache h2 dist
+						ImVec2& h2 = point_arr[h2_index];
+						ImVec2 h2_d = h2 - knot;
+						spline->opposite_handle_dist = sqrt(h2_d.x * h2_d.x + h2_d.y * h2_d.y);
+
+					}
+					else if (nearest_i == h2_index)
+					{
+						// handle h2 clicked, cache h1 dist
+						ImVec2& h1 = point_arr[h1_index];
+						ImVec2 h1_d = h1 - knot;
+						spline->opposite_handle_dist = sqrt(h1_d.x * h1_d.x + h1_d.y * h1_d.y);
+					}
+				}
+			}
+		}
+		else if (IsMouseReleased(0))
+		{
+			spline->dragging_index = -1;
+		}
 
 		for (int i = 0; i < numPoints; i++)
 		{
 			ImVec2& p = point_arr[i];
-			ImVec2 client_pos = fromGraph(p);
-			ImVec2 mouse_dist = mouse - client_pos;
-			float d2 = mouse_dist.x * mouse_dist.x + mouse_dist.y * mouse_dist.y;
+			//ImVec2 client_pos = fromGraph(p);
+			//ImVec2 mouse_dist = pointer - client_pos;
+			//bool hit = (i == spline->dragging_index);
 
-			bool hit = (d2 < handle_size_sq);
 			bool isKnot = spline->isKnot(i);
-
-			if ((IsMouseClicked(0)))
-			{
-				if (hit)
-				{
-					spline->dragging_index = i;
-
-					if (isKnot)
-					{
-						// Clicked on knot
-						ImVec2& h1_p = point_arr[i - 1];
-						ImVec2& h2_p = point_arr[i + 1];
-						spline->h1_offset = h1_p - p;
-						spline->h2_offset = h2_p - p;
-					}
-					else
-					{
-						// Clicked on handle. Get opposite handle dist for rotation
-						int knot_point_index = (i / 3) * 3 + 1;
-						int h1_index = knot_point_index - 1;
-						int h2_index = knot_point_index + 1;
-						ImVec2& knot = point_arr[knot_point_index];
-
-						if (i == h1_index)
-						{
-							// handle h1 clicked, cache h2 dist
-							ImVec2& h2 = point_arr[h2_index];
-							ImVec2 h2_d = h2 - knot;
-							spline->opposite_handle_dist = sqrt(h2_d.x * h2_d.x + h2_d.y * h2_d.y);
-
-						}
-						else if (i == h2_index)
-						{
-							// handle h2 clicked, cache h1 dist
-							ImVec2& h1 = point_arr[h1_index];
-							ImVec2 h1_d = h1 - knot;
-							spline->opposite_handle_dist = sqrt(h1_d.x * h1_d.x + h1_d.y * h1_d.y);
-						}
-					}
-				}
-			}
-			else if (IsMouseReleased(0))
-			{
-				spline->dragging_index = -1;
-			}
-
 			bool dragging_point = (spline->dragging_index == i);
 
 			if (dragging_point)
 			{
 				p.x = graph_mouse.x;
 				p.y = graph_mouse.y;
+				snap(p, spline->xy_precision);
 
 				// If knot, move connected handles
 				if (isKnot)
 				{
 					point_arr[i - 1] = p + spline->h1_offset;
 					point_arr[i + 1] = p + spline->h2_offset;
+					snap(point_arr[i - 1], spline->xy_precision);
+					snap(point_arr[i + 1], spline->xy_precision);
 				}
 				else // If handle, rotate opposite handle around knot
 				{
@@ -1338,6 +1654,7 @@ namespace ImSpline
 						float h2_angle = atan2(h1.y - knot.y, h1.x - knot.x) + IM_PI;
 						point_arr[h2_index].x = knot.x + cos(h2_angle) * spline->opposite_handle_dist;
 						point_arr[h2_index].y = knot.y + sin(h2_angle) * spline->opposite_handle_dist;
+						snap(point_arr[h2_index], spline->xy_precision);
 					}
 					else if (i == h2_index)
 					{
@@ -1346,6 +1663,7 @@ namespace ImSpline
 						float h1_angle = atan2(h2.y - knot.y, h2.x - knot.x) + IM_PI;
 						point_arr[h1_index].x = knot.x + cos(h1_angle) * spline->opposite_handle_dist;
 						point_arr[h1_index].y = knot.y + sin(h1_angle) * spline->opposite_handle_dist;
+						snap(point_arr[h1_index], spline->xy_precision);
 					}
 				}
 
@@ -1366,6 +1684,10 @@ namespace ImSpline
 		DrawList->PushClipRect(clip_min, clip_max, true);
 
 		// Draw grid
+		//ImGui::GetFont()->Scale = bb.GetWidth() / 200.0f;
+		float old_font_scale = GetCurrentWindow()->FontWindowScale;
+		ImGui::SetWindowFontScale(std::min(old_font_scale, std::max(0.5f*old_font_scale, old_font_scale*(bb.GetWidth() / 200.0f))));
+		
 		auto roundStep = [](float ideal_step)
 		{
 			float abs_ideal_step = fabs(ideal_step);
@@ -1429,6 +1751,8 @@ namespace ImSpline
 			grid_y += step_y;
 		}
 
+		ImGui::SetWindowFontScale(old_font_scale);
+
 		if (spline->equation)
 		{
 			float eq_inc = view_rect->GetWidth() / 100.0f;
@@ -1441,12 +1765,14 @@ namespace ImSpline
 			DrawList->AddPolyline(eq_points.Data, eq_points.Size, red, false, 1);
 		}
 
+		float spline_thickness = ImGui::GetFontSize() / 10.0f;
+
 		// Draw Spline
 		ImVector<ImVec2> spline_path;
 		//spline_path.push_back(fromGraph({ 0.0f, spline->intersectY(0.0f) }));
 		for (int i = 0; i < path.size(); i++)
 			spline_path.push_back(fromGraph(path[i]));
-		DrawList->AddPolyline(spline_path.Data, spline_path.Size, purple, false, 4);
+		DrawList->AddPolyline(spline_path.Data, spline_path.Size, spline_path_color, false, 4);
 
 		// Draw handle lines
 		for (size_t knot_point_index = 1; knot_point_index < numPoints; knot_point_index += 3)
@@ -1455,22 +1781,22 @@ namespace ImSpline
 			ImVec2& h1 = point_arr[knot_point_index - 1];
 			ImVec2& h2 = point_arr[knot_point_index + 1];
 			ImVec2 knot_pos = fromGraph(knot);
-			DrawList->AddLine(knot_pos, fromGraph(h1), white_dim, 1);
-			DrawList->AddLine(knot_pos, fromGraph(h2), white_dim, 1);
+			DrawList->AddLine(knot_pos, fromGraph(h1), handle_line_color, 1);
+			DrawList->AddLine(knot_pos, fromGraph(h2), handle_line_color, 1);
 		}
 
 		// Draw handle circles
 		for (int i = 0; i < numPoints; i++)
 		{
 			bool dragging_point = (spline->dragging_index == i);
-			DrawList->AddCircleFilled(fromGraph(point_arr[i]), handle_size, dragging_point ? cyan_active : white_dim);
+			DrawList->AddCircleFilled(fromGraph(point_arr[i]), handle_size, dragging_point ? white : light_gray);
 		}
 
 		// Show intersections
 		if (spline->dragging_index < 0)
 		{
 			int intersection_count = spline->countIntersectsY(graph_mouse.x);
-			DrawList->AddLine(ImVec2(mouse.x, bb.Min.y), ImVec2(mouse.x, bb.Max.y), red_dim, 1.0f);
+			DrawList->AddLine(ImVec2(pointer.x, bb.Min.y), ImVec2(pointer.x, bb.Max.y), red_dim, 1.0f);
 			for (int i = 0; i < intersection_count; i++)
 			{
 				float iy = spline->intersectY(graph_mouse.x, i);
@@ -1480,30 +1806,44 @@ namespace ImSpline
 
 		DrawList->PopClipRect();
 
+		if (spline_changed)
+			MarkItemEdited(id);
+
 		return spline_changed;
 	}
 
-	inline int SplineEditorPair(const char* label, Spline* spline1, Spline* spline2, ImRect* view_rect, float max_editor_width = 500.0f)
+	inline int SplineEditorPair(
+		const char* label,
+		Spline* spline1,
+		Spline* spline2,
+		ImRect* view_rect,
+		float max_graph_width = 500.0f,
+		float min_graph_wrap_width = 150.0f)
 	{
-		float availableWidth = ImGui::GetContentRegionAvail().x;
+		float avail_width = ImGui::GetContentRegionAvail().x;
 		float spacing = ImGui::GetStyle().ItemSpacing.x;
 
-		// Clamp the available width to max_editor_width if necessary.
-		float clampedWidth = (availableWidth > max_editor_width) ? max_editor_width : availableWidth;
+		// Clamp the available width to max_graph_width if necessary.
+		float clamped_width = (avail_width > max_graph_width) ? max_graph_width : avail_width;
+		float graph_size = (clamped_width - spacing) / 2.0f;
 
-		// Subtract the spacing between the two editors and divide the remainder equally.
-		float editor_size = (clampedWidth - spacing) / 2.0f;
 
 		char label1[128], label2[128];
 		snprintf(label1, sizeof(label1), "%s##1", label);
 		snprintf(label2, sizeof(label2), "%s##2", label);
 
-		// Render the first spline editor.
-		int ret1 = SplineEditor(label1, spline1, view_rect, editor_size);
-
-		// Place the second editor on the same line and reapply the known spacing.
-		ImGui::SameLine(0, spacing);
-		int ret2 = SplineEditor(label2, spline2, view_rect, editor_size);
-		return ret1 | ret2;
+		if (graph_size < min_graph_wrap_width)
+		{
+			int ret1 = SplineEditor(label1, spline1, view_rect, avail_width);
+			int ret2 = SplineEditor(label2, spline2, view_rect, avail_width);
+			return ret1 | ret2;
+		}
+		else
+		{
+			int ret1 = SplineEditor(label1, spline1, view_rect, graph_size);
+			ImGui::SameLine(0, spacing);
+			int ret2 = SplineEditor(label2, spline2, view_rect, graph_size);
+			return ret1 | ret2;
+		}
 	}
 }

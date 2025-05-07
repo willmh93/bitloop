@@ -36,7 +36,7 @@ namespace Thread
         unsigned int n = std::thread::hardware_concurrency();
         if (n) return n;
 
-        // 2. Platform-specific fall-backs
+        // 2. PlatformManager-specific fall-backs
         #if defined(__EMSCRIPTEN__)
             return static_cast<unsigned int>(emscripten_num_logical_cores());
         #elif defined(_WIN32)

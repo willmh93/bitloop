@@ -23,7 +23,36 @@ namespace Math
         if (pos == std::string::npos) return 0;
         return int(str.size() - pos - 1);
     }
+    inline int countDigits(int n)
+    {
+        if (n == 0) return 1;
 
+        // Work in unsigned to avoid overflow on INT_MIN
+        unsigned v = (n < 0)
+            ? static_cast<unsigned>(-(static_cast<long long>(n)))
+            : static_cast<unsigned>(n);
+
+        return static_cast<int>(std::log10(static_cast<double>(v))) + 1;
+    }
+    template <typename Float>
+    int countWholeDigits(Float x)
+    {
+        static_assert(std::is_floating_point_v<Float>,
+            "Float must be a floating?point type");
+
+        // Handle NaN and infinities up front.
+        if (!std::isfinite(x))
+            return 0;   // or throw/otherwise signal an error
+
+        x = std::fabs(x);
+
+        // Any |x| in [0,1) has "0" as its whole part ? 1 digit.
+        if (x < 1)
+            return 1;
+
+        // digits = floor(log10(x)) + 1
+        return static_cast<int>(std::floor(std::log10(x))) + 1;
+    }
     // Coordinate offset rotation
     inline Vec2 rotateOffset(double dx, double dy, double rotation)
     {

@@ -4,7 +4,7 @@
 SIM_DECLARE(Cardioid, "Fractal", "Mandelbrot", "Main Cardioid")
 
 // Exported
-void plot(Scene *scene, Viewport* ctx, bool interactive, int segments, double ox)
+void plot(SceneBase *scene, Viewport* ctx, bool interactive, int segments, double ox)
 {
     ctx->camera.saveCameraTransform();
     ctx->camera.setTransformFilters(true, false, false, false);
@@ -39,7 +39,7 @@ void plot(Scene *scene, Viewport* ctx, bool interactive, int segments, double ox
     {
 
         double tx1, ty1, tx2, ty2, ta, oa, d;
-        cardioidPolarCoord(scene->mouse->world_x, scene->mouse->world_y, tx1, ty1, ta, d, oa);
+        cardioidPolarCoord(scene->pointer->world_x, scene->pointer->world_y, tx1, ty1, ta, d, oa);
 
         ctx->camera.scalingSizes(true);
 
@@ -98,10 +98,7 @@ void plot(Scene *scene, Viewport* ctx, bool interactive, int segments, double ox
     ctx->camera.restoreCameraTransform();
 }
 
-/// Project ///
-
-void Cardioid_Project::projectAttributes()
-{}
+/// BasicProject ///
 
 void Cardioid_Project::projectPrepare()
 {
@@ -114,7 +111,7 @@ void Cardioid_Project::projectPrepare()
 
 /// Scene ///
 
-void Cardioid_Scene::sceneAttributes()
+void Cardioid_Scene_Vars::populate(Cardioid_Scene_Vars &dst)
 {
     //ImGui::SliderDouble("Angle", &interact_angle, 0, (2 * M_PI));
     ImGui::SliderDouble("Angle Step", &interact_angle_step, 0, (2 * M_PI) / 100.0);
@@ -156,7 +153,7 @@ double originalAngleFromPerpAngle(double perp_angle)
 void Cardioid_Scene::viewportProcess(Viewport* ctx)
 {
     /// Process Viewports running this Scene
-    //interact_angle = originalAngleFromPoint(mouse->world_x, mouse->world_y);
+    //interact_angle = originalAngleFromPoint(pointer->world_x, pointer->world_y);
 }
 
 void Cardioid_Scene::viewportDraw(Viewport* ctx)
@@ -182,7 +179,7 @@ void Cardioid_Scene::viewportDraw(Viewport* ctx)
     ctx->setFillStyle(255, 0, 0);
     ctx->fillEllipse(p.x, p.y, 5);
 
-    Vec2 p2 = cumulative_cardioid_lookup.originalPolarCoordinate(mouse->world_x, mouse->world_y, interact_spin_mult);
+    Vec2 p2 = cumulative_cardioid_lookup.originalPolarCoordinate(pointer->world_x, pointer->world_y, interact_spin_mult);
     Vec2 p3 = cumulative_cardioid_lookup.project(p2.x, p2.y, interact_spin_mult);
 
     ctx->setFillStyle(255, 0, 0);
@@ -208,7 +205,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox)
     ctx->setLineWidth(2);
 
     double tx1, ty1, tx2, ty2, ta, oa, d;
-    cardioidPolarCoord(mouse->world_x, mouse->world_y, tx1, ty1, ta, d, oa);
+    cardioidPolarCoord(pointer->world_x, pointer->world_y, tx1, ty1, ta, d, oa);
 
     camera->scalingSizes(true);
     
@@ -254,7 +251,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox)
     ctx->stroke();
     
     
-    // Draw perpendicular arrow (to mouse)
+    // Draw perpendicular arrow (to pointer)
     double perp_angle = Math::wrapRadians2PI(ta - M_PI / 2.0);
     ///tx2 = tx1 + cos(perp_angle) * d;
     ///ty2 = ty1 + sin(perp_angle) * d;
@@ -389,13 +386,8 @@ void Cardioid_Scene::fullPlotAlternative(Viewport* ctx, double scale, double ox)
     ctx->stroke();
 }
 
-void Cardioid_Graph_Scene::sceneAttributes()
-{}
-
 void Cardioid_Graph_Scene::sceneStart()
 {
-    //thread_count = (int)(1.5 * ((double)Thread::idealThreadCount()));
-    //pool.setMaxThreadCount(thread_count);
 }
 
 void Cardioid_Graph_Scene::sceneMounted(Viewport* viewport)
@@ -533,12 +525,5 @@ void Cardioid_Graph_Scene::viewportDraw(Viewport* ctx)
     ctx->stroke();
 }
 
-
-/// User Interaction
-
-void Cardioid_Scene::mouseDown() {}
-void Cardioid_Scene::mouseUp() {}
-void Cardioid_Scene::mouseMove() {}
-void Cardioid_Scene::mouseWheel() {}
 
 SIM_END(Cardioid)

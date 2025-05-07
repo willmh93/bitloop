@@ -1,9 +1,80 @@
 #include "project.h"
 
+/// Event
+
+
+// Touch helpers
+
+double Event::finger_x()
+{
+    return (double)(_event.tfinger.x * (float)PlatformManager::get()->drawable_width());
+}
+
+double Event::finger_y()
+{
+    return (double)(_event.tfinger.y * (float)PlatformManager::get()->drawable_height());
+}
+
+std::string Event::info()
+{
+    std::string focused = _focused_ctx ? std::to_string(_focused_ctx->viewportIndex()) : "_";
+    std::string hovered = _hovered_ctx ? std::to_string(_hovered_ctx->viewportIndex()) : "_";
+    std::string type;
+
+    char attribs[256];
+    
+    switch (_event.type) 
+    {
+    case SDL_KEYDOWN:           type = "SDL_KEYDOWN";         break;
+    case SDL_KEYUP:             type = "SDL_KEYUP";           break;
+
+    case SDL_MOUSEMOTION:       type = "SDL_MOUSEMOTION";     
+        sprintf(attribs, "{%d, %d}",
+            _event.motion.x,
+            _event.motion.y); 
+
+        break;
+
+    case SDL_MOUSEBUTTONDOWN:   type = "SDL_MOUSEBUTTONDOWN";  goto mouse_attribs;
+    case SDL_MOUSEBUTTONUP:     type = "SDL_MOUSEBUTTONUP";    goto mouse_attribs;
+        mouse_attribs:
+        sprintf(attribs, "{%d, %d}", 
+            _event.button.x, 
+            _event.button.y); 
+
+        break;
+
+    case SDL_FINGERDOWN:        type = "SDL_FINGERDOWN";    goto finger_attribs;
+    case SDL_FINGERUP:          type = "SDL_FINGERUP";      goto finger_attribs;
+    case SDL_FINGERMOTION:      type = "SDL_FINGERMOTION";
+        finger_attribs:
+        sprintf(attribs, "{F_%lld, %d, %d}", 
+            _event.tfinger.fingerId, 
+            (int)(_event.tfinger.x * (float)PlatformManager::get()->drawable_width()),
+            (int)(_event.tfinger.y * (float)PlatformManager::get()->drawable_height()));
+
+        break;
+
+    case SDL_MULTIGESTURE:      type = "SDL_MULTIGESTURE";     break;
+
+    case SDL_MOUSEWHEEL:        type = "SDL_MOUSEWHEEL";       break;
+    case SDL_TEXTINPUT:         type = "SDL_TEXTINPUT";        break;
+
+    default:                    type = "UNKNOWN_EVENT";        break;
+    }
+
+    std::string info;
+    info += "[focused: " + focused + "] ";
+    info += "[hovered: " + hovered + "] ";
+    info += "[" + type + "] ";
+    info += attribs;
+
+    return info;
+}
 
 /// Scene
 
-void Scene::registerMount(Viewport* viewport)
+void SceneBase::registerMount(Viewport* viewport)
 {
     //options = viewport->options;
     //camera = &viewport->camera;
@@ -11,16 +82,16 @@ void Scene::registerMount(Viewport* viewport)
     mounted_to_viewports.push_back(viewport);
     ///qDebug() << "Mounted to Viewport: " << viewport->viewportIndex();
 
-    std::vector<Scene*>& all_scenes = viewport->layout->all_scenes;
+    std::vector<SceneBase*>& all_scenes = viewport->layout->all_scenes;
 
     // Only add scene to list if it's not already in the layout (mounted to another viewport)
     if (std::find(all_scenes.begin(), all_scenes.end(), this) == all_scenes.end())
         viewport->layout->all_scenes.push_back(this);
 }
 
-void Scene::registerUnmount(Viewport* viewport)
+void SceneBase::registerUnmount(Viewport* viewport)
 {
-    std::vector<Scene*>& all_scenes = viewport->layout->all_scenes;
+    std::vector<SceneBase*>& all_scenes = viewport->layout->all_scenes;
 
     // Only remove scene from list if the layout includes it (which it should)
     auto scene_it = std::find(all_scenes.begin(), all_scenes.end(), this);
@@ -39,17 +110,17 @@ void Scene::registerUnmount(Viewport* viewport)
     }
 }
 
-void Scene::mountTo(Viewport* viewport)
+void SceneBase::mountTo(Viewport* viewport)
 {
     viewport->mountScene(this);
 }
 
-void Scene::mountTo(Layout& viewports)
+void SceneBase::mountTo(Layout& viewports)
 {
     viewports[viewports.count()]->mountScene(this);
 }
 
-void Scene::mountToAll(Layout& viewports)
+void SceneBase::mountToAll(Layout& viewports)
 {
     for (Viewport* viewport : viewports)
         viewport->mountScene(this);
@@ -89,6 +160,7 @@ Viewport::~Viewport()
 void Viewport::draw()
 {
     // Set defaults
+    setFont(getDefaultFont());
     setTextAlign(TextAlign::ALIGN_LEFT);
     setTextBaseline(TextBaseline::BASELINE_TOP);
 
@@ -137,10 +209,14 @@ void Viewport::draw()
 
     print_text = "";*/
 
+    print_stream.str("");
+    print_stream.clear();
+
     // Draw mounted project to this viewport
     scene->camera = &camera;
     scene->viewportDraw(this);
 
+    // Draw print() lines at top-left of viewport
     save();
     camera.saveCameraTransform();
     camera.stageTransform();
@@ -148,9 +224,11 @@ void Viewport::draw()
     setTextBaseline(TextBaseline::BASELINE_TOP);
     setFillStyle(255, 255, 255);
 
-    ///auto lines = print_text.split('\n');
-    ///for (int i = 0; i < lines.size(); i++)
-    ///    fillText(lines[i], 5, 5 + (i * 16));
+    print_stream.seekg(0);
+    int line_index = 0;
+    std::string line;
+    while (std::getline(print_stream, line, '\n'))
+        fillText(line, 5, 5 + (line_index++ * 16));
 
     camera.restoreCameraTransform();
     restore();
@@ -206,6 +284,39 @@ double getAngle(Vec2 a, Vec2 b)
     return (b - a).angle();
 }
 
+void Viewport::printTouchInfo()
+{
+    double pinch_zoom_factor = camera.touchDist() / camera.pan_down_touch_dist;
+
+    print() << "cam.position:               (" << camera.x << ",  " << camera.y << ")\n";
+    print() << "cam.pan:                     (" << camera.pan_x << ",  " << camera.pan_y << ")\n";
+    print() << "cam.rotation:              " << camera.rotation << "\n";
+    print() << "cam.zoom:                  (" << camera.zoom_x << ", " << camera.zoom_y << ")\n\n";
+    print() << "---------------------------------------------------------------\n";
+    print() << "pan_down_touch_x           = " << camera.pan_down_touch_x << "\n";
+    print() << "pan_down_touch_y           = " << camera.pan_down_touch_y << "\n";
+    print() << "pan_down_touch_dist      = " << camera.pan_down_touch_dist << "\n";
+    print() << "pan_down_touch_angle   = " << camera.pan_down_touch_angle << "\n";
+    print() << "---------------------------------------------------------------\n";
+    print() << "pan_beg_cam_x                = " << camera.pan_beg_cam_x << "\n";
+    print() << "pan_beg_cam_y                = " << camera.pan_beg_cam_y << "\n";
+    print() << "pan_beg_cam_zoom_x    = " << camera.pan_beg_cam_zoom_x << "\n";
+    print() << "pan_beg_cam_zoom_y    = " << camera.pan_beg_cam_zoom_y << "\n";
+    print() << "pan_beg_cam_angle        = " << camera.pan_beg_cam_angle << "\n";
+    print() << "---------------------------------------------------------------\n";
+    print() << "cam.touchAngle()        = " << camera.touchAngle() << "\n";
+    print() << "cam.touchDist()         = " << camera.touchDist() << "\n";
+    print() << "---------------------------------------------------------------\n";
+    print() << "pinch_zoom_factor   = " << pinch_zoom_factor << "x\n";
+    print() << "---------------------------------------------------------------\n";
+
+    int i = 0;
+    for (auto finger : camera.pressed_fingers)
+    {
+        print() << "Finger " << i << ": [id: " << finger.fingerId << "] - (" << finger.x << ", " << finger.y << ")\n";
+        i++;
+    }
+}
 
 void Viewport::drawWorldAxis(
     double axis_opacity,
@@ -415,6 +526,12 @@ void Viewport::drawWorldAxis(
 
 /// Layout
 
+void Layout::expandCheck(size_t count)
+{
+    if (count > viewports.size())
+        resize(count);
+}
+
 void Layout::add(int _viewport_index, int _grid_x, int _grid_y)
 {
     Viewport* viewport = new Viewport(this, project->canvas, _viewport_index, _grid_x, _grid_y);
@@ -475,66 +592,104 @@ void Layout::resize(size_t viewport_count)
     // todo: Unmount remaining viewport sims
 }
 
-void Layout::expandCheck(size_t count)
-{
-    if (count > viewports.size())
-        resize(count);
-}
-
 /// Project
 
-void Project::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
+void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
 {
+    DebugPrint("Project::configure");
+
     sim_uid = _sim_uid;
     canvas = _canvas;
     debug_log = shared_log;
 
     viewports.project = this;
 
-    //options = _options;
-    //options->setCurrentProject(this);
-
     started = false;
     paused = false;
     done_single_populate_attributes = false;
 }
 
-void Project::_populateAttributes()
+void ProjectBase::_populateAllAttributes(bool show_ui)
 {
-    //ImGui::SeparatorText("Project");
-    if (ImGui::CollapsingHeader("Project", ImGuiTreeNodeFlags_DefaultOpen))
+    if (has_var_buffer)
     {
-        ImGui::PushID("project_section");
-        projectAttributes();
-        ImGui::PopID();
+        bool showUI = ImGui::CollapsingHeader("Project", ImGuiTreeNodeFlags_DefaultOpen);
+
+        if (showUI)
+        {
+            ImGui::PushID("project_section");
+            _projectAttributes();
+            ImGui::PopID();
+        }
+        //else
+        //{
+        //    //ImGui::SetNextWindowSize(ImVec2(0, 0));
+        // //ImGui::Begin("HiddenProjectAttributes", nullptr, hidden_window_flags);
+        //    ImGui::PushID("project_section");
+        //    bool old_skip = ImGui::GetCurrentWindow()->SkipItems;
+        //    ImGui::GetCurrentWindow()->SkipItems = true;
+        //    _projectAttributes();
+        //    ImGui::GetCurrentWindow()->SkipItems = old_skip;
+        //    ImGui::PopID();
+        //    //ImGui::End();
+        //}
+
+        ImGui::Dummy(ScaleSize(0, 8));
     }
-
-    ImGui::Dummy(ImVec2(0, 8));
-    //ImGui::SeparatorText("Scenes");
-
+	
     // Scene sections
     Layout& layout = currentLayout();
     auto& scenes = layout.scenes();
-    for (Scene* scene : scenes)
+    for (SceneBase* scene : scenes)
     {
+        if (!scene->has_var_buffer)
+            continue;
+
         std::string sceneName = scene->name() + " " + std::to_string(scene->sceneIndex());
-        if (ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        std::string section_id = sceneName + "_section";
+        bool showSceneUI = ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+        if (showSceneUI)
         {
             // Allow Scene to populate inputs for section
-            ImGui::PushID((sceneName + "_section").c_str());
-            scene->sceneAttributes();
+            ImGui::PushID(section_id.c_str());
+            scene->_sceneAttributes();
             ImGui::PopID();
         }
+        //else
+        //{
+        //    // Allow Scene to populate inputs for section
+        //    ImGui::PushID(section_id.c_str());
+        //    bool old_skip = ImGui::GetCurrentWindow()->SkipItems;
+        //    ImGui::GetCurrentWindow()->SkipItems = true;
+        //    //ImGui::PushClipRect();
+        //    scene->_sceneAttributes();
+        //    ImGui::GetCurrentWindow()->SkipItems = old_skip;
+        //    ImGui::PopID();
+        //}
+        //else
+        //{
+        //    ImGui::SetNextWindowSize(ImVec2(0, 0));
+        //    ImGui::Begin("HiddenSceneAttributes", nullptr, hidden_window_flags);
+        //    ImGui::PushID(section_id.c_str());
+        //    scene->_sceneAttributes();
+        //    ImGui::PopID();
+        //    ImGui::End();
+        //}
     }
+
+
+
     if (!done_single_populate_attributes)
     {
         done_single_populate_attributes = true;
+        DebugPrint("done_single_populate_attributes = true;");
         logMessage("done_single_populate_attributes = true;");
     }
 }
 
-void Project::_projectPrepare()
+void ProjectBase::_projectPrepare()
 {
+    DebugPrint("_projectPrepare()");
     logMessage("_projectPrepare()");
     viewports.clear();
 
@@ -546,8 +701,9 @@ void Project::_projectPrepare()
     projectPrepare();
 }
 
-void Project::_projectStart()
+void ProjectBase::_projectStart()
 {
+    DebugPrint("_projectStart()");
     logMessage("_projectStart()");
     if (paused)
     {
@@ -561,19 +717,24 @@ void Project::_projectStart()
     // Prepare layout
     _projectPrepare();
 
+    assert(viewports.count() >  0);
+
     // Update layout rects
     updateViewportRects();
 
-    // Call Project::projectStart()
+    // Variable Buffer initializes itself *first*?
+    //_updateLiveAttributes();
+
+    // Call BasicProject::projectStart()
     projectStart();
 
     //cache.init("cache.bin");
 
     // Start project scenes
-    for (Scene* scene : viewports.all_scenes)
+    for (SceneBase* scene : viewports.all_scenes)
     {
         ///scene->cache = &cache;
-        scene->mouse = &mouse;
+        scene->pointer = &pointer;
         ///scene->dt_scene_ma_list.clear();
         ///scene->dt_project_ma_list.clear();
         ///scene->dt_project_draw_ma_list.clear();
@@ -589,6 +750,9 @@ void Project::_projectStart()
         viewport->scene->sceneMounted(viewport);
     }
 
+    //for (SceneBase* scene : viewports.all_scenes)
+    //    scene->_updateShadowAttributes();
+
     ///if (record_on_start)
     ///    startRecording();
 
@@ -597,7 +761,7 @@ void Project::_projectStart()
     started = true;
 }
 
-void Project::_projectStop()
+void ProjectBase::_projectStop()
 {
     projectStop();
     ///cache.finalize();
@@ -610,18 +774,18 @@ void Project::_projectStop()
     started = false;
 }
 
-void Project::_projectPause()
+void ProjectBase::_projectPause()
 {
     paused = true;
 }
 
-void Project::_projectDestroy()
+void ProjectBase::_projectDestroy()
 {
     setProjectInfoState(ProjectInfo::INACTIVE);
     projectDestroy();
 }
 
-void Project::updateViewportRects()
+void ProjectBase::updateViewportRects()
 {
     Vec2 surface_size = surfaceSize();
 
@@ -641,7 +805,7 @@ void Project::updateViewportRects()
     }
 }
 
-Vec2 Project::surfaceSize()
+Vec2 ProjectBase::surfaceSize()
 {
     double w;
     double h;
@@ -663,7 +827,7 @@ Vec2 Project::surfaceSize()
     return Vec2(w, h);
 }
 
-void Project::_projectProcess()
+void ProjectBase::_projectProcess()
 {
     updateViewportRects();
 
@@ -675,8 +839,8 @@ void Project::_projectProcess()
         // Allow panning/zooming, even when paused
         for (Viewport* viewport : viewports)
         {
-            double viewport_mx = mouse.client_x - viewport->x;
-            double viewport_my = mouse.client_y - viewport->y;
+            double viewport_mx = pointer.client_x - viewport->x;
+            double viewport_my = pointer.client_y - viewport->y;
 
             if (viewport_mx >= 0 && viewport_my >= 0 &&
                 viewport_mx <= viewport->width && viewport_my <= viewport->height)
@@ -684,11 +848,11 @@ void Project::_projectProcess()
                 Camera& cam = viewport->camera;
 
                 Vec2 world_mouse = cam.toWorld(viewport_mx, viewport_my);
-                mouse.viewport = viewport;
-                mouse.stage_x = viewport_mx;
-                mouse.stage_y = viewport_my;
-                mouse.world_x = world_mouse.x;
-                mouse.world_y = world_mouse.y;
+                pointer.viewport = viewport;
+                pointer.stage_x = viewport_mx;
+                pointer.stage_y = viewport_my;
+                pointer.world_x = world_mouse.x;
+                pointer.world_y = world_mouse.y;
                 viewport->camera.panZoomProcess();
             }
         }
@@ -698,14 +862,19 @@ void Project::_projectProcess()
             ///timer_projectProcess.start();
 
             // Process each scene
-            for (Scene* scene : viewports.all_scenes)
+            for (SceneBase* scene : viewports.all_scenes)
             {
+                //scene->_updateLiveAttributes();
+
                 ///scene->dt_call_index = 0;
                 ///scene->timer_sceneProcess.start();
-                scene->mouse = &mouse;
+                scene->pointer = &pointer;
                 scene->sceneProcess();
                 ///scene->dt_sceneProcess = scene->timer_sceneProcess.elapsed();
+                
+                //scene->_updateShadowAttributes();
             }
+
 
             // Allow project to handle process on each Viewport
             for (Viewport* viewport : viewports)
@@ -724,8 +893,9 @@ void Project::_projectProcess()
             }
 
             // Post-Process each scene
-            for (Scene* scene : viewports.all_scenes)
+            for (SceneBase* scene : viewports.all_scenes)
             {
+                //scene->_updateShadowAttributes();
                 scene->variableChangedUpdateCurrent();
             }
             
@@ -736,6 +906,7 @@ void Project::_projectProcess()
             if (!done_single_process)
             {
                 did_first_process = true;
+                DebugPrint("did_project_process = true;");
                 logMessage("did_project_process = true;");
             }
         }
@@ -745,11 +916,13 @@ void Project::_projectProcess()
         done_single_process = true;
 }
 
-void Project::_projectDraw()
+void ProjectBase::_projectDraw()
 {
     if (!done_single_process)
     {
+        DebugPrint("Waiting for single process()...");
         logMessage("Waiting for single process()...");
+        return;
     }
     if (!started)
     {
@@ -827,31 +1000,197 @@ void Project::_projectDraw()
     }
 }
 
-
-
-void Project::setProjectInfoState(ProjectInfo::State state)
+void ProjectBase::_onEvent(SDL_Event& e)
 {
-    getProjectInfo()->state = state;
-    //options->refreshTreeUI();
+    Event event(e);
+
+    // Track "cursor" position (pointer/first touch)
+    switch (e.type)
+    {
+        case SDL_MOUSEMOTION:
+        {
+            pointer.client_x = e.motion.x;
+            pointer.client_y = e.motion.y;
+        }
+        break;
+
+        case SDL_FINGERMOTION:
+        {
+            pointer.client_x = (double)(e.tfinger.x * (float)PlatformManager::get()->drawable_width());
+            pointer.client_y = (double)(e.tfinger.y * (float)PlatformManager::get()->drawable_height());
+        }
+        break;
+
+        ///case SDL_MOUSEWHEEL:
+        ///{
+        ///    pointer.scroll_delta = e.wheel.
+        ///}
+        ///break;
+    }
+
+    // Track "focused" and "hovered" viewports
+    switch (e.type)
+    {
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_FINGERDOWN:
+        {
+            bool captured = false;
+            for (Viewport* ctx : viewports)
+            {
+                if (ctx->viewportRect().hitTest(pointer.client_x, pointer.client_y))
+                {
+                    focused_ctx = ctx;
+                    captured = true;
+                    break;
+                }
+            }
+            if (!captured)
+                focused_ctx = nullptr;
+        }
+        break;
+
+        case SDL_MOUSEMOTION:
+        case SDL_FINGERMOTION:
+        {
+            bool captured = false;
+            for (Viewport* ctx : viewports)
+            {
+                if (ctx->viewportRect().hitTest(pointer.client_x, pointer.client_y))
+                {
+                    hovered_ctx = ctx;
+                    captured = true;
+                    break;
+                }
+            }
+            if (!captured)
+                hovered_ctx = nullptr;
+        }
+        break;
+    }
+
+
+    // Track fingers
+    if (PlatformManager::get()->is_mobile())
+    {
+        // Does this finger already have an owner? Attach it to the event
+        Viewport* owner_ctx = nullptr;
+        
+        // Support both single-finger pan & 2 finger transform
+        switch (e.type)
+        {
+        case SDL_FINGERDOWN:
+        {
+            owner_ctx = focused_ctx;
+
+            // Add pressed finger
+            FingerInfo info;
+            info.owner_ctx = focused_ctx;
+            info.fingerId = e.tfinger.fingerId;
+            info.x = event.finger_x();
+            info.y = event.finger_y();
+            pressed_fingers.push_back(info);
+
+            // Remember mouse-down ctx for mouse release/motion
+            event.setOwnerViewport(owner_ctx);
+        }
+        break;
+
+        case SDL_FINGERMOTION:
+        {
+            for (size_t i = 0; i < pressed_fingers.size(); i++)
+            {
+                FingerInfo& info = pressed_fingers[i];
+                if (info.fingerId == e.tfinger.fingerId)
+                {
+                    owner_ctx = info.owner_ctx;
+                    break;
+                }
+            }
+
+            event.setOwnerViewport(owner_ctx);
+        }
+        break;
+
+        case SDL_FINGERUP:
+        {
+            for (size_t i = 0; i < pressed_fingers.size(); i++)
+            {
+                FingerInfo& info = pressed_fingers[i];
+                if (info.fingerId == e.tfinger.fingerId)
+                {
+                    owner_ctx = info.owner_ctx;
+                    break;
+                }
+            }
+
+            // Erase lifted finger
+            for (size_t i = 0; i < pressed_fingers.size(); i++)
+            {
+                FingerInfo& info = pressed_fingers[i];
+                if (info.fingerId == e.tfinger.fingerId)
+                {
+                    pressed_fingers.erase(pressed_fingers.begin() + i);
+                    break;
+                }
+            }
+
+            event.setOwnerViewport(owner_ctx);
+        }
+        break;
+        }
+    }
+    else
+    {
+        switch (e.type)
+        {
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            case SDL_MOUSEMOTION:
+            {
+                event.setOwnerViewport(focused_ctx);
+            }
+            break;
+            case SDL_MOUSEWHEEL:
+            {
+                event.setOwnerViewport(hovered_ctx);
+            }
+            break;
+        }
+    }
+
+    event.setFocusedViewport(focused_ctx);
+    event.setHoveredViewport(hovered_ctx);
+
+    onEvent(event);
+
+    for (SceneBase* scene : viewports.all_scenes)
+    {
+        scene->_onEvent(event);
+    }
 }
 
-Layout& Project::newLayout()
+
+
+void ProjectBase::setProjectInfoState(ProjectInfo::State state)
+{
+    getProjectInfo()->state = state;
+}
+
+Layout& ProjectBase::newLayout()
 {
     viewports.clear();
     return viewports;
 }
 
-Layout& Project::newLayout(int targ_viewports_x, int targ_viewports_y)
+Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
 {
-    ///viewports.options = options;
-
     viewports.clear();
     viewports.setSize(targ_viewports_x, targ_viewports_y);
 
     return viewports;
 }
 
-void Scene::logMessage(const char* fmt, ...)
+void SceneBase::logMessage(const char* fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -859,7 +1198,7 @@ void Scene::logMessage(const char* fmt, ...)
     va_end(ap);
 }
 
-void Project::logMessage(const char* fmt, ...)
+void ProjectBase::logMessage(const char* fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -867,12 +1206,12 @@ void Project::logMessage(const char* fmt, ...)
     va_end(ap);
 }
 
-void Scene::logClear()
+void SceneBase::logClear()
 {
     project->debug_log->clear();
 }
 
-void Project::logClear()
+void ProjectBase::logClear()
 {
     debug_log->clear();
 }

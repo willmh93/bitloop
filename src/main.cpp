@@ -46,11 +46,12 @@
 #include "debug.h"
 #include "imgui_debug_ui.h"
 
+#define AGRESSIVE_THREAD_LOGGING false
 
 SDL_Window* window;
 SDL_GLContext gl_context;
-std::atomic<bool> done = false;
-
+std::atomic<bool> done{ false };
+std::atomic<bool> editing_ui{ false };
 
 ToolbarButtonState play = { ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
 ToolbarButtonState stop = { ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
@@ -62,13 +63,31 @@ ImDebugLog debug_log;
 
 ProjectManager project_manager;
 std::thread project_thread;
-std::condition_variable data_ready_cv;
-std::mutex data_mutex;
 
-std::atomic<bool> project_thread_started = false;
-std::atomic<bool> ready_to_render = false;
+std::condition_variable cv;
+std::mutex working_mutex;
+std::mutex state_mutex;
+bool frame_ready = false;
+bool frame_consumed = false;
+bool processing_frame = false;
+std::atomic<bool> populating_attributes{ false };
+
+std::atomic<bool> project_thread_started{ false };
+std::atomic<bool> gui_frame_running{ false };
+std::atomic<bool> copy_requested{ false };
+
+std::condition_variable cv_updating_live_buffer;
+std::atomic<bool> updating_live_buffer{ false };
+std::mutex live_buffer_mutex;
+
+std::condition_variable cv_updating_shadow;
+std::atomic<bool> updating_shadow{ false };
+std::mutex shadow_mutex;
+
 bool imgui_initialized = false;
 bool update_docking_layout = false;
+
+std::vector<SDL_Event> input_event_queue;
 
 void update_imgui_styles()
 {
@@ -80,27 +99,70 @@ void update_imgui_styles()
     style.FrameRounding = 6.0f;
     style.FramePadding = ImVec2(8.0f, 5.0f);
     style.PopupRounding = 3.0f;
-    style.ScrollbarRounding = 6.0f;
     style.GrabRounding = 2.0f;
     style.TabRounding = 6.0f;
-    style.ScrollbarSize = Platform::get()->is_mobile_device() ? 30.0f : 14;
+    style.ScrollbarRounding = Platform()->is_mobile() ? 12.0f : 6.0f;
+    style.ScrollbarSize = Platform()->is_mobile() ? 30.0f : 14.0f;
 
     // Colors
     ImVec4* colors = ImGui::GetStyle().Colors;
-    colors[ImGuiCol_WindowBg] = ImVec4(0.19f, 0.20f, 0.21f, 0.85f);
-    colors[ImGuiCol_TitleBg] = ImVec4(0.25f, 0.28f, 0.38f, 0.83f);
-    colors[ImGuiCol_TitleBgActive] = ImVec4(0.32f, 0.43f, 0.63f, 0.87f);
-    colors[ImGuiCol_Header] = ImVec4(0.44f, 0.62f, 0.85f, 0.45f);
-    colors[ImGuiCol_HeaderHovered] = ImVec4(0.45f, 0.69f, 0.90f, 0.80f);
-    colors[ImGuiCol_HeaderActive] = ImVec4(0.53f, 0.68f, 0.87f, 0.80f);
-    colors[ImGuiCol_TabHovered] = ImVec4(0.45f, 0.67f, 0.90f, 0.80f);
-    colors[ImGuiCol_Tab] = ImVec4(0.34f, 0.47f, 0.68f, 0.79f);
-    colors[ImGuiCol_TabSelected] = ImVec4(0.40f, 0.59f, 0.73f, 0.84f);
-    colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.53f, 0.72f, 0.87f, 0.80f);
-    colors[ImGuiCol_TabDimmed] = ImVec4(0.28f, 0.41f, 0.57f, 0.82f);
-    colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.35f, 0.46f, 0.65f, 0.84f);
 
-    style.ScaleAllSizes(Platform::get()->ui_scale_factor());
+    // Base colors for a pleasant and modern dark theme with dark accents
+    colors[ImGuiCol_Text] = ImVec4(0.92f, 0.93f, 0.94f, 1.00f);                  // Light grey text for readability
+    colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.52f, 0.54f, 1.00f);          // Subtle grey for disabled text
+    colors[ImGuiCol_WindowBg] = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);              // Dark background with a hint of blue
+    colors[ImGuiCol_ChildBg] = ImVec4(0.16f, 0.16f, 0.18f, 1.00f);               // Slightly lighter for child elements
+    colors[ImGuiCol_PopupBg] = ImVec4(0.18f, 0.18f, 0.20f, 1.00f);               // Popup background
+    colors[ImGuiCol_Border] = ImVec4(0.28f, 0.29f, 0.30f, 0.60f);                // Soft border color
+    colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);          // No border shadow
+    colors[ImGuiCol_FrameBg] = ImVec4(0.20f, 0.22f, 0.24f, 1.00f);               // Frame background
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.22f, 0.24f, 0.26f, 1.00f);        // Frame hover effect
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.26f, 0.28f, 1.00f);         // Active frame background
+    colors[ImGuiCol_TitleBg] = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);               // Title background
+    colors[ImGuiCol_TitleBgActive] = ImVec4(0.16f, 0.16f, 0.18f, 1.00f);         // Active title background
+    colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);      // Collapsed title background
+    colors[ImGuiCol_MenuBarBg] = ImVec4(0.20f, 0.20f, 0.22f, 1.00f);             // Menu bar background
+    colors[ImGuiCol_ScrollbarBg] = ImVec4(0.16f, 0.16f, 0.18f, 1.00f);           // Scrollbar background
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.24f, 0.26f, 0.28f, 1.00f);         // Dark accent for scrollbar grab
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.28f, 0.30f, 0.32f, 1.00f);  // Scrollbar grab hover
+    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.32f, 0.34f, 0.36f, 1.00f);   // Scrollbar grab active
+    colors[ImGuiCol_CheckMark] = ImVec4(0.46f, 0.56f, 0.66f, 1.00f);             // Dark blue checkmark
+    colors[ImGuiCol_SliderGrab] = ImVec4(0.36f, 0.46f, 0.56f, 1.00f);            // Dark blue slider grab
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.40f, 0.50f, 0.60f, 1.00f);      // Active slider grab
+    colors[ImGuiCol_Button] = ImVec4(0.24f, 0.34f, 0.44f, 1.00f);                // Dark blue button
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.28f, 0.38f, 0.48f, 1.00f);         // Button hover effect
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.32f, 0.42f, 0.52f, 1.00f);          // Active button
+    colors[ImGuiCol_Header] = ImVec4(0.24f, 0.34f, 0.44f, 1.00f);                // Header color similar to button
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.28f, 0.38f, 0.48f, 1.00f);         // Header hover effect
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.32f, 0.42f, 0.52f, 1.00f);          // Active header
+    colors[ImGuiCol_Separator] = ImVec4(0.28f, 0.29f, 0.30f, 1.00f);             // Separator color
+    colors[ImGuiCol_SeparatorHovered] = ImVec4(0.46f, 0.56f, 0.66f, 1.00f);      // Hover effect for separator
+    colors[ImGuiCol_SeparatorActive] = ImVec4(0.46f, 0.56f, 0.66f, 1.00f);       // Active separator
+    colors[ImGuiCol_ResizeGrip] = ImVec4(0.36f, 0.46f, 0.56f, 1.00f);            // Resize grip
+    colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.40f, 0.50f, 0.60f, 1.00f);     // Hover effect for resize grip
+    colors[ImGuiCol_ResizeGripActive] = ImVec4(0.44f, 0.54f, 0.64f, 1.00f);      // Active resize grip
+    colors[ImGuiCol_Tab] = ImVec4(0.20f, 0.22f, 0.24f, 1.00f);                   // Inactive tab
+    colors[ImGuiCol_TabHovered] = ImVec4(0.28f, 0.38f, 0.48f, 1.00f);            // Hover effect for tab
+    colors[ImGuiCol_TabActive] = ImVec4(0.24f, 0.34f, 0.44f, 1.00f);             // Active tab color
+    colors[ImGuiCol_TabUnfocused] = ImVec4(0.20f, 0.22f, 0.24f, 1.00f);          // Unfocused tab
+    colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.24f, 0.34f, 0.44f, 1.00f);    // Active but unfocused tab
+    colors[ImGuiCol_PlotLines] = ImVec4(0.46f, 0.56f, 0.66f, 1.00f);             // Plot lines
+    colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.46f, 0.56f, 0.66f, 1.00f);      // Hover effect for plot lines
+    colors[ImGuiCol_PlotHistogram] = ImVec4(0.36f, 0.46f, 0.56f, 1.00f);         // Histogram color
+    colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.40f, 0.50f, 0.60f, 1.00f);  // Hover effect for histogram
+    colors[ImGuiCol_TableHeaderBg] = ImVec4(0.20f, 0.22f, 0.24f, 1.00f);         // Table header background
+    colors[ImGuiCol_TableBorderStrong] = ImVec4(0.28f, 0.29f, 0.30f, 1.00f);     // Strong border for tables
+    colors[ImGuiCol_TableBorderLight] = ImVec4(0.24f, 0.25f, 0.26f, 1.00f);      // Light border for tables
+    colors[ImGuiCol_TableRowBg] = ImVec4(0.20f, 0.22f, 0.24f, 1.00f);            // Table row background
+    colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.22f, 0.24f, 0.26f, 1.00f);         // Alternate row background
+    colors[ImGuiCol_TextSelectedBg] = ImVec4(0.24f, 0.34f, 0.64f, 0.85f);        // Selected text background
+    colors[ImGuiCol_DragDropTarget] = ImVec4(0.46f, 0.56f, 0.66f, 0.90f);        // Drag and drop target
+    colors[ImGuiCol_NavHighlight] = ImVec4(0.46f, 0.56f, 0.66f, 1.00f);          // Navigation highlight
+    colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f); // Windowing highlight
+    colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);     // Dim background for windowing
+    colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);      // Dim background for modal windows
+
+    style.ScaleAllSizes(PlatformManager::get()->ui_scale_factor());
 }
 
 void imgui_init()
@@ -115,14 +177,86 @@ void imgui_init()
     imgui_initialized = true;
 }
 
+void DrawSymbol(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color)
+{
+    float cx = pos.x + size.x * 0.5f;
+    float cy = pos.y + size.y * 0.5f;
+    float r = ImMin(size.x, size.y) * 0.25f;
+
+    if (strcmp(symbol, "play") == 0) {
+        ImVec2 p1(cx - r * 0.6f, cy - r);
+        ImVec2 p2(cx - r * 0.6f, cy + r);
+        ImVec2 p3(cx + r, cy);
+        drawList->AddTriangleFilled(p1, p2, p3, color);
+    }
+    else if (strcmp(symbol, "stop") == 0) {
+        drawList->AddRectFilled(ImVec2(cx - r, cy - r), ImVec2(cx + r, cy + r), color);
+    }
+    else if (strcmp(symbol, "pause") == 0) {
+        float w = r * 0.4f;
+        drawList->AddRectFilled(ImVec2(cx - r, cy - r), ImVec2(cx - r + w, cy + r), color);
+        drawList->AddRectFilled(ImVec2(cx + r - w, cy - r), ImVec2(cx + r, cy + r), color);
+    }
+    else if (strcmp(symbol, "record") == 0) {
+        drawList->AddCircleFilled(ImVec2(cx, cy), r, color);
+    }
+}
+
+bool SymbolButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size)
+{
+    ImGui::PushStyleColor(ImGuiCol_Button, state.bgColor);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, state.bgColor);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, state.bgColor);
+    bool pressed = ImGui::Button(id, size);
+    ImGui::PopStyleColor(3);
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetItemRectMin();
+    ImVec2 sz = ImGui::GetItemRectSize();
+    DrawSymbol(drawList, p, sz, symbol, ImGui::ColorConvertFloat4ToU32(state.symbolColor));
+
+    return pressed;
+}
 
 void show_toolbar()
 {
-    if (Platform::get()->is_mobile_device())
-        return;
+    //if (PlatformManager::get()->is_mobile())
+    //    return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
-    ImGui::RenderToolbar(play, stop, pause, record, 30.0f * Platform::get()->window_dpr());
+
+    float size = ScaleSize(30.0f);
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImVec2 toolbarSize(avail.x, size); // Outer frame size
+    ImVec4 frameColor = ImVec4(0,0,0,0); // Toolbar background color
+
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, frameColor);
+
+    ImGui::BeginChild("ToolbarFrame", toolbarSize, false,
+        ImGuiWindowFlags_AlwaysUseWindowPadding | 
+        ImGuiWindowFlags_NoScrollbar | 
+        ImGuiWindowFlags_NoScrollWithMouse);
+
+    // Layout the buttons inside the frame
+    SymbolButton("##play", "play", play, ImVec2(size, size));
+    ImGui::SameLine();
+    SymbolButton("##stop", "stop", stop, ImVec2(size, size));
+    ImGui::SameLine();
+    SymbolButton("##pause", "pause", pause, ImVec2(size, size));
+
+    #ifndef WEB_UI
+    ImGui::SameLine();
+    SymbolButton("##record", "record", record, ImVec2(size, size));
+    #endif
+
+    ImGui::EndChild();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+
     ImGui::PopStyleVar();
 }
 
@@ -134,9 +268,20 @@ void show_tree_node(ProjectInfoNode& node, int& i, int depth)
         // Leaf project node
         if (ImGui::Button(node.name.c_str()))
         {
-            std::unique_lock<std::mutex> lock(data_mutex);
+            // Wait for worker to finish processing the frame
+            std::lock(working_mutex, state_mutex);
+            std::unique_lock<std::mutex> lock1(working_mutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(state_mutex, std::adopt_lock);
+
+            cv.wait(lock1, []() { return !processing_frame; });
+
+            //std::unique_lock<std::mutex> lock(state_mutex);
+            DebugPrint("show_tree_node::setActiveProject()");
             project_manager.setActiveProject(node.project_info->sim_uid);
+
+            DebugPrint("show_tree_node::startProject()");
             project_manager.startProject();
+            project_manager.updateShadowAttributes(); // thread-safe?
         }
     }
     else
@@ -147,7 +292,7 @@ void show_tree_node(ProjectInfoNode& node, int& i, int depth)
             ImGui::Indent();
             for (size_t child_i = 0; child_i < node.children.size(); child_i++)
             {
-                show_tree_node(node.children[child_i], i, depth+1);
+                show_tree_node(node.children[child_i], i, depth + 1);
             }
             ImGui::Unindent();
         }
@@ -157,20 +302,22 @@ void show_tree_node(ProjectInfoNode& node, int& i, int depth)
 
 void show_project_tree(bool expand_vertical)
 {
-    ImVec2 frameSize = ImVec2(0.0f, expand_vertical ? 0 : 150.0f); // Let height auto-expand
-    ImVec4 bgColor = ImVec4(0.1f, 0.1f, 0.1f, 1.0f); // Custom background
+    ImVec2 frameSize = ImVec2(0.0f, expand_vertical ? 0 : 170.0f); // Let height auto-expand
+    ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
+    ImVec4 dim_bg = bg * 0.9f;
+    dim_bg.w = bg.w;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     {
         ImGui::BeginChild("TreeFrame", frameSize, 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
 
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, bgColor);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, dim_bg);
 
         ImGui::BeginChild("TreeFrameInner", ImVec2(0.0f, 0.0f), true);
 
-        auto& tree = Project::projectTreeRootInfo();
+        auto& tree = ProjectBase::projectTreeRootInfo();
         int i = 0;
         for (size_t child_i = 0; child_i < tree.children.size(); child_i++)
         {
@@ -190,14 +337,106 @@ void sim_worker()
 {
     while (!done.load())
     {
+        // Wait for GUI to consume previous frame
         {
-            std::unique_lock<std::mutex> lock(data_mutex);
-            if (project_manager.getActiveProject())
-                project_manager.process();
+            std::unique_lock<std::mutex> lock(state_mutex);
+            cv.wait(lock, [] { return frame_consumed || done.load(); });
         }
 
-        ready_to_render.store(true);
-        data_ready_cv.notify_one();
+        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
+        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "====================== NEW WORKER FRAME =====================");
+
+        // Do heavy work while we draw the previously rendered frame on GUI thread
+        {
+            std::lock_guard<std::mutex> lock(working_mutex);
+
+            // ===== Update live values =====
+            // (in case any inputs were changed since last .process())
+            {
+                /// Make sure we can't alter the shadow buffer while we copy them to live buffer
+                std::lock_guard<std::mutex> live_buffer_lock(live_buffer_mutex);
+
+                updating_live_buffer.store(true);
+
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- BEGIN updateLiveAttributes ----");
+                if (project_manager.getActiveProject())
+                    project_manager.updateLiveAttributes();
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- END updateLiveAttributes ----");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+
+                updating_live_buffer.store(false, std::memory_order_release);
+
+                // Inform GUI thread that 'updating_live_buffer' changed
+                cv_updating_live_buffer.notify_one();
+            }
+
+            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "--------- BEGIN PROCESSING ---------");
+
+            processing_frame = true;
+            for (SDL_Event& e : input_event_queue)
+                project_manager._onEvent(e);
+            input_event_queue.clear();
+
+            if (project_manager.getActiveProject())
+                project_manager.process();
+            processing_frame = false;
+
+            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---------- END PROCESSING ----------");
+            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+
+            // todo: if (shadow_attributes_updated)
+            if (!editing_ui.load())
+            {
+                /// todo: Wait for an existing ui_update to finish first?
+
+                /// While we update the shadow buffer, we should NOT permit ui updates (force a small stall)
+                std::unique_lock<std::mutex> shadow_lock(shadow_mutex);
+                updating_shadow.store(true);
+
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "--- BEGIN updateShadowAttributes ---");
+                if (project_manager.getActiveProject())
+                    project_manager.updateShadowAttributes();
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- END updateShadowAttributes ----");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+
+                updating_shadow.store(false, std::memory_order_release);
+                cv_updating_shadow.notify_one();
+            }
+            else
+            {
+                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "<<<<< ImGui Item Active - SKIPPED updateShadowAttributes() >>>>>");
+            }
+        }
+        // Flag ready to draw
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            frame_ready = true;
+            frame_consumed = false;
+        }
+
+        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "====================== END WORKER FRAME =====================");
+        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
+        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+
+        // Wake GUI
+        cv.notify_one();
+        ///cv_updating_live_buffer.notify_one();
+
+        // Wait for GUI to draw
+        {
+            std::unique_lock<std::mutex> lock(state_mutex);
+            cv.wait(lock, [] { return frame_consumed || done.load(); });
+        }
 
         SDL_Delay(16);
     }
@@ -205,25 +444,46 @@ void sim_worker()
 
 void init_simulation_thread()
 {
-    std::unique_lock<std::mutex> lock(data_mutex);
+    std::unique_lock<std::mutex> lock(state_mutex);
     project_manager.setSharedCanvas(&canvas);
     project_manager.setSharedDebugLog(&debug_log);
     project_thread = std::thread(sim_worker);
     project_thread_started.store(true);
 }
 
-void show_project_attributes()
+void show_project_attributes(bool show_ui)
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
-    ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+    std::unique_lock<std::mutex> lock(state_mutex);
+
+    ImGui::BeginPaddedRegion(ScaleSize(10.0f));
 
     {
-        std::unique_lock<std::mutex> lock(data_mutex);   // blocks the worker
-        project_manager.populateAttributes();            // safe read
+        std::unique_lock<std::mutex> wait_live_buffer_lock(live_buffer_mutex);
+        cv_updating_live_buffer.wait(wait_live_buffer_lock, []() {
+            return !updating_live_buffer.load();
+        });
     }
 
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
+    // Stall until we've finished copying live buffer to shadow buffer (on worker thread)
+    std::unique_lock<std::mutex> shadow_lock(shadow_mutex);
+    cv_updating_shadow.wait(shadow_lock, []() 
+    {
+        return !updating_shadow.load();
+    });
+
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "--- BEGIN populateAttributes ---");
+    populating_attributes.store(true);
+    project_manager.populateAttributes(show_ui);
+    populating_attributes.store(false);
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- END populateAttributes ----");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+
+    editing_ui.store(ImGui::IsAnyItemActive(), std::memory_order_release);
+
+    ImGui::EndPaddedRegion();
 }
 
 void show_ui()
@@ -258,7 +518,7 @@ void show_ui()
     static ImVec2 last_viewport_size = ImVec2(0, 0);
     ImVec2 current_viewport_size = ImGui::GetMainViewport()->Size;
 
-    if (current_viewport_size.x != last_viewport_size.x || 
+    if (current_viewport_size.x != last_viewport_size.x ||
         current_viewport_size.y != last_viewport_size.y)
     {
         update_docking_layout = true;
@@ -269,6 +529,7 @@ void show_ui()
 
     // Build initial layout (once)
     static bool initialized = false;
+    static bool done_first_focus = false;
     if (!initialized || update_docking_layout)
     {
         initialized = true;
@@ -287,118 +548,174 @@ void show_ui()
 
         ImGuiID dock_main_id = dockspace_id;
         ImGuiID dock_sidebar = ImGui::DockBuilderSplitNode(
-            dock_main_id, 
-            vertical_layout ? ImGuiDir_Down : ImGuiDir_Right, 
+            dock_main_id,
+            vertical_layout ? ImGuiDir_Down : ImGuiDir_Right,
             vertical_layout ? 0.4f : 0.25f,
-            nullptr, 
+            nullptr,
             &dock_main_id
         );
 
         //ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.3f, nullptr, &dock_main_id);
         //ImGuiID dock_top_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Up, 0.07f, nullptr, &dock_main_id);
 
+        //ImGui::DockBuilderDockWindow("Right Window", dock_right_id);
+        //ImGui::DockBuilderDockWindow("Timeline", dock_top_id);
         ImGui::DockBuilderDockWindow("Projects", dock_sidebar);
         ImGui::DockBuilderDockWindow("Active", dock_sidebar);
         ImGui::DockBuilderDockWindow("Debug", dock_sidebar);
-        //ImGui::DockBuilderDockWindow("Right Window", dock_right_id);
-        //ImGui::DockBuilderDockWindow("Timeline", dock_top_id);
         ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
 
     int window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDecoration;
-
-    //if (Platform::is_mobile_device())
-        window_flags |= ImGuiWindowFlags_NoMove;
+    window_flags |= ImGuiWindowFlags_NoMove;
 
     // Show windows
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-    if (vertical_layout || Platform::get()->max_char_rows() < 40.0f)
+    // Determine if we are ready to draw *before* populating simulation imgui attributes
+    bool need_draw = false;
+    {
+        std::lock_guard<std::mutex> g(state_mutex);
+        need_draw = frame_ready;
+    }
+
+    if (vertical_layout || PlatformManager::get()->max_char_rows() < 40.0f)
     {
         // Collapse layout
         if (ImGui::Begin("Projects", nullptr, window_flags))
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(8.0f, 8.0f));
+            ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
             show_toolbar();
+            ImGui::Dummy(ScaleSize(0, 6));
+
             show_project_tree(true);
+            
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
         }
         ImGui::End();
 
-        if (ImGui::Begin("Active", nullptr, window_flags))
+        bool showing_active_project_window = ImGui::Begin("Active", nullptr, window_flags);
+        if (showing_active_project_window)
         {
+            // Only add padding after toolbar to inner-child
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(8.0f, 8.0f));
+            ImGui::BeginChild("AttributesFrameInner", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
             show_toolbar();
-            show_project_attributes();
+            ImGui::Dummy(ScaleSize(0, 6));
+
+            show_project_attributes(showing_active_project_window); // Always call (in case sim does any unusual setup here)
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
         }
+
         ImGui::End();
     }
     else
     {
         // Show both windows
-        if (ImGui::Begin("Projects", nullptr, window_flags))
+        bool showing_both_windows = ImGui::Begin("Projects", nullptr, window_flags);
+        if (showing_both_windows)
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+            ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
             show_toolbar();
+            ImGui::Dummy(ImVec2(0, 6));
+
             show_project_tree(false);
-            show_project_attributes();
+            show_project_attributes(showing_both_windows); // Always call (in case sim does any unusual setup here)
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
         }
+
         ImGui::End();
     }
 
+    static bool first_frame = true; // SetWindowFocus doesn't switch focused tab unless second frame
+    if (initialized && !done_first_focus && !first_frame)
+    {
+        done_first_focus = true;
+        ImGui::SetWindowFocus("Projects");
+    }
+    first_frame = false;
+
     ImGui::PopStyleVar();
-    
+
     ImGuiWindowClass wc{};
     wc.DockNodeFlagsOverrideSet = (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiWindowFlags_NoDocking;
     ImGui::SetNextWindowClass(&wc);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
-    if (ImGui::Begin("Viewport"))
+    bool viewport_visible = ImGui::Begin("Viewport");
+
+    // Always process viewport, even if not visible
     {
         ImVec2 size = ImGui::GetContentRegionAvail();
         int width = static_cast<int>(size.x);
         int height = static_cast<int>(size.y);
 
         static bool done_first_size = false;
-        
-        canvas.resize(width, height);
-        
+        bool resized = canvas.resize(width, height);
+
+
+        if (!done_first_size)
         {
-            std::unique_lock<std::mutex> lock(data_mutex);
-            data_ready_cv.wait(lock, [] { return ready_to_render.load(); });
-
-            if (!done_first_size)
+            done_first_size = true;
+        }
+        else if (project_thread_started.load())
+        {
+            // Launch initial simulation 1 frame late (background thread)
+            if (!project_manager.getActiveProject())
             {
-                done_first_size = true;
-            }
-            else if (project_thread_started.load())
-            {
-                // Launch initial simulation 1 frame late (background thread)
-                if (!project_manager.getActiveProject())
-                {
-                    project_manager.setActiveProject(0);
-                    project_manager.startProject();
-                }
-            }
+                DebugPrint("show_ui::setActiveProject()");
+                project_manager.setActiveProject(0);
+                DebugPrint("show_ui::startProject()");
+                project_manager.startProject();
+                project_manager.updateShadowAttributes(); // Thread safe?
 
-            // Data mutex scope
-            if (project_manager.getActiveProject())
-            {
-                data_ready_cv.wait(lock, [] { return ready_to_render.load(); });
-
-                canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-                project_manager.draw();
-                canvas.end();
+                // Kick-start work-render-work-render loop
+                need_draw = true;
             }
-
-            ready_to_render.store(false);
         }
 
+        if (need_draw)
+        {
+            // Stop the worker and draw the fresh frame
+            std::unique_lock<std::mutex> lock(state_mutex);
+
+            canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+            project_manager.draw();
+            canvas.end();
+
+            frame_ready = false;
+            frame_consumed = true;
+            lock.unlock();
+
+            // Let worker continue
+            cv.notify_one();
+        }
+        else if (resized)
+        {
+            canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+            canvas.setFillStyle(0, 0, 0);
+            canvas.fillRect(0, 0, (float)canvas.width(), (float)canvas.height());
+            canvas.end();
+        }
+
+        // Draw cached (or freshly generated) frame
         ImGui::Image(canvas.texture(), ImVec2(
-            static_cast<float>(canvas.width()), 
+            static_cast<float>(canvas.width()),
             static_cast<float>(canvas.height())),
             ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
             ImVec2(1.0f, 0.0f)    // UV bottom-right);
         );
     }
+    ImGui::End();
 
     if (ImGui::Begin("Debug"))
     {
@@ -406,7 +723,6 @@ void show_ui()
     }
     ImGui::End();
 
-    ImGui::End();
     ImGui::PopStyleVar();
 
 
@@ -424,23 +740,33 @@ void show_ui()
     }
 }
 
-
-
 void main_loop()
 {
     SDL_Event event;
-    while (SDL_PollEvent(&event)) {
+    while (SDL_PollEvent(&event))
+    {
         ImGui_ImplSDL2_ProcessEvent(&event);
-        if (event.type == SDL_QUIT)
-            done.store(true);
+        switch (event.type)
+        {
+            case SDL_QUIT:
+            {
+                done.store(true);
+                cv.notify_all();
+            }
+            break;
+
+            default:
+                input_event_queue.push_back(event);
+            break;
+        }
     }
 
 
-    Platform::get()->update();
+    PlatformManager::get()->update();
 
-    glViewport(0, 0, 
-        Platform::get()->drawable_width(), 
-        Platform::get()->drawable_height()
+    glViewport(0, 0,
+        PlatformManager::get()->drawable_width(),
+        PlatformManager::get()->drawable_height()
     );
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -450,12 +776,18 @@ void main_loop()
 
     #ifdef __EMSCRIPTEN__
     io.DisplaySize = ImVec2(
-        Platform::get()->drawable_width(),
-        Platform::get()->drawable_height()
+        PlatformManager::get()->drawable_width(),
+        PlatformManager::get()->drawable_height()
     );
     io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
     #endif
 
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "======================== NEW GUI FRAME ======================");
+
+    // New ImGui frame
+    gui_frame_running.store(true, std::memory_order_release);
     ImGui::NewFrame();
 
     // Draw simulation & refresh imgui drawlist
@@ -463,7 +795,13 @@ void main_loop()
 
     // Render
     ImGui::Render();
+    gui_frame_running.store(false, std::memory_order_release);
+
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "======================== END GUI FRAME ======================");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
+    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
     
+
     glClearColor(0.1f, 0.0f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -473,15 +811,15 @@ void main_loop()
 
 void reconfigure_ui()
 {
-    Platform::get()->update();
+    PlatformManager::get()->update();
 
     static float last_dpr = -1.0f;
-    float dpr = Platform::get()->window_dpr();
+    float _dpr = PlatformManager::get()->dpr();
 
-    if (fabs(dpr - last_dpr) > 0.01f)
+    if (fabs(_dpr - last_dpr) > 0.01f)
     {
         // DPR changed
-        last_dpr = Platform::get()->window_dpr();
+        last_dpr = PlatformManager::get()->dpr();
 
         update_imgui_styles();
 
@@ -490,14 +828,14 @@ void reconfigure_ui()
         io.Fonts->Clear();
 
         float base_pt = 16.0f;
-        const char* font_path = Platform::get()->path("/data/fonts/DroidSans.ttf");
+        const char* font_path = PlatformManager::get()->path("/data/fonts/DroidSans.ttf");
         ImFontConfig config;
         config.OversampleH = 3;
         config.OversampleV = 3;
 
-        io.Fonts->AddFontFromFileTTF(font_path, base_pt * dpr * Platform::get()->font_scale(), &config);
+        io.Fonts->AddFontFromFileTTF(font_path, base_pt * _dpr * PlatformManager::get()->font_scale(), &config);
         io.Fonts->FontBuilderFlags =
-            ImGuiFreeTypeBuilderFlags_LightHinting | 
+            ImGuiFreeTypeBuilderFlags_LightHinting |
             ImGuiFreeTypeBuilderFlags_ForceAutoHint;
 
         ImGuiFreeType::GetBuilderForFreeType()->FontBuilder_Build(io.Fonts);
@@ -508,14 +846,14 @@ void reconfigure_ui()
 #ifdef __EMSCRIPTEN__
 EM_BOOL on_client_resized(int, const EmscriptenUiEvent* e, void* userData)
 {
-    Platform::get()->resized();
+    PlatformManager::get()->resized();
     return EM_TRUE;
 }
 #endif
 
 int main(int argc, char* argv[])
 {
-    //DebugMessage("main() called");
+    //DebugPrint("main() called");
     //std::unique_lock<std::mutex> lock(data_mutex);
 
     // SDL Window setup
@@ -548,13 +886,13 @@ int main(int argc, char* argv[])
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
             fb_w, fb_h,
-              SDL_WINDOW_OPENGL | 
-              SDL_WINDOW_RESIZABLE | 
-              SDL_WINDOW_MAXIMIZED | 
-              SDL_WINDOW_ALLOW_HIGHDPI
+            SDL_WINDOW_OPENGL |
+            SDL_WINDOW_RESIZABLE |
+            SDL_WINDOW_MAXIMIZED |
+            SDL_WINDOW_ALLOW_HIGHDPI
         );
 
-        Platform::init(window);
+        PlatformManager::init(window);
     }
 
     // OpenGL setup
@@ -605,7 +943,7 @@ int main(int argc, char* argv[])
 
     canvas.create();
 
-    
+
     init_simulation_thread();
     //debug_log.Log("Simulation started");
 

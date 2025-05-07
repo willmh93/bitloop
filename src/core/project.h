@@ -7,8 +7,11 @@
 #include <functional>
 #include <random>
 
+#include "platform.h"
 #include "helpers.h"
 #include "types.h"
+#include "json.h"
+
 #include "camera.h"
 #include "nano_canvas.h"
 #include "imgui_custom.h"
@@ -16,7 +19,7 @@
 using std::max;
 using std::min;
 
-// Provide macros for easy Project registration
+// Provide macros for easy BasicProject registration
 template<typename... Ts>
 std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>(args)... }; }
 
@@ -24,24 +27,64 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
 #define SIM_DECLARE(ns, ...) namespace ns { AutoRegisterProject<ns##_Project> register_##ns(VectorizeArgs(__VA_ARGS__));
 #define SIM_END(ns) } using ns::ns##_Project;
 
-class Project;
 class Layout;
 class Viewport;
-class Project;
+class ProjectBase;
 class ProjectManager;
 struct ImDebugLog;
 
-class Scene : public VariableChangedTracker
+class Event
+{
+    friend class ProjectBase;
+
+    SDL_Event _event;
+    Viewport* _focused_ctx = nullptr;
+    Viewport* _hovered_ctx = nullptr;
+    Viewport* _owner_ctx = nullptr;
+
+protected:
+
+    void setFocusedViewport(Viewport* ctx) {
+        _focused_ctx = ctx;
+    }
+    void setHoveredViewport(Viewport* ctx) {
+        _hovered_ctx = ctx;
+    }
+    void setOwnerViewport(Viewport* ctx) {
+        _owner_ctx = ctx;
+    }
+
+public:
+
+    Event(const SDL_Event& e) : _event(e) {}
+
+    Viewport* focused_ctx() { return _focused_ctx; }
+    Viewport* hovered_ctx() { return _hovered_ctx; }
+    Viewport* owner_ctx() { return _owner_ctx; }
+
+    SDL_Event* operator->() { return &_event; }
+    const SDL_Event* operator->() const { return &_event; }
+
+    // Touch helpers
+    double finger_x();
+    double finger_y();
+
+    std::string info();
+};
+
+class SceneBase : public VariableChangedTracker
 {
     std::random_device rd;
     std::mt19937 gen;
 
 protected:
 
+    //template<typename T> 
+    //friend class SceneEx;
     friend class Viewport;
-    friend class Project;
+    friend class ProjectBase;
 
-    Project* project = nullptr;
+    ProjectBase* project = nullptr;
 
     int scene_index = -1;
     std::vector<Viewport*> mounted_to_viewports;
@@ -50,38 +93,52 @@ protected:
     void registerMount(Viewport* viewport);
     void registerUnmount(Viewport* viewport);
 
+    //
+    bool has_var_buffer = false;
+    virtual void _sceneAttributes() {}
+    virtual void _updateLiveSceneAttributes() {}
+    virtual void _updateShadowSceneAttributes() {}
+    //
+    
+    //void _onInputEvent(SDL_Event& e);
+    void _onEvent(Event& e) 
+    {
+        onEvent(e);
+    }
+
 public:
 
     std::shared_ptr<void> temporary_environment;
 
     Camera* camera = nullptr;
-    MouseInfo* mouse = nullptr;
+    PointerInfo* pointer = nullptr;
 
     struct Config {};
 
-    Scene() : gen(rd())
+    SceneBase() : gen(rd())
     {
     }
-    virtual ~Scene() = default;
+    virtual ~SceneBase() = default;
 
     void mountTo(Viewport* viewport);
     void mountTo(Layout& viewports);
     void mountToAll(Layout& viewports);
 
-    virtual void sceneAttributes() {}
     virtual void sceneStart() {}
     virtual void sceneMounted(Viewport* ctx) {}
     virtual void sceneStop() {}
     virtual void sceneDestroy() {}
     virtual void sceneProcess() {}
-
     virtual void viewportProcess(Viewport* ctx) {}
     virtual void viewportDraw(Viewport* ctx) = 0;
 
-    virtual void mouseDown() {}
-    virtual void mouseUp() {}
-    virtual void mouseMove() {}
-    virtual void mouseWheel() {}
+    virtual void onEvent(Event& e) {}
+
+    ///virtual void touchEvent(TouchEvent e) {}
+    ///virtual void mouseDown() {}
+    ///virtual void mouseUp() {}
+    ///virtual void mouseMove() {}
+    ///virtual void mouseWheel() {}
 
     //virtual void keyPressed(QKeyEvent* e) {};
     //virtual void keyReleased(QKeyEvent* e) {};
@@ -104,12 +161,136 @@ public:
     void logClear();
 };
 
-class Viewport : public Painter
+
+/// =================================================================================
+/// ======= varcpy overloads (helper for safely copying data between threads) =======
+/// =================================================================================
+
+// --- varcpy (non-primative requiring ::copyFrom method) ---
+template<typename T>
+concept ImpliedThreadSafeCopyable = requires(T t, const T & rhs) {
+    { t.copyFrom(rhs) } -> std::same_as<void>;
+};
+
+template<ImpliedThreadSafeCopyable T>
+void varcpy(T& dst, const T& src) {
+    dst.copyFrom(src);
+}
+
+// --- varcpy (primative copyable) ---
+template<typename T>
+concept PrimitiveCopyable = std::is_trivially_copyable_v<T> && std::is_assignable_v<T&, const T&>;
+
+template<PrimitiveCopyable T>
+void varcpy(T& dst, const T& src) {
+    dst = src;
+}
+
+// --- varcpy (trivially copyable array) ---
+template<typename T, size_t N>
+void varcpy(T(&dst)[N], const T(&src)[N]) {
+    static_assert(std::is_trivially_copyable_v<T>,
+        "varcpy: array element type must be trivially copyable");
+    std::memcpy(dst, src, sizeof(T) * N);
+}
+
+// --- varcpy (trivially copyable base part of a possibly non-trivially copyable derived class) ---
+template<typename Base, typename Derived>
+void varcpy(Derived& dst, const Derived& src) {
+    varcpy(*static_cast<Base*>(&dst), *static_cast<const Base*>(&src));
+}
+
+
+template<typename Derived>
+struct VarBuffer
 {
+    Derived* live_attributes = nullptr;
+
+    VarBuffer() = default;
+    VarBuffer(const VarBuffer&) = delete;
+
+    virtual void populate(Derived& dst) {}
+    virtual void copyFrom(const Derived& rhs) = 0;
+
+    /*template<typename F>
+    void post(F&& f)
+    {
+        post_fn_queue.push_back(f);
+    }
+
+    using PostFn = void(*)(Derived&, const Derived&);
+    std::vector<PostFn> post_fn_queue;
+
+    void post(void (*f)(Derived& dst, const Derived& src))
+    {
+        post_fn_queue.push_back(f);
+    }*/
+};
+
+template<typename VarBufferType>
+class Scene : public SceneBase, public VarBufferType
+{
+    friend class ProjectBase;
+
+    VarBufferType shadow_attributes;
+
+public:
+
+    Scene() : SceneBase(), shadow_attributes()
+    {
+        has_var_buffer = true;
+        shadow_attributes.live_attributes = this;
+
+        // In case Scene() constructor changes live attributes
+    }
+
+
 protected:
 
-    friend class Project;
-    friend class Scene;
+    virtual void _sceneAttributes() override 
+    {
+        shadow_attributes.populate(*shadow_attributes.live_attributes);
+        //_updateLiveAttributes();
+    }
+
+    void _updateLiveSceneAttributes() override
+    {
+        ///std::memcpy(
+        ///    static_cast<VarBufferType*>(this),
+        ///    static_cast<const VarBufferType*>(&shadow_attributes),
+        ///    sizeof(VarBufferType)
+        ///);
+
+        //*this_attributes = shadow_attributes;
+
+        VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
+        this_attributes->copyFrom(shadow_attributes);
+
+    }
+    void _updateShadowSceneAttributes() override
+    {
+        ///std::memcpy(
+        ///    static_cast<VarBufferType*>(&shadow_attributes),
+        ///    static_cast<const VarBufferType*>(this),
+        ///    sizeof(VarBufferType)
+        ///);
+
+        //shadow_attributes = *this_attributes;
+
+        VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
+        shadow_attributes.copyFrom(*this);
+    }
+};
+
+class Viewport : public Painter
+{
+    std::string print_text;
+    std::stringstream print_stream;
+
+protected:
+
+    friend class ProjectBase;
+    friend class SceneBase;
     friend class Layout;
     friend class Camera;
 
@@ -118,7 +299,7 @@ protected:
     int viewport_grid_y;
 
     Layout* layout = nullptr;
-    Scene* scene = nullptr;
+    SceneBase* scene = nullptr;
 
     double x = 0;
     double y = 0;
@@ -143,11 +324,12 @@ public:
     int viewportIndex() { return viewport_index; }
     int viewportGridX() { return viewport_grid_x; }
     int viewportGridY() { return viewport_grid_y; }
+    FRect viewportRect() { return FRect(x, y, x + width, y + height);}
 
     template<typename T, typename... Args>
     T* construct(Args&&... args)
     {
-        ///qDebug() << "Scene constructed. Mounting to Viewport: " << viewport_index;
+        DebugPrint("Scene constructed. Mounting to Viewport: %d", viewport_index);
         scene = new T(std::forward<Args>(args)...);
         scene->registerMount(this);
         return dynamic_cast<T*>(scene);
@@ -156,19 +338,24 @@ public:
     template<typename T>
     T* mountScene(T* _sim)
     {
-        ///qDebug() << "Mounting existing scene to Viewport: " << viewport_index;
-
+        DebugPrint("Mounting existing scene to Viewport: %d", viewport_index);
         scene = _sim;
         scene->registerMount(this);
         return _sim;
     }
 
     // Viewport-specific draw helpers (i.e. size of viewport needed)
+    void printTouchInfo();
+    
     void drawWorldAxis(
         double axis_opacity = 0.3,
         double grid_opacity = 0.04,
         double text_opacity = 0.4
     );
+
+    std::stringstream& print() {
+        return print_stream;
+    }
 };
 
 class Layout
@@ -177,8 +364,8 @@ class Layout
 
 protected:
 
-    friend class Project;
-    friend class Scene;
+    friend class ProjectBase;
+    friend class SceneBase;
 
     // If 0, viewports expand in that direction. If both 0, expand whole grid.
     int targ_viewports_x = 0;
@@ -186,8 +373,8 @@ protected:
     int cols = 0;
     int rows = 0;
 
-    std::vector<Scene*> all_scenes;
-    Project* project = nullptr;
+    std::vector<SceneBase*> all_scenes;
+    ProjectBase* project = nullptr;
 
 public:
 
@@ -200,17 +387,17 @@ public:
         clear();
     }
 
-    const std::vector<Scene*>& scenes()
-    {
+    const std::vector<SceneBase*>& scenes() {
         return all_scenes;
     }
 
+    void expandCheck(size_t count);
+    void add(int _viewport_index, int _grid_x, int _grid_y);
+    void resize(size_t viewport_count);
     void clear()
     {
         // layout freed each time you call setLayout
-        for (Viewport* p : viewports)
-            delete p;
-
+        for (Viewport* p : viewports) delete p;
         viewports.clear();
     }
 
@@ -220,11 +407,6 @@ public:
         this->targ_viewports_y = targ_viewports_y;
     }
 
-    void add(
-        int _viewport_index,
-        int _grid_x,
-        int _grid_y);
-
     template<typename T, typename... Args>
     Layout* constructAll(Args&&... args)
     {
@@ -233,20 +415,8 @@ public:
         return this;
     }
 
-    Viewport* operator[](size_t i)
-    {
-        expandCheck(i + 1);
-        return viewports[i];
-    }
-
-    Layout& operator <<(Scene* scene)
-    {
-        scene->mountTo(*this);
-        return *this;
-    }
-
-    void resize(size_t viewport_count);
-    void expandCheck(size_t count);
+    Viewport* operator[](size_t i) { expandCheck(i + 1); return viewports[i]; }
+    Layout&   operator<<(SceneBase* scene) { scene->mountTo(*this); return *this; }
 
     iterator begin() { return viewports.begin(); }
     iterator end() { return viewports.end(); }
@@ -259,10 +429,9 @@ public:
     }
 };
 
-struct SimSceneList : public std::vector<Scene*>
+struct SimSceneList : public std::vector<SceneBase*>
 {
-    void mountTo(Layout& viewports)
-    {
+    void mountTo(Layout& viewports) {
         for (size_t i = 0; i < size(); i++)
             at(i)->mountTo(viewports[i]);
     }
@@ -283,24 +452,27 @@ struct ProjectInfoNode
     }
 };
 
-class Project
+class ProjectBase
 {
     Layout viewports;
     int scene_counter = 0;
     int sim_uid = -1;
 
+    Viewport* focused_ctx = nullptr;
+    Viewport* hovered_ctx = nullptr;
+
 protected:
 
     friend class ProjectManager;
     friend class Layout;
-    friend class Scene;
+    friend class SceneBase;
 
     Canvas* canvas = nullptr;
     ImDebugLog* debug_log = nullptr;
 
+    // ----------- States -----------
     bool started = false;
     bool paused = false;
-
     bool done_single_process = false;
     bool done_single_populate_attributes = false;
 
@@ -309,7 +481,14 @@ protected:
     void updateViewportRects();
     Vec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
 
-    void _populateAttributes();
+    // -------- Attributes --------
+    bool has_var_buffer = false;
+    void _populateAllAttributes(bool show_ui);
+    virtual void _projectAttributes() {}
+    virtual void _updateLiveProjectAttributes() {}
+    virtual void _updateShadowProjectAttributes() {}
+
+    // ---- Project Management ----
     void _projectPrepare();
     void _projectStart();
     void _projectStop();
@@ -318,13 +497,16 @@ protected:
     void _projectProcess();
     void _projectDraw();
 
+    std::vector<FingerInfo> pressed_fingers;
+    void _onEvent(SDL_Event& e);
+
 public:
 
-    MouseInfo mouse;
+    PointerInfo pointer;
 
-    virtual ~Project() = default;
+    virtual ~ProjectBase() = default;
     
-    // Project Factory methods
+    // BasicProject Factory methods
     static std::vector<std::shared_ptr<ProjectInfo>>& projectInfoList()
     {
         static std::vector<std::shared_ptr<ProjectInfo>> info_list;
@@ -413,6 +595,20 @@ public:
     }
 
     void setProjectInfoState(ProjectInfo::State state);
+
+    /// todo: Find a way to make protected
+    void updateAllLiveAttributes()
+    {
+        _updateLiveProjectAttributes();
+        for (SceneBase* scene : viewports.all_scenes)
+            scene->_updateLiveSceneAttributes();
+    }
+    void updateAllShadowAttributes()
+    {
+        _updateShadowProjectAttributes();
+        for (SceneBase* scene : viewports.all_scenes)
+            scene->_updateShadowSceneAttributes();
+    }
 
     // Shared Scene creators
 
@@ -512,18 +708,57 @@ public:
     virtual void projectStop() {}
     virtual void projectDestroy() {}
 
+    virtual void onEvent(Event& e) {}
+
     void logMessage(const char* fmt, ...);
     void logClear();
 };
+
+template<typename VarBufferType>
+class Project : public ProjectBase, public VarBufferType
+{
+    friend class ProjectBase;
+
+    VarBufferType shadow_attributes;
+
+public:
+
+    Project() : ProjectBase()
+    {
+        has_var_buffer = true;
+    }
+
+protected:
+
+    virtual void _projectAttributes() override
+    {
+        shadow_attributes.populate(*shadow_attributes.live_attributes);
+    }
+
+
+    void _updateLiveProjectAttributes() override
+    {
+        VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
+        *this_attributes = shadow_attributes;
+    }
+    void _updateShadowProjectAttributes() override
+    {
+        VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
+        shadow_attributes = *this_attributes;
+    }
+};
+
+typedef ProjectBase BasicProject;
+typedef SceneBase BasicScene;
 
 template <typename T>
 struct AutoRegisterProject
 {
     AutoRegisterProject(const std::vector<std::string>& tree_path)
     {
-        DebugMessage("AutoRegisterProject() called");
-        Project::addProjectInfo(tree_path, []() -> Project* {
-            return (Project*)(new T());
+        DebugPrint("AutoRegisterProject() called");
+        ProjectBase::addProjectInfo(tree_path, []() -> ProjectBase* {
+            return (ProjectBase*)(new T());
         });
     }
 };

@@ -138,6 +138,22 @@ public:
         pending_resize = true;
     }
 
+    void clear(Color c)
+    {
+        if (pixels.size() == 0)
+            return;
+        uint32_t u32 = c.u32;
+        uint32_t* pixel = reinterpret_cast<uint32_t*>(&pixels.front());
+        uint32_t count = bmp_width * bmp_height;
+        for (uint32_t i=0; i< count; i++)
+            *pixel++ = u32;
+    }
+
+    void clear(int r, int g, int b, int a)
+    {
+        clear(Color(r, g, b, a));
+    }
+
     void setPixel(int x, int y, uint32_t rgba)
     {
         size_t i = (size_t(y) * bmp_width + x) * 4;
@@ -184,7 +200,7 @@ public:
         pixels[i + 3] = a;
     }
 
-    uint32_t getPixel(int x, int y) const 
+    Color getPixel(int x, int y) const 
     {
         size_t i = (size_t(y) * bmp_width + x) * 4;
         return 
@@ -194,7 +210,7 @@ public:
             pixels[i + 3] << 24;
     }
 
-    uint32_t getPixelSafe(int x, int y) const
+    Color getPixelSafe(int x, int y) const
     {
         if ((unsigned)x >= (unsigned)bmp_width ||
             (unsigned)y >= (unsigned)bmp_height)
@@ -220,7 +236,7 @@ protected:
         if (pending_resize)
         {
             if (nano_img) nvgDeleteImage(vg, nano_img);
-            nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, 0, pixels.data());
+            nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, NVG_IMAGE_NEAREST, pixels.data());
             pending_resize = false;
         }
         else
@@ -232,6 +248,7 @@ protected:
         float _y = static_cast<float>(y);
         float _w = static_cast<float>(w);
         float _h = static_cast<float>(h);
+
 
         NVGpaint p = nvgImagePattern(vg, _x, _y, _w, _h, 0.0f, nano_img, 1.0f);
         nvgBeginPath(vg);
@@ -290,6 +307,20 @@ public:
 
     FQuad getWorldQuad(Camera* camera);
 
+    template<typename Callback>
+    void forEachWorldPixel(Callback&& callback)
+    {
+        static_assert(std::is_invocable_r_v<void, Callback, int, int>,
+            "Callback must be: void(int x, int y)");
+
+        for (int bmp_y = 0; bmp_y < bmp_height; bmp_y++)
+        {
+            for (int bmp_x = 0; bmp_x < bmp_width; bmp_x++)
+            {
+                std::forward<Callback>(callback)(bmp_x, bmp_y);
+            }
+        }
+    }
 
     // Callback format: void(int x, int y, double wx, double wy)
     template<typename Callback>
@@ -334,9 +365,17 @@ public:
                     double dx = world_quad.d.x;
                     double dy = world_quad.d.y;
 
+                    // Get pixel center-y
+                    double bmp_fx;
+                    double bmp_fy = row_range.first + 0.5;
+                    double bmp_fy2 = row_range.second + 0.5;
+
                     for (int bmp_y = row_range.first; bmp_y < row_range.second; ++bmp_y)
+                    //for (; bmp_fy < bmp_fy2; bmp_fy+=1.0)
                     {
-                        double v = static_cast<double>(bmp_y) / static_cast<double>(bmp_fh);
+                        bmp_fy = static_cast<double>(bmp_y) + 0.5;
+                        //double v = static_cast<double>(bmp_y) / static_cast<double>(bmp_fh);
+                        double v = bmp_fy / bmp_fh;
 
                         // Interpolate left and right edges of the scanline
                         double scan_left_x = world_quad.a.x + (world_quad.d.x - world_quad.a.x) * v;
@@ -346,8 +385,11 @@ public:
                         double scan_right_y = world_quad.b.y + (world_quad.c.y - world_quad.b.y) * v;
 
                         for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
+                        //for (double bmp_fx = 0.5; bmp_fx < bmp_fw; ++bmp_fx)
                         {
-                            double u = static_cast<double>(bmp_x) / static_cast<double>(bmp_fw);
+                            bmp_fx = static_cast<double>(bmp_x) + 0.5;
+                            //double u = static_cast<double>(bmp_x) / bmp_fw;
+                            double u = bmp_fx / bmp_fw;
 
                             double wx = scan_left_x + (scan_right_x - scan_left_x) * u;
                             double wy = scan_left_y + (scan_right_y - scan_left_y) * u;

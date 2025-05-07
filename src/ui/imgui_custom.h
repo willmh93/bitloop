@@ -16,6 +16,7 @@ constexpr double pi = std::numbers::pi;
 
 // Custom components
 #include "imgui_splines.h"
+#include "imgui_gradient_edit.h"
 #include "imgui_log.h"
 
 struct ToolbarButtonState {
@@ -39,14 +40,8 @@ namespace ImGui
     IMGUI_API bool SliderDouble2(const char* label, double v[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     IMGUI_API bool DragDouble2(const char* label, double v[2], double v_speed = 1.0f, double v_min = 0.0f, double v_max = 0.0f, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     
-    void RenderToolbar(
-        const ToolbarButtonState& playState,
-        const ToolbarButtonState& stopState,
-        const ToolbarButtonState& pauseState,
-        const ToolbarButtonState& recordState,
-        float size);
-
-    bool SymbolButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size);
+    void BeginPaddedRegion(float padding);
+    void EndPaddedRegion();
 }
 
 

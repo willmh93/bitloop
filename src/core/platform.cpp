@@ -1,5 +1,5 @@
 #include "platform.h"
-#include "imgui.h"
+
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -30,16 +30,16 @@ int _is_mobile_device()
 }
 #endif
 
-void Platform::update()
+void PlatformManager::update()
 {
     SDL_GL_GetDrawableSize(window, &gl_w, &gl_h);
     SDL_GetWindowSize(window, &win_w, &win_h);
 
-    dpr = (float)gl_w / (float)win_w;
+    _dpr = (float)gl_w / (float)win_w;
     update_device_dpi();
 }
 
-void Platform::resized()
+void PlatformManager::resized()
 {
     #ifdef __EMSCRIPTEN__
     emscripten_get_element_css_size("#canvas", &css_w, &css_h);
@@ -50,10 +50,10 @@ void Platform::resized()
     emscripten_set_canvas_element_size("#canvas", fb_w, fb_h);
     #endif
 
-    Platform::get()->update();
+    PlatformManager::get()->update();
 }
 
-bool Platform::device_vertical()
+bool PlatformManager::device_vertical()
 {
     #ifdef __EMSCRIPTEN__
     EmscriptenOrientationChangeEvent orientation;
@@ -64,7 +64,7 @@ bool Platform::device_vertical()
     return false;
 }
 
-void Platform::device_orientation(int* orientation_angle, int* orientation_index)
+void PlatformManager::device_orientation(int* orientation_angle, int* orientation_index)
 {
     #ifdef __EMSCRIPTEN__
     EmscriptenOrientationChangeEvent orientation;
@@ -89,7 +89,7 @@ EM_BOOL _orientationChanged(int type, const EmscriptenOrientationChangeEvent* e,
 }
 #endif
 
-bool Platform::device_orientation_changed(std::function<void(int, int)> onChanged)
+bool PlatformManager::device_orientation_changed(std::function<void(int, int)> onChanged)
 {
     #ifdef __EMSCRIPTEN__
     _onOrientationChangedCB = onChanged;
@@ -100,32 +100,36 @@ bool Platform::device_orientation_changed(std::function<void(int, int)> onChange
     #endif
 }
 
-void Platform::update_device_dpi()
+void PlatformManager::update_device_dpi()
 {
     #ifdef __EMSCRIPTEN__
-    dpi = EM_ASM_DOUBLE({
+    _dpi = EM_ASM_DOUBLE({
         return window.devicePixelRatio * 96.0;
     });
     #else
     float ddpi, hdpi, vdpi;
     if (SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi) == 0)
-        dpi = ddpi;
+        _dpi = ddpi;
     else
-        dpi = 96.0f;
+        _dpi = 96.0f;
     #endif
 }
 
-bool Platform::is_touch_device()
+bool PlatformManager::is_touch_device()
 {
     return SDL_GetNumTouchDevices() > 0;
 }
 
-int Platform::is_mobile_device()
+int PlatformManager::is_mobile()
 {
-    return _is_mobile_device();
+    #ifdef DEBUG_SIMULATE_MOBILE
+    return true;
+    #else
+    return _is_mobile_device(); /// todo: Cache
+    #endif
 }
 
-float Platform::touch_accuracy()
+float PlatformManager::touch_accuracy()
 {
     // Measure size of a thumb relative to screen size
     // 0 = poor accuracy (thumb on small screen)
@@ -133,54 +137,50 @@ float Platform::touch_accuracy()
     return 1.0f - (1.0f / window_size_inches());
 }
 
-float Platform::font_scale()
+float PlatformManager::font_scale()
 {
-    return is_mobile_device() ? 1.4f : 1.0f;
+
+    return is_mobile() ? 1.3f : 1.0f;
     //return 1.0f / touch_accuracy(window);
-    //return window_dpr(window) / touch_accuracy(window);
+    //return dpr(window) / touch_accuracy(window);
 }
 
 
-float Platform::ui_scale_factor()
+float PlatformManager::ui_scale_factor()
 {
-    return is_mobile_device() ? 2.0f : 1.0f;
+    return is_mobile() ? 2.0f : 1.0f;
 }
 
-float Platform::window_dpr()
+float PlatformManager::window_width_inches()
 {
-    return (float)gl_w / (float)win_w;
+    return win_w / _dpi;
 }
 
-float Platform::window_width_inches()
+float PlatformManager::window_height_inches()
 {
-    return win_w / dpi;
+    return win_h / _dpi;
 }
 
-float Platform::window_height_inches()
-{
-    return win_h / dpi;
-}
-
-float Platform::window_size_inches()
+float PlatformManager::window_size_inches()
 {
     float diag_px = std::sqrt((float)(win_w * win_w + win_h * win_h));
-    return diag_px / dpi;
+    return diag_px / _dpi;
 }
 
-float Platform::max_char_rows()
+float PlatformManager::max_char_rows()
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.DisplaySize.y / io.Fonts->Fonts[0]->FontSize;
 }
 
-float Platform::max_char_cols()
+float PlatformManager::max_char_cols()
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.DisplaySize.x / io.Fonts->Fonts[0]->FontSize;
 }
 
 
-const char* Platform::path(const char* virtual_path)
+const char* PlatformManager::path(const char* virtual_path)
 {
     #ifdef __EMSCRIPTEN__
     return virtual_path;

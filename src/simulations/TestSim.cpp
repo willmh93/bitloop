@@ -12,7 +12,7 @@ SIM_DECLARE(Test, "Framework Tests", "Canvas Transforms")
 /// Project ///
 ///---------///
 
-void Test_Project::projectAttributes()
+void Test_Project_Vars::populate(Test_Project_Vars &dst)
 {
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 36);
 }
@@ -28,18 +28,13 @@ void Test_Project::projectPrepare()
 }
 
 ///-----------///
-/// SceneBase ///
+///   Scene   ///
 ///-----------///
 
-void Test_Scene::sceneAttributes()
+void Test_Scene_Attributes::populate(Test_Scene_Attributes& dst)
 {
-    // starting_checkbox,   realtime_checkbox
-    // starting_combo,      realtime_combo
-    // starting_spin_int    realtime_spin_int
-    // starting_spin_double starting_spin_double
-
-    //options->realtime_slider("SceneBase Var 1", &var1, 0.0, 1.0, 0.1); // updated in realtime
-    //options->starting_slider("SceneBase Var 2", &var2, 0.0, 1.0, 0.1); // only updated on restart
+    //options->realtime_slider("Scene Var 1", &var1, 0.0, 1.0, 0.1); // updated in realtime
+    //options->starting_slider("Scene Var 2", &var2, 0.0, 1.0, 0.1); // only updated on restart
     ImGui::Checkbox("Transform coordinates", &transform_coordinates); // updated in realtime
     ImGui::Checkbox("Scale Lines & Text", &scale_lines_text); // updated in realtime
     ImGui::Checkbox("Scale Sizes", &scale_sizes); // updated in realtime
@@ -50,7 +45,6 @@ void Test_Scene::sceneAttributes()
     ImGui::SliderDouble("Camera Y", &camera_y, -500.0, 500.0); // updated in realtime
     ImGui::SliderDouble("Zoom X", &zoom_x, -2.0, 2.0); // updated in realtime
     ImGui::SliderDouble("Zoom Y", &zoom_y, -2.0, 2.0); // updated in realtime
-
 }
 
 void Test_Scene::sceneStart()
@@ -84,10 +78,37 @@ void Test_Scene::sceneDestroy()
     // Destroy scene
 }
 
+// Very naive prime checker
+bool is_prime(unsigned long long n) {
+    if (n < 2) return false;
+    for (unsigned long long i = 2; i * i <= n; ++i) {
+        if (n % i == 0) return false;
+    }
+    return true;
+}
+
+// Find the nth prime number after a starting point
+unsigned long long find_large_prime(unsigned long long start, int count) {
+    unsigned long long candidate = start;
+    int found = 0;
+    int a = 5;
+    while (found < count) {
+        if (is_prime(candidate)) {
+            ++found;
+        }
+        ++candidate;
+        a += rand();
+    }
+    return candidate - 1;
+}
+
 void Test_Scene::sceneProcess()
 {
     // Process scene update
-    seed += 0.015;
+    for (int i = 0; i < 10; i++)
+    {
+        unsigned long long prime = find_large_prime(2000000000000ul + rand()%100000ul, 1);
+    }
 
     for (Particle& p : particles)
     {
@@ -127,8 +148,8 @@ void Test_Scene::viewportProcess(Viewport* ctx)
 
     //obj.rotation += 0.01;
 
-    //ball_pos.x = mouse->world_x;
-    //ball_pos.y = mouse->world_y;
+    //ball_pos.x = pointer->world_x;
+    //ball_pos.y = pointer->world_y;
 }
 
 
@@ -263,23 +284,13 @@ void Test_Scene::viewportDraw(Viewport* ctx)
     ctx->fill();*/
 }
 
-/// User Interaction
+void Test_Scene::onEvent(Event& e)
+{
+    if (e.focused_ctx())
+        e.focused_ctx()->camera.handleWorldNavigation(e, true);
+    
+    logMessage(e.info().c_str());
+}
 
-/*void Test_Scene::mouseDown()
-{
-    //ball_pos.x = mouse.world_x;
-    //ball_pos.y = mouse.world_y;
-}
-void Test_Scene::mouseUp()
-{
-    //ball_pos.x = mouse.world_x;
-    //ball_pos.y = mouse.world_y;
-}
-void Test_Scene::mouseMove()
-{
-    ball_pos.x = mouse->world_x;
-    ball_pos.y = mouse->world_y;
-}
-void Test_Scene::mouseWheel() {}*/
 
 SIM_END(Test)

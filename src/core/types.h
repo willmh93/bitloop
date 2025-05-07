@@ -2,8 +2,9 @@
 #include <functional>
 #include <string>
 
-class Project;
-using CreatorFunc = std::function<Project* ()>;
+
+class ProjectBase;
+using CreatorFunc = std::function<ProjectBase* ()>;
 
 // Enums
 
@@ -46,7 +47,7 @@ struct ProjectInfo
 };
 
 class Viewport;
-struct MouseInfo
+struct PointerInfo
 {
     Viewport* viewport = nullptr;
     double client_x = 0;
@@ -61,12 +62,10 @@ struct MouseInfo
 
 struct Vec2
 {
-    double x;
-    double y;
+    double x = 0.0;
+    double y = 0.0;
 
-    Vec2()
-    {}
-
+    Vec2() = default;
     Vec2(double _x, double _y)
     {
         x = _x;
@@ -111,6 +110,11 @@ struct Vec2
     Vec2 operator /(double v) const
     {
         return { x / v, y / v };
+    }
+
+    double* asArray()
+    {
+        return &x;
     }
 
     double angle() const
@@ -427,6 +431,11 @@ struct Color
 
     Color& operator =(const Color& rhs) { u32 = rhs.u32; return *this; }
     bool operator ==(const Color& rhs) const { return u32 == rhs.u32; }
+
+    operator uint32_t() const
+    {
+        return u32;
+    }
 };
 
 struct Size

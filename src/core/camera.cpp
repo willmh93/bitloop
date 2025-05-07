@@ -1,6 +1,7 @@
 #include <cmath>
 #include "camera.h"
 #include "project.h"
+#include "platform.h"
 
 void Camera::setTransformFilters(bool _transform_coordinates, bool _scale_line_txt, bool _scale_sizes, bool _rotate_text)
 {
@@ -200,48 +201,65 @@ void Camera::setRelativeZoomRange(double min, double max)
     max_zoom = max;
 }
 
-void Camera::panBegin(int _x, int _y)
+void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
 {
-    pan_down_mx = _x;
-    pan_down_my = _y;
+    pan_down_touch_x = _x;
+    pan_down_touch_y = _y;
+    pan_down_touch_dist = touch_dist;
+    pan_down_touch_angle = touch_angle;
 
     if (use_panning_offset)
     {
-        pan_beg_x = targ_pan_x;
-        pan_beg_y = targ_pan_y;
+        pan_beg_cam_x = targ_pan_x;
+        pan_beg_cam_y = targ_pan_y;
     }
     else
     {
         //Vec2 world_mouse = toWorld(x, y);
-        pan_beg_x = x;
-        pan_beg_y = y;
+        pan_beg_cam_x = x;
+        pan_beg_cam_y = y;
+        pan_beg_cam_zoom_x = zoom_x;
+        pan_beg_cam_zoom_y = zoom_y;
+        pan_beg_cam_angle = rotation;
     }
     panning = true;
 }
 
-void Camera::panDrag(int _x, int _y)
+void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 {
     if (panning)
     {
         if (use_panning_offset)
         {
-            int dx = _x - pan_down_mx;
-            int dy = _y - pan_down_my;
-            targ_pan_x = pan_beg_x + (double)(dx / zoom_x) * pan_mult;
-            targ_pan_y = pan_beg_y + (double)(dy / zoom_y) * pan_mult;
+            int dx = _x - pan_down_touch_x;
+            int dy = _y - pan_down_touch_y;
+            targ_pan_x = pan_beg_cam_x + (double)(dx / zoom_x) * pan_mult;
+            targ_pan_y = pan_beg_cam_y + (double)(dy / zoom_y) * pan_mult;
         }
         else
         {
             Vec2 world_mouse = toWorld(_x, _y);
-            //double dx = world_mouse.x - pan_down_mx;
-            //double dy = world_mouse.y - pan_down_my;
-            int dx = _x - pan_down_mx;
-            int dy = _y - pan_down_my;
+            //double dx = world_mouse.x - pan_down_touch_x;
+            //double dy = world_mouse.y - pan_down_touch_y;
+            int dx = _x - pan_down_touch_x;
+            int dy = _y - pan_down_touch_y;
+
+            double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
+
             Vec2 world_offset = toWorldOffset(dx, dy);
             //qDebug() << "(dx,dy) = (" << dx << ", " << dy << ")";
 
-            x = pan_beg_x - world_offset.x * pan_mult;
-            y = pan_beg_y - world_offset.y * pan_mult;
+            x = pan_beg_cam_x - world_offset.x * pan_mult;
+            y = pan_beg_cam_y - world_offset.y * pan_mult;
+
+            if (pan_down_touch_dist > 0.0)
+            {
+                double delta_zoom = touch_dist / pan_down_touch_dist;
+                zoom_x = pan_beg_cam_zoom_x * delta_zoom;
+                zoom_y = pan_beg_cam_zoom_y * delta_zoom;
+            }
+
+            rotation = pan_beg_cam_angle + delta_rotation;
         }
     }
 }
@@ -262,12 +280,173 @@ void Camera::panZoomProcess()
     */
     pan_x += (targ_pan_x - pan_x) * ease;
     pan_y += (targ_pan_y - pan_y) * ease;
-    zoom_x += (targ_zoom_x - zoom_x) * ease;
-    zoom_y += (targ_zoom_y - zoom_y) * ease;
+    ///zoom_x += (targ_zoom_x - zoom_x) * ease;
+    ///zoom_y += (targ_zoom_y - zoom_y) * ease;
 }
+
 
 void Camera::panEnd(int _x, int _y)
 {
-    panDrag(_x, _y);
+    ///panDrag(_x, _y, 0, 0);
     panning = false;
+}
+
+void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
+{
+    if (PlatformManager::get()->is_mobile())
+    {
+        // Support both single-finger pan & 2 finger transform
+        switch (e->type)
+        {
+            case SDL_FINGERDOWN:
+            {
+                //int previous_fingers_pressed = pressed_fingers.size();
+
+                if (e->tfinger.fingerId > 1)
+                {
+                    // Ignore 3 or more fingers
+                    return;
+                }
+
+                // Add pressed finger
+                FingerInfo info;
+                info.fingerId = e->tfinger.fingerId;
+                info.x = e.finger_x();
+                info.y = e.finger_y();
+                pressed_fingers.push_back(info);
+
+                if (pressed_fingers.size() == 1)
+                {
+                    if (single_touch_pan)
+                        panBegin((int)e.finger_x(), (int)e.finger_y(), 0.0, 0.0);
+                }
+                else if (pressed_fingers.size() == 2)
+                {
+                    if (panning)
+                    {
+                        // Was already panning with a single finger. Restart with 2 fingers
+                        panEnd((int)pressed_fingers.front().x, (int)pressed_fingers.front().y);
+                    }
+
+                    double avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
+                    double avg_y = (pressed_fingers[0].y + pressed_fingers[1].y) / 2.0;
+                    panBegin((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+                }
+            }
+            break;
+            case SDL_FINGERUP:
+            {
+                if (e->tfinger.fingerId > 1)
+                {
+                    // Ignore 3 or more fingers
+                    return;
+                }
+
+                double avg_x = 0.0;
+                double avg_y = 0.0;
+                if (pressed_fingers.size() == 2)
+                {
+                    avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
+                    avg_y = (pressed_fingers[0].y + pressed_fingers[1].y) / 2.0;
+                }
+
+                // Erase lifted finger
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                {
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == e->tfinger.fingerId)
+                    {
+                        pressed_fingers.erase(pressed_fingers.begin() + i);
+                        break;
+                    }
+                }
+
+                if (pressed_fingers.size() == 0)
+                {
+                    // End single-finger pan (previously had 1 remaining pressed finger)
+                    if (single_touch_pan)
+                        panEnd((int)e.finger_x(), (int)e.finger_y());
+                }
+                else if (pressed_fingers.size() == 1)
+                {
+                    // End 2-finger pan, switch to single-finger pan
+                    panEnd((int)avg_x, (int)avg_y);
+
+                    // Switch to whichever finger is still pressed (might not be finger index 0)
+                    if (single_touch_pan)
+                        panBegin((int)pressed_fingers.front().x, (int)pressed_fingers.front().y, 0.0, 0.0);
+                }
+            }
+            break;
+            case SDL_FINGERMOTION:
+            {
+                if (e->tfinger.fingerId > 1)
+                {
+                    // Ignore 3 or more fingers
+                    return;
+                }
+
+                // Update finger info
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                {
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == e->tfinger.fingerId)
+                    {
+                        info.x = e.finger_x();
+                        info.y = e.finger_y();
+                        break;
+                    }
+                }
+
+                if (pressed_fingers.size() == 1)
+                {
+                    if (single_touch_pan)
+                        panDrag((int)e.finger_x(), (int)e.finger_y(), 0.0, 0.0);
+                }
+                else if (pressed_fingers.size() == 2)
+                {
+                    double avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
+                    double avg_y = (pressed_fingers[0].y + pressed_fingers[1].y) / 2.0;
+                    panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+                }
+            }
+            break;
+        }
+    }
+    else
+    {
+        switch (e->type)
+        {
+            case SDL_MOUSEBUTTONDOWN:
+            {
+                if (e->button.button == SDL_BUTTON_MIDDLE ||
+                    (single_touch_pan && e->button.button == SDL_BUTTON_LEFT))
+                {
+                    panBegin(e->button.x, e->button.y, 0.0, 0.0);
+                }
+            }
+            break;
+            case SDL_MOUSEBUTTONUP:
+            {
+                if (e->button.button == SDL_BUTTON_MIDDLE ||
+                    (single_touch_pan && e->button.button == SDL_BUTTON_LEFT))
+                {
+                    panEnd(e->button.x, e->button.y);
+                }
+            }
+            break;
+            case SDL_MOUSEMOTION:
+            {
+                if (panning)
+                    panDrag(e->motion.x, e->motion.y, 0.0, 0.0);
+            }
+            break;
+            case SDL_MOUSEWHEEL:
+            {
+                zoom_x += (double)(e->wheel.y / 10.0) * zoom_x;
+                zoom_y += (double)(e->wheel.y / 10.0) * zoom_y;
+            }
+            break;
+        }
+    }
 }

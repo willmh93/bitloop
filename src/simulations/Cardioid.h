@@ -6,7 +6,7 @@ SIM_BEG(Cardioid)
 
 // Expose
 
-void plot(Scene* scene, Viewport* ctx, bool interactive, int segments = 720, double ox=0);
+void plot(SceneBase* scene, Viewport* ctx, bool interactive, int segments = 720, double ox=0);
 
 inline double cardioidSquaredDistance(double angle, double mx, double my)
 {
@@ -384,36 +384,39 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
     }
 };
 
-struct Cardioid_Scene : public Scene
+struct Cardioid_Scene_Vars : public VarBuffer<Cardioid_Scene_Vars>
 {
-    // --- Variables ---
-    //double interact_angle = 0.0;
+    bool show_offset = false;
+    bool interactive = true;
+
     double interact_angle_step = (2 * M_PI) / 720.0;
     double interact_spin_mult = 1.0;
     double interact_angle = 0.0;
     double interact_dist = 0.0;
-    
-    bool show_offset = false;
-    bool interactive = true;
 
-    
-    
+    void populate(Cardioid_Scene_Vars &dst) override;
+    void copyFrom(const Cardioid_Scene_Vars& rhs) override
+    {
+        show_offset = rhs.show_offset;
+        interactive = rhs.interactive;
+        interact_angle_step = rhs.interact_angle_step;
+        interact_spin_mult = rhs.interact_spin_mult;
+        interact_angle = rhs.interact_angle;
+        interact_dist = rhs.interact_dist;
+    }
+};
+
+struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
+{
+    // --- Variables ---
 
     // --- Scene management ---
-    void sceneAttributes() override;
-    //void sceneStart() override;
-    //void sceneStop() override;
-    //void sceneDestroy() override;
+    
 
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
 
     // --- Update methods ---
-    
-    //void sceneProcess() override;
-
-    // --- Shaders ---
-    //void loadShaders() override;
 
     void plotCumulativeCardioid(Viewport* ctx, const CumulativeCardioid &items, double angle_mult=1.0);
 
@@ -428,22 +431,9 @@ struct Cardioid_Scene : public Scene
     // --- Viewport ---
     void viewportProcess(Viewport* ctx) override;
     void viewportDraw(Viewport* ctx) override;
-
-    // --- Input ---
-    void mouseDown() override;
-    void mouseUp() override;
-    void mouseMove() override;
-    void mouseWheel() override;
 };
 
-struct Cardioid_Project : public Project
-{
-    void projectAttributes() override;
-    void projectPrepare() override;
-
-};
-
-struct Cardioid_Graph_Scene : public Scene
+struct Cardioid_Graph_Scene : public BasicScene
 {
     struct Config {
         Cardioid_Scene* main_scene;
@@ -456,12 +446,16 @@ struct Cardioid_Graph_Scene : public Scene
     Cardioid_Scene* main_scene;
     CanvasImage bmp;
 
-    void sceneAttributes() override;
     void sceneStart() override;
 
     void sceneMounted(Viewport* viewport) override;
     void viewportProcess(Viewport* ctx) override;
     void viewportDraw(Viewport* ctx) override;
+};
+
+struct Cardioid_Project : public BasicProject
+{
+    void projectPrepare() override;
 };
 
 SIM_END(Cardioid)

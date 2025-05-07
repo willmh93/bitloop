@@ -1,7 +1,18 @@
 #pragma once
 #include "types.h"
+#include "debug.h"
 
 class Viewport;
+class Event;
+
+struct FingerInfo
+{
+    Viewport* owner_ctx = nullptr;
+    int64_t fingerId;
+    double x;
+    double y;
+};
+
 class Camera
 {
 public:
@@ -11,11 +22,12 @@ public:
     bool panning_enabled = true;
     bool zooming_enabled = true;
 
-    double x = 0;
-    double y = 0;
-    double zoom_x = 1;
-    double zoom_y = 1;
-    double rotation = 0;
+    finite_double x = 0;
+    finite_double y = 0;
+    finite_double zoom_x = 1;
+    finite_double zoom_y = 1;
+    finite_double rotation = 0;
+
     double targ_zoom_x = 1;
     double targ_zoom_y = 1;
     double reference_zoom_x = 1;
@@ -40,10 +52,18 @@ public:
     double focal_anchor_y = 0.0;
 
     double pan_mult = 1.0;
-    int pan_down_mx = 0;
-    int pan_down_my = 0;
-    double pan_beg_x = 0;
-    double pan_beg_y = 0;
+
+    int    pan_down_touch_x      = 0;
+    int    pan_down_touch_y      = 0;
+    double pan_down_touch_dist   = 0;
+    double pan_down_touch_angle  = 0;
+                                 
+    double pan_beg_cam_x         = 0;
+    double pan_beg_cam_y         = 0;
+    double pan_beg_cam_zoom_x    = 0;
+    double pan_beg_cam_zoom_y    = 0;
+    double pan_beg_cam_angle     = 0;
+
     bool panning = false;
     bool use_panning_offset = true;
 
@@ -98,6 +118,20 @@ public:
         };
     }
     void setRelativeZoomRange(double min, double max);
+    void setRelativeZoomFactor(double relative_zoom)
+    {
+        zoom_x = reference_zoom_x * relative_zoom;
+        zoom_y = reference_zoom_y * relative_zoom;
+    }
+    void setRelativeZoomFactorX(double relative_zoom_x)
+    {
+        zoom_x = reference_zoom_x * relative_zoom_x;
+    }
+    void setRelativeZoomFactorY(double relative_zoom_y)
+    {
+        zoom_y = reference_zoom_y * relative_zoom_y;
+    }
+
 
     void cameraToViewport(double left, double top, double right, double bottom);
     void focusWorldRect(double left, double top, double right, double bottom, bool stretch=false);
@@ -157,8 +191,11 @@ public:
     Vec2 toWorld(double x, double y);
     FRect toWorldRect(const FRect& r);
     FRect toWorldRect(double x1, double y1, double x2, double y2);
+
     FQuad toWorldQuad(const Vec2 &a, const Vec2& b, const Vec2& c, const Vec2& d);
     FQuad toWorldQuad(const FQuad& quad);
+    FQuad toWorldQuad(const FRect& quad);
+    FQuad toWorldQuad(double x1, double y1, double x2, double y2);
 
     Vec2 toStage(const Vec2& pt);
     Vec2 toStage(double x, double y);
@@ -169,10 +206,35 @@ public:
     FQuad toStageQuad(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d);
 
     void setPanningUsesOffset(bool b) { use_panning_offset = b; }
-    void panBegin(int _x, int _y);
-    void panDrag(int _x, int _y);
+    void panBegin(int _x, int _y, double touch_dist, double touch_angle);
+    void panDrag(int _x, int _y, double touch_dist, double touch_angle);
     void panEnd(int _x, int _y);
     void panZoomProcess();
+
+    std::vector<FingerInfo> pressed_fingers;
+    double touchAngle()
+    {
+        if (pressed_fingers.size() >= 2)
+        {
+            return atan2(
+                pressed_fingers[1].y - pressed_fingers[0].y,
+                pressed_fingers[1].x - pressed_fingers[0].x
+            );
+        }
+        return 0.0;
+    }
+    double touchDist()
+    {
+        if (pressed_fingers.size() >= 2)
+        {
+            double dx = pressed_fingers[1].x - pressed_fingers[0].x;
+            double dy = pressed_fingers[1].y - pressed_fingers[0].y;
+            return sqrt(dx*dx + dy*dy);
+        }
+        return 0.0;
+    }
+
+    void handleWorldNavigation(Event& e, bool single_touch_pan);
 };
 
 inline void Camera::setStageOffset(double ox, double oy)
@@ -299,6 +361,7 @@ inline Vec2 Camera::toWorld(double x, double y)
     return toWorld({ x, y });
 }
 
+
 inline FRect Camera::toWorldRect(const FRect& r)
 {
     Vec2 tl = toWorld(r.x1, r.y1);
@@ -313,6 +376,7 @@ inline FRect Camera::toWorldRect(double x1, double y1, double x2, double y2)
     return { tl.x, tl.y, br.x, br.y };
 }
 
+
 inline FQuad Camera::toWorldQuad(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d)
 {
     Vec2 qA = toWorld(a);
@@ -326,6 +390,27 @@ inline FQuad Camera::toWorldQuad(const FQuad& quad)
 {
     return toWorldQuad(quad.a, quad.b, quad.c, quad.d);
 }
+
+inline FQuad Camera::toWorldQuad(double x1, double y1, double x2, double y2)
+{
+    return toWorldQuad(
+        Vec2(x1, y1),
+        Vec2(x2, y1),
+        Vec2(x2, y2),
+        Vec2(x1, y2)
+    );
+}
+
+inline FQuad Camera::toWorldQuad(const FRect& r)
+{
+    return toWorldQuad(
+        Vec2(r.x1, r.y1),
+        Vec2(r.x2, r.y1),
+        Vec2(r.x2, r.y2),
+        Vec2(r.x1, r.y2)
+    );
+}
+
 
 inline Vec2 Camera::toStage(const Vec2& pt)
 {
