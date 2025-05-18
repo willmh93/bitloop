@@ -5,8 +5,10 @@
 #include <string>
 #include <sstream>
 #include <functional>
+#include <type_traits>
 #include <random>
 
+#include "main.h"
 #include "platform.h"
 #include "helpers.h"
 #include "types.h"
@@ -26,6 +28,93 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
 #define SIM_BEG(ns) namespace ns{
 #define SIM_DECLARE(ns, ...) namespace ns { AutoRegisterProject<ns##_Project> register_##ns(VectorizeArgs(__VA_ARGS__));
 #define SIM_END(ns) } using ns::ns##_Project;
+
+
+
+/// =================================================================================
+/// ======= varcpy overloads (helper for safely copying data between threads) =======
+/// =================================================================================
+
+// --- varcpy (non-primative requiring ::copyFrom method) ---
+template<typename T>
+concept ImpliedThreadSafeCopyable = requires(T t, const T & rhs) {
+    { t.copyFrom(rhs) } -> std::same_as<void>;
+};
+
+template<ImpliedThreadSafeCopyable T>
+void varcpy(T& dst, const T& src) {
+    dst.copyFrom(src);
+}
+
+// --- varcpy (primative copyable) ---
+template<typename T>
+concept PrimitiveCopyable = std::is_trivially_copyable_v<T> && std::is_assignable_v<T&, const T&>;
+
+template<PrimitiveCopyable T>
+void varcpy(T& dst, const T& src) {
+    dst = src;
+}
+
+// --- varcpy (trivially copyable array) ---
+template<typename T, size_t N>
+void varcpy(T(&dst)[N], const T(&src)[N]) {
+    static_assert(std::is_trivially_copyable_v<T>,
+        "varcpy: array element type must be trivially copyable");
+    std::memcpy(dst, src, sizeof(T) * N);
+}
+
+// --- varcpy (trivially copyable base part of a possibly non-trivially copyable derived class) ---
+template<typename Base, typename Derived>
+void varcpy(Derived& dst, const Derived& src) {
+    varcpy(*static_cast<Base*>(&dst), *static_cast<const Base*>(&src));
+}
+
+/// ---------------------------------------------------------
+/// 
+/// Tiny helper macros to insert sentinel markers around data
+/// which will be automatically synchronized between the live
+/// data buffer and GUI data buffer.
+/// 
+/// Note: Only one sync-block is permitted per VarBuffer.
+/// 
+/// ---------------------------------------------------------
+
+#define sync_struct std::byte __sync_beg__; struct
+#define sync_end    ; std::byte __sync_end__;
+
+template<class T>
+constexpr std::span<std::byte> writable_sync_span(T& obj)
+{
+    auto* beg = reinterpret_cast<std::byte*>(&obj.__sync_beg__) + 1;
+    auto* end = reinterpret_cast<std::byte*>(&obj.__sync_end__);
+    return { beg, end };
+}
+
+template<class T>
+constexpr std::span<const std::byte> readonly_sync_span(const T& obj)
+{
+    auto* beg = reinterpret_cast<const std::byte*>(&obj.__sync_beg__) + 1;
+    auto* end = reinterpret_cast<const std::byte*>(&obj.__sync_end__);
+    return { beg, end };
+}
+
+template<typename T>
+concept VarBufferConcept = requires(T t, const T & rhs) {
+    { t.populate() } -> std::same_as<void>;
+    { t.copyFrom(rhs) } -> std::same_as<void>;
+};
+
+template<typename T>
+concept HasSyncMembers = requires(T & t) {
+    { t.__sync_beg__ } -> std::convertible_to<std::byte>;
+    { t.__sync_end__ } -> std::convertible_to<std::byte>;
+};
+
+struct VarBuffer
+{
+    VarBuffer() = default;
+    VarBuffer(const VarBuffer&) = delete;
+};
 
 class Layout;
 class Viewport;
@@ -74,13 +163,20 @@ public:
 
 class SceneBase : public VariableChangedTracker
 {
-    std::random_device rd;
-    std::mt19937 gen;
+    mutable std::mt19937 gen;
+
+    int dt_sceneProcess = 0;
+
+    mutable std::vector<Math::MovingAverage::MA> dt_scene_ma_list;
+    mutable std::vector<Math::MovingAverage::MA> dt_project_ma_list;
+    //mutable std::vector<Math::MovingAverage::MA> dt_project_draw_ma_list;
+
+    mutable size_t dt_call_index = 0;
+    mutable size_t dt_process_call_index = 0;
+    //size_t dt_draw_call_index = 0;
 
 protected:
 
-    //template<typename T> 
-    //friend class SceneEx;
     friend class Viewport;
     friend class ProjectBase;
 
@@ -100,7 +196,6 @@ protected:
     virtual void _updateShadowSceneAttributes() {}
     //
     
-    //void _onInputEvent(SDL_Event& e);
     void _onEvent(Event& e) 
     {
         onEvent(e);
@@ -111,13 +206,12 @@ public:
     std::shared_ptr<void> temporary_environment;
 
     Camera* camera = nullptr;
-    PointerInfo* pointer = nullptr;
+    MouseInfo* mouse = nullptr;
 
     struct Config {};
 
-    SceneBase() : gen(rd())
-    {
-    }
+    SceneBase() : gen(std::random_device{}())
+    {}
     virtual ~SceneBase() = default;
 
     void mountTo(Viewport* viewport);
@@ -130,9 +224,18 @@ public:
     virtual void sceneDestroy() {}
     virtual void sceneProcess() {}
     virtual void viewportProcess(Viewport* ctx) {}
-    virtual void viewportDraw(Viewport* ctx) = 0;
+    virtual void viewportDraw(Viewport* ctx) const = 0;
 
     virtual void onEvent(Event& e) {}
+
+    void pollEvents()
+    {
+        MainWindow()->pollEvents();
+    }
+    void pollData()
+    {
+        MainWindow()->pollData();
+    }
 
     ///virtual void touchEvent(TouchEvent e) {}
     ///virtual void mouseDown() {}
@@ -140,19 +243,31 @@ public:
     ///virtual void mouseMove() {}
     ///virtual void mouseWheel() {}
 
-    //virtual void keyPressed(QKeyEvent* e) {};
-    //virtual void keyReleased(QKeyEvent* e) {};
+    virtual std::string name() const { return "Scene"; }
+    int sceneIndex() const { return scene_index; }
 
-    virtual std::string name() { return "Scene"; }
-    int sceneIndex() { return scene_index; }
+    double frame_dt(int average_samples = 1) const;
+    double scene_dt(int average_samples = 1) const;
+    double project_dt(int average_samples = 1) const;
 
-    double random(double min = 0, double max = 1)
+    double fps(int average_samples = 1) const { return 1000.0 / frame_dt(average_samples); }
+
+    ///FRect combinedViewportsRect()
+    ///{
+    ///    FRect ret{};
+    ///    for (Viewport* ctx : viewports)
+    ///    {
+    ///        ctx->viewportRect();
+    ///    }
+    ///}
+
+    double random(double min = 0, double max = 1) const
     {
         std::uniform_real_distribution<> dist(min, max);
         return dist(gen);
     }
 
-    Vec2 Offset(double stage_offX, double stage_offY)
+    DVec2 Offset(double stage_offX, double stage_offY) const
     {
         return camera->toWorldOffset({ stage_offX, stage_offY });
     }
@@ -161,73 +276,7 @@ public:
     void logClear();
 };
 
-
-/// =================================================================================
-/// ======= varcpy overloads (helper for safely copying data between threads) =======
-/// =================================================================================
-
-// --- varcpy (non-primative requiring ::copyFrom method) ---
-template<typename T>
-concept ImpliedThreadSafeCopyable = requires(T t, const T & rhs) {
-    { t.copyFrom(rhs) } -> std::same_as<void>;
-};
-
-template<ImpliedThreadSafeCopyable T>
-void varcpy(T& dst, const T& src) {
-    dst.copyFrom(src);
-}
-
-// --- varcpy (primative copyable) ---
-template<typename T>
-concept PrimitiveCopyable = std::is_trivially_copyable_v<T> && std::is_assignable_v<T&, const T&>;
-
-template<PrimitiveCopyable T>
-void varcpy(T& dst, const T& src) {
-    dst = src;
-}
-
-// --- varcpy (trivially copyable array) ---
-template<typename T, size_t N>
-void varcpy(T(&dst)[N], const T(&src)[N]) {
-    static_assert(std::is_trivially_copyable_v<T>,
-        "varcpy: array element type must be trivially copyable");
-    std::memcpy(dst, src, sizeof(T) * N);
-}
-
-// --- varcpy (trivially copyable base part of a possibly non-trivially copyable derived class) ---
-template<typename Base, typename Derived>
-void varcpy(Derived& dst, const Derived& src) {
-    varcpy(*static_cast<Base*>(&dst), *static_cast<const Base*>(&src));
-}
-
-
-template<typename Derived>
-struct VarBuffer
-{
-    Derived* live_attributes = nullptr;
-
-    VarBuffer() = default;
-    VarBuffer(const VarBuffer&) = delete;
-
-    virtual void populate(Derived& dst) {}
-    virtual void copyFrom(const Derived& rhs) = 0;
-
-    /*template<typename F>
-    void post(F&& f)
-    {
-        post_fn_queue.push_back(f);
-    }
-
-    using PostFn = void(*)(Derived&, const Derived&);
-    std::vector<PostFn> post_fn_queue;
-
-    void post(void (*f)(Derived& dst, const Derived& src))
-    {
-        post_fn_queue.push_back(f);
-    }*/
-};
-
-template<typename VarBufferType>
+template<VarBufferConcept VarBufferType>
 class Scene : public SceneBase, public VarBufferType
 {
     friend class ProjectBase;
@@ -239,9 +288,7 @@ public:
     Scene() : SceneBase(), shadow_attributes()
     {
         has_var_buffer = true;
-        shadow_attributes.live_attributes = this;
-
-        // In case Scene() constructor changes live attributes
+        ///shadow_attributes.live_attributes = this;
     }
 
 
@@ -249,37 +296,42 @@ protected:
 
     virtual void _sceneAttributes() override 
     {
-        shadow_attributes.populate(*shadow_attributes.live_attributes);
-        //_updateLiveAttributes();
+        shadow_attributes.populate();
     }
 
     void _updateLiveSceneAttributes() override
     {
-        ///std::memcpy(
-        ///    static_cast<VarBufferType*>(this),
-        ///    static_cast<const VarBufferType*>(&shadow_attributes),
-        ///    sizeof(VarBufferType)
-        ///);
+        if constexpr (HasSyncMembers<VarBufferType>)
+        {
+            auto dst = writable_sync_span(*static_cast<VarBufferType*>(this));
+            auto src = readonly_sync_span(shadow_attributes);
+            std::memcpy(dst.data(), src.data(), dst.size());
+        }
 
-        //*this_attributes = shadow_attributes;
-
+        // Give sim a chance to manually copy non-trivially copyable data
         VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
         this_attributes->copyFrom(shadow_attributes);
-
     }
+
     void _updateShadowSceneAttributes() override
     {
-        ///std::memcpy(
-        ///    static_cast<VarBufferType*>(&shadow_attributes),
-        ///    static_cast<const VarBufferType*>(this),
-        ///    sizeof(VarBufferType)
-        ///);
+        if constexpr (HasSyncMembers<VarBufferType>)
+        {
+            auto dst = writable_sync_span(shadow_attributes);
+            auto src = readonly_sync_span(*static_cast<VarBufferType*>(this));
+            std::memcpy(dst.data(), src.data(), dst.size());
+        }
 
-        //shadow_attributes = *this_attributes;
-
+        // Give sim a chance to manually copy non-trivially copyable data
         VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
         shadow_attributes.copyFrom(*this);
     }
+
+    //void _discoverChildBuffers(VarBuffer* live_data, VarBuffer* shadow_data) override
+    //{
+    //    live_data->child_ptrs[this->getProjectInfo()->sim_uid] = this;
+    //    shadow_data->child_ptrs[this->getProjectInfo()->sim_uid] = &shadow_attributes;
+    //}
 };
 
 class Viewport : public Painter
@@ -324,7 +376,8 @@ public:
     int viewportIndex() { return viewport_index; }
     int viewportGridX() { return viewport_grid_x; }
     int viewportGridY() { return viewport_grid_y; }
-    FRect viewportRect() { return FRect(x, y, x + width, y + height);}
+    DRect viewportRect() { return DRect(x, y, x + width, y + height);}
+    DQuad worldQuad() { return camera.toWorldQuad(0, 0, width, height); }
 
     template<typename T, typename... Args>
     T* construct(Args&&... args)
@@ -458,28 +511,33 @@ class ProjectBase
     int scene_counter = 0;
     int sim_uid = -1;
 
+    int dt_projectProcess = 0;
+    int dt_frameProcess = 0;
+
+    std::chrono::steady_clock::time_point last_frame_time 
+        = std::chrono::steady_clock::now();
+
     Viewport* focused_ctx = nullptr;
     Viewport* hovered_ctx = nullptr;
 
 protected:
 
-    friend class ProjectManager;
+    friend class ProjectManagerInternal;
     friend class Layout;
     friend class SceneBase;
 
     Canvas* canvas = nullptr;
-    ImDebugLog* debug_log = nullptr;
+    ImDebugLog* project_log = nullptr;
 
     // ----------- States -----------
     bool started = false;
     bool paused = false;
     bool done_single_process = false;
-    bool done_single_populate_attributes = false;
 
-    void configure(int sim_uid, Canvas* canvas, ImDebugLog* debug_log);
+    void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
 
     void updateViewportRects();
-    Vec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
+    DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
 
     // -------- Attributes --------
     bool has_var_buffer = false;
@@ -487,6 +545,7 @@ protected:
     virtual void _projectAttributes() {}
     virtual void _updateLiveProjectAttributes() {}
     virtual void _updateShadowProjectAttributes() {}
+    //virtual void _discoverChildBuffers(VarBuffer* live_data, VarBuffer* shadow_data) {}
 
     // ---- Project Management ----
     void _projectPrepare();
@@ -502,7 +561,7 @@ protected:
 
 public:
 
-    PointerInfo pointer;
+    MouseInfo mouse;
 
     virtual ~ProjectBase() = default;
     
@@ -529,7 +588,7 @@ public:
         return nullptr;
     }
 
-    static void addProjectInfo(const std::vector<std::string>& tree_path, const CreatorFunc& func)
+    static void addProjectInfo(const std::vector<std::string>& tree_path, const ProjectCreatorFunc& func)
     {
         static int factory_sim_index = 0;
 
@@ -710,11 +769,20 @@ public:
 
     virtual void onEvent(Event& e) {}
 
+    void pollData()
+    {
+    }
+
+    void pollEvents()
+    {
+        MainWindow()->pollEvents();
+    }
+
     void logMessage(const char* fmt, ...);
     void logClear();
 };
 
-template<typename VarBufferType>
+template<VarBufferConcept VarBufferType>
 class Project : public ProjectBase, public VarBufferType
 {
     friend class ProjectBase;
@@ -723,7 +791,7 @@ class Project : public ProjectBase, public VarBufferType
 
 public:
 
-    Project() : ProjectBase()
+    Project() : ProjectBase(), shadow_attributes()
     {
         has_var_buffer = true;
     }
@@ -732,19 +800,34 @@ protected:
 
     virtual void _projectAttributes() override
     {
-        shadow_attributes.populate(*shadow_attributes.live_attributes);
+        shadow_attributes.populate();
     }
-
 
     void _updateLiveProjectAttributes() override
     {
+        if constexpr (HasSyncMembers<VarBufferType>)
+        {
+            auto dst = writable_sync_span(*static_cast<VarBufferType*>(this));
+            auto src = readonly_sync_span(shadow_attributes);
+            std::memcpy(dst.data(), src.data(), dst.size());
+        }
+
+        // Give sim a chance to manually copy non-trivially copyable data
         VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
-        *this_attributes = shadow_attributes;
+        this_attributes->copyFrom(shadow_attributes);
     }
     void _updateShadowProjectAttributes() override
     {
+        if constexpr (HasSyncMembers<VarBufferType>)
+        {
+            auto dst = writable_sync_span(shadow_attributes);
+            auto src = readonly_sync_span(*static_cast<VarBufferType*>(this));
+            std::memcpy(dst.data(), src.data(), dst.size());
+        }
+
+        // Give sim a chance to manually copy non-trivially copyable data
         VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
-        shadow_attributes = *this_attributes;
+        shadow_attributes.copyFrom(*this);
     }
 };
 

@@ -3,7 +3,22 @@
 
 SIM_BEG({CLASS_NAME})
 
-struct {CLASS_NAME}_Scene : public Scene
+struct {CLASS_NAME}_Scene_Vars : public VarBuffer<{CLASS_NAME}_Scene_Primitives>
+{{
+    void populate() override;
+    void copyFrom(const {CLASS_NAME}_Scene_Vars& rhs) override
+    {{
+        /// ===== Control how data is copied between buffers =====
+        ///
+        ///    NOTE: It is *UNSAFE* to store raw pointers to any data contained inside this buffer
+        ///          as operator=() will likely invalidate any dangling pointers. Take care when
+        ///          using third party pointers
+        ///
+        *this = rhs;
+    }}
+}};
+
+struct {CLASS_NAME}_Scene : public Scene<{CLASS_NAME}_Scene_Vars>
 {{
 /*  // --- Custom Launch Config Example ---
        
@@ -47,7 +62,9 @@ struct {CLASS_NAME}_Scene : public Scene
     void mouseWheel() override;
 }};
 
-struct {CLASS_NAME}_Project : public Project
+struct {CLASS_NAME}_Project_Vars : public VarBuffer<_Project_
+
+struct {CLASS_NAME}_Project : public Project<{CLASS_NAME}_Project_Vars>
 {{
     int panel_count = 1;
 

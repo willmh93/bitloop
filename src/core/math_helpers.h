@@ -11,6 +11,7 @@ namespace Math
     constexpr double PI = std::numbers::pi;
     constexpr double TWO_PI = std::numbers::pi * 2.0;
     constexpr double HALF_PI = std::numbers::pi / 2.0;
+    constexpr double INV_TWO_PI = 1.0 / TWO_PI;
 
     inline int countDecimals(double num)
     {
@@ -23,6 +24,7 @@ namespace Math
         if (pos == std::string::npos) return 0;
         return int(str.size() - pos - 1);
     }
+
     inline int countDigits(int n)
     {
         if (n == 0) return 1;
@@ -38,23 +40,41 @@ namespace Math
     int countWholeDigits(Float x)
     {
         static_assert(std::is_floating_point_v<Float>,
-            "Float must be a floating?point type");
+            "Float must be a floating-point type");
 
-        // Handle NaN and infinities up front.
         if (!std::isfinite(x))
-            return 0;   // or throw/otherwise signal an error
+            return 0;
 
         x = std::fabs(x);
 
-        // Any |x| in [0,1) has "0" as its whole part ? 1 digit.
         if (x < 1)
             return 1;
 
-        // digits = floor(log10(x)) + 1
         return static_cast<int>(std::floor(std::log10(x))) + 1;
     }
+
+    template<typename T, typename... Rest>
+    constexpr T avg(T first, Rest... rest)
+    {
+        T sum = (first + ... + rest);
+        constexpr std::size_t count = 1 + sizeof...(rest);
+        return sum / static_cast<T>(count);
+    }
+
+    // Ratios (a->b,  0->1)
+    template<typename T> constexpr T ratio(T a, T b) { return ((b-a)/a); }
+    template<typename T> constexpr T abs_ratio(T a, T b) { return abs((b-a)/a); }
+    template<typename T> constexpr T avg_ratio(T a, T b) { return ((a-b)/((a+b)/T{2})); }
+    template<typename T> constexpr T abs_avg_ratio(T a, T b) { return (abs(a-b)/((a+b)/T{2})); }
+
+    // Percentages (a->b,  0->100)
+    template<typename T> constexpr T pct(T a, T b) { return ((b-a)/a)*T{100}; }
+    template<typename T> constexpr T abs_pct(T a, T b) { return abs((b-a)/a)*T{100}; }
+    template<typename T> constexpr T avg_pct(T a, T b) { return (((a-b)/((a+b)/T{2}))*T{100}); }
+    template<typename T> constexpr T abs_avg_pct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
+
     // Coordinate offset rotation
-    inline Vec2 rotateOffset(double dx, double dy, double rotation)
+    inline DVec2 rotateOffset(double dx, double dy, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -63,14 +83,14 @@ namespace Math
             (dy * _cos + dx * _sin)
         };
     }
-    inline Vec2 rotateOffset(double dx, double dy, double _cos, double _sin)
+    inline DVec2 rotateOffset(double dx, double dy, double _cos, double _sin)
     {
         return {
             (dx * _cos - dy * _sin),
             (dy * _cos + dx * _sin)
         };
     }
-    inline Vec2 rotateOffset(const Vec2& offset, double rotation)
+    inline DVec2 rotateOffset(const DVec2& offset, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -79,7 +99,7 @@ namespace Math
             (offset.y * _cos + offset.x * _sin)
         };
     }
-    inline Vec2 rotateOffset(const Vec2& offset, double _cos, double _sin)
+    inline DVec2 rotateOffset(const DVec2& offset, double _cos, double _sin)
     {
         return {
             (offset.x * _cos - offset.y * _sin),
@@ -87,7 +107,7 @@ namespace Math
         };
     }
 
-    inline Vec2 reverseRotateOffset(double dx, double dy, double rotation)
+    inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -96,14 +116,14 @@ namespace Math
             (dy * _cos - dx * _sin)
         };
     }
-    inline Vec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
+    inline DVec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
     {
         return {
             (dx * _cos + dy * _sin),
             (dy * _cos - dx * _sin)
         };
     }
-    inline Vec2 reverseRotateOffset(const Vec2& offset, double rotation)
+    inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -112,7 +132,7 @@ namespace Math
             (offset.y * _cos - offset.x * _sin)
         };
     }
-    inline Vec2 reverseRotateOffset(const Vec2& offset, double _cos, double _sin)
+    inline DVec2 reverseRotateOffset(const DVec2& offset, double _cos, double _sin)
     {
         return {
             (offset.x * _cos + offset.y * _sin),
@@ -128,48 +148,40 @@ namespace Math
             diff += TWO_PI;
         return diff - PI;
     }
-    inline double wrapRadians(double angle)
-    {
-        angle = std::fmod(angle, 2.0 * TWO_PI);
-        if (angle > PI) angle -= 2.0 * PI;
-        else if (angle <= -PI) angle += 2.0 * PI;
-        return angle;
+
+    [[nodiscard]] inline double wrapRadians(double a) noexcept {
+        return std::remainder(a, TWO_PI);
     }
-    inline double wrapRadians2PI(double angle)
-    {
-        angle = std::fmod(angle, 2.0 * PI);
-        if (angle < 0.0)
-            angle += 2.0 * PI;
-        return angle;
+    [[nodiscard]] inline double wrapRadians2PI(double a) noexcept {
+        return a - TWO_PI * std::floor(a * INV_TWO_PI);
     }
 
+
     // Intersections
-    inline bool lineEqIntersect(Vec2* targ, const Ray& ray1, const Ray& ray2, bool bidirectional)
+    inline bool lineEqIntersect(DVec2* targ, const DRay& ray1, const DRay& ray2, bool bidirectional)
     {
-        // Compute unit direction vectors for each ray.
+        // Unit direction vectors for each ray
         double d1x = cos(ray1.angle), d1y = sin(ray1.angle);
         double d2x = cos(ray2.angle), d2y = sin(ray2.angle);
 
-        // Origins:
+        // Origins
         double x1 = ray1.x, y1 = ray1.y;
         double x2 = ray2.x, y2 = ray2.y;
 
-        // Denom of the 2x2 system:
+        // Denom of the 2x2 system
         double denom = d1x * d2y - d1y * d2x;
-        if (fabs(denom) < 1e-9)
-        {
-            // Rays are parallel (or nearly so)
-            return false;
-        }
 
-        // Compute the parameters t and u such that:
-        //   ray1.origin + t*d1 = ray2.origin + u*d2
+        // Are rays parallel?
+        if (fabs(denom) < 1e-9)
+            return false;
+
+        // Compute t and u such that:  ray1.origin + t*d1 = ray2.origin + u*d2
         double dx = x2 - x1;
         double dy = y2 - y1;
         double t = (dx * d2y - dy * d2x) / denom;
         double u = (dx * d1y - dy * d1x) / denom;
 
-        // If we're restricting to the forward direction, both t and u must be nonnegative.
+        // If restricting to the forward direction, both t and u must be nonnegative.
         if (!bidirectional)
         {
             if (t < 0 || u < 0)
@@ -180,7 +192,7 @@ namespace Math
         *targ = Vec2(x1 + t * d1x, y1 + t * d1y);
         return true;
     }
-    inline bool rayRectIntersection(Vec2* back_intersect, Vec2* foward_intersect, const FRect& r, const Ray& ray)
+    inline bool rayRectIntersection(DVec2* back_intersect, DVec2* foward_intersect, const DRect& r, const DRay& ray)
     {
         // Normalize rect boundaries
         double minX = std::min(r.x1, r.x2);
@@ -188,7 +200,7 @@ namespace Math
         double minY = std::min(r.y1, r.y2);
         double maxY = std::max(r.y1, r.y2);
 
-        // Ray origin and direction
+        // DRay origin and direction
         double rx = ray.x;
         double ry = ray.y;
         double dx = cos(ray.angle);
@@ -198,7 +210,7 @@ namespace Math
         struct IntersectionCandidate
         {
             double t;
-            Vec2 pt;
+            DVec2 pt;
         };
 
         std::vector<IntersectionCandidate> candidates;
@@ -270,7 +282,7 @@ namespace Math
         }
 
         // Order the two intersections:
-        // The one with the smaller t is the "back" intersection (may be behind the ray’s origin)
+        // The one with the smaller t is the "back" intersection (behind the ray’s origin)
         // and the one with the larger t is the "foward" intersection.
         *back_intersect = unique[0].pt;
         *foward_intersect = unique[1].pt;
@@ -278,14 +290,59 @@ namespace Math
     }
 
     // Lerp
-    inline FRect lerpRect(const FRect& src, const FRect& targ, double factor)
+    template<typename ValueT, typename Scalar>
+    constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar x) {
+
+        return (ValueT)(a + (b - a) * x);
+    }
+    
+    template<typename ValueT, typename Scalar>
+    inline Rect<ValueT> lerp(const Rect<ValueT>& src, const Rect<ValueT>& targ, Scalar factor)
     {
-        FRect ret = src;
+        Rect<ValueT> ret = src;
         ret.x1 += (targ.x1 - src.x1) * factor;
         ret.y1 += (targ.y1 - src.y1) * factor;
         ret.x2 += (targ.x2 - src.x2) * factor;
         ret.y2 += (targ.y2 - src.y2) * factor;
         return ret;
+    }
+
+    template<typename T>
+    inline T lerpFactor(T value, T min, T max) {
+        return ((value - min) / (max - min));
+    }
+
+    namespace MovingAverage
+    {
+        class MA
+        {
+            int ma_count = 0;
+            double sum = 0.0;
+            std::vector<double> samples;
+
+        public:
+            MA(int ma_count) : ma_count(ma_count)
+            {}
+
+            double push(double v)
+            {
+                sum += v;
+                samples.push_back(v);
+
+                if (samples.size() > ma_count)
+                {
+                    sum -= samples[0];
+                    samples.erase(samples.begin());
+                }
+
+                return average();
+            }
+
+            double average()
+            {
+                return (sum / static_cast<double>(samples.size()));
+            }
+        };
     }
 }
 

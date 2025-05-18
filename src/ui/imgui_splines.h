@@ -1,5 +1,4 @@
 #pragma once
-#define IMGUI_DEFINE_MATH_OPERATORS
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -316,7 +315,7 @@ namespace ImSpline
 {
 	// Forward declare
 	class Spline;
-	int SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
+	bool SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
 
 	// "Spline" object manages knots/handles (from external "points" float array)
 	// generates spline "path", holds editor states, and provides efficient value 
@@ -1420,7 +1419,7 @@ namespace ImSpline
 			}
 		}
 
-		friend int SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
+		friend bool SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
 	};
 
 
@@ -1431,7 +1430,7 @@ namespace ImSpline
 		return ret;
 	}
 
-	inline int SplineEditor(const char* label, Spline* spline, ImRect* view_rect, float max_editor_size=300.0f)
+	inline bool SplineEditor(const char* label, Spline* spline, ImRect* view_rect, float max_editor_size=300.0f)
 	{
 		using namespace ImGui;
 
@@ -1442,11 +1441,36 @@ namespace ImSpline
 		if (Window->SkipItems)
 			return false;
 
-		int hovered = IsItemActive() || IsItemHovered();
+		// prepare canvas
+		float dim = ImGui::GetContentRegionAvail().x;
+		if (dim > max_editor_size)
+			dim = max_editor_size;
+
+		ImVec2 Canvas(dim, dim);
+		ImRect bb(Window->DC.CursorPos, Window->DC.CursorPos + Canvas);
+		ItemSize(bb);
+		if (!ItemAdd(bb, NULL))
+			return 0;
+
+
+
+		//hovered |= 0 != ItemHoverable(bb, id, ImGui::GetCurrentContext()->LastItemData.ItemFlags);
+		//int hovered = IsItemActive() || IsItemHovered();
+		//const bool hovered = IsItemActive() || ItemHoverable(bb, id, ImGui::GetCurrentContext()->LastItemData.ItemFlags);
 
 		ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
 		ImVec4 dim_bg = bg * 0.85f;
 		dim_bg.w = bg.w;
+		
+		const ImGuiID id = Window->GetID(label);
+
+		bool hovered, active;
+		ButtonBehavior(bb, id, &hovered, &active, ImGuiButtonFlags_MouseButtonLeft);
+
+		active |= (spline->dragging_index >= 0);
+
+		// draw with Window->ClipRect automatically clipping anything outside the window
+		RenderFrame(bb.Min, bb.Max, GetColorU32(dim_bg));
 
 		ImColor green(0.0f, 1.0f, 0.0f, 1.0);
 		ImColor pink(1.0f, 0.0f, 0.75f, 1.0);
@@ -1469,25 +1493,35 @@ namespace ImSpline
 		float* points = spline->points;
 		int numPoints = spline->point_count;
 
-		// prepare canvas
-		float dim = ImGui::GetContentRegionAvail().x;
-		if (dim > max_editor_size)
-			dim = max_editor_size;
-
-		ImVec2 Canvas(dim, dim);
-		ImRect bb(Window->DC.CursorPos, Window->DC.CursorPos + Canvas);
-		ItemSize(bb);
-		if (!ItemAdd(bb, NULL))
-			return 0;
-
-		const ImGuiID id = Window->GetID(label);
-
-		hovered |= 0 != ItemHoverable(ImRect(bb.Min, bb.Min + ImVec2(dim, dim)), id, ImGui::GetCurrentContext()->LastItemData.ItemFlags);
-
 		ImVec2 pointer = IO.MousePos;
 		bool spline_changed = false;
 
-		if (hovered)
+		auto fromGraph = [&bb, view_rect](ImVec2 p)
+		{
+			ImVec2 r = (p - view_rect->Min) / (view_rect->Max - view_rect->Min);
+			return bb.Min + (r * bb.GetSize());
+		};
+		auto toGraph = [&bb, view_rect](ImVec2 p)
+		{
+			ImVec2 r = (p - bb.Min) / (bb.Max - bb.Min);
+			return view_rect->Min + (r * view_rect->GetSize());
+		};
+		auto snap = [](ImVec2& p, float step)
+		{
+			p.x = floor(p.x / step) * step;
+			p.y = floor(p.y / step) * step;
+		};
+
+		ImVec2 graph_mouse = toGraph(pointer);
+
+		// Handle knot/handle dragging
+		float handle_size = ImGui::GetFontSize() / 4.0f;
+		float handle_size_sq = handle_size * handle_size;
+
+		// Cast float* to ImVec2*
+		ImVec2* point_arr = spline->pointVecArray();
+
+		if (active || hovered)
 		{
 			// Handle scroll-wheel zoom
 			ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
@@ -1512,7 +1546,8 @@ namespace ImSpline
 				spline->pan_mouse_down_vr = *view_rect;
 				spline->pan_mouse_down_pos = pointer;
 			}
-			else if (ImGui::IsMouseReleased(ImGuiMouseButton_Middle) ||
+			else if (
+				ImGui::IsMouseReleased(ImGuiMouseButton_Middle) ||
 				!ImGui::IsMouseDown(ImGuiMouseButton_Middle))
 			{
 				spline->panning = false;
@@ -1525,152 +1560,127 @@ namespace ImSpline
 				view_rect->Min = spline->pan_mouse_down_vr.Min - graph_offset;
 				view_rect->Max = spline->pan_mouse_down_vr.Max - graph_offset;
 			}
-		}
-
-		//RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg, 1), true, Style.FrameRounding);
-		RenderFrame(bb.Min, bb.Max, GetColorU32(dim_bg), true, Style.FrameRounding);
-
-		auto fromGraph = [&bb, view_rect](ImVec2 p)
-		{
-			ImVec2 r = (p - view_rect->Min) / (view_rect->Max - view_rect->Min);
-			return bb.Min + (r * bb.GetSize());
-		};
-		auto toGraph = [&bb, view_rect](ImVec2 p)
-		{
-			ImVec2 r = (p - bb.Min) / (bb.Max - bb.Min);
-			return view_rect->Min + (r * view_rect->GetSize());
-		};
-		auto snap = [](ImVec2& p, float step)
-		{
-			p.x = floor(p.x / step) * step;
-			p.y = floor(p.y / step) * step;
-		};
-
-		// Cast float* to ImVec2*
-		ImVec2* point_arr = spline->pointVecArray();
-
-		// Handle knot/handle dragging
-		ImVec2 graph_mouse = toGraph(pointer);
-		float handle_size = ImGui::GetFontSize() / 4.0f;
-		float handle_size_sq = handle_size * handle_size;
 
 
-		if (IsMouseClicked(0) && bb.Contains(pointer))
-		{
-			float nearest_d2 = std::numeric_limits<float>::max();
-			int nearest_i = -1;
+			//RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg, 1), true, Style.FrameRounding);
+			///RenderFrame(bb.Min, bb.Max, GetColorU32(dim_bg), true, Style.FrameRounding);
+
+			if (IsMouseClicked(0) && bb.Contains(pointer))
+			{
+				float nearest_d2 = std::numeric_limits<float>::max();
+				int nearest_i = -1;
+				for (int i = 0; i < numPoints; i++)
+				{
+					ImVec2& p = point_arr[i];
+					ImVec2 client_pos = fromGraph(p);
+					ImVec2 mouse_dist = pointer - client_pos;
+					float d2 = mouse_dist.x * mouse_dist.x + mouse_dist.y * mouse_dist.y;
+					if (d2 < nearest_d2)
+					{
+						nearest_d2 = d2;
+						nearest_i = i;
+					}
+				}
+				if (nearest_i >= 0)
+				{
+					spline->dragging_index = nearest_i;
+					ImVec2& p = point_arr[nearest_i];
+
+					bool isKnot = spline->isKnot(nearest_i);
+					if (isKnot)
+					{
+						// Clicked on knot
+						ImVec2& h1_p = point_arr[nearest_i - 1];
+						ImVec2& h2_p = point_arr[nearest_i + 1];
+						spline->h1_offset = h1_p - p;
+						spline->h2_offset = h2_p - p;
+					}
+					else
+					{
+						// Clicked on handle. Get opposite handle dist for rotation
+						int knot_point_index = (nearest_i / 3) * 3 + 1;
+						int h1_index = knot_point_index - 1;
+						int h2_index = knot_point_index + 1;
+						ImVec2& knot = point_arr[knot_point_index];
+
+						if (nearest_i == h1_index)
+						{
+							// handle h1 clicked, cache h2 dist
+							ImVec2& h2 = point_arr[h2_index];
+							ImVec2 h2_d = h2 - knot;
+							spline->opposite_handle_dist = sqrt(h2_d.x * h2_d.x + h2_d.y * h2_d.y);
+
+						}
+						else if (nearest_i == h2_index)
+						{
+							// handle h2 clicked, cache h1 dist
+							ImVec2& h1 = point_arr[h1_index];
+							ImVec2 h1_d = h1 - knot;
+							spline->opposite_handle_dist = sqrt(h1_d.x * h1_d.x + h1_d.y * h1_d.y);
+						}
+					}
+				}
+			}
+			else if (IsMouseReleased(0))
+			{
+				spline->dragging_index = -1;
+			}
+
 			for (int i = 0; i < numPoints; i++)
 			{
 				ImVec2& p = point_arr[i];
-				ImVec2 client_pos = fromGraph(p);
-				ImVec2 mouse_dist = pointer - client_pos;
-				float d2 = mouse_dist.x * mouse_dist.x + mouse_dist.y * mouse_dist.y;
-				if (d2 < nearest_d2)
+				//ImVec2 client_pos = fromGraph(p);
+				//ImVec2 mouse_dist = pointer - client_pos;
+				//bool hit = (i == spline->dragging_index);
+
+				bool isKnot = spline->isKnot(i);
+				bool dragging_point = (spline->dragging_index == i);
+
+				if (dragging_point)
 				{
-					nearest_d2 = d2;
-					nearest_i = i;
+					p.x = graph_mouse.x;
+					p.y = graph_mouse.y;
+					snap(p, spline->xy_precision);
+
+					// If knot, move connected handles
+					if (isKnot)
+					{
+						point_arr[i - 1] = p + spline->h1_offset;
+						point_arr[i + 1] = p + spline->h2_offset;
+						snap(point_arr[i - 1], spline->xy_precision);
+						snap(point_arr[i + 1], spline->xy_precision);
+					}
+					else // If handle, rotate opposite handle around knot
+					{
+						int knot_point_index = (i / 3) * 3 + 1;
+						int h1_index = knot_point_index - 1;
+						int h2_index = knot_point_index + 1;
+						ImVec2& knot = point_arr[knot_point_index];
+
+						if (i == h1_index)
+						{
+							// handle h1 dragged, rotate h2
+							ImVec2& h1 = point_arr[h1_index];
+							float h2_angle = atan2(h1.y - knot.y, h1.x - knot.x) + IM_PI;
+							point_arr[h2_index].x = knot.x + cos(h2_angle) * spline->opposite_handle_dist;
+							point_arr[h2_index].y = knot.y + sin(h2_angle) * spline->opposite_handle_dist;
+							snap(point_arr[h2_index], spline->xy_precision);
+						}
+						else if (i == h2_index)
+						{
+							// handle h2 dragged, rotate h1
+							ImVec2& h2 = point_arr[h2_index];
+							float h1_angle = atan2(h2.y - knot.y, h2.x - knot.x) + IM_PI;
+							point_arr[h1_index].x = knot.x + cos(h1_angle) * spline->opposite_handle_dist;
+							point_arr[h1_index].y = knot.y + sin(h1_angle) * spline->opposite_handle_dist;
+							snap(point_arr[h1_index], spline->xy_precision);
+						}
+					}
+
+					spline_changed = true;
 				}
 			}
-			if (nearest_i >= 0)
-			{
-				spline->dragging_index = nearest_i;
-				ImVec2& p = point_arr[nearest_i];
-
-				bool isKnot = spline->isKnot(nearest_i);
-				if (isKnot)
-				{
-					// Clicked on knot
-					ImVec2& h1_p = point_arr[nearest_i - 1];
-					ImVec2& h2_p = point_arr[nearest_i + 1];
-					spline->h1_offset = h1_p - p;
-					spline->h2_offset = h2_p - p;
-				}
-				else
-				{
-					// Clicked on handle. Get opposite handle dist for rotation
-					int knot_point_index = (nearest_i / 3) * 3 + 1;
-					int h1_index = knot_point_index - 1;
-					int h2_index = knot_point_index + 1;
-					ImVec2& knot = point_arr[knot_point_index];
-
-					if (nearest_i == h1_index)
-					{
-						// handle h1 clicked, cache h2 dist
-						ImVec2& h2 = point_arr[h2_index];
-						ImVec2 h2_d = h2 - knot;
-						spline->opposite_handle_dist = sqrt(h2_d.x * h2_d.x + h2_d.y * h2_d.y);
-
-					}
-					else if (nearest_i == h2_index)
-					{
-						// handle h2 clicked, cache h1 dist
-						ImVec2& h1 = point_arr[h1_index];
-						ImVec2 h1_d = h1 - knot;
-						spline->opposite_handle_dist = sqrt(h1_d.x * h1_d.x + h1_d.y * h1_d.y);
-					}
-				}
-			}
 		}
-		else if (IsMouseReleased(0))
-		{
-			spline->dragging_index = -1;
-		}
-
-		for (int i = 0; i < numPoints; i++)
-		{
-			ImVec2& p = point_arr[i];
-			//ImVec2 client_pos = fromGraph(p);
-			//ImVec2 mouse_dist = pointer - client_pos;
-			//bool hit = (i == spline->dragging_index);
-
-			bool isKnot = spline->isKnot(i);
-			bool dragging_point = (spline->dragging_index == i);
-
-			if (dragging_point)
-			{
-				p.x = graph_mouse.x;
-				p.y = graph_mouse.y;
-				snap(p, spline->xy_precision);
-
-				// If knot, move connected handles
-				if (isKnot)
-				{
-					point_arr[i - 1] = p + spline->h1_offset;
-					point_arr[i + 1] = p + spline->h2_offset;
-					snap(point_arr[i - 1], spline->xy_precision);
-					snap(point_arr[i + 1], spline->xy_precision);
-				}
-				else // If handle, rotate opposite handle around knot
-				{
-					int knot_point_index = (i / 3) * 3 + 1;
-					int h1_index = knot_point_index - 1;
-					int h2_index = knot_point_index + 1;
-					ImVec2& knot = point_arr[knot_point_index];
-
-					if (i == h1_index)
-					{
-						// handle h1 dragged, rotate h2
-						ImVec2& h1 = point_arr[h1_index];
-						float h2_angle = atan2(h1.y - knot.y, h1.x - knot.x) + IM_PI;
-						point_arr[h2_index].x = knot.x + cos(h2_angle) * spline->opposite_handle_dist;
-						point_arr[h2_index].y = knot.y + sin(h2_angle) * spline->opposite_handle_dist;
-						snap(point_arr[h2_index], spline->xy_precision);
-					}
-					else if (i == h2_index)
-					{
-						// handle h2 dragged, rotate h1
-						ImVec2& h2 = point_arr[h2_index];
-						float h1_angle = atan2(h2.y - knot.y, h2.x - knot.x) + IM_PI;
-						point_arr[h1_index].x = knot.x + cos(h1_angle) * spline->opposite_handle_dist;
-						point_arr[h1_index].y = knot.y + sin(h1_angle) * spline->opposite_handle_dist;
-						snap(point_arr[h1_index], spline->xy_precision);
-					}
-				}
-
-				spline_changed = true;
-			}
-		}
-
 
 		// Build intersection map
 		if (spline_changed || spline->col_segments_dirty)
@@ -1806,13 +1816,17 @@ namespace ImSpline
 
 		DrawList->PopClipRect();
 
-		if (spline_changed)
-			MarkItemEdited(id);
+		if (active)
+		{
+			SetActiveID(id, ImGui::GetCurrentWindow());
+			if (spline_changed)
+				MarkItemEdited(id);
+		}
 
 		return spline_changed;
 	}
 
-	inline int SplineEditorPair(
+	inline bool SplineEditorPair(
 		const char* label,
 		Spline* spline1,
 		Spline* spline2,
@@ -1834,16 +1848,16 @@ namespace ImSpline
 
 		if (graph_size < min_graph_wrap_width)
 		{
-			int ret1 = SplineEditor(label1, spline1, view_rect, avail_width);
-			int ret2 = SplineEditor(label2, spline2, view_rect, avail_width);
-			return ret1 | ret2;
+			bool ret1 = SplineEditor(label1, spline1, view_rect, avail_width);
+			bool ret2 = SplineEditor(label2, spline2, view_rect, avail_width);
+			return ret1 || ret2;
 		}
 		else
 		{
-			int ret1 = SplineEditor(label1, spline1, view_rect, graph_size);
+			bool ret1 = SplineEditor(label1, spline1, view_rect, graph_size);
 			ImGui::SameLine(0, spacing);
-			int ret2 = SplineEditor(label2, spline2, view_rect, graph_size);
-			return ret1 | ret2;
+			bool ret2 = SplineEditor(label2, spline2, view_rect, graph_size);
+			return ret1 || ret2;
 		}
 	}
 }

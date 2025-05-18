@@ -99,7 +99,7 @@ public:
     NanoFont(const char* virtual_path)
     {
         DebugPrint("NanoFont() called");
-        path = PlatformManager::get()->path(virtual_path);
+        path = Platform()->path(virtual_path);
     }
 
     void setSize(double size_pts)
@@ -113,15 +113,6 @@ class Painter;
 // Simple nanovg abstract layer
 class SimplePainter
 {
-public:
-
-    //enum PixelAlign 
-    //{
-    //    PIXEL_ALIGN_NONE = 0,
-    //    PIXEL_ALIGN_HALF = 1,
-    //    PIXEL_ALIGN_FULL = 2
-    //};
-
 protected:
 
     friend class Viewport;
@@ -133,257 +124,76 @@ protected:
     TextAlign text_align = TextAlign::ALIGN_LEFT;
     TextBaseline text_baseline = TextBaseline::BASELINE_TOP;
 
-
     static std::shared_ptr<NanoFont> default_font;
     std::shared_ptr<NanoFont> active_font;
 
 public:
 
-    void setRenderTarget(NVGcontext* nvg_ctx)
-    {
-        vg = nvg_ctx;
-    }
-
-    NVGcontext* getRenderTarget()
-    {
-        return vg;
-    }
-
-    std::shared_ptr<NanoFont> getDefaultFont()
-    {
-        return active_font;
-    }
+    void setRenderTarget(NVGcontext* nvg_ctx) { vg = nvg_ctx; }
+    NVGcontext* getRenderTarget() { return vg; }
+    std::shared_ptr<NanoFont> getDefaultFont() { return active_font; }
 
     // --- Transforms ---
 
-    void save()
-    {
-        nvgSave(vg);
-    }
+    void save() const { nvgSave(vg); }
+    void restore() { nvgRestore(vg); }
 
-    void restore()
-    {
-        nvgRestore(vg);
-    }
+    void resetTransform()                                    { nvgResetTransform(vg); }
+    void transform(const glm::mat3& m)                       { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
+    glm::mat3 currentTransform() const                       { float x[6]; nvgCurrentTransform(vg, x); return glm::mat3(x[0], x[1], 0, x[2], x[3], 0, x[4], x[5], 1); }
 
-    void resetTransform()
-    {
-        nvgResetTransform(vg);
-    }
-
-    glm::mat3 currentTransform() const
-    {
-        float xform[6];
-        nvgCurrentTransform(vg, xform);
-
-        // Construct a glm::mat3 using the 3x2 affine matrix data
-        glm::mat3 t = glm::mat3(
-            xform[0], xform[1], 0.0f,  // column 0
-            xform[2], xform[3], 0.0f,  // column 1
-            xform[4], xform[5], 1.0f   // column 2 (translation + homogeneous)
-        );
-
-        return t;
-    }
-
-    void transform(const glm::mat3& m)
-    {
-        nvgTransform(vg,
-            m[0][0], // a
-            m[0][1], // b
-            m[1][0], // c
-            m[1][1], // d
-            m[2][0], // e (translate x)
-            m[2][1]  // f (translate y)
-        );
-    }
-
-    void translate(double x, double y)
-    {
-        nvgTranslate(vg, static_cast<float>(x), static_cast<float>(y));
-    }
-
-    void translate(const Vec2& p)
-    {
-        nvgTranslate(vg, static_cast<float>(p.x), static_cast<float>(p.y));
-    }
-
-    void rotate(double angle)
-    {
-        nvgRotate(vg, static_cast<float>(angle));
-    }
-
-    void scale(double scale)
-    {
-        float fScale = static_cast<float>(scale);
-        nvgScale(vg, fScale, fScale);
-    }
-
-    void scale(double scale_x, double scale_y)
-    {
-        nvgScale(vg, static_cast<float>(scale_x), static_cast<float>(scale_y));
-    }
-
-    void skewX(double angle)
-    {
-        nvgSkewX(vg, static_cast<float>(angle));
-    }
-
-    void skewY(double angle)
-    {
-        nvgSkewY(vg, static_cast<float>(angle));
-    }
-
-    void setClipRect(double x, double y, double w, double h)
-    {
-        nvgScissor(vg,
-            static_cast<float>(x), static_cast<float>(y),
-            static_cast<float>(w), static_cast<float>(h)
-        );
-    }
-
-    void resetClipping()
-    {
-        nvgResetScissor(vg);
-    }
+    void translate(double x, double y)                       { nvgTranslate(vg, (float)(x), (float)(y)); }
+    void translate(const DVec2& p)                           { nvgTranslate(vg, (float)(p.x), (float)(p.y)); }
+    void rotate(double angle)                                { nvgRotate(vg, (float)(angle)); }
+    void scale(double scale)                                 { nvgScale(vg, (float)(scale), (float)(scale)); }
+    void scale(double scale_x, double scale_y)               { nvgScale(vg, (float)(scale_x), (float)(scale_y)); }
+    void skewX(double angle)                                 { nvgSkewX(vg, (float)(angle)); }
+    void skewY(double angle)                                 { nvgSkewY(vg, (float)(angle)); }
+    void setClipRect(double x, double y, double w, double h) { nvgScissor(vg, (float)(x), (float)(y), (float)(w), (float)(h)); }
+    void resetClipping() { nvgResetScissor(vg); }
 
     // --- Styles ---
 
-    void setFillStyle(const Color& color)
-    {
-        nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a));
-    }
-    void setStrokeStyle(const Color& color)
-    {
-        nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a));
-    }
-
-    void setFillStyle(int r, int g, int b, int a = 255)
-    {
-        nvgFillColor(vg, nvgRGBA(r, g, b, a));
-    }
-    void setStrokeStyle(int r, int g, int b, int a = 255)
-    {
-        nvgStrokeColor(vg, nvgRGBA(r, g, b, a));
-    }
-
-    void setLineWidth(double w)
-    {
-        nvgStrokeWidth(vg, static_cast<float>(w));
-    }
-
-    void setLineCap(LineCap cap)
-    {
-        nvgLineCap(vg, cap);
-    }
-
-    void setLineJoin(LineJoin join)
-    {
-        nvgLineJoin(vg, join);
-    }
+    void setStrokeStyle(const Color& color)                  { nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
+    void setFillStyle(const Color& color)                    { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
+    void setFillStyle(int r, int g, int b, int a = 255)      { nvgFillColor(vg, nvgRGBA(r, g, b, a)); }
+    void setStrokeStyle(int r, int g, int b, int a = 255)    { nvgStrokeColor(vg, nvgRGBA(r, g, b, a)); }
+    void setLineWidth(double w)                              { nvgStrokeWidth(vg, (float)(w)); }
+    void setLineCap(LineCap cap)                             { nvgLineCap(vg, cap); }
+    void setLineJoin(LineJoin join)                          { nvgLineJoin(vg, join); }
 
     // --- Paths ---
 
-    void beginPath()
-    {
-        nvgBeginPath(vg);
-    }
+    void beginPath()                                         { nvgBeginPath(vg); }
+    void moveTo(double x, double y)                          { nvgMoveTo(vg, (float)(x), (float)(y)); }
+    void lineTo(double x, double y)                          { nvgLineTo(vg, (float)(x), (float)(y)); }
+    void stroke()                                            { nvgStroke(vg); }
+    void fill()                                              { nvgFill(vg); }
 
-    void moveTo(double x, double y)
-    {
-        nvgMoveTo(vg, static_cast<float>(x), static_cast<float>(y));
-    }
-
-    void lineTo(double x, double y)
-    {
-        nvgLineTo(vg, static_cast<float>(x), static_cast<float>(y));
-    }
-
-    void stroke()
-    {
-        nvgStroke(vg);
-    }
-
-    template<typename PointT> void drawPath(const std::vector<PointT>& path)
-    {
-        if (path.size() < 2) return;
-        size_t len = path.size();
-        moveTo(path[0]);
-        for (size_t i = 1; i < len; i++)
-            lineTo(path[i]);
-    }
-
-    void fill()
-    {
-        nvgFill(vg);
-    }
-
-    void circle(double x, double y, double radius)
-    {
-        nvgCircle(vg, 
-            static_cast<float>(x), 
-            static_cast<float>(y),
-            static_cast<float>(radius)
-        );
-    }
-
-    void ellipse(double x, double y, double radius_x, double radius_y)
-    {
-        nvgEllipse(vg, 
-            static_cast<float>(x), 
-            static_cast<float>(y), 
-            static_cast<float>(radius_x), 
-            static_cast<float>(radius_y)
-        );
-    }
-
-    void fillRect(double x, double y, double w, double h)
-    {
-        nvgBeginPath(vg);
-        nvgRect(vg, 
-            static_cast<float>(x), 
-            static_cast<float>(y),
-            static_cast<float>(w),
-            static_cast<float>(h)
-        );
-        nvgFill(vg);
-    }
-
-    void strokeRect(double x, double y, double w, double h)
-    {
-        nvgBeginPath(vg);
-        nvgRect(vg, 
-            static_cast<float>(x),
-            static_cast<float>(y),
-            static_cast<float>(w),
-            static_cast<float>(h)
-        );
-        nvgStroke(vg);
+    void circle(double x, double y, double r)                { nvgCircle(vg, (float)(x), (float)(y), (float)(r)); }
+    void ellipse(double x, double y, double rx, double ry)   { nvgEllipse(vg, (float)(x), (float)(y), (float)(rx), (float)(ry)); }
+    void fillRect(double x, double y, double w, double h)    { nvgBeginPath(vg); nvgRect(vg, (float)(x), (float)(y), (float)(w), (float)(h)); nvgFill(vg); }
+    void strokeRect(double x, double y, double w, double h)  { nvgBeginPath(vg); nvgRect(vg, (float)(x), (float)(y), (float)(w), (float)(h)); nvgStroke(vg); }
+   
+    template<typename PointT> void drawPath(const std::vector<PointT>& path) {
+        if (path.size() >= 2) {
+            moveTo(path[0]); 
+            for (size_t i = 1; i < path.size(); i++) 
+                lineTo(path[i]); 
+        }
     }
 
     // --- Image ---
 
-    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0)
-    {
-        if (w <= 0.0) w = bmp.bmp_width;
-        if (h <= 0.0) h = bmp.bmp_height;
-        bmp.draw(vg, x, y, w, h);
+    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) { 
+        bmp.draw(vg, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h); 
     }
 
     // --- Text ---
 
-    void setTextAlign(TextAlign align)
-    {
-        text_align = align;
-        nvgTextAlign(vg, static_cast<int>(text_align) | static_cast<int>(text_baseline));
-    }
-
-    void setTextBaseline(TextBaseline baseline)
-    {
-        text_baseline = baseline;
-        nvgTextAlign(vg, static_cast<int>(text_align) | static_cast<int>(text_baseline));
-    }
-
+    void setTextAlign(TextAlign align)          { text_align = align;       nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
+    void setTextBaseline(TextBaseline baseline) { text_baseline = baseline; nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
+    void setFontSize(double size_pts)           { nvgFontSize(vg, ScaleSize((float)size_pts)); }
     void setFont(std::shared_ptr<NanoFont> font)
     {
         if (font == active_font)
@@ -402,78 +212,53 @@ public:
         active_font = font;
     }
 
-    void setFontSize(double size_pts)
-    {
-        nvgFontSize(vg, ScaleSize((float)size_pts));
-    }
 
-    FRect boundingBox(const std::string& txt)
+    DRect boundingBox(const std::string& txt) const
     {
         float bounds[4];
         nvgTextBounds(vg, 0, 0, txt.c_str(), txt.c_str() + txt.size(), bounds);
-        return FRect(
-            static_cast<double>(bounds[0]),
-            static_cast<double>(bounds[1]),
-            static_cast<double>(bounds[2] - bounds[0]),
-            static_cast<double>(bounds[3] - bounds[1])
-        );
+        return DRect((double)(bounds[0]), (double)(bounds[1]), (double)(bounds[2] - bounds[0]), (double)(bounds[3] - bounds[1]));
     }
 
     void fillText(const char* txt, double x, double y)
     {
-        if (!active_font)
-            setFont(default_font);
-
-        nvgText(vg, static_cast<float>(x), static_cast<float>(y), txt, nullptr);
+        if (!active_font) setFont(default_font);
+        nvgText(vg, (float)(x), (float)(y), txt, nullptr);
     }
 
-    void fillText(const char* txt, const Vec2& pos)
-    {
-        fillText(txt, pos.x, pos.y);
-    }
-
+    void fillText(const char* txt, const DVec2& pos) { fillText(txt, pos.x, pos.y); }
     void fillText(const std::string& txt, double x, double y)
     {
-        if (!active_font)
-            setFont(default_font);
-
+        if (!active_font) setFont(default_font);
         const char* ptr = txt.c_str();
-        nvgText(vg,
-            static_cast<float>(x),
-            static_cast<float>(y),
-            ptr, 
-            ptr + txt.size()
-        );
+        nvgText(vg, (float)(x), (float)(y), ptr, ptr + txt.size());
     }
 };
 
 
 class Painter : private SimplePainter
 {
-    double _avgZoom()
-    {
-        return (abs(camera.zoom_x) + abs(camera.zoom_y)) * 0.5;
-    }
+    double _avgZoom() { return (abs(camera.zoom_x) + abs(camera.zoom_y)) * 0.5; }
 
 public:
 
-    Camera camera;
+    mutable Camera camera;
     glm::mat3 default_viewport_transform;
     double line_width = 1;
 
 
-    Vec2 PT(double x, double y)
+    DVec2 PT(double x, double y)
     {
         // todo: Alter point reference instead of returning new point
         if (camera.transform_coordinates)
         {
-            Vec2 o = camera.toWorldOffset({ camera.stage_ox, camera.stage_oy });
+            DVec2 o = camera.toWorldOffset({ camera.stage_ox, camera.stage_oy });
             return { x + o.x, y + o.y };
         }
         else
         {
             // (x,y) represents stage coordinate, but transform is active
-            Vec2 ret = camera.toWorld(x + camera.stage_ox, y + camera.stage_oy);
+            DVec2 ret = camera.toWorld(x + camera.stage_ox, y + camera.stage_oy);
             return ret;
         }
     }
@@ -483,97 +268,37 @@ public:
     void setLineWidth(double w)
     {
         this->line_width = w;
-
         if (camera.scale_lines_text)
-        {
             SimplePainter::setLineWidth(w);
-        }
         else
-        {
             SimplePainter::setLineWidth(w / _avgZoom());
-        }
     }
-
-    /*void setFillStyle(const Color& color)
-    {
-        SimplePainter::setFillStyle(color);
-    }
-    void setStrokeStyle(int r, int g, int b, int a = 255)
-    {
-        SimplePainter::setStrokeStyle(r, g, b, a);
-    }
-
-    void setStrokeStyle(const Color& color)
-    {
-        SimplePainter::setStrokeStyle(color);
-    }
-    void setFillStyle(int r, int g, int b, int a = 255)
-    {
-        SimplePainter::setFillStyle(r, g, b, a);
-    }*/
 
     // --- Paths (overrides) ---
 
     void circle(double cx, double cy, double radius)
     {
-        Vec2 pt = PT(cx, cy);
+        DVec2 pt = PT(cx, cy);
         if (camera.scale_sizes)
-        {
             SimplePainter::circle(pt.x, pt.y, radius);
-        }
         else
-        {
             SimplePainter::circle(pt.x, pt.y, radius / _avgZoom());
-        }
     }
 
-    void circle(Vec2 cen, double radius)
+    void circle(DVec2 cen, double r) { circle(cen.x, cen.y, r); }
+    void ellipse(double x, double y, double rx, double ry)
     {
-        circle(cen.x, cen.y, radius);
-    }
-
-    void ellipse(double x, double y, double radius_x, double radius_y)
-    {
-        Vec2 pt = PT(x, y);
+        DVec2 pt = PT(x, y);
         if (camera.scale_sizes)
-        {
-            SimplePainter::ellipse(pt.x, pt.y, 
-                radius_x,
-                radius_y
-            );
-        }
+            SimplePainter::ellipse(pt.x, pt.y, rx, ry);
         else
-        {
-            SimplePainter::ellipse(pt.x, pt.y,
-                radius_x * camera.zoom_x,
-                radius_y * camera.zoom_y
-            );
-        }
+            SimplePainter::ellipse(pt.x, pt.y, rx * camera.zoom_x, ry * camera.zoom_y);
     }
 
-    void moveTo(double px, double py)
-    {
-        Vec2 pt = PT(px, py);
-        SimplePainter::moveTo(pt.x, pt.y);
-    }
-
-    void moveTo(Vec2 p)
-    {
-        Vec2 pt = PT(p.x, p.y);
-        SimplePainter::moveTo(pt.x, pt.y);
-    }
-
-    void lineTo(double px, double py)
-    {
-        Vec2 pt = PT(px, py);
-        SimplePainter::lineTo(pt.x, pt.y);
-    }
-
-    void lineTo(Vec2 p)
-    {
-        Vec2 pt = PT(p.x, p.y);
-        SimplePainter::lineTo(pt.x, pt.y);
-    }
+    void moveTo(double px, double py) { DVec2 pt = PT(px, py);   SimplePainter::moveTo(pt.x, pt.y); }
+    void lineTo(double px, double py) { DVec2 pt = PT(px, py);   SimplePainter::lineTo(pt.x, pt.y); }
+    void moveTo(DVec2 p)              { DVec2 pt = PT(p.x, p.y); SimplePainter::moveTo(pt.x, pt.y); }
+    void lineTo(DVec2 p)              { DVec2 pt = PT(p.x, p.y); SimplePainter::lineTo(pt.x, pt.y); }
 
     template<typename PointT> void drawPath(const std::vector<PointT>& path)
     {
@@ -589,9 +314,7 @@ public:
         if (camera.transform_coordinates)
         {
             if (camera.scale_lines_text)
-            {
                 SimplePainter::strokeRect(x, y, w, h);
-            }
             else
             {
                 double old_linewidth = line_width;
@@ -624,16 +347,6 @@ public:
         }
     }
 
-    void strokeRect(const FRect& r)
-    {
-        strokeRect(
-            r.x1,
-            r.y1,
-            r.x2 - r.x1,
-            r.y2 - r.y1
-        );
-    }
-
     void fillRect(double x, double y, double w, double h)
     {
         if (camera.transform_coordinates)
@@ -653,15 +366,8 @@ public:
         }
     }
 
-    void fillRect(const FRect& r)
-    {
-        fillRect(
-            r.x1,
-            r.y1,
-            r.x2 - r.x1,
-            r.y2 - r.y1
-        );
-    }
+    void strokeRect(const FRect& r) { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    void fillRect(const FRect& r) { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
 
     void strokeEllipse(double cx, double cy, double r)
     {
@@ -693,20 +399,12 @@ public:
 
     void fillEllipse(double cx, double cy, double r)
     {
-        //painter->beginPath();
-        //painter->ellipse(cx, cy, r, r);
-        //painter->fill();
-
-        Vec2 pt = PT(cx, cy);
+        DVec2 pt = PT(cx, cy);
         SimplePainter::beginPath();
         if (camera.scale_sizes)
-        {
             SimplePainter::ellipse(cx, cy, r, r);
-        }
         else
-        {
             SimplePainter::ellipse(cx, cy, r / camera.zoom_x, r / camera.zoom_y);
-        }
         SimplePainter::fill();
     }
 
@@ -714,17 +412,13 @@ public:
     {
         SimplePainter::beginPath();
         if (camera.scale_sizes)
-        {
             SimplePainter::ellipse(cx, cy, rx, ry);
-        }
         else
-        {
             SimplePainter::ellipse(cx, cy, rx / camera.zoom_x, ry / camera.zoom_y);
-        }
         SimplePainter::fill();
     }
 
-    void drawArrow(Vec2 a, Vec2 b, Color color)
+    void drawArrow(DVec2 a, DVec2 b, Color color)
     {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
@@ -750,41 +444,25 @@ public:
         moveTo(b);
         lineTo(rx1, ry1);
         lineTo(rx2, ry2);
-        //closePath();
         fill();
     }
 
     double arrow_x0 = 0, arrow_y0 = 0;
-    void arrowMoveTo(double px, double py)
-    {
-        arrow_x0 = px;
-        arrow_y0 = py;
-    }
-    void arrowDrawTo(double px, double py, Color color = Color(255, 255, 255))
-    {
-        drawArrow({ arrow_x0, arrow_y0 }, { px, py }, color);
-    }
+    void arrowMoveTo(double px, double py) { arrow_x0 = px; arrow_y0 = py; }
+    void arrowDrawTo(double px, double py, Color color = Color(255, 255, 255)) { drawArrow({ arrow_x0, arrow_y0 }, { px, py }, color); }
 
     // --- Image ---
 
-    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0)
-    {
-        if (w <= 0) w = bmp.bmp_width;
-        if (h <= 0) h = bmp.bmp_height;
-        SimplePainter::drawImage(bmp, x, y, w, h);
+    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) {
+        SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
     }
-
     void drawImage(CanvasImage& bmp)
     {
         camera.saveCameraTransform();
         if (bmp.coordinate_type == CoordinateType::STAGE)
-        {
             camera.stageTransform();
-        }
         else
-        {
             camera.worldTransform();
-        }
 
         if (camera.transform_coordinates)
         {
@@ -883,12 +561,11 @@ public:
         }
     }
 
-    void fillText(const std::string& txt, const Vec2& p)
-    {
+    void fillText(const std::string& txt, const DVec2& p) {
         fillText(txt, p.x, p.y);
     }
 
-    FRect boundingBox(const std::string& txt)
+    DRect boundingBox(const std::string& txt)
     {
         save();
         resetTransform();
@@ -962,7 +639,7 @@ public:
         return mantissa + exponent;
     }*/
 
-    void fillNumberScientific(double v, Vec2 pos, float fontSize = 12)
+    void fillNumberScientific(double v, DVec2 pos, float fontSize = 12)
     {
         std::string txt = format_number(v);
 
@@ -1013,7 +690,7 @@ public:
         }
     }
 
-    FRect boundingBoxNumberScientific(double v, float fontSize = 12)
+    DRect boundingBoxNumberScientific(double v, float fontSize = 12)
     {
         std::string txt = format_number(v);
 
@@ -1030,13 +707,13 @@ public:
             //font.setPixelSize(fontSize);
             //painter->setFont(font);
 
-            FRect mantissaRect = boundingBox(mantissa_txt);
+            DRect mantissaRect = boundingBox(mantissa_txt);
 
             //font.setPixelSize((int)(fontSize * 0.85));
             //painter->setFont(font);
 
-            FRect exponentRect = boundingBox(exponent_txt);
-            FRect ret = mantissaRect;
+            DRect exponentRect = boundingBox(exponent_txt);
+            DRect ret = mantissaRect;
 
             ret.y1 -= (int)(fontSize * 0.7 + (1.0 * scale));
             ret.x2 += exponentRect.width() + exponent_spacing;
@@ -1059,32 +736,32 @@ public:
     void moveToSharp(double px, double py)
     {
         moveTo(px, py);
-        //Vec2 pt = sharp(PT(px, py));
+        //DVec2 pt = sharp(PT(px, py));
         //painter->moveTo(pt.x, pt.y);
     }
 
-    void moveToSharp(Vec2 p)
+    void moveToSharp(DVec2 p)
     {
         moveTo(p.x, p.y);
-        //Vec2 pt = sharp(PT(p.x, p.y));
+        //DVec2 pt = sharp(PT(p.x, p.y));
         //painter->moveTo(pt.x, pt.y);
     }
 
     void lineToSharp(double px, double py)
     {
         lineTo(px, py);
-        //Vec2 pt = sharp(PT(px, py));
+        //DVec2 pt = sharp(PT(px, py));
         //painter->lineTo(pt.x, pt.y);
     }
 
-    void lineToSharp(Vec2 p)
+    void lineToSharp(DVec2 p)
     {
         lineTo(p.x, p.y);
-        //Vec2 pt = sharp(PT(p.x, p.y));
+        //DVec2 pt = sharp(PT(p.x, p.y));
         //painter->lineTo(pt.x, pt.y);
     }
 
-    void fillTextSharp(const char* txt, const Vec2& pos)
+    void fillTextSharp(const char* txt, const DVec2& pos)
     {
         //painter->setPixelAlignText(QNanoPainter::PixelAlign::PIXEL_ALIGN_FULL);
         fillText(txt, /*sharpX*/(pos.x), /*sharpY*/(pos.y));
@@ -1126,6 +803,7 @@ class Canvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
     int fbo_width = 0, fbo_height = 0;
+    double global_scale = 1.0;
 
 public:
 
@@ -1136,8 +814,9 @@ public:
     void end();
 
     GLuint texture() { return tex; }
-    int width() { return fbo_width; }
-    int height() { return fbo_height; }
-
+    int width() { return (int)(fbo_width/global_scale); }   // Logical pixel width
+    int height() { return (int)(fbo_height/global_scale); } // Logical pixel height
+    int fboWidth() { return fbo_width; }
+    int fboHeight() { return fbo_height; }
 
 };

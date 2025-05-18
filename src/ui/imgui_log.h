@@ -50,3 +50,5 @@ struct ImDebugLog
         ImGui::EndChild();
     }
 };
+
+//ImDebugLog* ImDebugLog::instance = nullptr;

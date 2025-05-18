@@ -7,7 +7,6 @@
 
 
 #include "imgui_gradient_edit.h"
-#include "imgui_internal.h"
 
 static const float GRADIENT_BAR_WIDGET_HEIGHT = 25;
 static const float GRADIENT_BAR_EDITOR_HEIGHT = 40;
@@ -103,7 +102,16 @@ void ImGradient::removeMark(ImGradientMark* mark)
 void ImGradient::getColorAt(float position, float* color) const
 {
     position = ImClamp(position, 0.0f, 1.0f);
-    int idx = static_cast<int>(position * 255.0f) * 3;
+    int idx = static_cast<int>(position * (CACHE_SIZE - 1)) * 3;
+    color[0] = m_cachedValues[idx + 0];
+    color[1] = m_cachedValues[idx + 1];
+    color[2] = m_cachedValues[idx + 2];
+}
+
+void ImGradient::getColorAt(double position, float* color) const
+{
+    position = ImClamp(position, 0.0, 1.0);
+    int idx = static_cast<int>(position * (CACHE_SIZE - 1)) * 3;
     color[0] = m_cachedValues[idx + 0];
     color[1] = m_cachedValues[idx + 1];
     color[2] = m_cachedValues[idx + 2];
@@ -209,8 +217,8 @@ void ImGradient::refreshCache()
     m_marks.sort([](const ImGradientMark* a, const ImGradientMark* b)
     { return a->position < b->position; });
 
-    for (int i = 0; i < 256; ++i)
-        computeColorAt(i / 255.0f, &m_cachedValues[i * 3]);
+    for (int i = 0; i < CACHE_SIZE; ++i)
+        computeColorAt(i / ((float)(CACHE_SIZE)-1.0f), &m_cachedValues[i * 3]);
 }
 
 
@@ -543,18 +551,22 @@ namespace ImGui
         ImGradient* gradient,
         ImGradientMark*& draggingMark,
         ImGradientMark*& selectedMark,
-        float dpr)
+        float bar_scale,
+        float mark_scale)
     {
         if (!gradient) return false;
 
         bool modified = false;
 
         ImVec2 bar_pos = ImGui::GetCursorScreenPos();
-        bar_pos.x += 10 * dpr;
-        float maxWidth = ImGui::GetContentRegionAvail().x - 20 * dpr;
-        float barBottom = bar_pos.y + GRADIENT_BAR_EDITOR_HEIGHT * dpr;
+        bar_pos.x += 10 * bar_scale;
+        float maxWidth = ImGui::GetContentRegionAvail().x - 20 * bar_scale;
+        float barBottom = bar_pos.y + GRADIENT_BAR_EDITOR_HEIGHT * bar_scale;
 
-        ImGui::InvisibleButton("gradient_editor_bar", ImVec2(maxWidth, GRADIENT_BAR_EDITOR_HEIGHT * dpr));
+        if (maxWidth < 100)
+            maxWidth = 100;
+
+        ImGui::InvisibleButton("gradient_editor_bar", ImVec2(maxWidth, GRADIENT_BAR_EDITOR_HEIGHT * bar_scale));
 
         if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0))
         {
@@ -567,8 +579,8 @@ namespace ImGui
             gradient->addMark(pos, ImColor(newMarkCol[0], newMarkCol[1], newMarkCol[2]));
         }
 
-        DrawGradientBar(gradient, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* dpr);
-        DrawGradientMarks(gradient, draggingMark, selectedMark, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* dpr, dpr);
+        DrawGradientBar(gradient, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* bar_scale);
+        DrawGradientMarks(gradient, draggingMark, selectedMark, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* bar_scale, mark_scale);
 
         if (!ImGui::IsMouseDown(0) && draggingMark)
         {
@@ -591,7 +603,7 @@ namespace ImGui
 
             float diffY = ImGui::GetIO().MousePos.y - barBottom;
 
-            if (diffY >= GRADIENT_MARK_DELETE_DIFFY* dpr)
+            if (diffY >= GRADIENT_MARK_DELETE_DIFFY * bar_scale)
             {
                 gradient->removeMark(draggingMark);
                 draggingMark = nullptr;

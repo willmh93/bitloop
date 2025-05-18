@@ -3,7 +3,7 @@
 #include "project.h"
 SIM_BEG(Test)
 
-struct Particle : public Vec2
+struct Particle : public DVec2
 {
     double fx = 0, fy = 0;
     double vx, vy;
@@ -12,22 +12,25 @@ struct Particle : public Vec2
     {}
 };
 
-
-struct Test_Scene_Attributes : public VarBuffer<Test_Scene_Attributes>
+struct Test_Scene_Attributes : public VarBuffer
 {
-    bool transform_coordinates = true;
-    bool scale_lines_text = true;
-    bool scale_sizes = true;
-    bool rotate_text = true;
+    sync_struct
+    {
+        bool transform_coordinates = true;
+        bool scale_lines_text = true;
+        bool scale_sizes = true;
+        bool rotate_text = true;
 
-    double camera_x = 0;
-    double camera_y = 0;
-    double camera_rotation = 0;
-    double zoom_x = 1;
-    double zoom_y = 1;
+        double camera_x = 0;
+        double camera_y = 0;
+        double camera_rotation = 0;
+        double zoom_x = 1;
+        double zoom_y = 1;
+    }
+    sync_end;
 
-    void populate(Test_Scene_Attributes &dst) override;
-    void copyFrom(const Test_Scene_Attributes& rhs) override
+    void populate();
+    void copyFrom(const Test_Scene_Attributes& rhs)
     {
         transform_coordinates = rhs.transform_coordinates;
         scale_lines_text = rhs.scale_lines_text;
@@ -55,7 +58,7 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
 
     double speed;
 
-    Vec2 ball_pos = { 0, 0 };
+    DVec2 ball_pos = { 0, 0 };
 
     std::vector<Particle> particles;
 
@@ -72,20 +75,26 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
 
     // Viewport handling
     void viewportProcess(Viewport* ctx) override;
-    void viewportDraw(Viewport* ctx) override;
+    void viewportDraw(Viewport* ctx) const override;
 
     // Input
     void onEvent(Event& e) override;
 };
 
-struct Test_Project_Vars : public VarBuffer<Test_Project_Vars>
+struct Test_Project_Vars : public VarBuffer
 {
-    int viewport_count = 1;
-    
-    void populate(Test_Project_Vars &dst) override;
+    sync_struct
+    {
+        int viewport_count = 1;
+    } 
+    sync_end;
+
+    void populate();
+    void copyFrom(const Test_Project_Vars& rhs)
+    {}
 };
 
-struct Test_Project : public ProjectBase
+struct Test_Project : public Project<Test_Project_Vars>
 {
     void projectPrepare() override;
 };

@@ -1,14 +1,17 @@
 #pragma once
-#define _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR 
+
+// Fix for MSVC mutex constexpr bug
+#define _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR
 #include <thread>
-#include <vector>
-#include <queue>
-#include <deque>
 #include <mutex>
 #include <condition_variable>
 #include <future>
 #include <functional>
 #include <atomic>
+
+#include <vector>
+#include <queue>
+#include <deque>
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/threading.h>
@@ -67,5 +70,29 @@ namespace Thread
         }
 
         return ranges;
+    }
+
+    template<typename sizeT>
+    inline std::pair<sizeT, sizeT> splitRange(sizeT totalSize, sizeT numParts, sizeT blockIndex)
+    {
+        // Preconditions (replace with your own error handling if desired)
+        if (numParts == 0)          throw std::invalid_argument("numParts must be > 0");
+        if (blockIndex >= numParts) throw std::out_of_range("blockIndex out of range");
+
+        const sizeT base = totalSize / numParts;   // size of every block before distributing the remainder
+        const sizeT extra = totalSize % numParts;   // how many blocks get one extra element
+
+        // Blocks [0, extra) have size base + 1. The rest have size base.
+        const bool hasExtra = blockIndex < extra;
+        const sizeT size = base + (hasExtra ? 1 : 0);
+
+        // Start index is:
+        //   * blockIndex * (base + 1)          for the first 'extra' blocks
+        //   * extra * (base + 1) + (blockIndex - extra) * base  otherwise
+        const sizeT start = hasExtra
+            ? blockIndex * (base + 1)
+            : extra * (base + 1) + (blockIndex - extra) * base;
+
+        return { start, start + size };   // [start, end)
     }
 }

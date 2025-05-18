@@ -1,7 +1,7 @@
 #include "nano_bitmap.h"
 #include "nano_canvas.h"
 
-FQuad CanvasImage::getWorldQuad(Camera* camera)
+DQuad CanvasImage::getWorldQuad(Camera* camera)
 {
     if (coordinate_type == CoordinateType::WORLD)
         // WORLD Input, use unchanged

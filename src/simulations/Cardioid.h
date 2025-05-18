@@ -142,7 +142,7 @@ inline void cardioidPolarCoord(
 }
 
 
-inline Vec2 fromPolarCoordinate(double angle, double dist)
+inline DVec2 fromPolarCoordinate(double angle, double dist)
 {
     //double angle = (perp_angle + M_PI / 2.0) / 1.5;
     double tangent_angle = 1.5 * angle;
@@ -164,7 +164,7 @@ struct CardioidStepInfo
     double step_dist;
 };
 
-struct CardioidSegment : public Vec2
+struct CardioidSegment : public DVec2
 {
     double angle;
 
@@ -262,7 +262,7 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
         }
     }
 
-    LerpedCardioid lerped(double weight)
+    LerpedCardioid lerped(double weight) const
     {
         double f_index = weight * static_cast<double>(size()-1);
         size_t i0 = static_cast<int>(f_index);
@@ -282,11 +282,11 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
     }
 
 
-    int nearestPoint(double x, double y, double weight)
+    int nearestPoint(double x, double y, double weight) const
     {
         double f_cardioid_index = weight * static_cast<double>(size() - 1);
         int cardioid_i0 = static_cast<int>(f_cardioid_index);
-        LerpedCardioid& cardioid = at(cardioid_i0);
+        const LerpedCardioid& cardioid = at(cardioid_i0);
 
         int lower = 0;
         int upper = static_cast<int>(cardioid.size()) - 1;
@@ -335,15 +335,15 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
     }
 
 
-    Vec2 originalPolarCoordinate(double x, double y, double weight)
+    DVec2 originalPolarCoordinate(double x, double y, double weight) const
     {
         double f_cardioid_index = weight * static_cast<double>(size() - 1);
         int cardioid_i0 = static_cast<int>(f_cardioid_index);
-        LerpedCardioid& cardioid = at(cardioid_i0);
+        const LerpedCardioid& cardioid = at(cardioid_i0);
 
         int i = nearestPoint(x, y, weight);
 
-        CardioidSegment& p = cardioid[i];
+        const CardioidSegment& p = cardioid[i];
         double angle = (i / (double)cardioid.size()) * (2 * M_PI);
         double tangent_angle = p.angle;
 
@@ -357,7 +357,7 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
         };
     }
 
-    Vec2 project(double angle, double dist, double weight)
+    DVec2 project(double angle, double dist, double weight) const
     {
         double f_cardioid_index = weight * static_cast<double>(size()-1);
         size_t cardioid_i0 = static_cast<int>(f_cardioid_index);
@@ -384,27 +384,59 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
     }
 };
 
-struct Cardioid_Scene_Vars : public VarBuffer<Cardioid_Scene_Vars>
+
+struct Cardioid_Scene_Vars : public VarBuffer
 {
-    bool show_offset = false;
+    /*bool   show_offset = false;
+    bool   flatten = true;
+    bool   interactive = true;
+
+    double interact_angle_step = (2.0 * M_PI) / 720.0;
+    double interact_spin_mult = 1.0;
+    double interact_angle = 0.0;
+    double interact_dist = 0.0;*/
+
+
+    /*bool show_offset = false;
+    bool flatten = true;
     bool interactive = true;
 
     double interact_angle_step = (2 * M_PI) / 720.0;
     double interact_spin_mult = 1.0;
     double interact_angle = 0.0;
-    double interact_dist = 0.0;
-
-    void populate(Cardioid_Scene_Vars &dst) override;
-    void copyFrom(const Cardioid_Scene_Vars& rhs) override
+    double interact_dist = 0.0;*/
+    sync_struct
     {
-        show_offset = rhs.show_offset;
-        interactive = rhs.interactive;
-        interact_angle_step = rhs.interact_angle_step;
-        interact_spin_mult = rhs.interact_spin_mult;
-        interact_angle = rhs.interact_angle;
-        interact_dist = rhs.interact_dist;
+        bool   show_offset = false;
+        bool   flatten = false;
+        bool   interactive = false;
+        bool   animate = true;
+        double ani_angle = 0.0;
+        double interact_angle_step = (2.0 * M_PI) / 720.0;
+        double interact_spin_mult = 1.0;
+        double interact_angle = 0.0;
+        double interact_dist = 0.0;
+    }
+    sync_end;
+
+
+    void populate();
+    void copyFrom(const Cardioid_Scene_Vars& rhs)
+    {
+        //show_offset = rhs.show_offset;
+        //interactive = rhs.interactive;
+        //interact_angle_step = rhs.interact_angle_step;
+        //interact_spin_mult = rhs.interact_spin_mult;
+        //interact_angle = rhs.interact_angle;
+        //interact_dist = rhs.interact_dist;
     }
 };
+
+//struct Cardioid_Scene_Vars::Primitives
+//{
+//    
+//};
+
 
 struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
 {
@@ -415,7 +447,7 @@ struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
 
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
-
+    void sceneProcess() override;
     // --- Update methods ---
 
     void plotCumulativeCardioid(Viewport* ctx, const CumulativeCardioid &items, double angle_mult=1.0);
@@ -423,14 +455,16 @@ struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
     CumulativeCardioid cumulative_cardioid;
     CardioidLerper cumulative_cardioid_lookup;
 
-    void fullPlot(Viewport* ctx, double scale, double ox, double spin_mult = 1.0);
-    void fullPlotAlternative(Viewport* ctx, double scale, double ox);
-    void fullPlotAlternative2(Viewport* ctx, double scale, double ox);
-    void animatePlot(Viewport* ctx, double scale, double ox);
+    void fullPlot(Viewport* ctx, double scale, double ox) const;
+    void fullPlotAlternative(Viewport* ctx, double scale, double ox) const;
+    //void fullPlotAlternative2(Viewport* ctx, double scale, double ox);
+    void animatePlot(Viewport* ctx, double scale, double ox, double orig_angle, double dist) const;
 
     // --- Viewport ---
     void viewportProcess(Viewport* ctx) override;
-    void viewportDraw(Viewport* ctx) override;
+    void viewportDraw(Viewport* ctx) const override;
+
+    void onEvent(Event &e) override;
 };
 
 struct Cardioid_Graph_Scene : public BasicScene
@@ -450,7 +484,7 @@ struct Cardioid_Graph_Scene : public BasicScene
 
     void sceneMounted(Viewport* viewport) override;
     void viewportProcess(Viewport* ctx) override;
-    void viewportDraw(Viewport* ctx) override;
+    void viewportDraw(Viewport* ctx) const override;
 };
 
 struct Cardioid_Project : public BasicProject

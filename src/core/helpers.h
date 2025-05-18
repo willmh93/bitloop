@@ -39,45 +39,83 @@ constexpr auto makeBoolsTuple()
     }(std::make_index_sequence<N>{});
 }
 
-// Build the dispatch table by enumerating all bitmask combinations
-template <typename F, size_t... Is>
-void dispatchBooleansImpl(const std::array<bool, sizeof...(Is)>& flags,
-    F&& f,
-    std::index_sequence<Is...>)
+// Step 1: the "core" – what does f(bool_c<0>, bool_c<1>...) return?
+template<typename F, std::size_t... Is>
+using dispatch_result_t_ =
+std::invoke_result_t<F,
+    std::integral_constant<bool, ((void)Is, false)>...>;
+
+// Step 2: unwrap std::index_sequence into the pack <Is...> 
+template<typename F, typename Seq>
+struct dispatch_result_impl;                     // primary template
+
+template<typename F, std::size_t... Is>
+struct dispatch_result_impl<F, std::index_sequence<Is...>>   // specialization
 {
+    using type = dispatch_result_t_<F, Is...>;
+};
+
+// Step 3: public alias
+template<typename F, std::size_t N>
+using dispatch_result_t =
+typename dispatch_result_impl<F, std::make_index_sequence<N>>::type;
+
+// Build the dispatch table by enumerating all bitmask combinations
+template<typename F, std::size_t... Is>
+auto dispatchBooleansImpl(const std::array<bool, sizeof...(Is)>& flags,
+    F&& f,
+    std::index_sequence<Is...>) -> dispatch_result_t<F, sizeof...(Is)>
+{
+    using Ret = dispatch_result_t<F, sizeof...(Is)>;
+
     // Compute the flat index from the actual runtime flags
     int index = 0;
     const size_t shift = sizeof...(Is) - 1;
     ((index |= (flags[Is] ? 1 : 0) << (shift - Is)), ...);
 
-    using FnPtr = void(*)(F&&);
+    using FnPtr = Ret(*)(F&);
 
     static constexpr std::array<FnPtr, 1 << sizeof...(Is)> dispatch_table = [] {
         std::array<FnPtr, 1 << sizeof...(Is)> table{};
 
-        [&] <size_t... Idxs>(std::index_sequence<Idxs...>) {
-            ((table[Idxs] = +[](F&& f_inner) constexpr {
-                constexpr auto bools = makeBoolsTuple<Idxs, sizeof...(Is)>();
-                std::apply([&](auto... Bools) {
-                    f_inner(Bools...);
-                }, bools);
+        [&] <std::size_t... Idxs>(std::index_sequence<Idxs...>)
+        {
+            ((table[Idxs] = +[](F& f_inner) -> Ret
+            {
+                constexpr auto bools =
+                    makeBoolsTuple<Idxs, sizeof...(Is)>();
+
+                if constexpr (std::is_void_v<Ret>)
+                {
+                    std::apply([&](auto... Bs) { f_inner(Bs...); }, bools);
+                }
+                else
+                {
+                    return std::apply(
+                        [&](auto... Bs) { return f_inner(Bs...); }, bools);
+                }
             }), ...);
         }(std::make_index_sequence<1 << sizeof...(Is)>{});
 
         return table;
     }();
 
-
-    // Finally, call the correct entry with the user functor.
-    dispatch_table[index](std::forward<F>(f));
+    if constexpr (std::is_void_v<Ret>)
+    {
+        dispatch_table[index](f);
+    }
+    else
+    {
+        return dispatch_table[index](f);
+    }
 }
 
 template <typename... Bools, typename F>
-void dispatchBooleans(F&& f, Bools... flags)
+decltype(auto) dispatchBooleans(F&& f, Bools... flags)
 {
     static_assert((std::is_same_v<Bools, bool> && ...), "All flags must be bool");
     auto flagArray = std::array{ flags... };
-    dispatchBooleansImpl(flagArray,
+    return dispatchBooleansImpl(flagArray,
         std::forward<F>(f),
         std::make_index_sequence<sizeof...(Bools)>{});
 }
@@ -85,7 +123,13 @@ void dispatchBooleans(F&& f, Bools... flags)
 // usage:  dispatchBooleans( bools_template(FUNC_NAME, [CAPTURE], FUNC_ARGS), BOOL_ARGS )
 // note:   The function call itself is not likely to get inlined
 
-#define boolsTemplate(func, capture, ...) capture<typename... Bools>(Bools... passed) { func<Bools::value...>(__VA_ARGS__); }
+//#define boolsTemplate(func, capture, ...) capture<typename... Bools>(Bools... passed) { func<Bools::value...>(__VA_ARGS__); }
+
+#define boolsTemplate(func, capture, ...)            \
+    capture <typename... Bools>(Bools...)            \
+    -> decltype(auto) {                              \
+        return func<Bools::value...>(__VA_ARGS__);   \
+    }
 
 class VariableChangedTracker
 {

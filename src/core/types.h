@@ -1,10 +1,10 @@
 #pragma once
 #include <functional>
 #include <string>
-
+//#include "imgui_custom.h"
 
 class ProjectBase;
-using CreatorFunc = std::function<ProjectBase* ()>;
+using ProjectCreatorFunc = std::function<ProjectBase*()>;
 
 // Enums
 
@@ -32,13 +32,13 @@ struct ProjectInfo
     };
 
     std::vector<std::string> path;
-    CreatorFunc creator;
+    ProjectCreatorFunc creator;
     int sim_uid;
     State state;
 
     ProjectInfo(
         std::vector<std::string> path,
-        CreatorFunc creator = nullptr,
+        ProjectCreatorFunc creator = nullptr,
         int sim_uid = -100,
         State state = State::INACTIVE
     )
@@ -47,7 +47,7 @@ struct ProjectInfo
 };
 
 class Viewport;
-struct PointerInfo
+struct MouseInfo
 {
     Viewport* viewport = nullptr;
     double client_x = 0;
@@ -57,109 +57,46 @@ struct PointerInfo
     double world_x = 0;
     double world_y = 0;
     int scroll_delta = 0;
-    //Qt::MouseButton btn = Qt::MouseButton::NoButton;
 };
 
+template<typename T>
 struct Vec2
 {
-    double x = 0.0;
-    double y = 0.0;
+    T x = 0;
+    T y = 0;
 
     Vec2() = default;
-    Vec2(double _x, double _y)
-    {
-        x = _x;
-        y = _y;
-    }
+    Vec2(T _x, T _y) : x(_x), y(_y) {}
 
-    Vec2 operator-() const 
-    {
-        return Vec2(-x, -y);
-    }
+    //operator ImVec2() const 
+    //{
+    //    return ImVec2(static_cast<float>(x), static_cast<float>(y));
+    //}
 
-    bool operator==(const Vec2& other) const
-    {
-        return x == other.x && y == other.y;
-    }
+    Vec2 operator-() const { return Vec2(-x, -y); }
+    bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
+    bool operator!=(const Vec2& other) const { return x != other.x || y != other.y; }
+    Vec2 operator+(const Vec2& rhs) const { return { x + rhs.x, y + rhs.y }; }
+    Vec2 operator-(const Vec2& rhs) const { return { x - rhs.x, y - rhs.y }; }
+    Vec2 operator*(const Vec2& rhs) const { return { x * rhs.x, y * rhs.y }; }
+    Vec2 operator/(const Vec2& rhs) const { return { x / rhs.x, y / rhs.y }; }
+    Vec2 operator*(T v) const { return { x * v, y * v }; }
+    Vec2 operator/(T v) const { return { x / v, y / v }; }
 
-    Vec2 operator +(const Vec2& rhs) const
-    {
-        return { x + rhs.x, y + rhs.y };
-    }
+    double* asArray() { return &x; }
+    double  angle() const { return atan2(y, x); }
+    double  average() const { return (x + y) / 2; }
+    double  magnitude() const { return sqrt(x * x + y * y); }
+    double  angleTo(const Vec2& b) const { return atan2(b.y - y, b.x - x); }
 
-    Vec2 operator -(const Vec2& rhs) const
-    {
-        return { x - rhs.x, y - rhs.y };
-    }
-
-    Vec2 operator *(const Vec2& rhs) const
-    {
-        return { x * rhs.x, y * rhs.y };
-    }
-
-    Vec2 operator /(const Vec2& rhs) const
-    {
-        return { x / rhs.x, y / rhs.y };
-    }
-
-    Vec2 operator *(double v) const
-    {
-        return { x * v, y * v };
-    }
-
-    Vec2 operator /(double v) const
-    {
-        return { x / v, y / v };
-    }
-
-    double* asArray()
-    {
-        return &x;
-    }
-
-    double angle() const
-    {
-        return atan2(y, x);
-    }
-
-    double average() const
-    {
-        return (x + y) / 2.0;
-    }
-
-    double magnitude() const
-    {
-        return sqrt(x * x + y * y);
-    }
-
-    double angleTo(const Vec2& b) const
-    {
-        return atan2(b.y - y, b.x - x);
-    }
-
-    Vec2 normalized() const
-    {
-        double mag = sqrt(x * x + y * y);
+    Vec2 floored(double offset = 0) { return { floor(x) + offset, floor(y) + offset }; }
+    Vec2 rounded(double offset = 0) { return { round(x) + offset, round(y) + offset }; }
+    Vec2 normalized() const {
+        T mag = sqrt(x * x + y * y);
         return { x / mag, y / mag };
     }
 
-    Vec2 floored(double offset = 0)
-    {
-        return {
-            floor(x) + offset,
-            floor(y) + offset
-        };
-    }
-
-    Vec2 rounded(double offset = 0)
-    {
-        return {
-            round(x) + offset,
-            round(y) + offset
-        };
-    }
-
-    static Vec2 lerp(const Vec2& a, const Vec2& b, double ratio)
+    static Vec2 lerp(const Vec2& a, Vec2& b, T ratio)
     {
         return {
             (a.x + (b.x - a.x) * ratio),
@@ -168,25 +105,55 @@ struct Vec2
     }
 };
 
-struct Ray : public Vec2
+
+/*struct DVec2
+{
+    double x = 0.0;
+    double y = 0.0;
+
+    DVec2() = default;
+    DVec2(double _x, double _y) : x(_x), y(_y) {}
+
+    DVec2 operator-() const { return DVec2(-x, -y); }
+    bool operator==(const DVec2& other) const { return x == other.x && y == other.y; }
+    bool operator!=(const DVec2& other) const { return x != other.x || y != other.y; }
+    DVec2 operator+(const DVec2& rhs) const { return { x + rhs.x, y + rhs.y }; }
+    DVec2 operator-(const DVec2& rhs) const { return { x - rhs.x, y - rhs.y }; }
+    DVec2 operator*(const DVec2& rhs) const { return { x * rhs.x, y * rhs.y }; }
+    DVec2 operator/(const DVec2& rhs) const { return { x / rhs.x, y / rhs.y }; }
+    DVec2 operator*(double v) const { return { x * v, y * v }; }
+    DVec2 operator/(double v) const { return { x / v, y / v }; }
+
+    double* asArray() { return &x; }
+    double angle() const { return atan2(y, x); }
+    double average() const { return (x + y) / 2.0; }
+    double magnitude() const { return sqrt(x * x + y * y); }
+    double angleTo(const DVec2& b) const { return atan2(b.y - y, b.x - x); }
+
+    DVec2 floored(double offset = 0) { return { floor(x) + offset, floor(y) + offset }; }
+    DVec2 rounded(double offset = 0) { return { round(x) + offset, round(y) + offset }; }
+    DVec2 normalized() const {
+        double mag = sqrt(x * x + y * y);
+        return { x / mag, y / mag };
+    }
+
+    static DVec2 lerp(const DVec2& a, const DVec2& b, double ratio)
+    {
+        return {
+            (a.x + (b.x - a.x) * ratio),
+            (a.y + (b.y - a.y) * ratio)
+        };
+    }
+};*/
+
+template<typename T>
+struct Ray : public Vec2<T>
 {
     double angle;
-    Ray(double x, double y, double angle) : Vec2(x, y), angle(angle)
-    {}
-    Ray(const Vec2& p, double angle) : Vec2(p.x, p.y), angle(angle)
-    {}
-    Ray(const Vec2& a, const Vec2& b) : Vec2(a.x, a.y), angle(a.angleTo(b))
-    {}
-};
-
-struct MassForceParticle : public Vec2
-{
-    double r;
-    double fx;
-    double fy;
-    double vx;
-    double vy;
-    double mass;
+    Ray() = default;
+    Ray(double x, double y, T angle) : Vec2<T>(x, y), angle(angle) {}
+    Ray(const Vec2<T>& p, T angle) : Vec2<T>(p.x, p.y), angle(angle) {}
+    Ray(const Vec2<T>& a, const Vec2<T>& b) : Vec2<T>(a.x, a.y), angle(a.angleTo(b)) {}
 };
 
 // Triangle structure
@@ -384,10 +351,10 @@ struct TriangleEqual
 
 /*struct Triangle
 {
-    Vec2 a, b, c;
+    DVec2 a, b, c;
 
     // Check if a point is inside the circumcircle of the triangle
-    bool isPointInCircumcircle(const Vec2& p) const
+    bool isPointInCircumcircle(const DVec2& p) const
     {
         double ax = a.x - p.x, ay = a.y - p.y;
         double bx = b.x - p.x, by = b.y - p.y;
@@ -405,7 +372,7 @@ struct TriangleEqual
         return determinant > 0; // Inside circumcircle
     }
 
-    bool containsVertex(const Vec2& p) const
+    bool containsVertex(const DVec2& p) const
     {
         return (a == p || b == p || c == p);
     }
@@ -425,6 +392,7 @@ struct Color
         uint32_t u32 = 0;
     };
 
+    Color() = default;
     Color(uint32_t rgba) : u32(rgba) {}
     Color(uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _a=255) 
         : r(_r), g(_g), b(_b), a(_a) {}
@@ -432,187 +400,77 @@ struct Color
     Color& operator =(const Color& rhs) { u32 = rhs.u32; return *this; }
     bool operator ==(const Color& rhs) const { return u32 == rhs.u32; }
 
-    operator uint32_t() const
-    {
+    operator uint32_t() const {
         return u32;
     }
 };
 
-struct Size
+template<typename T>
+struct Rect
 {
-    int x;
-    int y;
+    union { struct { T x1, y1; }; Vec2<T> a; };
+    union { struct { T x2, y2; }; Vec2<T> b; };
 
-    Size(int _x = 0, int _y = 0)
-    {
-        x = _x;
-        y = _y;
-    }
-};
+    //Rect() = default;
+    Rect() : a(0, 0), b(0, 0) {}
+    Rect(T _x1, T _y1, T _x2, T _y2)           { set(_x1, _y1, _x2, _y2); }
+    Rect(const Vec2<T>& _a, const Vec2<T>& _b) { set(_a, _b); }
 
-struct FRect
-{
-    double x1 = 0.0;
-    double y1 = 0.0;
-    double x2 = 0.0;
-    double y2 = 0.0;
+    void set(const Rect& r)                      { memcpy(this, &r, sizeof(Rect)); }
+    void set(T _x1, T _y1, T _x2, T _y2)         { x1 = _x1; y1 = _y1; x2 = _x2; y2 = _y2; }
+    void set(const Vec2<T>& a, const Vec2<T>& b) { x1 = a.x; y1 = a.y; x2 = b.x; y2 = b.y; }
 
-    FRect()
-    {}
+    double  width()  { return x2 - x1; }
+    double  height() { return y2 - y1; }
+    Vec2<T> size()   { return { x2 - x1, y2 - y1 }; }
 
-    FRect(double _x1, double _y1, double _x2, double _y2)
-    {
-        set(_x1, _y1, _x2, _y2);
-    }
-
-    FRect(const Vec2& a, const Vec2& b)
-    {
-        set(a, b);
-    }
-
-    void set(const FRect& r)
-    {
-        x1 = r.x1;
-        y1 = r.y1;
-        x2 = r.x2;
-        y2 = r.y2;
-    }
-
-    void set(double _x1, double _y1, double _x2, double _y2)
-    {
-        x1 = _x1;
-        y1 = _y1;
-        x2 = _x2;
-        y2 = _y2;
-    }
-
-    void set(const Vec2& a, const Vec2& b)
-    {
-        x1 = a.x;
-        y1 = a.y;
-        x2 = b.x;
-        y2 = b.y;
-    }
-
-    bool hitTest(double x, double y)
-    {
-        return (x >= x1 && y >= y1 && x <= x2 && y <= y2);
-    }
-
-    FRect scaled(double mult)
-    {
-        double cx = (x1 + x2) * 0.5;
-        double cy = (y1 + y2) * 0.5;
+    bool hitTest(T x, T y) { return (x >= x1 && y >= y1 && x <= x2 && y <= y2); }
+    Rect scaled(T mult) {
+        T cx = (x1 + x2) / 2;
+        T cy = (y1 + y2) / 2;
         x1 = cx + (x1 - cx) * mult;
         y1 = cy + (y1 - cy) * mult;
         x2 = cx + (x2 - cx) * mult;
         y2 = cy + (y2 - cy) * mult;
-        return FRect(x1, y1, x2, y2);
-    }
-
-    double width()
-    {
-        return x2 - x1;
-    }
-
-    double height()
-    {
-        return y2 - y1;
-    }
-
-    Vec2 size()
-    {
-        return { x2 - x1, y2 - y1 };
-    }
-};
-
-struct Rect
-{
-    int x1;
-    int y1;
-    int x2;
-    int y2;
-
-    Rect()
-    {}
-
-    Rect(int _x1, int _y1, int _x2, int _y2)
-    {
-        set(_x1, _y1, _x2, _y2);
-    }
-
-    Rect(const Vec2& a, const Vec2& b)
-    {
-        set(a, b);
-    }
-
-    void set(const Rect& r)
-    {
-        x1 = r.x1;
-        y1 = r.y1;
-        x2 = r.x2;
-        y2 = r.y2;
-    }
-
-    void set(int _x1, int _y1, int _x2, int _y2)
-    {
-        x1 = _x1;
-        y1 = _y1;
-        x2 = _x2;
-        y2 = _y2;
-    }
-
-    void set(const Vec2& a, const Vec2& b)
-    {
-        x1 = static_cast<int>(a.x);
-        y1 = static_cast<int>(a.y);
-        x2 = static_cast<int>(b.x);
-        y2 = static_cast<int>(b.y);
-    }
-
-    bool hitTest(int x, int y)
-    {
-        return (x >= x1 && y >= y1 && x <= x2 && y <= y2);
-    }
-
-    Rect scaled(double mult)
-    {
-        double cx = static_cast<double>(x1 + x2) * 0.5;
-        double cy = static_cast<double>(y1 + y2) * 0.5;
-        x1 = static_cast<int>(cx + (static_cast<double>(x1) - cx) * mult);
-        y1 = static_cast<int>(cy + (static_cast<double>(y1) - cy) * mult);
-        x2 = static_cast<int>(cx + (static_cast<double>(x2) - cx) * mult);
-        y2 = static_cast<int>(cy + (static_cast<double>(y2) - cy) * mult);
         return Rect(x1, y1, x2, y2);
     }
 
-    int width()
+    void merge(const Rect& r)
     {
-        return x2 - x1;
-    }
-
-    int height()
-    {
-        return y2 - y1;
-    }
-
-    Size size()
-    {
-        return { x2 - x1, y2 - y1 };
+        if (r.x1 < x1) x1 = r.x1;
+        if (r.y1 < y1) y1 = r.y1;
+        if (r.x2 > x2) x2 = r.x2;
+        if (r.y2 > y2) y2 = r.y2;
     }
 };
 
-struct FQuad
+template<typename T>
+struct Quad
 {
-    Vec2 a, b, c, d;
-
-    bool operator ==(const FQuad& rhs)
-    {
-        return (a == rhs.a && b == rhs.b && c == rhs.c && d == rhs.d);
-    }
-    bool operator !=(const FQuad& rhs)
-    {
-        return (a != rhs.a || b != rhs.b || c != rhs.c || d != rhs.d);
-    }
+    Vec2<T> a, b, c, d;
+    bool operator ==(const Quad& rhs) { return (a == rhs.a && b == rhs.b && c == rhs.c && d == rhs.d); }
+    bool operator !=(const Quad& rhs) { return (a != rhs.a || b != rhs.b || c != rhs.c || d != rhs.d); }
 };
 
+typedef Vec2<float>  FVec2;
+typedef Vec2<double> DVec2;
+typedef Vec2<int>    IVec2;
+typedef Rect<float>  FRect;
+typedef Rect<double> DRect;
+typedef Rect<int>    IRect;
+typedef Quad<float>  FQuad;
+typedef Quad<double> DQuad;
+typedef Quad<int>    IQuad;
+typedef Ray<float>   FRay;
+typedef Ray<double>  DRay;
+
+
+struct MassForceParticle : public DVec2
+{
+    double r;
+    double fx;
+    double fy;
+    double vx;
+    double vy;
+    double mass;
+};

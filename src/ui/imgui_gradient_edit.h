@@ -74,6 +74,7 @@ public:
 
     /* API used by the editor ------------------------------------------------ */
     void   getColorAt(float position, float* color) const;
+    void   getColorAt(double position, float* color) const;
     void   addMark(float position, ImColor color);
     void   removeMark(ImGradientMark* mark);
     void   refreshCache();
@@ -129,13 +130,14 @@ public:
 
 private:
     static constexpr float kEps = 1e-6f;
+    static constexpr int CACHE_SIZE = 512*6;
 
     void   clear() noexcept;                 // delete all marks + clear list
     void   swap(ImGradient& other) noexcept; // member-wise swap
     void   computeColorAt(float position, float* color) const;
 
     std::list<ImGradientMark*> m_marks;
-    float                      m_cachedValues[256 * 3]{}; // 256 rgb triples
+    float                      m_cachedValues[CACHE_SIZE * 3]{}; // 256 rgb triples
 };
 
 /* ---------------------------- editor helpers ------------------------------ */
@@ -145,7 +147,8 @@ namespace ImGui
     bool GradientEditor(ImGradient* gradient,
         ImGradientMark*& draggingMark,
         ImGradientMark*& selectedMark,
-        float dpr);
+        float bar_scale,
+        float mark_scale);
 }
 
 /*#include <list>

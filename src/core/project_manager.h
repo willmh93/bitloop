@@ -1,16 +1,28 @@
 #pragma once
 
-#include "imgui_debug_ui.h"
+#include "imgui_custom.h"
 #include "nano_canvas.h"
 #include "project.h"
 
-class ProjectManager
+class ProjectManagerInternal
 {
     ProjectBase* active_project = nullptr;
     Canvas* canvas = nullptr;
-    ImDebugLog* debug_log = nullptr;
+    ImDebugLog* project_log = nullptr;
+
+    VarBuffer live_data;
+    VarBuffer shadow_data;
+
+    static ProjectManagerInternal* singleton;
 
 public:
+
+    static ProjectManagerInternal* get()
+    {
+        if (singleton == nullptr)
+            singleton = new ProjectManagerInternal();
+        return singleton;
+    }
 
     void updateLiveAttributes()
     {
@@ -43,12 +55,12 @@ public:
 
     void setSharedDebugLog(ImDebugLog* shared_log)
     {
-        debug_log = shared_log;
+        project_log = shared_log;
     }
 
     void setActiveProject(int sim_uid)
     {
-        debug_log->clear();
+        project_log->clear();
 
         if (active_project)
         {
@@ -59,7 +71,7 @@ public:
 
         DebugPrint("-------- Switching Project --------");
         active_project = ProjectBase::findProjectInfo(sim_uid)->creator();
-        active_project->configure(sim_uid, canvas, debug_log);
+        active_project->configure(sim_uid, canvas, project_log);
         active_project->_projectPrepare();
     }
 
@@ -114,3 +126,8 @@ public:
             active_project->_onEvent(e);
     }
 };
+
+static ProjectManagerInternal* ProjectManager()
+{
+    return ProjectManagerInternal::get();
+}

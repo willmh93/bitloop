@@ -87,7 +87,7 @@ void Camera::setOriginViewportAnchor(Anchor anchor)
     }
 }
 
-Vec2 Camera::originPixelOffset()
+DVec2 Camera::originPixelOffset()
 {
     double viewport_cx = (viewport->width / 2.0);
     double viewport_cy = (viewport->height / 2.0);
@@ -135,7 +135,7 @@ void Camera::focusWorldRect(
         targ_zoom_x = zoom_x = (viewport_w / world_w);
         targ_zoom_y = zoom_y = (viewport_h / world_h);
 
-        Vec2 _originWorldOffset = originWorldOffset();
+        DVec2 _originWorldOffset = originWorldOffset();
         x = left + _originWorldOffset.x;
         y = top + _originWorldOffset.y;
     }
@@ -144,7 +144,7 @@ void Camera::focusWorldRect(
         double aspect_view = viewport_w / viewport_h;
         double aspect_rect = world_w / world_h;
 
-        Vec2 stage_rect_tl;
+        DVec2 stage_rect_tl;
 
         if (aspect_rect > aspect_view)
         {
@@ -156,7 +156,7 @@ void Camera::focusWorldRect(
             assert(zoom_x > 0.0);
             assert(zoom_y > 0.0);
 
-            Vec2 _originWorldOffset = originWorldOffset();
+            DVec2 _originWorldOffset = originWorldOffset();
 
             double world_ox = 0;
             double world_oy = ((viewport_h - (world_h * zoom_y)) / 2.0) / zoom_y;
@@ -174,7 +174,7 @@ void Camera::focusWorldRect(
             assert(zoom_x > 0.0);
             assert(zoom_y > 0.0);
 
-            Vec2 _originWorldOffset = originWorldOffset();
+            DVec2 _originWorldOffset = originWorldOffset();
 
             double world_ox = ((viewport_w - (world_w * zoom_x)) / 2.0) / zoom_x;
             double world_oy = 0;
@@ -203,6 +203,9 @@ void Camera::setRelativeZoomRange(double min, double max)
 
 void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
 {
+    saveCameraTransform();
+    worldTransform();
+
     pan_down_touch_x = _x;
     pan_down_touch_y = _y;
     pan_down_touch_dist = touch_dist;
@@ -215,7 +218,7 @@ void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
     }
     else
     {
-        //Vec2 world_mouse = toWorld(x, y);
+        //DVec2 world_mouse = toWorld(x, y);
         pan_beg_cam_x = x;
         pan_beg_cam_y = y;
         pan_beg_cam_zoom_x = zoom_x;
@@ -223,10 +226,15 @@ void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
         pan_beg_cam_angle = rotation;
     }
     panning = true;
+
+    restoreCameraTransform();
 }
 
 void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 {
+    saveCameraTransform();
+    worldTransform();
+
     if (panning)
     {
         if (use_panning_offset)
@@ -238,7 +246,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
         }
         else
         {
-            Vec2 world_mouse = toWorld(_x, _y);
+            DVec2 world_mouse = toWorld(_x, _y);
             //double dx = world_mouse.x - pan_down_touch_x;
             //double dy = world_mouse.y - pan_down_touch_y;
             int dx = _x - pan_down_touch_x;
@@ -246,7 +254,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 
             double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
 
-            Vec2 world_offset = toWorldOffset(dx, dy);
+            DVec2 world_offset = toWorldOffset(dx, dy);
             //qDebug() << "(dx,dy) = (" << dx << ", " << dy << ")";
 
             x = pan_beg_cam_x - world_offset.x * pan_mult;
@@ -262,6 +270,8 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             rotation = pan_beg_cam_angle + delta_rotation;
         }
     }
+
+    restoreCameraTransform();
 }
 
 void Camera::panZoomProcess()
@@ -293,7 +303,7 @@ void Camera::panEnd(int _x, int _y)
 
 void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
 {
-    if (PlatformManager::get()->is_mobile())
+    if (Platform()->is_mobile())
     {
         // Support both single-finger pan & 2 finger transform
         switch (e->type)

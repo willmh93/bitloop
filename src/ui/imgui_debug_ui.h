@@ -1,6 +1,6 @@
 #pragma once
 
-#include <imgui.h>
+/*#include <imgui.h>
 #include <SDL2/SDL.h>
 #include "platform.h"
 
@@ -26,23 +26,23 @@ void dpiDebugInfo()
 
         ImGui::Text("---- Environment ----");
 
-        if (PlatformManager::get()->is_mobile())
+        if (Platform()->is_mobile())
             ImGui::Text("Handheld:               TRUE");
         else
             ImGui::Text("Handheld:               FALSE");
 
-        if (PlatformManager::get()->is_touch_device())
+        if (Platform()->is_touch_device())
             ImGui::Text("Touchscreen:           TRUE");
         else
             ImGui::Text("Touchscreen:           FALSE");
 
-        if (PlatformManager::get()->device_vertical())
+        if (Platform()->device_vertical())
             ImGui::Text("Vertical:                   TRUE");
         else
             ImGui::Text("Vertical:                   FALSE");
 
         ImGui::Text("FontSize                  %.1f", io.Fonts->Fonts[0]->FontSize);
-        ImGui::Text("Touch Accuracy       %.2f", PlatformManager::get()->touch_accuracy());
+        ImGui::Text("Touch Accuracy       %.2f", Platform()->touch_accuracy());
 
         ImGui::Text("---- Scales ----");
         ImGui::Text("Character Rows       %.1f", io.DisplaySize.y / io.Fonts->Fonts[0]->FontSize);
@@ -50,19 +50,19 @@ void dpiDebugInfo()
         ImGui::Text("FontGlobalScale      %.2f", io.FontGlobalScale);
         ImGui::Text("FramebufferScale    %.3f x %.3f", io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
         ImGui::Text("---- Dimensions ----");
-        ImGui::Text("Width                     %.1f inches", PlatformManager::get()->window_width_inches());
-        ImGui::Text("Height                    %.1f inches", PlatformManager::get()->window_height_inches());
+        ImGui::Text("Width                     %.1f inches", Platform()->window_width_inches());
+        ImGui::Text("Height                    %.1f inches", Platform()->window_height_inches());
         ImGui::Text("---- DPI ----");
-        ImGui::Text("DPI:                         %.1f", PlatformManager::get()->dpi());
-        ImGui::Text("DPR:                        %.1f", PlatformManager::get()->dpr());
+        ImGui::Text("DPI:                         %.1f", Platform()->dpi());
+        ImGui::Text("DPR:                        %.1f", Platform()->dpr());
         ImGui::Text("DisplaySize:            %.1f x %.1f", io.DisplaySize.x, io.DisplaySize.y);
         ImGui::Text("WindowSize:           %d x %d",
-            PlatformManager::get()->window_width(),
-            PlatformManager::get()->window_height()
+            Platform()->window_width(),
+            Platform()->window_height()
         );
         ImGui::Text("DrawableSize:         %d x %d",
-            PlatformManager::get()->drawable_width(),
-            PlatformManager::get()->drawable_height()
+            Platform()->drawable_width(),
+            Platform()->drawable_height()
         );
         //ImGui::Text("DrawableSize (GL):   %d x %d", gl_dw, gl_dh);
 
@@ -76,4 +76,4 @@ void dpiDebugInfo()
         #endif
     }
     ImGui::End();
-}
+}*/

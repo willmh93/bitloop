@@ -1,12 +1,15 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <functional>
+
 #ifdef __EMSCRIPTEN__
+#include <emscripten.h>
 #include <emscripten/html5.h>
 #endif
 
 #include "debug.h"
-#include "imgui_custom.h"
+#include "types.h"
+//#include "imgui_custom.h"
 
 class PlatformManager
 {
@@ -21,6 +24,8 @@ class PlatformManager
     int win_w, win_h;
     int fb_w, fb_h;
 
+    bool is_mobile_device = false;
+
     void update_device_dpi();
 
 public:
@@ -31,10 +36,13 @@ public:
         return &singleton;
     }
 
-    static void init(SDL_Window* window)
+    static void prepare(SDL_Window* window)
     {
-        PlatformManager::get()->window = window;
+        get()->window = window;
+        get()->init();
     }
+
+    void init();
 
     // Required function calls
     void update();
@@ -54,14 +62,16 @@ public:
     bool device_orientation_changed(std::function<void(int, int)> onChanged);
     
 
-    // Mobile/Touch
-    int is_mobile();
+    // Platform detection
+    bool is_mobile();
+    bool is_desktop_native();
+    bool is_desktop_browser();
     bool is_touch_device();
     float touch_accuracy();
 
     // Scale
     float font_scale();
-    float ui_scale_factor();
+    float ui_scale_factor(float extra_mobile_mult=1.0f);
 
     // Window
     float window_width_inches();
@@ -84,22 +94,4 @@ inline PlatformManager* Platform()
 inline float ScaleSize(float length)
 {
     return PlatformManager::get()->dpr() * length;
-}
-
-inline ImVec2 ScaleSize(const ImVec2& size)
-{
-    float dpr = PlatformManager::get()->dpr();
-    return ImVec2(size.x * dpr, size.y * dpr);
-}
-
-inline ImVec2 ScaleSize(int w, int h)
-{
-    float dpr = PlatformManager::get()->dpr();
-    return ImVec2((float)w * dpr, (float)h * dpr);
-}
-
-inline ImVec2 ScaleSize(float w, float h)
-{
-    float dpr = PlatformManager::get()->dpr();
-    return ImVec2(w * dpr, h * dpr);
 }

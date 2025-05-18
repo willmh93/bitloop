@@ -1,10 +1,6 @@
 #include "platform.h"
+#include "imgui_custom.h"
 
-
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#include <emscripten/html5.h>
-#endif
 
 #ifdef __EMSCRIPTEN__
 EM_JS(int, _is_mobile_device, (), {
@@ -30,6 +26,11 @@ int _is_mobile_device()
 }
 #endif
 
+void PlatformManager::init()
+{
+    is_mobile_device = _is_mobile_device();
+}
+
 void PlatformManager::update()
 {
     SDL_GL_GetDrawableSize(window, &gl_w, &gl_h);
@@ -50,7 +51,7 @@ void PlatformManager::resized()
     emscripten_set_canvas_element_size("#canvas", fb_w, fb_h);
     #endif
 
-    PlatformManager::get()->update();
+    Platform()->update();
 }
 
 bool PlatformManager::device_vertical()
@@ -120,12 +121,30 @@ bool PlatformManager::is_touch_device()
     return SDL_GetNumTouchDevices() > 0;
 }
 
-int PlatformManager::is_mobile()
+bool PlatformManager::is_mobile()
 {
     #ifdef DEBUG_SIMULATE_MOBILE
     return true;
     #else
-    return _is_mobile_device(); /// todo: Cache
+    return is_mobile_device;// (bool)_is_mobile_device(); /// todo: Cache (ensure consistency from first call by logging return value)
+    #endif
+}
+
+bool PlatformManager::is_desktop_native()
+{
+    #ifdef __EMSCRIPTEN__
+    return false;
+    #else
+    return true;
+    #endif
+}
+
+bool PlatformManager::is_desktop_browser()
+{
+    #ifdef __EMSCRIPTEN__
+    return !is_mobile(); // Assumed desktop browser if mobile screen not detected
+    #else
+    return false; // Native desktop application
     #endif
 }
 
@@ -146,9 +165,9 @@ float PlatformManager::font_scale()
 }
 
 
-float PlatformManager::ui_scale_factor()
+float PlatformManager::ui_scale_factor(float extra_mobile_mult)
 {
-    return is_mobile() ? 2.0f : 1.0f;
+    return is_mobile() ? (2.0f * extra_mobile_mult) : 1.0f;
 }
 
 float PlatformManager::window_width_inches()

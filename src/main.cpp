@@ -1,4 +1,4 @@
-#define _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR 
+#include "threads.h"
 #include "main.h"
 
 /// emscripten
@@ -34,9 +34,6 @@
 /// Standard library
 #include <vector>
 #include <memory>
-#include <thread>
-#include <atomic>
-#include <mutex>
 
 #include "platform.h"
 #include "project.h"
@@ -44,14 +41,16 @@
 #include "nano_canvas.h"
 
 #include "debug.h"
-#include "imgui_debug_ui.h"
 
-#define AGRESSIVE_THREAD_LOGGING false
 
-SDL_Window* window;
+SDL_Window* window = nullptr;
 SDL_GLContext gl_context;
-std::atomic<bool> done{ false };
-std::atomic<bool> editing_ui{ false };
+
+struct ToolbarButtonState {
+    ImVec4 bgColor;
+    ImVec4 symbolColor;
+    bool active;
+};
 
 ToolbarButtonState play = { ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
 ToolbarButtonState stop = { ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
@@ -59,35 +58,115 @@ ToolbarButtonState pause = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1, 1, 1, 1),
 ToolbarButtonState record = { ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1, 1, 1, 1), false };
 
 Canvas canvas;
+ImDebugLog project_log;
 ImDebugLog debug_log;
 
-ProjectManager project_manager;
-std::thread project_thread;
+void ImDebugPrint(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    debug_log.vlog(fmt, ap);
+    va_end(ap);
+}
+
+
+// ---------------------------------------
+// ------------Threading ----------------- 
+// ---------------------------------------
+std::thread worker_thread;
+
+std::atomic<bool> done{ false };
+std::atomic<bool> project_thread_started{ false };
+std::atomic<bool> updating_live_buffer{ false };
+std::atomic<bool> updating_shadow{ false };
+std::atomic<bool> editing_ui{ false };
 
 std::condition_variable cv;
+std::condition_variable cv_updating_live_buffer;
+std::condition_variable cv_updating_shadow;
+
+std::mutex live_buffer_mutex;
+std::mutex shadow_buffer_mutex;
+
 std::mutex working_mutex;
 std::mutex state_mutex;
+
+WindowManager* WindowManager::singleton = nullptr;
+
 bool frame_ready = false;
 bool frame_consumed = false;
 bool processing_frame = false;
-std::atomic<bool> populating_attributes{ false };
 
-std::atomic<bool> project_thread_started{ false };
-std::atomic<bool> gui_frame_running{ false };
-std::atomic<bool> copy_requested{ false };
-
-std::condition_variable cv_updating_live_buffer;
-std::atomic<bool> updating_live_buffer{ false };
-std::mutex live_buffer_mutex;
-
-std::condition_variable cv_updating_shadow;
-std::atomic<bool> updating_shadow{ false };
-std::mutex shadow_mutex;
+// ---------------------------------------
 
 bool imgui_initialized = false;
 bool update_docking_layout = false;
 
-std::vector<SDL_Event> input_event_queue;
+
+void WindowManager::queueEvent(const SDL_Event& event)
+{
+    std::lock_guard<std::mutex> lock(event_queue_mutex);
+    input_event_queue.push_back(event);
+}
+
+void WindowManager::queueData()
+{
+    if (!editing_ui.load())
+    {
+        /// While we update the shadow buffer, we should NOT permit ui updates (force a small stall)
+
+        T0(shadow_lock);
+        std::unique_lock<std::mutex> shadow_lock(shadow_buffer_mutex);
+        T1(shadow_lock);
+
+        if (shadow_lock.owns_lock())
+        {
+            updating_shadow.store(true, std::memory_order_relaxed);
+
+            //T0(updateShadowAttributes);
+            ProjectManager()->updateShadowAttributes();
+            //T1(updateShadowAttributes);
+
+            updating_shadow.store(false, std::memory_order_relaxed);
+            cv_updating_shadow.notify_one(); //  Allow UI populateAttributes()
+        }
+    }
+}
+
+void WindowManager::pollData()
+{
+    if (editing_ui.load())
+    {
+        /// Make sure we can't alter the shadow buffer while we copy them to live buffer
+        std::lock_guard<std::mutex> live_buffer_lock(live_buffer_mutex);
+
+        updating_live_buffer.store(true);
+
+
+        DebugGroupBeg(THREAD_LOGGING, "BEGIN updateLiveAttributes");
+        //DebugPrint("Copying SHADOW to LIVE");
+        ProjectManager()->updateLiveAttributes();
+        DebugGroupEnd(THREAD_LOGGING, "END updateLiveAttributes");
+
+        updating_live_buffer.store(false, std::memory_order_release);
+
+        // Inform GUI thread that 'updating_live_buffer' changed
+        cv_updating_live_buffer.notify_one();
+    }
+}
+
+void WindowManager::pollEvents()
+{
+    // Grab event queue data (and clear via swap with empty queue)
+    std::vector<SDL_Event> local;
+    {
+        std::lock_guard<std::mutex> lock(event_queue_mutex);
+        local.swap(input_event_queue);
+    }
+
+    for (SDL_Event& e : local)
+        ProjectManager()->_onEvent(e);
+}
 
 void update_imgui_styles()
 {
@@ -162,7 +241,7 @@ void update_imgui_styles()
     colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);     // Dim background for windowing
     colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);      // Dim background for modal windows
 
-    style.ScaleAllSizes(PlatformManager::get()->ui_scale_factor());
+    style.ScaleAllSizes(Platform()->ui_scale_factor());
 }
 
 void imgui_init()
@@ -175,6 +254,22 @@ void imgui_init()
     update_imgui_styles();
 
     imgui_initialized = true;
+}
+
+inline bool isEditingUI()
+{
+    ImGuiID active_id = ImGui::GetActiveID();
+
+    static ImGuiID old_active_id = 0;
+    ImGuiID lagged_active_id = active_id ? active_id : old_active_id;
+
+    old_active_id = active_id;
+
+    if (lagged_active_id == 0)
+        return false;
+
+    static ImGuiID viewport_id = ImHashStr("Viewport");
+    return (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
 }
 
 void DrawSymbol(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color)
@@ -220,7 +315,7 @@ bool SymbolButton(const char* id, const char* symbol, const ToolbarButtonState& 
 
 void show_toolbar()
 {
-    //if (PlatformManager::get()->is_mobile())
+    //if (Platform()->is_mobile())
     //    return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
@@ -277,11 +372,11 @@ void show_tree_node(ProjectInfoNode& node, int& i, int depth)
 
             //std::unique_lock<std::mutex> lock(state_mutex);
             DebugPrint("show_tree_node::setActiveProject()");
-            project_manager.setActiveProject(node.project_info->sim_uid);
+            ProjectManager()->setActiveProject(node.project_info->sim_uid);
 
             DebugPrint("show_tree_node::startProject()");
-            project_manager.startProject();
-            project_manager.updateShadowAttributes(); // thread-safe?
+            ProjectManager()->startProject();
+            ProjectManager()->updateShadowAttributes(); // thread-safe?
         }
     }
     else
@@ -337,152 +432,154 @@ void sim_worker()
 {
     while (!done.load())
     {
-        // Wait for GUI to consume previous frame
+        // Wait for GUI to consume the freshly-rendered previous frame
         {
+            T0(worker_waiting_for_consumed_frame);
             std::unique_lock<std::mutex> lock(state_mutex);
             cv.wait(lock, [] { return frame_consumed || done.load(); });
+            T1(worker_waiting_for_consumed_frame);
         }
 
-        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
-        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "====================== NEW WORKER FRAME =====================");
+        DebugGroupBeg(THREAD_LOGGING, "NEW WORKER FRAME");
 
-        // Do heavy work while we draw the previously rendered frame on GUI thread
+        // Do heavy work while we continuously redraw the previously rendered frame on GUI thread
         {
+
+            // Preventing switching project entirely during a full worker frame
+            // This mutex is not used anywhere else except when you click to launch a new project
+            T0(working_lock);
             std::lock_guard<std::mutex> lock(working_mutex);
+            T1(working_lock);
+
+            MainWindow()->pollEvents();
+
+            // Process events
+            /*{
+                // Grab event queue data (and clear via swap with empty queue)
+                std::vector<SDL_Event> local;
+                {
+                    std::lock_guard<std::mutex> lock(event_queue_mutex);
+                    local.swap(input_event_queue);
+                }
+
+                for (SDL_Event& e : local)
+                    project_manager._onEvent(e);
+
+                /// todo: Copy LIVE to shadow here to keep things synced? 
+                ///       Or do we move this to after updateLiveAttributes?
+            }*/
 
             // ===== Update live values =====
             // (in case any inputs were changed since last .process())
-            {
-                /// Make sure we can't alter the shadow buffer while we copy them to live buffer
-                std::lock_guard<std::mutex> live_buffer_lock(live_buffer_mutex);
-
-                updating_live_buffer.store(true);
-
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- BEGIN updateLiveAttributes ----");
-                if (project_manager.getActiveProject())
-                    project_manager.updateLiveAttributes();
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- END updateLiveAttributes ----");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-
-                updating_live_buffer.store(false, std::memory_order_release);
-
-                // Inform GUI thread that 'updating_live_buffer' changed
-                cv_updating_live_buffer.notify_one();
-            }
-
-            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "--------- BEGIN PROCESSING ---------");
-
             processing_frame = true;
-            for (SDL_Event& e : input_event_queue)
-                project_manager._onEvent(e);
-            input_event_queue.clear();
+            DebugGroupBeg(THREAD_LOGGING, "BEGIN PROCESSING");
+            {
+                MainWindow()->pollData();
 
-            if (project_manager.getActiveProject())
-                project_manager.process();
+                ProjectManager()->process();
+
+                // todo: if (shadow_attributes_updated)
+                MainWindow()->queueData();
+            }
             processing_frame = false;
+            DebugGroupEnd(THREAD_LOGGING, "END PROCESSING");
 
-            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---------- END PROCESSING ----------");
-            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-            DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
 
-            // todo: if (shadow_attributes_updated)
-            if (!editing_ui.load())
-            {
-                /// todo: Wait for an existing ui_update to finish first?
 
-                /// While we update the shadow buffer, we should NOT permit ui updates (force a small stall)
-                std::unique_lock<std::mutex> shadow_lock(shadow_mutex);
-                updating_shadow.store(true);
-
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "--- BEGIN updateShadowAttributes ---");
-                if (project_manager.getActiveProject())
-                    project_manager.updateShadowAttributes();
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- END updateShadowAttributes ----");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-
-                updating_shadow.store(false, std::memory_order_release);
-                cv_updating_shadow.notify_one();
-            }
-            else
-            {
-                DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "<<<<< ImGui Item Active - SKIPPED updateShadowAttributes() >>>>>");
-            }
+            //else
+            //{
+            //    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "<<<<< ImGui Item Active - SKIPPED updateShadowAttributes() >>>>>");
+            //}
         }
+
         // Flag ready to draw
         {
+            T0(state_lock);
             std::lock_guard<std::mutex> lock(state_mutex);
+            T1(state_lock);
+
             frame_ready = true;
             frame_consumed = false;
         }
 
-        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "====================== END WORKER FRAME =====================");
-        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
-        DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+        DebugGroupEnd(THREAD_LOGGING, "END WORKER FRAME");
 
         // Wake GUI
         cv.notify_one();
         ///cv_updating_live_buffer.notify_one();
 
-        // Wait for GUI to draw
+        // Start tracking how long it took to draw the frame
+        auto draw_t0 = std::chrono::steady_clock::now();
+
         {
+            T0(drawing_frame);
+
+            // Wait for GUI to draw the freshly prepared data
             std::unique_lock<std::mutex> lock(state_mutex);
             cv.wait(lock, [] { return frame_consumed || done.load(); });
+
+            T1(drawing_frame);
         }
 
-        SDL_Delay(16);
+        // Wait 16ms (minus the time it took to draw the frame)
+        auto draw_duration = std::chrono::steady_clock::now() - draw_t0;
+        int draw_ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(draw_duration).count());
+        //SDL_Delay(std::max(0, 16 - draw_ms));
+        SDL_Delay(0);
     }
 }
 
 void init_simulation_thread()
 {
     std::unique_lock<std::mutex> lock(state_mutex);
-    project_manager.setSharedCanvas(&canvas);
-    project_manager.setSharedDebugLog(&debug_log);
-    project_thread = std::thread(sim_worker);
+    ProjectManager()->setSharedCanvas(&canvas);
+    ProjectManager()->setSharedDebugLog(&project_log);
+    worker_thread = std::thread(sim_worker);
     project_thread_started.store(true);
 }
 
 void show_project_attributes(bool show_ui)
 {
-    std::unique_lock<std::mutex> lock(state_mutex);
+    //T0(state_lock);
+    //std::unique_lock<std::mutex> lock(state_mutex);
+    //T1(state_lock);
 
     ImGui::BeginPaddedRegion(ScaleSize(10.0f));
 
+    /// Makes sure we're presenting the most recent data...
+
+    // Stall until we've finishing copying the shadow buffer to the live buffer (on worker thread)
     {
-        std::unique_lock<std::mutex> wait_live_buffer_lock(live_buffer_mutex);
-        cv_updating_live_buffer.wait(wait_live_buffer_lock, []() {
-            return !updating_live_buffer.load();
-        });
+        T0(live_lock);
+        std::unique_lock<std::mutex> live_lock(live_buffer_mutex);
+        cv_updating_live_buffer.wait(live_lock, []() { return !updating_live_buffer.load(); });
+        T1(live_lock);
     }
 
     // Stall until we've finished copying live buffer to shadow buffer (on worker thread)
-    std::unique_lock<std::mutex> shadow_lock(shadow_mutex);
-    cv_updating_shadow.wait(shadow_lock, []() 
     {
-        return !updating_shadow.load();
-    });
+        T0(shadow_lock);
+        std::unique_lock<std::mutex> shadow_lock(shadow_buffer_mutex);
 
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "--- BEGIN populateAttributes ---");
-    populating_attributes.store(true);
-    project_manager.populateAttributes(show_ui);
-    populating_attributes.store(false);
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "---- END populateAttributes ----");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "------------------------------------");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+        //cv_updating_shadow.wait(shadow_lock, []() { return !updating_shadow.load(); });
+        T1(shadow_lock);
 
-    editing_ui.store(ImGui::IsAnyItemActive(), std::memory_order_release);
+        DebugGroupBeg(THREAD_LOGGING, "BEGIN populateAttributes");
+        //populating_attributes.store(true);
+        {
+            //std::lock_guard<std::mutex> g(state_mutex);
+            ///ImGui::BeginGroup();
+            ProjectManager()->populateAttributes(show_ui);
+            ///ImGui::EndGroup();
 
+            ///if (ImGui::IsItemClicked)
+        }
+        //populating_attributes.store(false);
+        DebugGroupEnd(THREAD_LOGGING, "END populateAttributes ");
+    }
+
+    // Shadow buffer is now up-to-date free to access (while worker does processing)
+    
     ImGui::EndPaddedRegion();
 }
 
@@ -562,7 +659,8 @@ void show_ui()
         //ImGui::DockBuilderDockWindow("Timeline", dock_top_id);
         ImGui::DockBuilderDockWindow("Projects", dock_sidebar);
         ImGui::DockBuilderDockWindow("Active", dock_sidebar);
-        ImGui::DockBuilderDockWindow("Debug", dock_sidebar);
+        ImGui::DockBuilderDockWindow("Debug Log", dock_sidebar);
+        ImGui::DockBuilderDockWindow("Project Log", dock_sidebar);
         ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
 
         ImGui::DockBuilderFinish(dockspace_id);
@@ -574,14 +672,18 @@ void show_ui()
     // Show windows
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
+    ///ImGui::ClearActiveID();
+
     // Determine if we are ready to draw *before* populating simulation imgui attributes
     bool need_draw = false;
     {
+        T0(state_lock);
         std::lock_guard<std::mutex> g(state_mutex);
+        T1(state_lock);
         need_draw = frame_ready;
     }
 
-    if (vertical_layout || PlatformManager::get()->max_char_rows() < 40.0f)
+    if (vertical_layout || Platform()->max_char_rows() < 40.0f)
     {
         // Collapse layout
         if (ImGui::Begin("Projects", nullptr, window_flags))
@@ -647,11 +749,21 @@ void show_ui()
     ImGui::PopStyleVar();
 
     ImGuiWindowClass wc{};
-    wc.DockNodeFlagsOverrideSet = (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiWindowFlags_NoDocking;
+    wc.DockNodeFlagsOverrideSet =
+        (int)ImGuiDockNodeFlags_NoTabBar | 
+        (int)ImGuiWindowFlags_NoDocking;
+
     ImGui::SetNextWindowClass(&wc);
 
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
-    bool viewport_visible = ImGui::Begin("Viewport");
+
+
+    bool viewport_visible = ImGui::Begin("Viewport"/*, nullptr, 
+        ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoMove*/);
 
     // Always process viewport, even if not visible
     {
@@ -670,13 +782,13 @@ void show_ui()
         else if (project_thread_started.load())
         {
             // Launch initial simulation 1 frame late (background thread)
-            if (!project_manager.getActiveProject())
+            if (!ProjectManager()->getActiveProject())
             {
                 DebugPrint("show_ui::setActiveProject()");
-                project_manager.setActiveProject(0);
+                ProjectManager()->setActiveProject(0);
                 DebugPrint("show_ui::startProject()");
-                project_manager.startProject();
-                project_manager.updateShadowAttributes(); // Thread safe?
+                ProjectManager()->startProject();
+                ProjectManager()->updateShadowAttributes(); // Thread safe?
 
                 // Kick-start work-render-work-render loop
                 need_draw = true;
@@ -685,12 +797,17 @@ void show_ui()
 
         if (need_draw)
         {
+            T0(need_draw);
             // Stop the worker and draw the fresh frame
+            T0(state_lock);
             std::unique_lock<std::mutex> lock(state_mutex);
+            T1(state_lock);
 
+            T0(drawing_canvas);
             canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-            project_manager.draw();
+            ProjectManager()->draw();
             canvas.end();
+            T1(drawing_canvas);
 
             frame_ready = false;
             frame_consumed = true;
@@ -698,26 +815,35 @@ void show_ui()
 
             // Let worker continue
             cv.notify_one();
+            T1(need_draw);
         }
         else if (resized)
         {
             canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
             canvas.setFillStyle(0, 0, 0);
-            canvas.fillRect(0, 0, (float)canvas.width(), (float)canvas.height());
+            canvas.fillRect(0, 0, (float)canvas.fboWidth(), (float)canvas.fboHeight());
             canvas.end();
         }
 
         // Draw cached (or freshly generated) frame
         ImGui::Image(canvas.texture(), ImVec2(
-            static_cast<float>(canvas.width()),
-            static_cast<float>(canvas.height())),
+            static_cast<float>(canvas.fboWidth()),
+            static_cast<float>(canvas.fboHeight())),
             ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
             ImVec2(1.0f, 0.0f)    // UV bottom-right);
         );
+        
+        editing_ui.store(isEditingUI(), std::memory_order_release);
     }
     ImGui::End();
 
-    if (ImGui::Begin("Debug"))
+    if (ImGui::Begin("Project Log"))
+    {
+        project_log.draw();
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Debug Log"))
     {
         debug_log.draw();
     }
@@ -732,8 +858,8 @@ void show_ui()
     /// Debugging
     {
         // Debug Log
-        //debug_log.log("%d", rand());
-        //debug_log.Draw();
+        //project_log.log("%d", rand());
+        //project_log.Draw();
 
         // Debug DPI
         //dpiDebugInfo();
@@ -756,17 +882,17 @@ void main_loop()
             break;
 
             default:
-                input_event_queue.push_back(event);
+                MainWindow()->queueEvent(event);
             break;
         }
     }
 
 
-    PlatformManager::get()->update();
+    Platform()->update();
 
     glViewport(0, 0,
-        PlatformManager::get()->drawable_width(),
-        PlatformManager::get()->drawable_height()
+        Platform()->drawable_width(),
+        Platform()->drawable_height()
     );
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -776,18 +902,16 @@ void main_loop()
 
     #ifdef __EMSCRIPTEN__
     io.DisplaySize = ImVec2(
-        PlatformManager::get()->drawable_width(),
-        PlatformManager::get()->drawable_height()
+        Platform()->drawable_width(),
+        Platform()->drawable_height()
     );
     io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
     #endif
 
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "======================== NEW GUI FRAME ======================");
+    DebugGroupBeg(THREAD_LOGGING, "NEW GUI FRAME");
 
     // New ImGui frame
-    gui_frame_running.store(true, std::memory_order_release);
+    //gui_frame_running.store(true, std::memory_order_release);
     ImGui::NewFrame();
 
     // Draw simulation & refresh imgui drawlist
@@ -795,12 +919,10 @@ void main_loop()
 
     // Render
     ImGui::Render();
-    gui_frame_running.store(false, std::memory_order_release);
 
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "======================== END GUI FRAME ======================");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "=============================================================");
-    DebugPrintEx(AGRESSIVE_THREAD_LOGGING, "");
+    DebugGroupEnd(THREAD_LOGGING, "END GUI FRAME");
     
+    //gui_frame_running.store(false, std::memory_order_release);
 
     glClearColor(0.1f, 0.0f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -811,15 +933,15 @@ void main_loop()
 
 void reconfigure_ui()
 {
-    PlatformManager::get()->update();
+    Platform()->update();
 
     static float last_dpr = -1.0f;
-    float _dpr = PlatformManager::get()->dpr();
+    float _dpr = Platform()->dpr();
 
     if (fabs(_dpr - last_dpr) > 0.01f)
     {
         // DPR changed
-        last_dpr = PlatformManager::get()->dpr();
+        last_dpr = Platform()->dpr();
 
         update_imgui_styles();
 
@@ -828,12 +950,12 @@ void reconfigure_ui()
         io.Fonts->Clear();
 
         float base_pt = 16.0f;
-        const char* font_path = PlatformManager::get()->path("/data/fonts/DroidSans.ttf");
+        const char* font_path = Platform()->path("/data/fonts/DroidSans.ttf");
         ImFontConfig config;
         config.OversampleH = 3;
         config.OversampleV = 3;
 
-        io.Fonts->AddFontFromFileTTF(font_path, base_pt * _dpr * PlatformManager::get()->font_scale(), &config);
+        io.Fonts->AddFontFromFileTTF(font_path, base_pt * _dpr * Platform()->font_scale(), &config);
         io.Fonts->FontBuilderFlags =
             ImGuiFreeTypeBuilderFlags_LightHinting |
             ImGuiFreeTypeBuilderFlags_ForceAutoHint;
@@ -846,16 +968,13 @@ void reconfigure_ui()
 #ifdef __EMSCRIPTEN__
 EM_BOOL on_client_resized(int, const EmscriptenUiEvent* e, void* userData)
 {
-    PlatformManager::get()->resized();
+    Platform()->resized();
     return EM_TRUE;
 }
 #endif
 
 int main(int argc, char* argv[])
 {
-    //DebugPrint("main() called");
-    //std::unique_lock<std::mutex> lock(data_mutex);
-
     // SDL Window setup
     {
         //SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0"); // "0" = nearest pixel sampling, NO bilinear
@@ -892,7 +1011,7 @@ int main(int argc, char* argv[])
             SDL_WINDOW_ALLOW_HIGHDPI
         );
 
-        PlatformManager::init(window);
+        PlatformManager::prepare(window);
     }
 
     // OpenGL setup
@@ -943,9 +1062,7 @@ int main(int argc, char* argv[])
 
     canvas.create();
 
-
     init_simulation_thread();
-    //debug_log.Log("Simulation started");
 
     // Start main ui loop (main thread)
     {
@@ -959,11 +1076,11 @@ int main(int argc, char* argv[])
             while (!done.load())
             {
                 main_loop();
-                SDL_Delay(16);
+                SDL_Delay(0);
             }
 
             if (project_thread_started.load())
-                project_thread.join();
+                worker_thread.join();
 
             // Shutdown
             {
@@ -988,3 +1105,4 @@ int WINAPI CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR 
     return main(__argc, __argv);
 }
 #endif
+

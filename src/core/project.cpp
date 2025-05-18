@@ -7,12 +7,12 @@
 
 double Event::finger_x()
 {
-    return (double)(_event.tfinger.x * (float)PlatformManager::get()->drawable_width());
+    return (double)(_event.tfinger.x * (float)Platform()->drawable_width());
 }
 
 double Event::finger_y()
 {
-    return (double)(_event.tfinger.y * (float)PlatformManager::get()->drawable_height());
+    return (double)(_event.tfinger.y * (float)Platform()->drawable_height());
 }
 
 std::string Event::info()
@@ -50,8 +50,8 @@ std::string Event::info()
         finger_attribs:
         sprintf(attribs, "{F_%lld, %d, %d}", 
             _event.tfinger.fingerId, 
-            (int)(_event.tfinger.x * (float)PlatformManager::get()->drawable_width()),
-            (int)(_event.tfinger.y * (float)PlatformManager::get()->drawable_height()));
+            (int)(_event.tfinger.x * (float)Platform()->drawable_width()),
+            (int)(_event.tfinger.y * (float)Platform()->drawable_height()));
 
         break;
 
@@ -124,6 +124,33 @@ void SceneBase::mountToAll(Layout& viewports)
 {
     for (Viewport* viewport : viewports)
         viewport->mountScene(this);
+}
+
+double SceneBase::frame_dt(int average_samples) const
+{
+    if (dt_call_index >= dt_scene_ma_list.size())
+        dt_scene_ma_list.push_back(Math::MovingAverage::MA(average_samples));
+
+    auto& ma = dt_scene_ma_list[dt_call_index++];
+    return ma.push(project->dt_frameProcess);
+}
+
+double SceneBase::scene_dt(int average_samples) const
+{
+    if (dt_call_index >= dt_scene_ma_list.size())
+        dt_scene_ma_list.push_back(Math::MovingAverage::MA(average_samples));
+
+    auto& ma = dt_scene_ma_list[dt_call_index++];
+    return ma.push(dt_sceneProcess);
+}
+
+double SceneBase::project_dt(int average_samples) const
+{
+    if (dt_process_call_index >= dt_project_ma_list.size())
+        dt_project_ma_list.push_back(Math::MovingAverage::MA(average_samples));
+
+    auto& ma = dt_project_ma_list[dt_process_call_index++];
+    return ma.push(project->dt_projectProcess);
 }
 
 ///  Viewport
@@ -279,7 +306,7 @@ double ceilAxisValue(double v, double step)
     return ceil(v / step) * step;
 }
 
-double getAngle(Vec2 a, Vec2 b)
+double getAngle(DVec2 a, DVec2 b)
 {
     return (b - a).angle();
 }
@@ -326,14 +353,14 @@ void Viewport::drawWorldAxis(
     save();
 
     // Fist, draw axis
-    Vec2 stage_origin = camera.toStage(0, 0);
-    FRect stage_rect = { 0, 0, width, height };
+    DVec2 stage_origin = camera.toStage(0, 0);
+    DRect stage_rect = { 0, 0, width, height };
 
     // World quad
-    Vec2 world_tl = camera.toWorld(0, 0);
-    Vec2 world_tr = camera.toWorld(width, 0);
-    Vec2 world_br = camera.toWorld(width, height);
-    Vec2 world_bl = camera.toWorld(0, height);
+    DVec2 world_tl = camera.toWorld(0, 0);
+    DVec2 world_tr = camera.toWorld(width, 0);
+    DVec2 world_br = camera.toWorld(width, height);
+    DVec2 world_bl = camera.toWorld(0, height);
 
     double world_w = world_br.x - world_tl.x;
     double world_h = world_br.y - world_tl.y;
@@ -344,19 +371,19 @@ void Viewport::drawWorldAxis(
     double angle = camera.rotation;
 
     // Get +positive Axis rays
-    Ray axis_rayX = { stage_origin, angle + 0 };
-    Ray axis_rayY = { stage_origin, angle + Math::HALF_PI };
+    DRay axis_rayX = { stage_origin, angle + 0 };
+    DRay axis_rayY = { stage_origin, angle + Math::HALF_PI };
 
     // Get axis intersection with viewport rect
-    Vec2 negX_intersect, posX_intersect, negY_intersect, posY_intersect;
+    DVec2 negX_intersect, posX_intersect, negY_intersect, posY_intersect;
     bool x_axis_visible = Math::rayRectIntersection(&negX_intersect, &posX_intersect, stage_rect, axis_rayX);
     bool y_axis_visible = Math::rayRectIntersection(&negY_intersect, &posY_intersect, stage_rect, axis_rayY);
 
     // Convert to world coordinates
-    Vec2 negX_intersect_world = camera.toWorld(negX_intersect);
-    Vec2 posX_intersect_world = camera.toWorld(posX_intersect);
-    Vec2 negY_intersect_world = camera.toWorld(negY_intersect);
-    Vec2 posY_intersect_world = camera.toWorld(posY_intersect);
+    DVec2 negX_intersect_world = camera.toWorld(negX_intersect);
+    DVec2 posX_intersect_world = camera.toWorld(posX_intersect);
+    DVec2 negY_intersect_world = camera.toWorld(negY_intersect);
+    DVec2 posY_intersect_world = camera.toWorld(posY_intersect);
 
     // Draw with world coordinates, without line scaling
     camera.setTransformFilters(true, false, false, false);
@@ -420,11 +447,11 @@ void Viewport::drawWorldAxis(
     fillText("small_angle: " + QString::number((int)(small_angle * 180.0 / M_PI)), 0, 160);
     fillText("small_visibility: " + QString::number(small_visibility), 0, 180);*/
 
-    Vec2 x_perp_off = camera.toStageOffset(0, 6 * world_zoom);
-    Vec2 x_perp_norm = camera.toStageOffset(0, 1).normalized();
+    DVec2 x_perp_off = camera.toStageOffset(0, 6 * world_zoom);
+    DVec2 x_perp_norm = camera.toStageOffset(0, 1).normalized();
 
-    Vec2 y_perp_off = camera.toStageOffset(6 * world_zoom, 0);
-    Vec2 y_perp_norm = camera.toStageOffset(1, 0).normalized();
+    DVec2 y_perp_off = camera.toStageOffset(6 * world_zoom, 0);
+    DVec2 y_perp_norm = camera.toStageOffset(1, 0).normalized();
 
     setTextAlign(TextAlign::ALIGN_CENTER);
     setTextBaseline(TextBaseline::BASELINE_MIDDLE);
@@ -448,7 +475,7 @@ void Viewport::drawWorldAxis(
         setFillStyle(255, 255, 255, static_cast<int>(big_visibility * 5.0));
 
         bool offset = false;
-        Vec2 p1, p2;
+        DVec2 p1, p2;
 
         for (double wy = ceilAxisValue(world_minY, big_step_wy); wy < world_maxY; wy += big_step_wy)
         {
@@ -456,7 +483,7 @@ void Viewport::drawWorldAxis(
 
             int64_t iy = static_cast<int64_t>(wy / big_step_wy);
 
-            Ray line_ray_y(camera.toStage(0, wy), angle);
+            DRay line_ray_y(camera.toStage(0, wy), angle);
             if (!Math::rayRectIntersection(&p1, &p2, stage_rect, line_ray_y)) break;
 
             for (double wx = ceilAxisValue(world_minX, big_step_wx); wx < world_maxX; wx += big_step_wx)
@@ -464,7 +491,7 @@ void Viewport::drawWorldAxis(
                 int64_t ix = static_cast<int64_t>(wx / big_step_wx);
                 //int64_t i = ix + (iy % 2 ? 1 : 0);
 
-                Ray line_ray_x(camera.toStage(wx, 0), angle + Math::HALF_PI);
+                DRay line_ray_x(camera.toStage(wx, 0), angle + Math::HALF_PI);
                 if (!Math::rayRectIntersection(&p1, &p2, stage_rect, line_ray_x)) break;
 
                 if ((ix + iy) % 2 == 0)
@@ -487,12 +514,12 @@ void Viewport::drawWorldAxis(
         {
             if (abs(wx) < 1e-9) continue;
 
-            Vec2 stage_pos = camera.toStage(wx, 0);
-            Vec2 txt_size = boundingBoxNumberScientific(wx).size();
+            DVec2 stage_pos = camera.toStage(wx, 0);
+            DVec2 txt_size = boundingBoxNumberScientific(wx).size();
 
             double txt_dist = (abs(cos(angle)) * txt_size.y + abs(sin(angle)) * txt_size.x) * 0.5 + spacing;
 
-            Vec2 tick_anchor = stage_pos + x_perp_off + (x_perp_norm * txt_dist);
+            DVec2 tick_anchor = stage_pos + x_perp_off + (x_perp_norm * txt_dist);
 
             moveToSharp(stage_pos - x_perp_off);
             lineToSharp(stage_pos + x_perp_off);
@@ -504,13 +531,13 @@ void Viewport::drawWorldAxis(
         {
             if (abs(wy) < 1e-9) continue;
 
-            Vec2 stage_pos = camera.toStage(0, wy);
-            //Vec2 txt_size = measureText(txt);
-            Vec2 txt_size = boundingBoxNumberScientific(wy).size();
+            DVec2 stage_pos = camera.toStage(0, wy);
+            //DVec2 txt_size = measureText(txt);
+            DVec2 txt_size = boundingBoxNumberScientific(wy).size();
 
             double txt_dist = (abs(cos(angle)) * txt_size.y + abs(sin(angle)) * txt_size.x) * 0.5 + spacing;
 
-            Vec2 tick_anchor = stage_pos + y_perp_off + (y_perp_norm * txt_dist);
+            DVec2 tick_anchor = stage_pos + y_perp_off + (y_perp_norm * txt_dist);
 
             moveToSharp(stage_pos - y_perp_off);
             lineToSharp(stage_pos + y_perp_off);
@@ -600,13 +627,12 @@ void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_lo
 
     sim_uid = _sim_uid;
     canvas = _canvas;
-    debug_log = shared_log;
+    project_log = shared_log;
 
     viewports.project = this;
 
     started = false;
     paused = false;
-    done_single_populate_attributes = false;
 }
 
 void ProjectBase::_populateAllAttributes(bool show_ui)
@@ -621,18 +647,6 @@ void ProjectBase::_populateAllAttributes(bool show_ui)
             _projectAttributes();
             ImGui::PopID();
         }
-        //else
-        //{
-        //    //ImGui::SetNextWindowSize(ImVec2(0, 0));
-        // //ImGui::Begin("HiddenProjectAttributes", nullptr, hidden_window_flags);
-        //    ImGui::PushID("project_section");
-        //    bool old_skip = ImGui::GetCurrentWindow()->SkipItems;
-        //    ImGui::GetCurrentWindow()->SkipItems = true;
-        //    _projectAttributes();
-        //    ImGui::GetCurrentWindow()->SkipItems = old_skip;
-        //    ImGui::PopID();
-        //    //ImGui::End();
-        //}
 
         ImGui::Dummy(ScaleSize(0, 8));
     }
@@ -655,35 +669,6 @@ void ProjectBase::_populateAllAttributes(bool show_ui)
             scene->_sceneAttributes();
             ImGui::PopID();
         }
-        //else
-        //{
-        //    // Allow Scene to populate inputs for section
-        //    ImGui::PushID(section_id.c_str());
-        //    bool old_skip = ImGui::GetCurrentWindow()->SkipItems;
-        //    ImGui::GetCurrentWindow()->SkipItems = true;
-        //    //ImGui::PushClipRect();
-        //    scene->_sceneAttributes();
-        //    ImGui::GetCurrentWindow()->SkipItems = old_skip;
-        //    ImGui::PopID();
-        //}
-        //else
-        //{
-        //    ImGui::SetNextWindowSize(ImVec2(0, 0));
-        //    ImGui::Begin("HiddenSceneAttributes", nullptr, hidden_window_flags);
-        //    ImGui::PushID(section_id.c_str());
-        //    scene->_sceneAttributes();
-        //    ImGui::PopID();
-        //    ImGui::End();
-        //}
-    }
-
-
-
-    if (!done_single_populate_attributes)
-    {
-        done_single_populate_attributes = true;
-        DebugPrint("done_single_populate_attributes = true;");
-        logMessage("done_single_populate_attributes = true;");
     }
 }
 
@@ -703,8 +688,6 @@ void ProjectBase::_projectPrepare()
 
 void ProjectBase::_projectStart()
 {
-    DebugPrint("_projectStart()");
-    logMessage("_projectStart()");
     if (paused)
     {
         // If paused - just resume, don't restart
@@ -734,7 +717,7 @@ void ProjectBase::_projectStart()
     for (SceneBase* scene : viewports.all_scenes)
     {
         ///scene->cache = &cache;
-        scene->pointer = &pointer;
+        scene->mouse = &mouse;
         ///scene->dt_scene_ma_list.clear();
         ///scene->dt_project_ma_list.clear();
         ///scene->dt_project_draw_ma_list.clear();
@@ -787,7 +770,7 @@ void ProjectBase::_projectDestroy()
 
 void ProjectBase::updateViewportRects()
 {
-    Vec2 surface_size = surfaceSize();
+    DVec2 surface_size = surfaceSize();
 
     // Update viewport sizes
     double viewport_width = surface_size.x / viewports.cols;
@@ -805,7 +788,7 @@ void ProjectBase::updateViewportRects()
     }
 }
 
-Vec2 ProjectBase::surfaceSize()
+DVec2 ProjectBase::surfaceSize()
 {
     double w;
     double h;
@@ -818,7 +801,7 @@ Vec2 ProjectBase::surfaceSize()
     }
     //else
     //{
-    //    Size record_resolution = options->getRecordResolution();
+    //    IVec2 record_resolution = options->getRecordResolution();
     //
     //    w = record_resolution.x;
     //    h = record_resolution.y;
@@ -829,6 +812,13 @@ Vec2 ProjectBase::surfaceSize()
 
 void ProjectBase::_projectProcess()
 {
+    auto frame_dt = std::chrono::steady_clock::now() - last_frame_time;
+    dt_frameProcess = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(frame_dt).count()
+    );
+    
+    last_frame_time = std::chrono::steady_clock::now();
+
     updateViewportRects();
 
     bool did_first_process = false;
@@ -839,40 +829,41 @@ void ProjectBase::_projectProcess()
         // Allow panning/zooming, even when paused
         for (Viewport* viewport : viewports)
         {
-            double viewport_mx = pointer.client_x - viewport->x;
-            double viewport_my = pointer.client_y - viewport->y;
+            double viewport_mx = mouse.client_x - viewport->x;
+            double viewport_my = mouse.client_y - viewport->y;
 
             if (viewport_mx >= 0 && viewport_my >= 0 &&
                 viewport_mx <= viewport->width && viewport_my <= viewport->height)
             {
                 Camera& cam = viewport->camera;
 
-                Vec2 world_mouse = cam.toWorld(viewport_mx, viewport_my);
-                pointer.viewport = viewport;
-                pointer.stage_x = viewport_mx;
-                pointer.stage_y = viewport_my;
-                pointer.world_x = world_mouse.x;
-                pointer.world_y = world_mouse.y;
+                DVec2 world_mouse = cam.toWorld(viewport_mx, viewport_my);
+                mouse.viewport = viewport;
+                mouse.stage_x = viewport_mx;
+                mouse.stage_y = viewport_my;
+                mouse.world_x = world_mouse.x;
+                mouse.world_y = world_mouse.y;
                 viewport->camera.panZoomProcess();
             }
         }
 
-        if (!paused && done_single_populate_attributes)
+        if (!paused)
         {
-            ///timer_projectProcess.start();
+            auto project_t0 = std::chrono::steady_clock::now();
 
             // Process each scene
             for (SceneBase* scene : viewports.all_scenes)
             {
-                //scene->_updateLiveAttributes();
+                scene->dt_call_index = 0;
+                auto scene_t0 = std::chrono::steady_clock::now();
 
-                ///scene->dt_call_index = 0;
-                ///scene->timer_sceneProcess.start();
-                scene->pointer = &pointer;
+                scene->mouse = &mouse;
                 scene->sceneProcess();
-                ///scene->dt_sceneProcess = scene->timer_sceneProcess.elapsed();
-                
-                //scene->_updateShadowAttributes();
+
+                auto scene_dt = std::chrono::steady_clock::now() - scene_t0;
+                scene->dt_sceneProcess = static_cast<int>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(scene_dt).count()
+                );
             }
 
 
@@ -894,21 +885,17 @@ void ProjectBase::_projectProcess()
 
             // Post-Process each scene
             for (SceneBase* scene : viewports.all_scenes)
-            {
-                //scene->_updateShadowAttributes();
                 scene->variableChangedUpdateCurrent();
-            }
             
-            ///dt_projectProcess = timer_projectProcess.elapsed();
+            auto project_dt = std::chrono::steady_clock::now() - project_t0;
+            dt_projectProcess = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(project_dt).count()
+            );
 
             // Prepare to encode the next frame
             ///encode_next_paint = true;
             if (!done_single_process)
-            {
                 did_first_process = true;
-                DebugPrint("did_project_process = true;");
-                logMessage("did_project_process = true;");
-            }
         }
     }
 
@@ -918,16 +905,8 @@ void ProjectBase::_projectProcess()
 
 void ProjectBase::_projectDraw()
 {
-    if (!done_single_process)
-    {
-        DebugPrint("Waiting for single process()...");
-        logMessage("Waiting for single process()...");
-        return;
-    }
-    if (!started)
-    {
-        return;
-    }
+    if (!done_single_process) return;
+    if (!started) return;
     
 
     ///if (!shaders_loaded)
@@ -937,7 +916,7 @@ void ProjectBase::_projectDraw()
     ///}
 
     Canvas* ctx = canvas;
-    Vec2 surface_size = surfaceSize();
+    DVec2 surface_size = surfaceSize();
 
     ctx->setFillStyle(10, 10, 15);
     ctx->fillRect(0, 0, surface_size.x, surface_size.y);
@@ -1009,21 +988,21 @@ void ProjectBase::_onEvent(SDL_Event& e)
     {
         case SDL_MOUSEMOTION:
         {
-            pointer.client_x = e.motion.x;
-            pointer.client_y = e.motion.y;
+            mouse.client_x = e.motion.x;
+            mouse.client_y = e.motion.y;
         }
         break;
 
         case SDL_FINGERMOTION:
         {
-            pointer.client_x = (double)(e.tfinger.x * (float)PlatformManager::get()->drawable_width());
-            pointer.client_y = (double)(e.tfinger.y * (float)PlatformManager::get()->drawable_height());
+            mouse.client_x = (double)(e.tfinger.x * (float)Platform()->drawable_width());
+            mouse.client_y = (double)(e.tfinger.y * (float)Platform()->drawable_height());
         }
         break;
 
         ///case SDL_MOUSEWHEEL:
         ///{
-        ///    pointer.scroll_delta = e.wheel.
+        ///    mouse.scroll_delta = e.wheel.
         ///}
         ///break;
     }
@@ -1037,7 +1016,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
-                if (ctx->viewportRect().hitTest(pointer.client_x, pointer.client_y))
+                if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
                 {
                     focused_ctx = ctx;
                     captured = true;
@@ -1055,7 +1034,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
-                if (ctx->viewportRect().hitTest(pointer.client_x, pointer.client_y))
+                if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
                 {
                     hovered_ctx = ctx;
                     captured = true;
@@ -1070,7 +1049,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
 
     // Track fingers
-    if (PlatformManager::get()->is_mobile())
+    if (Platform()->is_mobile())
     {
         // Does this finger already have an owner? Attach it to the event
         Viewport* owner_ctx = nullptr;
@@ -1158,15 +1137,14 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
     }
 
+
     event.setFocusedViewport(focused_ctx);
     event.setHoveredViewport(hovered_ctx);
 
     onEvent(event);
 
     for (SceneBase* scene : viewports.all_scenes)
-    {
         scene->_onEvent(event);
-    }
 }
 
 
@@ -1194,7 +1172,7 @@ void SceneBase::logMessage(const char* fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    project->debug_log->vlog(fmt, ap);
+    project->project_log->vlog(fmt, ap);
     va_end(ap);
 }
 
@@ -1202,17 +1180,17 @@ void ProjectBase::logMessage(const char* fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    debug_log->vlog(fmt, ap);
+    project_log->vlog(fmt, ap);
     va_end(ap);
 }
 
 void SceneBase::logClear()
 {
-    project->debug_log->clear();
+    project->project_log->clear();
 }
 
 void ProjectBase::logClear()
 {
-    debug_log->clear();
+    project_log->clear();
 }
 

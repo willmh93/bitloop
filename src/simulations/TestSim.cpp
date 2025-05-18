@@ -12,9 +12,28 @@ SIM_DECLARE(Test, "Framework Tests", "Canvas Transforms")
 /// Project ///
 ///---------///
 
-void Test_Project_Vars::populate(Test_Project_Vars &dst)
+void Test_Project_Vars::populate()
 {
+    //foo = 7335;
+
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 36);
+    //byte* begin = reinterpret_cast<uint8_t*>(&_first) + sizeof(int);
+    //byte* end = reinterpret_cast<uint8_t*>(&_last);
+    ///int* begin = &_sync_beg + 1;
+    ///int* end = &_sync_end;
+    
+    /*int data[3]{};
+
+    using byte = std::byte;
+    const byte* begin = reinterpret_cast<const byte*>(&_sync_beg) + sizeof(int);
+    const byte* end = reinterpret_cast<const byte*>(&_sync_end);
+    size_t size = static_cast<std::size_t>(end - begin);
+
+    memcpy((void*)(&data), begin, size);
+
+    int a = 5;*/
+
+    //blah = 5;
 }
 
 void Test_Project::projectPrepare()
@@ -31,7 +50,7 @@ void Test_Project::projectPrepare()
 ///   Scene   ///
 ///-----------///
 
-void Test_Scene_Attributes::populate(Test_Scene_Attributes& dst)
+void Test_Scene_Attributes::populate()
 {
     //options->realtime_slider("Scene Var 1", &var1, 0.0, 1.0, 0.1); // updated in realtime
     //options->starting_slider("Scene Var 2", &var2, 0.0, 1.0, 0.1); // only updated on restart
@@ -88,7 +107,7 @@ bool is_prime(unsigned long long n) {
 }
 
 // Find the nth prime number after a starting point
-unsigned long long find_large_prime(unsigned long long start, int count) {
+/*unsigned long long find_large_prime(unsigned long long start, int count) {
     unsigned long long candidate = start;
     int found = 0;
     int a = 5;
@@ -100,15 +119,15 @@ unsigned long long find_large_prime(unsigned long long start, int count) {
         a += rand();
     }
     return candidate - 1;
-}
+}*/
 
 void Test_Scene::sceneProcess()
 {
     // Process scene update
-    for (int i = 0; i < 10; i++)
+    /*for (int i = 0; i < 10; i++)
     {
         unsigned long long prime = find_large_prime(2000000000000ul + rand()%100000ul, 1);
-    }
+    }*/
 
     for (Particle& p : particles)
     {
@@ -148,13 +167,13 @@ void Test_Scene::viewportProcess(Viewport* ctx)
 
     //obj.rotation += 0.01;
 
-    //ball_pos.x = pointer->world_x;
-    //ball_pos.y = pointer->world_y;
+    //ball_pos.x = mouse->world_x;
+    //ball_pos.y = mouse->world_y;
 }
 
 
 
-void Test_Scene::viewportDraw(Viewport* ctx)
+void Test_Scene::viewportDraw(Viewport* ctx) const
 {
     //camera->x += 1;
     //ctx->beginPath();
@@ -207,7 +226,7 @@ void Test_Scene::viewportDraw(Viewport* ctx)
 
     ctx->setFillStyle(255, 0, 255);
     ctx->beginPath();
-    for (Particle& p : particles)
+    for (const Particle& p : particles)
     {
         ctx->circle(p.x, p.y, 0.1);
     }
@@ -222,7 +241,7 @@ void Test_Scene::viewportDraw(Viewport* ctx)
     //camera->labelTransform();
     //camera->setStageOffset(50, 0);
     ctx->beginPath();
-    Vec2 p = Vec2(100, 100) + Offset(50, 50);
+    DVec2 p = DVec2(100, 100) + Offset(50, 50);
     ctx->circle(p, 2);
     ctx->fill();
     ctx->fillText("Fixed pixel offset", p);
@@ -255,7 +274,7 @@ void Test_Scene::viewportDraw(Viewport* ctx)
     ctx->circle(camera->x, camera->y, 5);
     ctx->fill();
     //
-    ctx->fillText("Camera", Vec2(camera->x, camera->y) + Offset(20, 20));
+    ctx->fillText("Camera", DVec2(camera->x, camera->y) + Offset(20, 20));
 
     camera->stageTransform();
 

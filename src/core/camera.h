@@ -111,7 +111,7 @@ public:
     void setZoomX(double zoom_x, bool immediate= true);
     void setZoomY(double zoom_y, bool immediate= true);
 
-    Vec2 getRelativeZoomFactor() { 
+    DVec2 getRelativeZoomFactor() { 
         return { 
             zoom_x / reference_zoom_x, 
             zoom_y / reference_zoom_x 
@@ -135,11 +135,11 @@ public:
 
     void cameraToViewport(double left, double top, double right, double bottom);
     void focusWorldRect(double left, double top, double right, double bottom, bool stretch=false);
-    void focusWorldRect(const FRect &r, bool stretch = false);
+    void focusWorldRect(const DRect &r, bool stretch = false);
 
     void originToCenterViewport();
 
-    Vec2 toStageOffset(const Vec2& world_offset)
+    DVec2 toStageOffset(const DVec2& world_offset)
     {
         if (this->transform_coordinates)
         {
@@ -156,7 +156,7 @@ public:
             };
         }
     }
-    Vec2 toWorldOffset(const Vec2& stage_offset)
+    DVec2 toWorldOffset(const DVec2& stage_offset)
     {
         if (this->transform_coordinates)
         {
@@ -174,36 +174,36 @@ public:
         }
     }
 
-    Vec2 toStageOffset(double world_ox, double world_oy)
+    DVec2 toStageOffset(double world_ox, double world_oy)
     {
         return toStageOffset({ world_ox, world_oy });
     }
-    Vec2 toWorldOffset(double stage_ox, double stage_oy)
+    DVec2 toWorldOffset(double stage_ox, double stage_oy)
     {
         return toWorldOffset({ stage_ox, stage_oy });
     }
 
-    Vec2 originPixelOffset();
-    Vec2 originWorldOffset();
-    Vec2 panPixelOffset();
+    DVec2 originPixelOffset();
+    DVec2 originWorldOffset();
+    DVec2 panPixelOffset();
 
-    Vec2 toWorld(const Vec2& pt);
-    Vec2 toWorld(double x, double y);
-    FRect toWorldRect(const FRect& r);
-    FRect toWorldRect(double x1, double y1, double x2, double y2);
+    DVec2 toWorld(const DVec2& pt);
+    DVec2 toWorld(double x, double y);
+    DRect toWorldRect(const DRect& r);
+    DRect toWorldRect(double x1, double y1, double x2, double y2);
 
-    FQuad toWorldQuad(const Vec2 &a, const Vec2& b, const Vec2& c, const Vec2& d);
-    FQuad toWorldQuad(const FQuad& quad);
-    FQuad toWorldQuad(const FRect& quad);
-    FQuad toWorldQuad(double x1, double y1, double x2, double y2);
+    DQuad toWorldQuad(const DVec2 &a, const DVec2& b, const DVec2& c, const DVec2& d);
+    DQuad toWorldQuad(const DQuad& quad);
+    DQuad toWorldQuad(const DRect& quad);
+    DQuad toWorldQuad(double x1, double y1, double x2, double y2);
 
-    Vec2 toStage(const Vec2& pt);
-    Vec2 toStage(double x, double y);
-    Vec2 toStageSize(const Vec2& size);
-    Vec2 toStageSize(double w, double h);
-    FRect toStageRect(double x0, double y0, double x1, double y1);
-    FRect toStageRect(const Vec2& pt1, const Vec2& pt2);
-    FQuad toStageQuad(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d);
+    DVec2 toStage(const DVec2& pt);
+    DVec2 toStage(double x, double y);
+    DVec2 toStageSize(const DVec2& size);
+    DVec2 toStageSize(double w, double h);
+    DRect toStageRect(double x0, double y0, double x1, double y1);
+    DRect toStageRect(const DVec2& pt1, const DVec2& pt2);
+    DQuad toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d);
 
     void setPanningUsesOffset(bool b) { use_panning_offset = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
@@ -305,25 +305,25 @@ inline void Camera::setZoomY(double _zoom_y, bool immediate)
         zoom_y = _zoom_y;
 }
 
-inline void Camera::focusWorldRect(const FRect& r, bool stretch)
+inline void Camera::focusWorldRect(const DRect& r, bool stretch)
 {
     focusWorldRect(r.x1, r.y1, r.x2, r.y2, stretch);
 }
 
-inline Vec2 Camera::originWorldOffset()
+inline DVec2 Camera::originWorldOffset()
 {
-    return originPixelOffset() / Vec2(zoom_x, zoom_y);
+    return originPixelOffset() / DVec2(zoom_x, zoom_y);
 }
 
-inline Vec2 Camera::panPixelOffset()
+inline DVec2 Camera::panPixelOffset()
 {
-    return Vec2(
+    return DVec2(
         pan_x * zoom_x,
         pan_y * zoom_y
     );
 }
 
-inline Vec2 Camera::toWorld(const Vec2& pt)
+inline DVec2 Camera::toWorld(const DVec2& pt)
 {
     // World coordinate
     double px = pt.x;
@@ -332,8 +332,8 @@ inline Vec2 Camera::toWorld(const Vec2& pt)
     double cos_r = cos(rotation);
     double sin_r = sin(rotation);
 
-    Vec2 _originPixelOffset = originPixelOffset();
-    Vec2 _panPixelOffset = panPixelOffset();
+    DVec2 _originPixelOffset = originPixelOffset();
+    DVec2 _panPixelOffset = panPixelOffset();
 
     double origin_ox = _originPixelOffset.x;
     double origin_oy = _originPixelOffset.y;
@@ -356,42 +356,42 @@ inline Vec2 Camera::toWorld(const Vec2& pt)
     return { world_x, world_y };
 }
 
-inline Vec2 Camera::toWorld(double x, double y)
+inline DVec2 Camera::toWorld(double x, double y)
 {
     return toWorld({ x, y });
 }
 
 
-inline FRect Camera::toWorldRect(const FRect& r)
+inline DRect Camera::toWorldRect(const DRect& r)
 {
-    Vec2 tl = toWorld(r.x1, r.y1);
-    Vec2 br = toWorld(r.x2, r.y2);
+    DVec2 tl = toWorld(r.x1, r.y1);
+    DVec2 br = toWorld(r.x2, r.y2);
     return { tl.x, tl.y, br.x, br.y };
 }
 
-inline FRect Camera::toWorldRect(double x1, double y1, double x2, double y2)
+inline DRect Camera::toWorldRect(double x1, double y1, double x2, double y2)
 {
-    Vec2 tl = toWorld(x1, y1);
-    Vec2 br = toWorld(x2, y2);
+    DVec2 tl = toWorld(x1, y1);
+    DVec2 br = toWorld(x2, y2);
     return { tl.x, tl.y, br.x, br.y };
 }
 
 
-inline FQuad Camera::toWorldQuad(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d)
+inline DQuad Camera::toWorldQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d)
 {
-    Vec2 qA = toWorld(a);
-    Vec2 qB = toWorld(b);
-    Vec2 qC = toWorld(c);
-    Vec2 qD = toWorld(d);
+    DVec2 qA = toWorld(a);
+    DVec2 qB = toWorld(b);
+    DVec2 qC = toWorld(c);
+    DVec2 qD = toWorld(d);
     return { qA, qB, qC, qD };
 }
 
-inline FQuad Camera::toWorldQuad(const FQuad& quad)
+inline DQuad Camera::toWorldQuad(const DQuad& quad)
 {
     return toWorldQuad(quad.a, quad.b, quad.c, quad.d);
 }
 
-inline FQuad Camera::toWorldQuad(double x1, double y1, double x2, double y2)
+inline DQuad Camera::toWorldQuad(double x1, double y1, double x2, double y2)
 {
     return toWorldQuad(
         Vec2(x1, y1),
@@ -401,7 +401,7 @@ inline FQuad Camera::toWorldQuad(double x1, double y1, double x2, double y2)
     );
 }
 
-inline FQuad Camera::toWorldQuad(const FRect& r)
+inline DQuad Camera::toWorldQuad(const DRect& r)
 {
     return toWorldQuad(
         Vec2(r.x1, r.y1),
@@ -412,7 +412,7 @@ inline FQuad Camera::toWorldQuad(const FRect& r)
 }
 
 
-inline Vec2 Camera::toStage(const Vec2& pt)
+inline DVec2 Camera::toStage(const DVec2& pt)
 {
     // World coordinate
     double px = pt.x;
@@ -421,8 +421,8 @@ inline Vec2 Camera::toStage(const Vec2& pt)
     double cos_r = cos(rotation);
     double sin_r = sin(rotation);
 
-    Vec2 _originPixelOffset = originPixelOffset();
-    Vec2 _panPixelOffset = panPixelOffset();
+    DVec2 _originPixelOffset = originPixelOffset();
+    DVec2 _panPixelOffset = panPixelOffset();
 
     double origin_ox = _originPixelOffset.x;
     double origin_oy = _originPixelOffset.y;
@@ -447,38 +447,38 @@ inline Vec2 Camera::toStage(const Vec2& pt)
     return { ret_x, ret_y };
 }
 
-inline Vec2 Camera::toStage(double x, double y)
+inline DVec2 Camera::toStage(double x, double y)
 {
     return toStage({ x, y });
 }
 
-inline Vec2 Camera::toStageSize(const Vec2& size)
+inline DVec2 Camera::toStageSize(const DVec2& size)
 {
     return { size.x * zoom_x, size.y * zoom_y };
 }
 
-inline Vec2 Camera::toStageSize(double w, double h)
+inline DVec2 Camera::toStageSize(double w, double h)
 {
     return { w * zoom_x, h * zoom_y };
 }
 
-inline FRect Camera::toStageRect(double x0, double y0, double x1, double y1)
+inline DRect Camera::toStageRect(double x0, double y0, double x1, double y1)
 {
-    Vec2 p1 = toStage({ x0, y0 });
-    Vec2 p2 = toStage({ x1, y1 });
+    DVec2 p1 = toStage({ x0, y0 });
+    DVec2 p2 = toStage({ x1, y1 });
     return { p1.x, p1.y, p2.x, p2.y };
 }
 
-inline FRect Camera::toStageRect(const Vec2& pt1, const Vec2& pt2)
+inline DRect Camera::toStageRect(const DVec2& pt1, const DVec2& pt2)
 {
     return toStageRect(pt1.x, pt1.y, pt2.x, pt2.y);
 }
 
-inline FQuad Camera::toStageQuad(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d)
+inline DQuad Camera::toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d)
 {
-    Vec2 qA = toStage(a);
-    Vec2 qB = toStage(b);
-    Vec2 qC = toStage(c);
-    Vec2 qD = toStage(d);
+    DVec2 qA = toStage(a);
+    DVec2 qB = toStage(b);
+    DVec2 qC = toStage(c);
+    DVec2 qD = toStage(d);
     return { qA, qB, qC, qD };
 }

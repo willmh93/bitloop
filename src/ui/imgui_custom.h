@@ -10,6 +10,8 @@ constexpr double pi = std::numbers::pi;
 #define IMGUI_ENABLE_FREETYPE
 #define IMGUI_DEFINE_MATH_OPERATORS
 
+#include "platform.h"
+
 //#include "imgui_ext.h"
 #include "imgui_internal.h"
 #include "misc/freetype/imgui_freetype.h"
@@ -18,12 +20,25 @@ constexpr double pi = std::numbers::pi;
 #include "imgui_splines.h"
 #include "imgui_gradient_edit.h"
 #include "imgui_log.h"
+#include "imgui_debug_ui.h"
 
-struct ToolbarButtonState {
-    ImVec4 bgColor;
-    ImVec4 symbolColor;
-    bool active;
-};
+inline ImVec2 ScaleSize(const ImVec2& size)
+{
+    float dpr = PlatformManager::get()->dpr();
+    return ImVec2(size.x * dpr, size.y * dpr);
+}
+
+inline ImVec2 ScaleSize(int w, int h)
+{
+    float dpr = PlatformManager::get()->dpr();
+    return ImVec2((float)w * dpr, (float)h * dpr);
+}
+
+inline ImVec2 ScaleSize(float w, float h)
+{
+    float dpr = PlatformManager::get()->dpr();
+    return ImVec2(w * dpr, h * dpr);
+}
 
 namespace ImGui
 {
