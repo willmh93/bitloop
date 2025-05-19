@@ -12,7 +12,6 @@ constexpr double pi = std::numbers::pi;
 
 #include "platform.h"
 
-//#include "imgui_ext.h"
 #include "imgui_internal.h"
 #include "misc/freetype/imgui_freetype.h"
 

@@ -14,19 +14,18 @@
 
 #include "nlohmann_json.hpp"
 
-/// ------------------------------------------------------------- ///
-/// ------------------------ Config ----------------------------- ///
+/// ======== Config ========
 
-/// ---- Debug Features ----
+/// ======== Debug Features ========
 //#define DEBUG_FINITE_DOUBLE_CHECKS
 //#define DEBUG_DISABLE_PRINT
 
-/// ----- Platform Simulation -----
+/// ======== Platform Simulation ========
 //#define DEBUG_SIMULATE_WEB_UI
 //#define DEBUG_SIMULATE_MOBILE
 
 
-/// ---- Timer filters ----
+/// ======== Timer filters ========
 
 //#define TIMERS_ENABLED
 
@@ -38,9 +37,8 @@ constexpr bool THREAD_LOGGING  = false;
 constexpr bool THREAD_TIMING             = false;
 
 
-
-/// -------------------------------------------------------------- ///
-/// ------------------------ Private ----------------------------- ///
+/// ========================= ///
+/// ======== Private ======== ///
 
 // Disable debug flags for Release builds
 #ifdef NDEBUG
@@ -98,7 +96,6 @@ void DashedDebugPrint(int width=0, const char* fmt=nullptr, Args... args)
 }
 
 #define DebugPrintEx(cond, fmt, ...) if constexpr (cond) DebugPrint(fmt, __VA_ARGS__);
-//#define DualPrint(fmt, ...) DebugPrint(fmt, __VA_ARGS__);
 
 #if defined(_WIN32)
 #define DebugGroupBeg(cond, fmt, ...) \
@@ -145,41 +142,6 @@ void DashedDebugPrint(int width=0, const char* fmt=nullptr, Args... args)
 #else
 #define DebugBreak() ((void)0)  // fallback: no-op
 #endif
-
-
-/*class FiniteDouble {
-    double value;
-public:
-    FiniteDouble() : value(0.0) {}
-    FiniteDouble(double v) {
-        set(v);
-    }
-
-    FiniteDouble& operator=(double v) {
-        set(v);
-        return *this;
-    }
-
-    operator double() const {
-        return value;
-    }
-
-    // Optional: support arithmetic operations
-    FiniteDouble operator+(double other) const { return FiniteDouble(value + other); }
-    FiniteDouble operator-(double other) const { return FiniteDouble(value - other); }
-    FiniteDouble operator*(double other) const { return FiniteDouble(value * other); }
-    FiniteDouble operator/(double other) const { return FiniteDouble(value / other); }
-
-private:
-    void set(double v) {
-        assert(std::isfinite(v) && "FiniteDouble assigned non-finite value");
-        if (!std::isfinite(v)) {
-            throw std::runtime_error("FiniteDouble assigned non-finite value");
-        }
-        value = v;
-    }
-};*/
-
 
 class FiniteDouble
 {
@@ -285,11 +247,6 @@ public:
     }
 };
 
-    //friend FiniteDouble operator+(double lhs, const FiniteDouble& rhs) { return FiniteDouble(lhs + rhs.value); }
-    //friend FiniteDouble operator-(double lhs, const FiniteDouble& rhs) { return FiniteDouble(lhs - rhs.value); }
-    //friend FiniteDouble operator*(double lhs, const FiniteDouble& rhs) { return FiniteDouble(lhs * rhs.value); }
-    //friend FiniteDouble operator/(double lhs, const FiniteDouble& rhs) { return FiniteDouble(lhs / rhs.value); }
-
 // JSON support must go *after* class definition
 inline void to_json(nlohmann::json& j, const FiniteDouble& fd) {
     j = static_cast<double>(fd);  // or fd.get();
@@ -307,9 +264,6 @@ namespace std {
         }
     };
 }
-
-
-
 
 /// --- Debug & Release ---
 

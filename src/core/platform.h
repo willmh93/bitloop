@@ -1,11 +1,21 @@
 #pragma once
-#include <SDL2/SDL.h>
-#include <functional>
 
+/// SDL2
+#include <SDL2/SDL.h>
+
+/// emscripten
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #endif
+
+/// Windows
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
+
+#include <functional>
 
 #include "debug.h"
 #include "types.h"
@@ -48,10 +58,10 @@ public:
     void update();
     void resized();
 
-    int drawable_width()  { return fb_w; }
-    int drawable_height() { return fb_h; }
-    int window_width()    { return win_w; }
-    int window_height()   { return win_h; }
+    int fbo_width()     { return fb_w; }
+    int fbo_height()    { return fb_h; }
+    int window_width()  { return win_w; }
+    int window_height() { return win_h; }
 
     // Device Info
     float dpi() { return _dpi; }
@@ -61,7 +71,6 @@ public:
     void device_orientation(int* orientation_angle, int* orientation_index = nullptr);
     bool device_orientation_changed(std::function<void(int, int)> onChanged);
     
-
     // Platform detection
     bool is_mobile();
     bool is_desktop_native();

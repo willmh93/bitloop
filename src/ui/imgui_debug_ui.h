@@ -61,8 +61,8 @@ void dpiDebugInfo()
             Platform()->window_height()
         );
         ImGui::Text("DrawableSize:         %d x %d",
-            Platform()->drawable_width(),
-            Platform()->drawable_height()
+            Platform()->fbo_width(),
+            Platform()->fbo_height()
         );
         //ImGui::Text("DrawableSize (GL):   %d x %d", gl_dw, gl_dh);
 

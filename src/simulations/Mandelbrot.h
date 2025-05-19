@@ -201,13 +201,15 @@ struct Mandelbrot_Scene_Vars : public VarBuffer
         int iter_lim = 0; // Actual iter limit
         double cardioid_lerp_amount = 1.0; // 1 - flatten
 
-        float x_spline_points[ImSpline::PointsArrSize(6)] = {
+        float x_spline_points[ImSpline::PointsArrSize(9)] = {
             0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
-            0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f
+            0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
+            0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
         };
-        float y_spline_points[ImSpline::PointsArrSize(6)] = {
+        float y_spline_points[ImSpline::PointsArrSize(9)] = {
              0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
-             0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f
+             0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
+             0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
         };
 
         bool colors_updated = false;

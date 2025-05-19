@@ -96,3 +96,60 @@ namespace Thread
         return { start, start + size };   // [start, end)
     }
 }
+
+struct SharedSync
+{
+    std::atomic<bool> quitting{ false };
+    std::atomic<bool> editing_ui{ false };
+    std::atomic<bool> updating_live_buffer{ false };
+
+    std::mutex live_buffer_mutex;
+    std::mutex shadow_buffer_mutex;
+
+    std::mutex project_mutex;
+    std::mutex state_mutex;
+    std::mutex working_mutex;
+
+    std::condition_variable cv;
+    std::condition_variable cv_updating_live_buffer;
+
+    bool project_thread_started = false;
+    bool frame_ready = false;
+    bool frame_consumed = false;
+    bool processing_frame = false;
+
+    void wait_until_gui_consumes_frame()
+    {
+        std::unique_lock<std::mutex> lock(state_mutex);
+        cv.wait(lock, [this] {
+            return frame_consumed || quitting.load();
+        });
+    }
+
+    void flag_ready_to_draw()
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        frame_ready = true;
+        frame_consumed = false;
+    }
+
+    void wait_until_gui_drawn()
+    {
+        std::unique_lock<std::mutex> lock(state_mutex);
+        cv.wait(lock, [this] { return frame_consumed || quitting.load(); });
+    }
+
+    void wait_until_live_buffer_updated()
+    {
+        std::unique_lock<std::mutex> live_lock(live_buffer_mutex);
+        cv_updating_live_buffer.wait(live_lock, [this]() {
+            return !updating_live_buffer.load();
+        });
+    }
+
+    void quit()
+    {
+        quitting.store(true);
+        cv.notify_all();
+    }
+};

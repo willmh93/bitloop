@@ -8,7 +8,6 @@
 #include <type_traits>
 #include <random>
 
-#include "main.h"
 #include "platform.h"
 #include "helpers.h"
 #include "types.h"
@@ -17,6 +16,7 @@
 #include "camera.h"
 #include "nano_canvas.h"
 #include "imgui_custom.h"
+#include "project_worker.h"
 
 using std::max;
 using std::min;
@@ -228,14 +228,8 @@ public:
 
     virtual void onEvent(Event& e) {}
 
-    void pollEvents()
-    {
-        MainWindow()->pollEvents();
-    }
-    void pollData()
-    {
-        MainWindow()->pollData();
-    }
+    void pollEvents();
+    void pollData();
 
     ///virtual void touchEvent(TouchEvent e) {}
     ///virtual void mouseDown() {}
@@ -522,7 +516,8 @@ class ProjectBase
 
 protected:
 
-    friend class ProjectManagerInternal;
+    //friend class ProjectManagerCls;
+    friend class CProjectWorker;
     friend class Layout;
     friend class SceneBase;
 
@@ -541,7 +536,7 @@ protected:
 
     // -------- Attributes --------
     bool has_var_buffer = false;
-    void _populateAllAttributes(bool show_ui);
+    void _populateAllAttributes();
     virtual void _projectAttributes() {}
     virtual void _updateLiveProjectAttributes() {}
     virtual void _updateShadowProjectAttributes() {}
@@ -583,6 +578,16 @@ public:
         for (auto& info : projectInfoList())
         {
             if (info->sim_uid == sim_uid)
+                return info;
+        }
+        return nullptr;
+    }
+
+    static std::shared_ptr<ProjectInfo> findProjectInfo(const char *name)
+    {
+        for (auto& info : projectInfoList())
+        {
+            if (info->path.back() == name)
                 return info;
         }
         return nullptr;
@@ -769,14 +774,8 @@ public:
 
     virtual void onEvent(Event& e) {}
 
-    void pollData()
-    {
-    }
-
-    void pollEvents()
-    {
-        MainWindow()->pollEvents();
-    }
+    void pollData();
+    void pollEvents();
 
     void logMessage(const char* fmt, ...);
     void logClear();
@@ -839,7 +838,6 @@ struct AutoRegisterProject
 {
     AutoRegisterProject(const std::vector<std::string>& tree_path)
     {
-        DebugPrint("AutoRegisterProject() called");
         ProjectBase::addProjectInfo(tree_path, []() -> ProjectBase* {
             return (ProjectBase*)(new T());
         });

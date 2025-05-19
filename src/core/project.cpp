@@ -1,4 +1,5 @@
 #include "project.h"
+#include "main_window.h"
 
 /// Event
 
@@ -7,12 +8,12 @@
 
 double Event::finger_x()
 {
-    return (double)(_event.tfinger.x * (float)Platform()->drawable_width());
+    return (double)(_event.tfinger.x * (float)Platform()->fbo_width());
 }
 
 double Event::finger_y()
 {
-    return (double)(_event.tfinger.y * (float)Platform()->drawable_height());
+    return (double)(_event.tfinger.y * (float)Platform()->fbo_height());
 }
 
 std::string Event::info()
@@ -50,8 +51,8 @@ std::string Event::info()
         finger_attribs:
         sprintf(attribs, "{F_%lld, %d, %d}", 
             _event.tfinger.fingerId, 
-            (int)(_event.tfinger.x * (float)Platform()->drawable_width()),
-            (int)(_event.tfinger.y * (float)Platform()->drawable_height()));
+            (int)(_event.tfinger.x * (float)Platform()->fbo_width()),
+            (int)(_event.tfinger.y * (float)Platform()->fbo_height()));
 
         break;
 
@@ -124,6 +125,16 @@ void SceneBase::mountToAll(Layout& viewports)
 {
     for (Viewport* viewport : viewports)
         viewport->mountScene(this);
+}
+
+void SceneBase::pollEvents()
+{
+    ProjectWorker()->pollEvents();
+}
+
+void SceneBase::pollData()
+{
+    ProjectWorker()->pollData();
 }
 
 double SceneBase::frame_dt(int average_samples) const
@@ -635,7 +646,7 @@ void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_lo
     paused = false;
 }
 
-void ProjectBase::_populateAllAttributes(bool show_ui)
+void ProjectBase::_populateAllAttributes()
 {
     if (has_var_buffer)
     {
@@ -995,8 +1006,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
         case SDL_FINGERMOTION:
         {
-            mouse.client_x = (double)(e.tfinger.x * (float)Platform()->drawable_width());
-            mouse.client_y = (double)(e.tfinger.y * (float)Platform()->drawable_height());
+            mouse.client_x = (double)(e.tfinger.x * (float)Platform()->fbo_width());
+            mouse.client_y = (double)(e.tfinger.y * (float)Platform()->fbo_height());
         }
         break;
 
@@ -1174,6 +1185,16 @@ void SceneBase::logMessage(const char* fmt, ...)
     va_start(ap, fmt);
     project->project_log->vlog(fmt, ap);
     va_end(ap);
+}
+
+void ProjectBase::pollData()
+{
+    ProjectWorker()->pollData();
+}
+
+void ProjectBase::pollEvents()
+{
+    ProjectWorker()->pollEvents();
 }
 
 void ProjectBase::logMessage(const char* fmt, ...)

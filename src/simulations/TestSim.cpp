@@ -1,5 +1,4 @@
 #include "TestSim.h"
-#include "main.h"
 ///#include "CurvedSpace.h"
 ///#include "SpaceEngine.h"
 ///#include "EarthMoon.h"
@@ -14,26 +13,7 @@ SIM_DECLARE(Test, "Framework Tests", "Canvas Transforms")
 
 void Test_Project_Vars::populate()
 {
-    //foo = 7335;
-
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 36);
-    //byte* begin = reinterpret_cast<uint8_t*>(&_first) + sizeof(int);
-    //byte* end = reinterpret_cast<uint8_t*>(&_last);
-    ///int* begin = &_sync_beg + 1;
-    ///int* end = &_sync_end;
-    
-    /*int data[3]{};
-
-    using byte = std::byte;
-    const byte* begin = reinterpret_cast<const byte*>(&_sync_beg) + sizeof(int);
-    const byte* end = reinterpret_cast<const byte*>(&_sync_end);
-    size_t size = static_cast<std::size_t>(end - begin);
-
-    memcpy((void*)(&data), begin, size);
-
-    int a = 5;*/
-
-    //blah = 5;
 }
 
 void Test_Project::projectPrepare()
@@ -52,8 +32,6 @@ void Test_Project::projectPrepare()
 
 void Test_Scene_Attributes::populate()
 {
-    //options->realtime_slider("Scene Var 1", &var1, 0.0, 1.0, 0.1); // updated in realtime
-    //options->starting_slider("Scene Var 2", &var2, 0.0, 1.0, 0.1); // only updated on restart
     ImGui::Checkbox("Transform coordinates", &transform_coordinates); // updated in realtime
     ImGui::Checkbox("Scale Lines & Text", &scale_lines_text); // updated in realtime
     ImGui::Checkbox("Scale Sizes", &scale_sizes); // updated in realtime
@@ -97,7 +75,7 @@ void Test_Scene::sceneDestroy()
     // Destroy scene
 }
 
-// Very naive prime checker
+/*// Very naive prime checker
 bool is_prime(unsigned long long n) {
     if (n < 2) return false;
     for (unsigned long long i = 2; i * i <= n; ++i) {
@@ -107,7 +85,7 @@ bool is_prime(unsigned long long n) {
 }
 
 // Find the nth prime number after a starting point
-/*unsigned long long find_large_prime(unsigned long long start, int count) {
+unsigned long long find_large_prime(unsigned long long start, int count) {
     unsigned long long candidate = start;
     int found = 0;
     int a = 5;
