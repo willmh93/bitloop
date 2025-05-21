@@ -105,14 +105,14 @@ endif()
 # SDL2 headers for the Emscripten tool‑chain
 if (EMSCRIPTEN)
     # inside bitloopDeps CMakeLists.txt  (only for EMSCRIPTEN)
-    get_filename_component(EMSDK_SYSROOT "${CMAKE_SYSROOT}" ABSOLUTE)
+    #get_filename_component(EMSDK_SYSROOT "${CMAKE_SYSROOT}" ABSOLUTE)
 
-    find_path(EMSCRIPTEN_SDL2_INCLUDE
-              NAMES SDL.h
-              PATHS "${EMSDK_SYSROOT}/include/SDL"
-              REQUIRED)
-
-    message(STATUS "EMSCRIPTEN_SDL2_INCLUDE: ${EMSCRIPTEN_SDL2_INCLUDE}")
+    #find_path(EMSCRIPTEN_SDL2_INCLUDE
+    #          NAMES SDL.h
+    #          PATHS "${EMSDK_SYSROOT}/include/SDL"
+    #          REQUIRED)
+    #
+    #message(STATUS "EMSCRIPTEN_SDL2_INCLUDE: ${EMSCRIPTEN_SDL2_INCLUDE}")
     include_directories($ENV{EMSDK}/upstream/emscripten/cache/sysroot/include)
 endif()
 

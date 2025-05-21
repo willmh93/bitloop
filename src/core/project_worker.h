@@ -16,6 +16,8 @@ enum ProjectControlEventType
 
 constexpr int CURRENT_PROJECT = -1;
 
+extern ImDebugLog project_log;
+
 struct ProjectControlEvent
 {
     ProjectControlEventType type;
@@ -34,9 +36,6 @@ class CProjectWorker
     std::thread worker_thread;
 
     ProjectBase* active_project = nullptr;
-
-    Canvas* canvas = nullptr;
-    ImDebugLog* project_log = nullptr;
 
     std::vector<ProjectControlEvent> msg_queue;
 
@@ -63,13 +62,9 @@ public:
     }
 
     // ======== Thread Control ========
-    void start();
+    void startWorker();
     void end();
     void worker_loop();
-
-    void setSharedCanvas(Canvas* shared_canvas) { canvas = shared_canvas; }
-    void setSharedDebugLog(ImDebugLog* shared_log) { project_log = shared_log; }
-
 
     // ======== Events / Data ========
     void handleProjectControlEvent(ProjectControlEvent& e);

@@ -85,7 +85,7 @@ struct Test_Project_Vars : public VarBuffer
 {
     sync_struct
     {
-        int viewport_count = 1;
+        int viewport_count = 4;
     } 
     sync_end;
 

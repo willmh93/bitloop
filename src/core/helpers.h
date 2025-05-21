@@ -131,94 +131,51 @@ decltype(auto) dispatchBooleans(F&& f, Bools... flags)
         return func<Bools::value...>(__VA_ARGS__);   \
     }
 
+///--------------------------///
+/// Variable Changed Tracker ///
+///--------------------------///
+
 class VariableChangedTracker
 {
-
-    /// Holds the two maps for a particular type T
     template <typename T>
     struct StateMapPair {
         std::unordered_map<T*, T> current;
         std::unordered_map<T*, T> previous;
     };
 
-    /// A simple record to store how we clear and commit for each type
     struct ClearCommit {
-        std::function<void()> clearer;
-        std::function<void()> committer;
+        std::function<void()> clear;
+        std::function<void()> commit;
     };
 
-    mutable std::unordered_map<std::type_index, ClearCommit> registry_;
-    std::mutex mutex_;
+    // one entry per type *in this tracker object*
+    mutable std::unordered_map<std::type_index, std::any>       store_;
+    mutable std::unordered_map<std::type_index, ClearCommit>    registry_;
+    mutable std::mutex                                  mutex_;   // optional; uncomment locks if needed
 
-
-    /// The per-type map is allocated once per type T via a static local; we also
-    /// register it (lazily) so that global clear/commit can iterate over it.
     template <typename T>
     StateMapPair<T>& getStateMap() const
     {
-        static StateMapPair<T> maps;
-        static bool registered = registerType<T>(maps);
-        (void)registered; // silence unused warning
-        return maps;
-    }
+        const auto idx = std::type_index(typeid(T));
 
-    /// Register the given maps clear/commit methods in our registry
-    template <typename T>
-    bool registerType(StateMapPair<T>& maps) const
-    {
-        //std::lock_guard<std::mutex> lock(mutex_);
+        auto it = store_.find(idx);
+        if (it == store_.end()) {
+            // first time we see this T -> create holder and hook up clear/commit
+            auto& holder = store_[idx];
+            holder.emplace<StateMapPair<T>>();
+            auto& maps = std::any_cast<StateMapPair<T>&>(holder);
 
-        registry_[std::type_index(typeid(T))] = {
-            // Clearer: reset both 'current' and 'previous'
-            [&]() {
-                maps.current.clear();
-                maps.previous.clear();
-            },
-            // Committer: copy 'current' => 'previous'
-            [&]() {
-                maps.previous = maps.current;
-            }
-        };
-        return true;
+            registry_[idx] = {
+                [&maps]() { maps.current.clear(); maps.previous.clear(); },
+                [&maps]() { maps.previous = maps.current; }
+            };
+            return maps;
+        }
+        return std::any_cast<StateMapPair<T>&>(it->second);
     }
 
 public:
-
     VariableChangedTracker() = default;
-
-    /// Obtain a single global instance if you want to use it as a singleton
-    static VariableChangedTracker& instance()
-    {
-        static VariableChangedTracker s_instance;
-        return s_instance;
-    }
-
-    /// Returns true if 'var' differs from its last committed value, false otherwise.
-    /*template <typename T>
-    bool variableChanged(T& var) const
-    {
-        using NonConstT = typename std::remove_const<T>::type;
-        auto& maps = getStateMap<NonConstT>();
-
-        // Remove constness from the address
-        auto key = const_cast<NonConstT*>(&var);
-
-        auto it = maps.previous.find(key);
-        if (it != maps.previous.end())
-        {
-            // Compare against the previously committed value
-            bool changed = (var != it->second);
-            // Always update 'current' so that commit will be correct
-            maps.current[key] = var;
-            return changed;
-        }
-        else
-        {
-            // First time we see this variable; store it but it doesn't "count" as changed yet
-            maps.current[key] = var;
-            return false;
-        }
-    }*/
 
     template <typename T>
     bool variableChanged(T& var) const
@@ -227,59 +184,48 @@ public:
         auto& maps = getStateMap<NonConstT>();
 
         auto key = const_cast<NonConstT*>(std::addressof(var));
-
         auto it = maps.previous.find(key);
+
         if (it != maps.previous.end()) {
             bool changed = (var != it->second);
             maps.current[key] = var;
             return changed;
         }
         else {
-            maps.current[key] = var;        // first sighting
+            maps.current[key] = var;
             return false;
         }
     }
 
-
-    /// Returns true if any variable among args... has changed
     template <typename... Args>
     bool anyChanged(Args&&... args) const
     {
         return (variableChanged(std::forward<Args>(args)) || ...);
     }
 
-    /// Explicitly update the 'current' value of a single variable
-    template<typename T>
+    template <typename T>
     void commitValue(T& var)
     {
         getStateMap<T>().current[&var] = var;
     }
 
-    /// Explicitly update the 'current' values of all variables passed in
-    template<typename... Args>
+    template <typename... Args>
     void commitAll(Args&&... args)
     {
         (commitValue(std::forward<Args>(args)), ...);
     }
 
-    /// Clears all tracked data (for every type) so we effectively start fresh
     void variableChangedClearMaps()
     {
-        //std::lock_guard<std::mutex> lock(mutex_);
+        // std::lock_guard<std::mutex> lock(mutex_);
         for (auto& [_, cc] : registry_)
-        {
-            cc.clearer();
-        }
+            cc.clear();
     }
 
-    /// Commits all tracked data (for every type), i.e. current => previous
-    /// so that subsequent calls to variableChanged() compare against the newly committed data
     void variableChangedUpdateCurrent()
     {
-        //std::lock_guard<std::mutex> lock(mutex_);
+        // std::lock_guard<std::mutex> lock(mutex_);
         for (auto& [_, cc] : registry_)
-        {
-            cc.committer();
-        }
+            cc.commit();
     }
 };

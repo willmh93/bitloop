@@ -104,7 +104,7 @@ public:
 
     void setSize(double size_pts)
     {
-        size = ScaleSize((float)size_pts);
+        size = (float)size_pts;
     }
 };
 
@@ -126,12 +126,21 @@ protected:
 
     static std::shared_ptr<NanoFont> default_font;
     std::shared_ptr<NanoFont> active_font;
+    
+    double global_scale = 1.0;
 
 public:
 
+    void setGlobalScale(double _global_scale) {
+        global_scale = _global_scale;
+    }
+    double getGlobalScale() {
+        return global_scale; 
+    }
+
     void setRenderTarget(NVGcontext* nvg_ctx) { vg = nvg_ctx; }
     NVGcontext* getRenderTarget() { return vg; }
-    std::shared_ptr<NanoFont> getDefaultFont() { return active_font; }
+    std::shared_ptr<NanoFont> getDefaultFont() { return default_font; }
 
     // --- Transforms ---
 
@@ -193,7 +202,7 @@ public:
 
     void setTextAlign(TextAlign align)          { text_align = align;       nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
     void setTextBaseline(TextBaseline baseline) { text_baseline = baseline; nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
-    void setFontSize(double size_pts)           { nvgFontSize(vg, ScaleSize((float)size_pts)); }
+    void setFontSize(double size_pts)           { nvgFontSize(vg, (float)(global_scale * size_pts)); }
     void setFont(std::shared_ptr<NanoFont> font)
     {
         if (font == active_font)
@@ -201,11 +210,12 @@ public:
 
         if (!font->created)
         {
-            // Todo: Check if font changed and update even if already created
-            nvgFontSize(vg, font->size);
-
             font->id = nvgCreateFont(vg, font->path.c_str(), font->path.c_str());
             font->created = true;
+
+            // Todo: Check if font changed and update even if already created
+            nvgFontSize(vg, (float)global_scale * font->size);
+
         }
 
         nvgFontFaceId(vg, font->id);
@@ -643,7 +653,7 @@ public:
     {
         std::string txt = format_number(v);
 
-        double scale = ScaleSize(1.0);
+        double scale = 1.0;// fontSize;// ScaleSize(1.0);
         double exponent_spacing = 3.0 * scale;
 
         size_t ePos = txt.find("e");
@@ -686,6 +696,7 @@ public:
         {
             //font.setPixelSize(fontSize);
             //painter->setFont(font);
+            setFontSize(fontSize);
             fillTextSharp(txt.c_str(), pos);
         }
     }
@@ -694,7 +705,7 @@ public:
     {
         std::string txt = format_number(v);
 
-        double scale = ScaleSize(1.0);
+        double scale = 1.0;// fontSize;// ScaleSize(1.0);
         double exponent_spacing = 3.0 * scale;
 
         size_t ePos = txt.find("e");
@@ -771,6 +782,9 @@ public:
 
     using SimplePainter::setRenderTarget;
     using SimplePainter::getRenderTarget;
+    using SimplePainter::setGlobalScale;
+    using SimplePainter::getGlobalScale;
+    //
     using SimplePainter::getDefaultFont;
     //
     using SimplePainter::save;
@@ -803,20 +817,18 @@ class Canvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
     int fbo_width = 0, fbo_height = 0;
-    double global_scale = 1.0;
 
 public:
 
-    void create();
+    void create(double global_scale);
     bool resize(int w, int h);
 
     void begin(float r, float g, float b, float a = 1.0);
     void end();
 
     GLuint texture() { return tex; }
-    int width() { return (int)(fbo_width/global_scale); }   // Logical pixel width
-    int height() { return (int)(fbo_height/global_scale); } // Logical pixel height
+    //int logicalWidth() { return (int)(fbo_width/global_scale); }   // Logical pixel width
+    //int logicalHeight() { return (int)(fbo_height/global_scale); } // Logical pixel height
     int fboWidth() { return fbo_width; }
     int fboHeight() { return fbo_height; }
-
 };

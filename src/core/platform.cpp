@@ -36,7 +36,7 @@ void PlatformManager::update()
     SDL_GL_GetDrawableSize(window, &gl_w, &gl_h);
     SDL_GetWindowSize(window, &win_w, &win_h);
 
-    _dpr = (float)gl_w / (float)win_w;
+    //_dpr = (float)gl_w / (float)win_w;
     update_device_dpi();
 }
 
@@ -49,6 +49,8 @@ void PlatformManager::resized()
     fb_h = css_h * device_dpr;
     SDL_SetWindowSize(window, fb_w, fb_h);
     emscripten_set_canvas_element_size("#canvas", fb_w, fb_h);
+    #else
+    SDL_GL_GetDrawableSize(window, &fb_w, &fb_h);
     #endif
 
     Platform()->update();

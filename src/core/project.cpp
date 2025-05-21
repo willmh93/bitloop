@@ -172,7 +172,10 @@ Viewport::Viewport(Layout* layout, Canvas* canvas, int viewport_index, int grid_
     viewport_grid_x(grid_x),
     viewport_grid_y(grid_y)
 {
+    // Tell derived painter to paint to the same canvas
+    setGlobalScale(canvas->getGlobalScale());
     setRenderTarget(canvas->getRenderTarget());
+
     camera.viewport = this;
     ///print_stream.setString(&print_text);
 }
@@ -266,7 +269,7 @@ void Viewport::draw()
     int line_index = 0;
     std::string line;
     while (std::getline(print_stream, line, '\n'))
-        fillText(line, 5, 5 + (line_index++ * 16));
+        fillText(line, 5, 5 + (line_index++ * getGlobalScale() * 16.0f));
 
     camera.restoreCameraTransform();
     restore();
@@ -779,6 +782,28 @@ void ProjectBase::_projectDestroy()
     projectDestroy();
 }
 
+DVec2 ProjectBase::surfaceSize()
+{
+    double w;
+    double h;
+
+    // Determine surface size to draw to (depends on if recording or not)
+    //if (!record_manager.isRecording() || window_capture)
+    {
+        w = fboWidth();
+        h = fboHeight();
+    }
+    //else
+    //{
+    //    IVec2 record_resolution = options->getRecordResolution();
+    //
+    //    w = record_resolution.x;
+    //    h = record_resolution.y;
+    //}
+
+    return Vec2(w, h);
+}
+
 void ProjectBase::updateViewportRects()
 {
     DVec2 surface_size = surfaceSize();
@@ -797,28 +822,6 @@ void ProjectBase::updateViewportRects()
         viewport->camera.viewport_w = viewport_width - 1;
         viewport->camera.viewport_h = viewport_height - 1;
     }
-}
-
-DVec2 ProjectBase::surfaceSize()
-{
-    double w;
-    double h;
-
-    // Determine surface size to draw to (depends on if recording or not)
-    //if (!record_manager.isRecording() || window_capture)
-    {
-        w = canvasWidth();
-        h = canvasHeight();
-    }
-    //else
-    //{
-    //    IVec2 record_resolution = options->getRecordResolution();
-    //
-    //    w = record_resolution.x;
-    //    h = record_resolution.y;
-    //}
-
-    return Vec2(w, h);
 }
 
 void ProjectBase::_projectProcess()
@@ -935,6 +938,8 @@ void ProjectBase::_projectDraw()
     ctx->setFillStyle(255,255,255);
     ctx->setStrokeStyle(255,255,255);
 
+    ctx->setFontSize(16.0f);
+
     ///timer_projectDraw.start();
 
     // Draw each viewport
@@ -944,11 +949,12 @@ void ProjectBase::_projectDraw()
         ctx->setClipRect(viewport->x, viewport->y, viewport->width, viewport->height);
         ctx->save();
 
+        /// ======== Set default viewport transform ========
+
         // Move to viewport position
         ctx->translate(floor(viewport->x), floor(viewport->y));
 
-        // Attach QNanoPainter for viewport draw operations
-        ///viewport->painter = p;
+        /// ======== Save default transform & Render ========
 
         // Set default transform to "World"
         viewport->camera.worldTransform();
@@ -956,6 +962,8 @@ void ProjectBase::_projectDraw()
         // Draw Scene to Viewport
         viewport->scene->camera = &viewport->camera;
         viewport->draw();
+
+        /// ======== Restore initial canvas transform ========
 
         ctx->restore();
         ctx->resetClipping();
@@ -1006,8 +1014,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
         case SDL_FINGERMOTION:
         {
-            mouse.client_x = (double)(e.tfinger.x * (float)Platform()->fbo_width());
-            mouse.client_y = (double)(e.tfinger.y * (float)Platform()->fbo_height());
+            mouse.client_x = (double)(e.tfinger.x * (float)fboWidth());
+            mouse.client_y = (double)(e.tfinger.y * (float)fboHeight());
         }
         break;
 

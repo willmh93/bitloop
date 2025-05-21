@@ -1,10 +1,10 @@
 #pragma once
 
-/*#include <imgui.h>
+#include <imgui.h>
 #include <SDL2/SDL.h>
 #include "platform.h"
 
-void dpiDebugInfo()
+inline void dpiDebugInfo()
 {
     ImGuiIO& io = ImGui::GetIO();
 
@@ -54,7 +54,7 @@ void dpiDebugInfo()
         ImGui::Text("Height                    %.1f inches", Platform()->window_height_inches());
         ImGui::Text("---- DPI ----");
         ImGui::Text("DPI:                         %.1f", Platform()->dpi());
-        ImGui::Text("DPR:                        %.1f", Platform()->dpr());
+        ImGui::Text("DPR:                        %.3f", Platform()->dpr());
         ImGui::Text("DisplaySize:            %.1f x %.1f", io.DisplaySize.x, io.DisplaySize.y);
         ImGui::Text("WindowSize:           %d x %d",
             Platform()->window_width(),
@@ -63,6 +63,10 @@ void dpiDebugInfo()
         ImGui::Text("DrawableSize:         %d x %d",
             Platform()->fbo_width(),
             Platform()->fbo_height()
+        );
+        ImGui::Text("GLSize:                 %d x %d",
+            Platform()->gl_width(),
+            Platform()->gl_height()
         );
         //ImGui::Text("DrawableSize (GL):   %d x %d", gl_dw, gl_dh);
 
@@ -76,4 +80,4 @@ void dpiDebugInfo()
         #endif
     }
     ImGui::End();
-}*/
+}

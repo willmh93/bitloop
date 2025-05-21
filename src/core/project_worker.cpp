@@ -4,7 +4,7 @@
 
 CProjectWorker* CProjectWorker::singleton = nullptr;
 
-void CProjectWorker::start()
+void CProjectWorker::startWorker()
 {
     worker_thread = std::thread(&CProjectWorker::worker_loop, singleton);
     shared_sync.project_thread_started = true;
@@ -40,12 +40,12 @@ void CProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
     {
     case PROJECT_SET:
     {
-        project_log->clear();
+        project_log.clear();
 
         _destroyActiveProject();
 
         active_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
-        active_project->configure(e.project_uid, canvas, project_log);
+        active_project->configure(e.project_uid, MainWindow()->getCanvas(), &project_log);
         active_project->_projectPrepare();
     }
     break;

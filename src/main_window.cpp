@@ -27,7 +27,7 @@ void CMainWindow::init()
     // Always initializes window on first call
     checkChangedDPR();
 
-    canvas.create();
+    canvas.create(Platform()->dpr());
 }
 
 void CMainWindow::checkChangedDPR()
@@ -470,7 +470,8 @@ void CMainWindow::populateUI()
         need_draw = shared_sync.frame_ready;
     }
 
-    if (vertical_layout || Platform()->max_char_rows() < 40.0f)
+    bool collapse_layout = vertical_layout || Platform()->max_char_rows() < 40.0f;
+    if (collapse_layout)
         populateCollapsedLayout();
     else
         populateExpandedLayout();
@@ -479,7 +480,7 @@ void CMainWindow::populateUI()
     if (initialized && !done_first_focus && !first_frame)
     {
         done_first_focus = true;
-        ImGui::SetWindowFocus("Projects");
+        ImGui::SetWindowFocus(collapse_layout ? "Active" : "Projects");
     }
     first_frame = false;
 
@@ -560,17 +561,18 @@ void CMainWindow::populateUI()
     }
     ImGui::End();
 
+    #ifdef DEBUG_INCLUDE_LOG_TABS
     if (ImGui::Begin("Project Log"))
     {
         project_log.draw();
     }
     ImGui::End();
-
     if (ImGui::Begin("Debug Log"))
     {
         debug_log.draw();
     }
     ImGui::End();
+    #endif
 
     ImGui::PopStyleVar();
 

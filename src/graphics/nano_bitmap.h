@@ -55,6 +55,7 @@ struct CanvasObject
     void setStageRect(double _x, double _y, double _w, double _h)
     {
         coordinate_type = CoordinateType::STAGE;
+        rotation = 0.0;
         x = _x;
         y = _y;
         w = _w;
@@ -63,7 +64,8 @@ struct CanvasObject
 
     void setWorldRect(double _x, double _y, double _w, double _h)
     {
-        coordinate_type = CoordinateType::STAGE;
+        coordinate_type = CoordinateType::WORLD;
+        rotation = 0.0;
         x = _x;
         y = _y;
         w = _w;

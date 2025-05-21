@@ -23,7 +23,7 @@ void Test_Project::projectPrepare()
     Test_Scene::Config config1;
     //auto config2 = make_shared<Test_Scene::Config>(Test_Scene::Config());
 
-    create<Test_Scene>(config1)->mountTo(layout);
+    create<Test_Scene>(viewport_count, config1)->mountTo(layout);
 }
 
 ///-----------///

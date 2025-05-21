@@ -1,3 +1,4 @@
+#include <memory>
 #ifdef __EMSCRIPTEN__
 #define SDL_MAIN_HANDLED
 #include <GLES3/gl3.h>
@@ -10,83 +11,60 @@
 #include "backends/imgui_impl_sdl2.h"
 #include "backends/imgui_impl_opengl3.h"
 
-/// std
-#include <vector>
-#include <memory>
-
-#include "threads.h"
+/// Project files
 #include "platform.h"
 #include "project.h"
 #include "project_worker.h"
 #include "main_window.h"
-#include "debug.h"
 
 SDL_Window* window = nullptr;
-SDL_GLContext gl_context;
 
+SharedSync shared_sync;
 std::unique_ptr<CMainWindow>     main_window;
 std::unique_ptr<CProjectWorker>  project_worker;
 
-
-SharedSync shared_sync;
-
-// ---------------------------------------
-
 void gui_loop()
 {
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
+    // ======== Poll SDL events ========
+    SDL_Event e;
+    while (SDL_PollEvent(&e))
     {
-        ImGui_ImplSDL2_ProcessEvent(&event);
-        switch (event.type)
+        ImGui_ImplSDL2_ProcessEvent(&e);
+        switch (e.type)
         {
-            case SDL_QUIT: 
-                shared_sync.quit(); break;
-            default: 
-                ProjectWorker()->queueEvent(event); break;
+            case SDL_QUIT: shared_sync.quit(); break;
+            case SDL_WINDOWEVENT: 
+                if (e.window.event == SDL_WINDOWEVENT_RESIZED) 
+                    Platform()->resized(); 
+                break;
+            default: ProjectWorker()->queueEvent(e); break;
         }
     }
 
     Platform()->update();
 
-    glViewport(0, 0, Platform()->fbo_width(), Platform()->fbo_height());
-
+    // ======== Prepare frame ========
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
-    
-    #ifdef __EMSCRIPTEN__
-    ImGui::GetIO().DisplaySize = ImVec2(Platform()->fbo_width(), Platform()->fbo_height());
+    ImGui::GetIO().DisplaySize = ImVec2((float)Platform()->fbo_width(), (float)Platform()->fbo_height());
     ImGui::GetIO().DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
-    #endif
-
-    // New ImGui frame
     ImGui::NewFrame();
 
-    // Draw simulation & refresh imgui drawlist
+    // ======== Draw window ========
     MainWindow()->populateUI();
 
-    // Render
+    // ======== Render ========
     ImGui::Render();
-
     glClearColor(0.1f, 0.0f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window);
     SDL_Delay(0);
 }
 
-#ifdef __EMSCRIPTEN__
-EM_BOOL on_client_resized(int, const EmscriptenUiEvent* e, void* userData)
-{
-    Platform()->resized();
-    return EM_TRUE;
-}
-#endif
-
 int main(int argc, char* argv[])
 {
-    // SDL Window setup
+    // ======== SDL Window setup ========
     {
         SDL_Init(SDL_INIT_VIDEO);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -101,77 +79,56 @@ int main(int argc, char* argv[])
         emscripten_get_canvas_element_size("#canvas", &fb_w, &fb_h);
         #endif
 
-        window = SDL_CreateWindow(
-            "bitloop",
-            SDL_WINDOWPOS_CENTERED,
-            SDL_WINDOWPOS_CENTERED,
-            fb_w, fb_h,
-            SDL_WINDOW_OPENGL |
-            SDL_WINDOW_RESIZABLE |
-            SDL_WINDOW_MAXIMIZED |
-            SDL_WINDOW_ALLOW_HIGHDPI
-        );
+        window = SDL_CreateWindow("bitloop", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, fb_w, fb_h,
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_ALLOW_HIGHDPI);
 
         PlatformManager::prepare(window);
     }
 
-    // OpenGL setup
+    SDL_GLContext gl_context;
+
+    // ======== OpenGL setup ========
     {
         gl_context = SDL_GL_CreateContext(window);
         SDL_GL_MakeCurrent(window, gl_context);
         SDL_GL_SetSwapInterval(1);
 
         #ifndef __EMSCRIPTEN__
-        // If desktop build, load GLAD functions
         if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
-        {
-            fprintf(stderr, "Failed to initialize GLAD\n");
-            return 1;
-        }
+            return 1; // Failed to initialize GLAD
 
         // Make colours consistent on with desktop build
         glDisable(GL_FRAMEBUFFER_SRGB);
         #endif
     }
 
-    #ifdef __EMSCRIPTEN__
-    on_client_resized(0, nullptr, window);
-    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, window, false, on_client_resized);
-    #endif
-
     project_worker  = std::make_unique<CProjectWorker>(shared_sync);
     main_window     = std::make_unique<CMainWindow>(shared_sync);
 
-    // ImGui setup
+    // ======== ImGui setup ========
     {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
-
-        // Initialize imgui & nanovg
         #ifdef __EMSCRIPTEN__
         ImGui_ImplOpenGL3_Init("#version 300 es");
         #else
         ImGui_ImplOpenGL3_Init();
         #endif
-
-        MainWindow()->init();
     }
 
-    ProjectWorker()->setSharedCanvas(MainWindow()->getCanvas());
-    ProjectWorker()->setSharedDebugLog(&project_log);
+    // ======== Init Window & Start worker thread ========
+    {
+        MainWindow()->init();
+        ProjectWorker()->startWorker();
+    }
 
-    ProjectWorker()->start();
-
-    // Start main ui loop (main thread)
+    // ======== Start main ui loop ========
     {
         #ifdef __EMSCRIPTEN__
+        emscripten_set_main_loop(gui_loop, 0, true);
+        #else
         {
-            emscripten_set_main_loop(gui_loop, 0, true);
-        }
-        #else // Desktop
-        {
-            // Handle main loop
             while (!shared_sync.quitting.load())
                 gui_loop();
 
@@ -181,21 +138,17 @@ int main(int argc, char* argv[])
             ImGui_ImplOpenGL3_Shutdown();
             ImGui_ImplSDL2_Shutdown();
             ImGui::DestroyContext();
-
             SDL_GL_DeleteContext(gl_context);
             SDL_DestroyWindow(window);
             SDL_Quit();
         }
         #endif
     }
-
     return 0;
 }
 
 #ifdef _WIN32
-int WINAPI CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-{
-    return main(__argc, __argv);
+int WINAPI CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    return main(__argc, __argv); // Redirect entry point for WIN32 build
 }
 #endif
-

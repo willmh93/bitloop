@@ -26,7 +26,7 @@ class PlatformManager
     SDL_Window* window;
 
     
-    float _dpr = 1.0f;
+    //float _dpr = 1.0f;
     float _dpi = 96.0f;
 
     double css_w, css_h;
@@ -58,6 +58,8 @@ public:
     void update();
     void resized();
 
+    int gl_width()      { return gl_w; }
+    int gl_height()     { return gl_h; }
     int fbo_width()     { return fb_w; }
     int fbo_height()    { return fb_h; }
     int window_width()  { return win_w; }
@@ -65,7 +67,12 @@ public:
 
     // Device Info
     float dpi() { return _dpi; }
+
+    #ifdef DEBUG_SIMULATE_DPR
+    float dpr() { return DEBUG_SIMULATE_DPR; }
+    #else
     float dpr() { return (float)gl_w / (float)win_w; }
+    #endif
 
     bool device_vertical();
     void device_orientation(int* orientation_angle, int* orientation_index = nullptr);

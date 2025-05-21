@@ -531,8 +531,8 @@ protected:
 
     void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
 
-    void updateViewportRects();
     DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
+    void updateViewportRects();
 
     // -------- Attributes --------
     bool has_var_buffer = false;
@@ -763,8 +763,8 @@ public:
         return viewports;
     }
 
-    int canvasWidth() { return canvas->width(); }
-    int canvasHeight() { return canvas->height(); }
+    int fboWidth() { return canvas->fboWidth(); }
+    int fboHeight() { return canvas->fboHeight(); }
 
     virtual void projectAttributes() {}
     virtual void projectPrepare() = 0;
