@@ -72,13 +72,13 @@ struct CanvasObject
         h = _h;
     }
 
-    DVec2 topLeft()
+    [[nodiscard]] DVec2 topLeft()
     {
         DVec2 offset = { -(align_x + 1) / 2 * w , -(align_y + 1) / 2 * h };
         return Math::rotateOffset(offset, rotation) + pos;
     }
 
-    DQuad getQuad()
+    [[nodiscard]] DQuad getQuad()
     {
         DVec2 pivot = { (align_x + 1) / 2 * w , (align_y + 1) / 2 * h };
         DQuad quad = { { 0, 0 }, { w, 0 }, { w, h }, { 0, h } };
@@ -96,12 +96,12 @@ struct CanvasObject
         return quad;
     }
 
-    double localAlignOffsetX()
+    [[nodiscard]] double localAlignOffsetX()
     {
         return -(align_x + 1) * 0.5 * w;
     }
 
-    double localAlignOffsetY()
+    [[nodiscard]] double localAlignOffsetY()
     {
         return -(align_y + 1) * 0.5 * h;
     }
@@ -124,14 +124,13 @@ protected:
 public:
 
     explicit Image(NVGcontext* ctx = nullptr) {}
-    Image(NVGcontext* ctx, int w, int h)
-    {
+    Image(NVGcontext* ctx, int w, int h) {
         create(w, h); 
     }
 
-    int width() const { return bmp_width; }
-    int height() const { return bmp_height; }
-    int imageId() const { return nano_img; }
+    [[nodiscard]] int width() const { return bmp_width; }
+    [[nodiscard]] int height() const { return bmp_height; }
+    [[nodiscard]] int imageId() const { return nano_img; }
 
     void create(int w, int h) 
     {
@@ -202,7 +201,7 @@ public:
         pixels[i + 3] = a;
     }
 
-    Color getPixel(int x, int y) const 
+    [[nodiscard]] Color getPixel(int x, int y) const
     {
         size_t i = (size_t(y) * bmp_width + x) * 4;
         return 
@@ -212,7 +211,7 @@ public:
             pixels[i + 3] << 24;
     }
 
-    Color getPixelSafe(int x, int y) const
+    [[nodiscard]] Color getPixelSafe(int x, int y) const
     {
         if ((unsigned)x >= (unsigned)bmp_width ||
             (unsigned)y >= (unsigned)bmp_height)
@@ -278,7 +277,7 @@ public:
         needs_reshading = b;
     }
 
-    bool needsReshading(Camera* camera)
+    [[nodiscard]] bool needsReshading(Camera* camera)
     {
         DQuad world_quad = getWorldQuad(camera);
         if (needs_reshading || (world_quad != prev_world_quad))
@@ -307,7 +306,7 @@ public:
         }
     }
 
-    DQuad getWorldQuad(Camera* camera);
+    [[nodiscard]] DQuad getWorldQuad(Camera* camera);
 
     template<typename Callback>
     void forEachPixel(Callback&& callback)

@@ -78,14 +78,20 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
     void viewportDraw(Viewport* ctx) const override;
 
     // Input
-    void onEvent(Event& e) override;
+    void onEvent(Event e) override;
+    void onPointerDown(PointerEvent e) override;
+    void onPointerUp(PointerEvent e) override;
+    void onPointerMove(PointerEvent e) override;
+    void onWheel(PointerEvent e) override;
+    void onKeyDown(KeyEvent e) override;
+    void onKeyUp(KeyEvent e) override;
 };
 
 struct Test_Project_Vars : public VarBuffer
 {
     sync_struct
     {
-        int viewport_count = 4;
+        int viewport_count = 1;
     } 
     sync_end;
 
@@ -96,7 +102,7 @@ struct Test_Project_Vars : public VarBuffer
 
 struct Test_Project : public Project<Test_Project_Vars>
 {
-    void projectPrepare() override;
+    void projectPrepare(Layout& layout) override;
 };
 
 SIM_END(Test)

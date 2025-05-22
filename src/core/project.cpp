@@ -1,77 +1,6 @@
 #include "project.h"
 #include "main_window.h"
 
-/// Event
-
-
-// Touch helpers
-
-double Event::finger_x()
-{
-    return (double)(_event.tfinger.x * (float)Platform()->fbo_width());
-}
-
-double Event::finger_y()
-{
-    return (double)(_event.tfinger.y * (float)Platform()->fbo_height());
-}
-
-std::string Event::info()
-{
-    std::string focused = _focused_ctx ? std::to_string(_focused_ctx->viewportIndex()) : "_";
-    std::string hovered = _hovered_ctx ? std::to_string(_hovered_ctx->viewportIndex()) : "_";
-    std::string type;
-
-    char attribs[256];
-    
-    switch (_event.type) 
-    {
-    case SDL_KEYDOWN:           type = "SDL_KEYDOWN";         break;
-    case SDL_KEYUP:             type = "SDL_KEYUP";           break;
-
-    case SDL_MOUSEMOTION:       type = "SDL_MOUSEMOTION";     
-        sprintf(attribs, "{%d, %d}",
-            _event.motion.x,
-            _event.motion.y); 
-
-        break;
-
-    case SDL_MOUSEBUTTONDOWN:   type = "SDL_MOUSEBUTTONDOWN";  goto mouse_attribs;
-    case SDL_MOUSEBUTTONUP:     type = "SDL_MOUSEBUTTONUP";    goto mouse_attribs;
-        mouse_attribs:
-        sprintf(attribs, "{%d, %d}", 
-            _event.button.x, 
-            _event.button.y); 
-
-        break;
-
-    case SDL_FINGERDOWN:        type = "SDL_FINGERDOWN";    goto finger_attribs;
-    case SDL_FINGERUP:          type = "SDL_FINGERUP";      goto finger_attribs;
-    case SDL_FINGERMOTION:      type = "SDL_FINGERMOTION";
-        finger_attribs:
-        sprintf(attribs, "{F_%lld, %d, %d}", 
-            _event.tfinger.fingerId, 
-            (int)(_event.tfinger.x * (float)Platform()->fbo_width()),
-            (int)(_event.tfinger.y * (float)Platform()->fbo_height()));
-
-        break;
-
-    case SDL_MULTIGESTURE:      type = "SDL_MULTIGESTURE";     break;
-
-    case SDL_MOUSEWHEEL:        type = "SDL_MOUSEWHEEL";       break;
-    case SDL_TEXTINPUT:         type = "SDL_TEXTINPUT";        break;
-
-    default:                    type = "UNKNOWN_EVENT";        break;
-    }
-
-    std::string info;
-    info += "[focused: " + focused + "] ";
-    info += "[hovered: " + hovered + "] ";
-    info += "[" + type + "] ";
-    info += attribs;
-
-    return info;
-}
 
 /// Scene
 
@@ -129,12 +58,18 @@ void SceneBase::mountToAll(Layout& viewports)
 
 void SceneBase::pollEvents()
 {
-    ProjectWorker()->pollEvents();
+    ProjectWorker::instance()->pollEvents();
 }
 
 void SceneBase::pollData()
 {
-    ProjectWorker()->pollData();
+    ProjectWorker::instance()->pollData();
+}
+
+void SceneBase::handleWorldNavigation(Event e, bool single_touch_pan)
+{
+    if (e.ctx_focused())
+        e.ctx_focused()->camera.handleWorldNavigation(e, true);
 }
 
 double SceneBase::frame_dt(int average_samples) const
@@ -567,6 +502,12 @@ void Viewport::drawWorldAxis(
 
 /// Layout
 
+void SimSceneList::mountTo(Layout& viewports) 
+{
+    for (size_t i = 0; i < size(); i++)
+        at(i)->mountTo(viewports[i]);
+}
+
 void Layout::expandCheck(size_t count)
 {
     if (count > viewports.size())
@@ -697,7 +638,7 @@ void ProjectBase::_projectPrepare()
     // Prepare project and create layout
     // Note: This is where old viewports get replaced
     scene_counter = 0;
-    projectPrepare();
+    projectPrepare(newLayout());
 }
 
 void ProjectBase::_projectStart()
@@ -1037,13 +978,13 @@ void ProjectBase::_onEvent(SDL_Event& e)
             {
                 if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
                 {
-                    focused_ctx = ctx;
+                    ctx_focused = ctx;
                     captured = true;
                     break;
                 }
             }
             if (!captured)
-                focused_ctx = nullptr;
+                ctx_focused = nullptr;
         }
         break;
 
@@ -1055,13 +996,13 @@ void ProjectBase::_onEvent(SDL_Event& e)
             {
                 if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
                 {
-                    hovered_ctx = ctx;
+                    ctx_hovered = ctx;
                     captured = true;
                     break;
                 }
             }
             if (!captured)
-                hovered_ctx = nullptr;
+                ctx_hovered = nullptr;
         }
         break;
     }
@@ -1071,25 +1012,26 @@ void ProjectBase::_onEvent(SDL_Event& e)
     if (Platform()->is_mobile())
     {
         // Does this finger already have an owner? Attach it to the event
-        Viewport* owner_ctx = nullptr;
+        Viewport* ctx_owner = nullptr;
         
         // Support both single-finger pan & 2 finger transform
         switch (e.type)
         {
         case SDL_FINGERDOWN:
         {
-            owner_ctx = focused_ctx;
+            ctx_owner = ctx_focused;
+            PointerEvent pointer_event(event);
 
             // Add pressed finger
             FingerInfo info;
-            info.owner_ctx = focused_ctx;
+            info.ctx_owner = ctx_focused;
             info.fingerId = e.tfinger.fingerId;
-            info.x = event.finger_x();
-            info.y = event.finger_y();
+            info.x = pointer_event.x();
+            info.y = pointer_event.y();
             pressed_fingers.push_back(info);
 
             // Remember mouse-down ctx for mouse release/motion
-            event.setOwnerViewport(owner_ctx);
+            event.setOwnerViewport(ctx_owner);
         }
         break;
 
@@ -1100,12 +1042,12 @@ void ProjectBase::_onEvent(SDL_Event& e)
                 FingerInfo& info = pressed_fingers[i];
                 if (info.fingerId == e.tfinger.fingerId)
                 {
-                    owner_ctx = info.owner_ctx;
+                    ctx_owner = info.ctx_owner;
                     break;
                 }
             }
 
-            event.setOwnerViewport(owner_ctx);
+            event.setOwnerViewport(ctx_owner);
         }
         break;
 
@@ -1116,7 +1058,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
                 FingerInfo& info = pressed_fingers[i];
                 if (info.fingerId == e.tfinger.fingerId)
                 {
-                    owner_ctx = info.owner_ctx;
+                    ctx_owner = info.ctx_owner;
                     break;
                 }
             }
@@ -1132,7 +1074,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
                 }
             }
 
-            event.setOwnerViewport(owner_ctx);
+            event.setOwnerViewport(ctx_owner);
         }
         break;
         }
@@ -1145,20 +1087,20 @@ void ProjectBase::_onEvent(SDL_Event& e)
             case SDL_MOUSEBUTTONUP:
             case SDL_MOUSEMOTION:
             {
-                event.setOwnerViewport(focused_ctx);
+                event.setOwnerViewport(ctx_focused);
             }
             break;
             case SDL_MOUSEWHEEL:
             {
-                event.setOwnerViewport(hovered_ctx);
+                event.setOwnerViewport(ctx_hovered);
             }
             break;
         }
     }
 
 
-    event.setFocusedViewport(focused_ctx);
-    event.setHoveredViewport(hovered_ctx);
+    event.setFocusedViewport(ctx_focused);
+    event.setHoveredViewport(ctx_hovered);
 
     onEvent(event);
 
@@ -1187,22 +1129,22 @@ Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
     return viewports;
 }
 
-void SceneBase::logMessage(const char* fmt, ...)
+void SceneBase::logMessage(std::string_view fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    project->project_log->vlog(fmt, ap);
+    project->project_log->vlog(fmt.data(), ap);
     va_end(ap);
 }
 
 void ProjectBase::pollData()
 {
-    ProjectWorker()->pollData();
+    ProjectWorker::instance()->pollData();
 }
 
 void ProjectBase::pollEvents()
 {
-    ProjectWorker()->pollEvents();
+    ProjectWorker::instance()->pollEvents();
 }
 
 void ProjectBase::logMessage(const char* fmt, ...)
@@ -1222,4 +1164,3 @@ void ProjectBase::logClear()
 {
     project_log->clear();
 }
-

@@ -602,16 +602,16 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Vars>
     void viewportDraw(Viewport* ctx) const override;
 
     // Input
-    void onEvent(Event& e) override;
-    ///void mouseDown() override;
-    ///void mouseUp() override;
-    ///void mouseMove() override;
-    ///void mouseWheel() override;
+    void onEvent(Event e) override;
+    ///void onPointerDown() override;
+    ///void onPointerUp() override;
+    ///void onPointerMove() override;
+    ///void onWheel() override;
 };
 
 struct Mandelbrot_Project : public BasicProject
 {
-    void projectPrepare() override;
+    void projectPrepare(Layout& layout) override;
 };
 
 SIM_END(Mandelbrot)

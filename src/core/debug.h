@@ -19,7 +19,7 @@
 /// ======== Debug Features ========
 //#define DEBUG_FINITE_DOUBLE_CHECKS
 //#define DEBUG_DISABLE_PRINT
-//#define DEBUG_INCLUDE_LOG_TABS
+#define DEBUG_INCLUDE_LOG_TABS
 
 /// ======== Platform Simulation ========
 //#define DEBUG_SIMULATE_WEB_UI

@@ -301,18 +301,21 @@ void Camera::panEnd(int _x, int _y)
     panning = false;
 }
 
-void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
+void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
 {
+    if (!event.isPointerEvent())
+        return;
+
+    PointerEvent e(event);
+
     if (Platform()->is_mobile())
     {
         // Support both single-finger pan & 2 finger transform
-        switch (e->type)
+        switch (e.type())
         {
             case SDL_FINGERDOWN:
             {
-                //int previous_fingers_pressed = pressed_fingers.size();
-
-                if (e->tfinger.fingerId > 1)
+                if (pressed_fingers.size() >= 2)
                 {
                     // Ignore 3 or more fingers
                     return;
@@ -320,15 +323,15 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
 
                 // Add pressed finger
                 FingerInfo info;
-                info.fingerId = e->tfinger.fingerId;
-                info.x = e.finger_x();
-                info.y = e.finger_y();
+                info.fingerId = e.fingerID();
+                info.x = e.x();
+                info.y = e.y();
                 pressed_fingers.push_back(info);
 
                 if (pressed_fingers.size() == 1)
                 {
                     if (single_touch_pan)
-                        panBegin((int)e.finger_x(), (int)e.finger_y(), 0.0, 0.0);
+                        panBegin((int)e.x(), (int)e.y(), 0.0, 0.0);
                 }
                 else if (pressed_fingers.size() == 2)
                 {
@@ -346,7 +349,7 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
             break;
             case SDL_FINGERUP:
             {
-                if (e->tfinger.fingerId > 1)
+                if (pressed_fingers.size() > 2)
                 {
                     // Ignore 3 or more fingers
                     return;
@@ -364,7 +367,7 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
                 for (size_t i = 0; i < pressed_fingers.size(); i++)
                 {
                     FingerInfo& info = pressed_fingers[i];
-                    if (info.fingerId == e->tfinger.fingerId)
+                    if (info.fingerId == e.fingerID())
                     {
                         pressed_fingers.erase(pressed_fingers.begin() + i);
                         break;
@@ -375,7 +378,7 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
                 {
                     // End single-finger pan (previously had 1 remaining pressed finger)
                     if (single_touch_pan)
-                        panEnd((int)e.finger_x(), (int)e.finger_y());
+                        panEnd((int)e.x(), (int)e.y());
                 }
                 else if (pressed_fingers.size() == 1)
                 {
@@ -390,7 +393,7 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
             break;
             case SDL_FINGERMOTION:
             {
-                if (e->tfinger.fingerId > 1)
+                if (pressed_fingers.size() > 2)
                 {
                     // Ignore 3 or more fingers
                     return;
@@ -400,10 +403,10 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
                 for (size_t i = 0; i < pressed_fingers.size(); i++)
                 {
                     FingerInfo& info = pressed_fingers[i];
-                    if (info.fingerId == e->tfinger.fingerId)
+                    if (info.fingerId == e.fingerID())
                     {
-                        info.x = e.finger_x();
-                        info.y = e.finger_y();
+                        info.x = e.x();
+                        info.y = e.y();
                         break;
                     }
                 }
@@ -411,7 +414,7 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
                 if (pressed_fingers.size() == 1)
                 {
                     if (single_touch_pan)
-                        panDrag((int)e.finger_x(), (int)e.finger_y(), 0.0, 0.0);
+                        panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
                 }
                 else if (pressed_fingers.size() == 2)
                 {
@@ -425,36 +428,36 @@ void Camera::handleWorldNavigation(Event& e, bool single_touch_pan)
     }
     else
     {
-        switch (e->type)
+        switch (e.type())
         {
             case SDL_MOUSEBUTTONDOWN:
             {
-                if (e->button.button == SDL_BUTTON_MIDDLE ||
-                    (single_touch_pan && e->button.button == SDL_BUTTON_LEFT))
+                if (e.button() == SDL_BUTTON_MIDDLE ||
+                    (single_touch_pan && e.button() == SDL_BUTTON_LEFT))
                 {
-                    panBegin(e->button.x, e->button.y, 0.0, 0.0);
+                    panBegin((int)e.x(), (int)e.y(), 0.0, 0.0);
                 }
             }
             break;
             case SDL_MOUSEBUTTONUP:
             {
-                if (e->button.button == SDL_BUTTON_MIDDLE ||
-                    (single_touch_pan && e->button.button == SDL_BUTTON_LEFT))
+                if (e.button() == SDL_BUTTON_MIDDLE ||
+                    (single_touch_pan && e.button() == SDL_BUTTON_LEFT))
                 {
-                    panEnd(e->button.x, e->button.y);
+                    panEnd((int)e.x(), (int)e.y());
                 }
             }
             break;
             case SDL_MOUSEMOTION:
             {
                 if (panning)
-                    panDrag(e->motion.x, e->motion.y, 0.0, 0.0);
+                    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
             }
             break;
             case SDL_MOUSEWHEEL:
             {
-                zoom_x += (double)(e->wheel.y / 10.0) * zoom_x;
-                zoom_y += (double)(e->wheel.y / 10.0) * zoom_y;
+                zoom_x += (e.wheelY() / 10.0) * zoom_x;
+                zoom_y += (e.wheelY() / 10.0) * zoom_y;
             }
             break;
         }

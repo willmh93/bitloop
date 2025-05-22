@@ -3,7 +3,7 @@ setlocal
 
 set START_DIR=%CD%
 
-echo Removing old build
+::echo Removing old build
 ::rmdir /s /q ..\build\web_release
 ::mkdir ..\build\web_release
 

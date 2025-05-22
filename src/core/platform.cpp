@@ -1,6 +1,7 @@
 #include "platform.h"
 #include "imgui_custom.h"
 
+PlatformManager* PlatformManager::singleton = nullptr;
 
 #ifdef __EMSCRIPTEN__
 EM_JS(int, _is_mobile_device, (), {

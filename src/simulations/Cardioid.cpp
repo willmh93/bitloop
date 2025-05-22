@@ -100,13 +100,9 @@ void plot(SceneBase *scene, Viewport* ctx, bool interactive, int segments, doubl
 
 /// BasicProject ///
 
-void Cardioid_Project::projectPrepare()
+void Cardioid_Project::projectPrepare(Layout& layout)
 {
-    auto& layout = newLayout();
-
-    auto* main_scene = create<Cardioid_Scene>();
-    layout << main_scene;
-    //layout << create<Cardioid_Graph_Scene>({main_scene});
+    layout << create<Cardioid_Scene>();
 }
 
 /// Scene ///
@@ -237,10 +233,10 @@ void Cardioid_Scene::viewportDraw(Viewport* ctx) const
     //ctx->print() << "\nfps: " << fps(60) << " ms";
 }
 
-void Cardioid_Scene::onEvent(Event& e)
+void Cardioid_Scene::onEvent(Event e)
 {
-    if (e.owner_ctx())
-        e.owner_ctx()->camera.handleWorldNavigation(e, true);
+    if (e.ctx_owner())
+        e.ctx_owner()->camera.handleWorldNavigation(e, true);
 }
 
 double originalAngle(double p2_x, double p2_y)

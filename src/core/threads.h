@@ -27,13 +27,13 @@
 
 namespace Thread
 {
-    static BS::thread_pool<BS::tp::none>& pool()
+    [[nodiscard]] static BS::thread_pool<BS::tp::none>& pool()
     {
         static BS::thread_pool pool;
         return pool;
     }
 
-    inline unsigned int idealThreadCount()
+    [[nodiscard]] inline unsigned int idealThreadCount()
     {
         // 1. Try the standard C++ hint
         unsigned int n = std::thread::hardware_concurrency();
@@ -54,7 +54,7 @@ namespace Thread
     }
 
     template<typename sizeT>
-    inline std::vector<std::pair<sizeT, sizeT>> splitRanges(sizeT totalSize, sizeT numParts)
+    [[nodiscard]] inline std::vector<std::pair<sizeT, sizeT>> splitRanges(sizeT totalSize, sizeT numParts)
     {
         std::vector<std::pair<sizeT, sizeT>> ranges;
 
@@ -73,7 +73,7 @@ namespace Thread
     }
 
     template<typename sizeT>
-    inline std::pair<sizeT, sizeT> splitRange(sizeT totalSize, sizeT numParts, sizeT blockIndex)
+    [[nodiscard]] inline std::pair<sizeT, sizeT> splitRange(sizeT totalSize, sizeT numParts, sizeT blockIndex)
     {
         // Preconditions (replace with your own error handling if desired)
         if (numParts == 0)          throw std::invalid_argument("numParts must be > 0");

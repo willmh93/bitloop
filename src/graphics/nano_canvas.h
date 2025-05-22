@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 /// OpenGL
 #ifdef __EMSCRIPTEN__
 #include <GLES3/gl3.h>
@@ -7,15 +9,11 @@
 #include "glad.h"
 #endif
 #include "glm/glm.hpp"
-#include "platform.h"
-
-#include <memory>
-
 #include "nanovg.h"
 #include "nanovg_gl.h"
 
+#include "platform.h"
 #include "nano_bitmap.h"
-
 #include "camera.h"
 #include "debug.h"
 
@@ -139,8 +137,8 @@ public:
     }
 
     void setRenderTarget(NVGcontext* nvg_ctx) { vg = nvg_ctx; }
-    NVGcontext* getRenderTarget() { return vg; }
-    std::shared_ptr<NanoFont> getDefaultFont() { return default_font; }
+    [[nodiscard]] NVGcontext* getRenderTarget() { return vg; }
+    [[nodiscard]] std::shared_ptr<NanoFont> getDefaultFont() { return default_font; }
 
     // --- Transforms ---
 
@@ -223,25 +221,18 @@ public:
     }
 
 
-    DRect boundingBox(const std::string& txt) const
+    [[nodiscard]] DRect boundingBox(std::string_view txt) const
     {
         float bounds[4];
-        nvgTextBounds(vg, 0, 0, txt.c_str(), txt.c_str() + txt.size(), bounds);
+        nvgTextBounds(vg, 0, 0, txt._Unchecked_begin(), txt._Unchecked_end(), bounds);
         return DRect((double)(bounds[0]), (double)(bounds[1]), (double)(bounds[2] - bounds[0]), (double)(bounds[3] - bounds[1]));
     }
 
-    void fillText(const char* txt, double x, double y)
+    void fillText(std::string_view txt, const DVec2& pos) { fillText(txt, pos.x, pos.y); }
+    void fillText(std::string_view txt, double x, double y)
     {
         if (!active_font) setFont(default_font);
-        nvgText(vg, (float)(x), (float)(y), txt, nullptr);
-    }
-
-    void fillText(const char* txt, const DVec2& pos) { fillText(txt, pos.x, pos.y); }
-    void fillText(const std::string& txt, double x, double y)
-    {
-        if (!active_font) setFont(default_font);
-        const char* ptr = txt.c_str();
-        nvgText(vg, (float)(x), (float)(y), ptr, ptr + txt.size());
+        nvgText(vg, (float)(x), (float)(y), txt._Unchecked_begin(), txt._Unchecked_end());
     }
 };
 
@@ -257,7 +248,7 @@ public:
     double line_width = 1;
 
 
-    DVec2 PT(double x, double y)
+    [[nodiscard]] DVec2 PT(double x, double y)
     {
         // todo: Alter point reference instead of returning new point
         if (camera.transform_coordinates)
@@ -509,7 +500,7 @@ public:
 
     // --- Text ---
 
-    void fillText(const std::string& txt, double px, double py)
+    void fillText(std::string_view txt, double px, double py)
     {
         if (camera.transform_coordinates)
         {
@@ -527,7 +518,6 @@ public:
                     transform(default_viewport_transform);
 
                     translate(camera.toStage(px, py));
-                    //rotate(camera.rotation);
                     scale(camera.zoom_x, camera.zoom_y);
                     SimplePainter::fillText(txt, 0, 0);
 
@@ -541,7 +531,6 @@ public:
                 resetTransform();
                 transform(default_viewport_transform);
 
-                //translate(camera.toWorldOffset(px, py));
                 translate(camera.toStage(px, py));
                 if (camera.rotate_text) 
                     rotate(camera.rotation);
@@ -571,11 +560,11 @@ public:
         }
     }
 
-    void fillText(const std::string& txt, const DVec2& p) {
+    void fillText(std::string_view txt, const DVec2& p) {
         fillText(txt, p.x, p.y);
     }
 
-    DRect boundingBox(const std::string& txt)
+    [[nodiscard]] DRect boundingBox(std::string_view txt)
     {
         save();
         resetTransform();
@@ -585,7 +574,7 @@ public:
         return r;
     }
 
-    std::string format_number(double v) {
+    [[nodiscard]] std::string format_number(double v) {
         char buffer[32];
         double abs_v = std::abs(v);
 
@@ -701,7 +690,7 @@ public:
         }
     }
 
-    DRect boundingBoxNumberScientific(double v, float fontSize = 12)
+    [[nodiscard]] DRect boundingBoxNumberScientific(double v, float fontSize = 12)
     {
         std::string txt = format_number(v);
 
@@ -772,7 +761,7 @@ public:
         //painter->lineTo(pt.x, pt.y);
     }
 
-    void fillTextSharp(const char* txt, const DVec2& pos)
+    void fillTextSharp(std::string_view txt, const DVec2& pos)
     {
         //painter->setPixelAlignText(QNanoPainter::PixelAlign::PIXEL_ALIGN_FULL);
         fillText(txt, /*sharpX*/(pos.x), /*sharpY*/(pos.y));
@@ -829,6 +818,6 @@ public:
     GLuint texture() { return tex; }
     //int logicalWidth() { return (int)(fbo_width/global_scale); }   // Logical pixel width
     //int logicalHeight() { return (int)(fbo_height/global_scale); } // Logical pixel height
-    int fboWidth() { return fbo_width; }
-    int fboHeight() { return fbo_height; }
+    [[nodiscard]] int fboWidth() { return fbo_width; }
+    [[nodiscard]] int fboHeight() { return fbo_height; }
 };

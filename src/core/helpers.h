@@ -178,7 +178,7 @@ public:
     VariableChangedTracker() = default;
 
     template <typename T>
-    bool variableChanged(T& var) const
+    [[nodiscard]] bool variableChanged(T& var) const
     {
         using NonConstT = std::remove_const_t<T>;
         auto& maps = getStateMap<NonConstT>();
@@ -198,7 +198,7 @@ public:
     }
 
     template <typename... Args>
-    bool anyChanged(Args&&... args) const
+    [[nodiscard]] bool anyChanged(Args&&... args) const
     {
         return (variableChanged(std::forward<Args>(args)) || ...);
     }

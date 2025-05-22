@@ -3,32 +3,32 @@
 ///#include "SpaceEngine.h"
 ///#include "EarthMoon.h"
 
-//SIM_SORT_KEY(0)
 SIM_DECLARE(Test, "Framework Tests", "Canvas Transforms")
 
 
-///---------///
-/// Project ///
-///---------///
+/// =========================
+/// ======== Project ========
+/// =========================
 
 void Test_Project_Vars::populate()
 {
-    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 36);
+    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
 }
 
-void Test_Project::projectPrepare()
+void Test_Project::projectPrepare(Layout& layout)
 {
-    auto& layout = newLayout();
+    /// Create multiple instance of a single Scene, mount to separate viewports
+    layout << create<Test_Scene>(viewport_count);
 
-    Test_Scene::Config config1;
-    //auto config2 = make_shared<Test_Scene::Config>(Test_Scene::Config());
-
-    create<Test_Scene>(viewport_count, config1)->mountTo(layout);
+    /// Or create a single Scene instance and view on multiple Viewports
+    //auto* scene = create<Test_Scene>();
+    //for (int i = 0; i < viewport_count; ++i)
+    //    layout << scene;
 }
 
-///-----------///
-///   Scene   ///
-///-----------///
+/// =========================
+/// ========= Scene =========
+/// =========================
 
 void Test_Scene_Attributes::populate()
 {
@@ -279,15 +279,25 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
     ctx->beginPath();
     ctx->circle(ball_pos, 10);
     ctx->fill();*/
+
+    ///auto fingers = camera->pressed_fingers;
+    ///for (auto& finger : fingers)
+    ///{
+    ///    ctx->print() << finger.fingerId << ": (" << finger.x << ", " << finger.y << ")\n";
+    ///}
 }
 
-void Test_Scene::onEvent(Event& e)
+void Test_Scene::onEvent(Event e)
 {
-    if (e.focused_ctx())
-        e.focused_ctx()->camera.handleWorldNavigation(e, true);
-    
-    logMessage(e.info().c_str());
+    handleWorldNavigation(e, true);
 }
+
+void Test_Scene::onPointerDown(PointerEvent e) {}
+void Test_Scene::onPointerUp(PointerEvent e) {}
+void Test_Scene::onPointerMove(PointerEvent e) {}
+void Test_Scene::onWheel(PointerEvent e) {}
+void Test_Scene::onKeyDown(KeyEvent e) {}
+void Test_Scene::onKeyUp(KeyEvent e) {}
 
 
 SIM_END(Test)

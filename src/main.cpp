@@ -18,10 +18,7 @@
 #include "main_window.h"
 
 SDL_Window* window = nullptr;
-
 SharedSync shared_sync;
-std::unique_ptr<CMainWindow>     main_window;
-std::unique_ptr<CProjectWorker>  project_worker;
 
 void gui_loop()
 {
@@ -37,7 +34,7 @@ void gui_loop()
                 if (e.window.event == SDL_WINDOWEVENT_RESIZED) 
                     Platform()->resized(); 
                 break;
-            default: ProjectWorker()->queueEvent(e); break;
+            default: ProjectWorker::instance()->queueEvent(e); break;
         }
     }
 
@@ -51,7 +48,7 @@ void gui_loop()
     ImGui::NewFrame();
 
     // ======== Draw window ========
-    MainWindow()->populateUI();
+    MainWindow::instance()->populateUI();
 
     // ======== Render ========
     ImGui::Render();
@@ -82,7 +79,6 @@ int main(int argc, char* argv[])
         window = SDL_CreateWindow("bitloop", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, fb_w, fb_h,
             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_ALLOW_HIGHDPI);
 
-        PlatformManager::prepare(window);
     }
 
     SDL_GLContext gl_context;
@@ -102,8 +98,9 @@ int main(int argc, char* argv[])
         #endif
     }
 
-    project_worker  = std::make_unique<CProjectWorker>(shared_sync);
-    main_window     = std::make_unique<CMainWindow>(shared_sync);
+    auto platform_manager = std::make_unique<PlatformManager>(window);
+    auto project_worker   = std::make_unique<ProjectWorker>(shared_sync);
+    auto main_window      = std::make_unique<MainWindow>(shared_sync);
 
     // ======== ImGui setup ========
     {
@@ -119,8 +116,8 @@ int main(int argc, char* argv[])
 
     // ======== Init Window & Start worker thread ========
     {
-        MainWindow()->init();
-        ProjectWorker()->startWorker();
+        MainWindow::instance()->init();
+        ProjectWorker::instance()->startWorker();
     }
 
     // ======== Start main ui loop ========
@@ -133,7 +130,7 @@ int main(int argc, char* argv[])
                 gui_loop();
 
             // Gracefully exit
-            ProjectWorker()->end();
+            ProjectWorker::instance()->end();
 
             ImGui_ImplOpenGL3_Shutdown();
             ImGui_ImplSDL2_Shutdown();

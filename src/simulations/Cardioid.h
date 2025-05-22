@@ -464,7 +464,7 @@ struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
     void viewportProcess(Viewport* ctx) override;
     void viewportDraw(Viewport* ctx) const override;
 
-    void onEvent(Event &e) override;
+    void onEvent(Event e) override;
 };
 
 struct Cardioid_Graph_Scene : public BasicScene
@@ -489,7 +489,7 @@ struct Cardioid_Graph_Scene : public BasicScene
 
 struct Cardioid_Project : public BasicProject
 {
-    void projectPrepare() override;
+    void projectPrepare(Layout& layout) override;
 };
 
 SIM_END(Cardioid)

@@ -3,7 +3,7 @@
 #include "project_worker.h"
 
 
-CMainWindow* CMainWindow::singleton = nullptr;
+MainWindow* MainWindow::singleton = nullptr;
 
 ImDebugLog project_log;
 ImDebugLog debug_log;
@@ -16,7 +16,7 @@ void ImDebugPrint(const char* fmt, ...)
     va_end(ap);
 }
 
-void CMainWindow::init()
+void MainWindow::init()
 {
     ImGui::LoadIniSettingsFromMemory("");
 
@@ -30,7 +30,7 @@ void CMainWindow::init()
     canvas.create(Platform()->dpr());
 }
 
-void CMainWindow::checkChangedDPR()
+void MainWindow::checkChangedDPR()
 {
     Platform()->update();
 
@@ -45,7 +45,7 @@ void CMainWindow::checkChangedDPR()
     }
 }
 
-void CMainWindow::initStyles()
+void MainWindow::initStyles()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
@@ -121,7 +121,7 @@ void CMainWindow::initStyles()
     style.ScaleAllSizes(Platform()->ui_scale_factor());
 }
 
-void CMainWindow::initFonts()
+void MainWindow::initFonts()
 {
     // Update FreeType fonts
     ImGuiIO& io = ImGui::GetIO();
@@ -141,7 +141,7 @@ void CMainWindow::initFonts()
     ImGuiFreeType::GetBuilderForFreeType()->FontBuilder_Build(io.Fonts);
 }
 
-void CMainWindow::populateProjectUI()
+void MainWindow::populateProjectUI()
 {
     ImGui::BeginPaddedRegion(ScaleSize(10.0f));
   
@@ -151,13 +151,13 @@ void CMainWindow::populateProjectUI()
     // Shadow buffer is now up-to-date free to access (while worker does processing)
     {
         std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-        ProjectWorker()->populateAttributes();
+        ProjectWorker::instance()->populateAttributes();
     }
 
     ImGui::EndPaddedRegion();
 }
 
-bool CMainWindow::isEditingUI()
+bool MainWindow::isEditingUI()
 {
     ImGuiID active_id = ImGui::GetActiveID();
 
@@ -175,7 +175,7 @@ bool CMainWindow::isEditingUI()
 
 /// ======== Toolbar ========
 
-void CMainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color)
+void MainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color)
 {
     float cx = pos.x + size.x * 0.5f;
     float cy = pos.y + size.y * 0.5f;
@@ -200,7 +200,7 @@ void CMainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 siz
     }
 }
 
-bool CMainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size)
+bool MainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size)
 {
     ImGui::PushStyleColor(ImGuiCol_Button, state.bgColor);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, state.bgColor);
@@ -216,7 +216,7 @@ bool CMainWindow::toolbarButton(const char* id, const char* symbol, const Toolba
     return pressed;
 }
 
-void CMainWindow::populateToolbar()
+void MainWindow::populateToolbar()
 {
     //if (Platform()->is_mobile())
     //    return;
@@ -260,7 +260,7 @@ void CMainWindow::populateToolbar()
 
 /// ======== Project Tree ========
 
-void CMainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i, int depth)
+void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i, int depth)
 {
     ImGui::PushID(i++);
     if (node.project_info)
@@ -268,8 +268,8 @@ void CMainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i
         // Leaf project node
         if (ImGui::Button(node.name.c_str()))
         {
-            ProjectWorker()->setActiveProject(node.project_info->sim_uid);
-            ProjectWorker()->startProject();
+            ProjectWorker::instance()->setActiveProject(node.project_info->sim_uid);
+            ProjectWorker::instance()->startProject();
         }
     }
     else
@@ -288,7 +288,7 @@ void CMainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i
     ImGui::PopID();
 }
 
-void CMainWindow::populateProjectTree(bool expand_vertical)
+void MainWindow::populateProjectTree(bool expand_vertical)
 {
     ImVec2 frameSize = ImVec2(0.0f, expand_vertical ? 0 : 170.0f); // Let height auto-expand
     ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
@@ -323,7 +323,7 @@ void CMainWindow::populateProjectTree(bool expand_vertical)
 
 /// ======== Main Window populate ========
 
-bool CMainWindow::manageDockingLayout()
+bool MainWindow::manageDockingLayout()
 {
     // Create a fullscreen dockspace
     ImGuiWindowFlags dockspace_flags =
@@ -401,7 +401,20 @@ bool CMainWindow::manageDockingLayout()
     return true;
 }
 
-void CMainWindow::populateCollapsedLayout()
+bool MainWindow::focusWindow(const char* id)
+{
+    static bool first_frame = true; // SetWindowFocus doesn't switch focused tab unless second frame
+    bool ret = false;
+    if (initialized && !first_frame)
+    {
+        ImGui::SetWindowFocus(id);
+        ret = true;
+    }
+    first_frame = false;
+    return ret;
+}
+
+void MainWindow::populateCollapsedLayout()
 {
     // Collapse layout
     if (ImGui::Begin("Projects", nullptr, window_flags))
@@ -435,7 +448,7 @@ void CMainWindow::populateCollapsedLayout()
     ImGui::End();
 }
 
-void CMainWindow::populateExpandedLayout()
+void MainWindow::populateExpandedLayout()
 {
     // Show both windows
     if (ImGui::Begin("Projects", nullptr, window_flags))
@@ -455,49 +468,10 @@ void CMainWindow::populateExpandedLayout()
     ImGui::End();
 }
 
-void CMainWindow::populateUI()
+void MainWindow::populateViewport()
 {
-    if (!manageDockingLayout())
-        return;
-
-    // Show windows
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-
-    // Determine if we are ready to draw *before* populating simulation imgui attributes
-    bool need_draw = false;
-    {
-        std::lock_guard<std::mutex> g(shared_sync.state_mutex);
-        need_draw = shared_sync.frame_ready;
-    }
-
-    bool collapse_layout = vertical_layout || Platform()->max_char_rows() < 40.0f;
-    if (collapse_layout)
-        populateCollapsedLayout();
-    else
-        populateExpandedLayout();
-
-    static bool first_frame = true; // SetWindowFocus doesn't switch focused tab unless second frame
-    if (initialized && !done_first_focus && !first_frame)
-    {
-        done_first_focus = true;
-        ImGui::SetWindowFocus(collapse_layout ? "Active" : "Projects");
-    }
-    first_frame = false;
-
-    ImGui::PopStyleVar();
-
-    ImGuiWindowClass wc{};
-    wc.DockNodeFlagsOverrideSet =
-        (int)ImGuiDockNodeFlags_NoTabBar |
-        (int)ImGuiWindowFlags_NoDocking;
-
-    ImGui::SetNextWindowClass(&wc);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
-
-
+    // Always process viewport, even if not visible
     bool viewport_visible = ImGui::Begin("Viewport");
-
-        // Always process viewport, even if not visible
     {
         ImVec2 size = ImGui::GetContentRegionAvail();
         int width = static_cast<int>(size.x);
@@ -514,10 +488,10 @@ void CMainWindow::populateUI()
         else if (shared_sync.project_thread_started)
         {
             // Launch initial simulation 1 frame late (background thread)
-            if (!ProjectWorker()->getActiveProject())
+            if (!ProjectWorker::instance()->getActiveProject())
             {
-                ProjectWorker()->setActiveProject(ProjectBase::findProjectInfo("Mandelbrot Viewer")->sim_uid);
-                ProjectWorker()->startProject();
+                ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Mandelbrot Viewer")->sim_uid);
+                ProjectWorker::instance()->startProject();
 
                 // Kick-start work-render-work-render loop
                 need_draw = true;
@@ -531,7 +505,7 @@ void CMainWindow::populateUI()
                 std::unique_lock<std::mutex> lock(shared_sync.state_mutex);
 
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-                ProjectWorker()->draw();
+                ProjectWorker::instance()->draw();
                 canvas.end();
 
                 shared_sync.frame_ready = false;
@@ -560,6 +534,53 @@ void CMainWindow::populateUI()
         shared_sync.editing_ui.store(isEditingUI(), std::memory_order_release);
     }
     ImGui::End();
+}
+
+void MainWindow::populateUI()
+{
+    if (!manageDockingLayout())
+        return;
+
+    // Show windows
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+    // Determine if we are ready to draw *before* populating simulation imgui attributes
+    {
+        std::lock_guard<std::mutex> g(shared_sync.state_mutex);
+        need_draw = shared_sync.frame_ready;
+    }
+
+    bool collapse_layout = vertical_layout || Platform()->max_char_rows() < 40.0f;
+    if (collapse_layout)
+        populateCollapsedLayout();
+    else
+        populateExpandedLayout();
+
+    /*static bool first_frame = true; // SetWindowFocus doesn't switch focused tab unless second frame
+    if (initialized && !done_first_focus && !first_frame)
+    {
+        done_first_focus = true;
+        ImGui::SetWindowFocus(collapse_layout ? "Active" : "Projects");
+    }
+    first_frame = false;*/
+
+    if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
+    {
+        done_first_focus = true;
+    }
+
+    ImGui::PopStyleVar();
+
+    ImGuiWindowClass wc{};
+    wc.DockNodeFlagsOverrideSet =
+        (int)ImGuiDockNodeFlags_NoTabBar |
+        (int)ImGuiWindowFlags_NoDocking;
+
+    ImGui::SetNextWindowClass(&wc);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
+
+
+    populateViewport();
 
     #ifdef DEBUG_INCLUDE_LOG_TABS
     if (ImGui::Begin("Project Log"))

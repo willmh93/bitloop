@@ -55,11 +55,14 @@ struct {CLASS_NAME}_Scene : public Scene<{CLASS_NAME}_Scene_Vars>
     void viewportProcess(Viewport* ctx) override;
     void viewportDraw(Viewport* ctx) override;
 
-    // --- Input ---
-    void mouseDown() override;
-    void mouseUp() override;
-    void mouseMove() override;
-    void mouseWheel() override;
+    // Input
+    void onEvent(Event e) override;
+    void onPointerDown(PointerEvent e) override;
+    void onPointerUp(PointerEvent e) override;
+    void onPointerMove(PointerEvent e) override;
+    void onWheel(PointerEvent e) override;
+    void onKeyDown(KeyEvent e) override;
+    void onKeyUp(KeyEvent e) override;
 }};
 
 struct {CLASS_NAME}_Project_Vars : public VarBuffer<_Project_
@@ -69,7 +72,7 @@ struct {CLASS_NAME}_Project : public Project<{CLASS_NAME}_Project_Vars>
     int panel_count = 1;
 
     void projectAttributes() override;
-    void projectPrepare() override;
+    void projectPrepare(Layout& layout) override;
     //void projectStart() override;
     //void projectStop() override;
     //void projectDestroy() override;

@@ -12,7 +12,7 @@
 #include "helpers.h"
 #include "types.h"
 #include "json.h"
-
+#include "event.h"
 #include "camera.h"
 #include "nano_canvas.h"
 #include "imgui_custom.h"
@@ -122,44 +122,6 @@ class ProjectBase;
 class ProjectManager;
 struct ImDebugLog;
 
-class Event
-{
-    friend class ProjectBase;
-
-    SDL_Event _event;
-    Viewport* _focused_ctx = nullptr;
-    Viewport* _hovered_ctx = nullptr;
-    Viewport* _owner_ctx = nullptr;
-
-protected:
-
-    void setFocusedViewport(Viewport* ctx) {
-        _focused_ctx = ctx;
-    }
-    void setHoveredViewport(Viewport* ctx) {
-        _hovered_ctx = ctx;
-    }
-    void setOwnerViewport(Viewport* ctx) {
-        _owner_ctx = ctx;
-    }
-
-public:
-
-    Event(const SDL_Event& e) : _event(e) {}
-
-    Viewport* focused_ctx() { return _focused_ctx; }
-    Viewport* hovered_ctx() { return _hovered_ctx; }
-    Viewport* owner_ctx() { return _owner_ctx; }
-
-    SDL_Event* operator->() { return &_event; }
-    const SDL_Event* operator->() const { return &_event; }
-
-    // Touch helpers
-    double finger_x();
-    double finger_y();
-
-    std::string info();
-};
 
 class SceneBase : public VariableChangedTracker
 {
@@ -196,9 +158,23 @@ protected:
     virtual void _updateShadowSceneAttributes() {}
     //
     
-    void _onEvent(Event& e) 
+    void _onEvent(Event e) 
     {
         onEvent(e);
+
+        switch (e.type())
+        {
+        case SDL_FINGERDOWN:       onPointerDown(PointerEvent(e));  break;
+        case SDL_MOUSEBUTTONDOWN:  onPointerDown(PointerEvent(e));  break;
+        case SDL_FINGERUP:         onPointerUp(PointerEvent(e));    break;
+        case SDL_MOUSEBUTTONUP:    onPointerUp(PointerEvent(e));    break;
+        case SDL_FINGERMOTION:     onPointerMove(PointerEvent(e));  break;
+        case SDL_MOUSEMOTION:      onPointerMove(PointerEvent(e));  break;
+        case SDL_MOUSEWHEEL:       onWheel(PointerEvent(e));        break;
+
+        case SDL_KEYDOWN:          onKeyDown(KeyEvent(e));          break;
+        case SDL_KEYUP:            onKeyUp(KeyEvent(e));            break;
+        }
     }
 
 public:
@@ -226,25 +202,29 @@ public:
     virtual void viewportProcess(Viewport* ctx) {}
     virtual void viewportDraw(Viewport* ctx) const = 0;
 
-    virtual void onEvent(Event& e) {}
+    virtual void onEvent(Event e) {}
 
     void pollEvents();
     void pollData();
 
-    ///virtual void touchEvent(TouchEvent e) {}
-    ///virtual void mouseDown() {}
-    ///virtual void mouseUp() {}
-    ///virtual void mouseMove() {}
-    ///virtual void mouseWheel() {}
+    virtual void onPointerEvent(PointerEvent e) {}
+    virtual void onPointerDown(PointerEvent e) {}
+    virtual void onPointerUp(PointerEvent e) {}
+    virtual void onPointerMove(PointerEvent e) {} 
+    virtual void onWheel(PointerEvent e) {}
+    virtual void onKeyDown(KeyEvent e) {}
+    virtual void onKeyUp(KeyEvent e) {}
+
+    void handleWorldNavigation(Event e, bool single_touch_pan);
 
     virtual std::string name() const { return "Scene"; }
-    int sceneIndex() const { return scene_index; }
+    [[nodiscard]] int sceneIndex() const { return scene_index; }
 
-    double frame_dt(int average_samples = 1) const;
-    double scene_dt(int average_samples = 1) const;
-    double project_dt(int average_samples = 1) const;
+    [[nodiscard]] double frame_dt(int average_samples = 1) const;
+    [[nodiscard]] double scene_dt(int average_samples = 1) const;
+    [[nodiscard]] double project_dt(int average_samples = 1) const;
 
-    double fps(int average_samples = 1) const { return 1000.0 / frame_dt(average_samples); }
+    [[nodiscard]] double fps(int average_samples = 1) const { return 1000.0 / frame_dt(average_samples); }
 
     ///FRect combinedViewportsRect()
     ///{
@@ -255,18 +235,18 @@ public:
     ///    }
     ///}
 
-    double random(double min = 0, double max = 1) const
+    [[nodiscard]] double random(double min = 0, double max = 1) const
     {
         std::uniform_real_distribution<> dist(min, max);
         return dist(gen);
     }
 
-    DVec2 Offset(double stage_offX, double stage_offY) const
+    [[nodiscard]] DVec2 Offset(double stage_offX, double stage_offY) const
     {
         return camera->toWorldOffset({ stage_offX, stage_offY });
     }
 
-    void logMessage(const char* fmt, ...);
+    void logMessage(std::string_view, ...);
     void logClear();
 };
 
@@ -367,20 +347,11 @@ public:
 
     void draw();
 
-    int viewportIndex() { return viewport_index; }
-    int viewportGridX() { return viewport_grid_x; }
-    int viewportGridY() { return viewport_grid_y; }
-    DRect viewportRect() { return DRect(x, y, x + width, y + height);}
-    DQuad worldQuad() { return camera.toWorldQuad(0, 0, width, height); }
-
-    template<typename T, typename... Args>
-    T* construct(Args&&... args)
-    {
-        DebugPrint("Scene constructed. Mounting to Viewport: %d", viewport_index);
-        scene = new T(std::forward<Args>(args)...);
-        scene->registerMount(this);
-        return dynamic_cast<T*>(scene);
-    }
+    [[nodiscard]] int viewportIndex() { return viewport_index; }
+    [[nodiscard]] int viewportGridX() { return viewport_grid_x; }
+    [[nodiscard]] int viewportGridY() { return viewport_grid_y; }
+    [[nodiscard]] DRect viewportRect() { return DRect(x, y, x + width, y + height);}
+    [[nodiscard]] DQuad worldQuad() { return camera.toWorldQuad(0, 0, width, height); }
 
     template<typename T>
     T* mountScene(T* _sim)
@@ -393,7 +364,7 @@ public:
 
     // Viewport-specific draw helpers (i.e. size of viewport needed)
     void printTouchInfo();
-    
+
     void drawWorldAxis(
         double axis_opacity = 0.3,
         double grid_opacity = 0.04,
@@ -403,6 +374,12 @@ public:
     std::stringstream& print() {
         return print_stream;
     }
+};
+
+
+struct SimSceneList : public std::vector<SceneBase*>
+{
+    void mountTo(Layout& viewports);
 };
 
 class Layout
@@ -454,33 +431,23 @@ public:
         this->targ_viewports_y = targ_viewports_y;
     }
 
-    template<typename T, typename... Args>
-    Layout* constructAll(Args&&... args)
-    {
-        for (Viewport* viewport : viewports)
-            viewport->construct<T>(std::forward<Args>(args)...);
-        return this;
-    }
 
-    Viewport* operator[](size_t i) { expandCheck(i + 1); return viewports[i]; }
+    [[nodiscard]] Viewport* operator[](size_t i) { expandCheck(i + 1); return viewports[i]; }
     Layout&   operator<<(SceneBase* scene) { scene->mountTo(*this); return *this; }
-
-    iterator begin() { return viewports.begin(); }
-    iterator end() { return viewports.end(); }
-
-    const_iterator begin() const { return viewports.begin(); }
-    const_iterator end() const { return viewports.end(); }
-
-    int count() const {
-        return static_cast<int>(viewports.size());
+    Layout&   operator<<(std::shared_ptr<SimSceneList> scenes) { 
+        for (SceneBase *scene : *scenes)
+            scene->mountTo(*this);
+        return *this;
     }
-};
 
-struct SimSceneList : public std::vector<SceneBase*>
-{
-    void mountTo(Layout& viewports) {
-        for (size_t i = 0; i < size(); i++)
-            at(i)->mountTo(viewports[i]);
+    [[nodiscard]] iterator begin() { return viewports.begin(); }
+    [[nodiscard]] iterator end() { return viewports.end(); }
+
+    [[nodiscard]] const_iterator begin() const { return viewports.begin(); }
+    [[nodiscard]] const_iterator end() const { return viewports.end(); }
+
+    [[nodiscard]] int count() const {
+        return static_cast<int>(viewports.size());
     }
 };
 
@@ -511,13 +478,12 @@ class ProjectBase
     std::chrono::steady_clock::time_point last_frame_time 
         = std::chrono::steady_clock::now();
 
-    Viewport* focused_ctx = nullptr;
-    Viewport* hovered_ctx = nullptr;
+    Viewport* ctx_focused = nullptr;
+    Viewport* ctx_hovered = nullptr;
 
 protected:
 
-    //friend class ProjectManagerCls;
-    friend class CProjectWorker;
+    friend class ProjectWorker;
     friend class Layout;
     friend class SceneBase;
 
@@ -531,7 +497,7 @@ protected:
 
     void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
 
-    DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
+    [[nodiscard]] DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
     void updateViewportRects();
 
     // -------- Attributes --------
@@ -561,19 +527,19 @@ public:
     virtual ~ProjectBase() = default;
     
     // BasicProject Factory methods
-    static std::vector<std::shared_ptr<ProjectInfo>>& projectInfoList()
+    static [[nodiscard]] std::vector<std::shared_ptr<ProjectInfo>>& projectInfoList()
     {
         static std::vector<std::shared_ptr<ProjectInfo>> info_list;
         return info_list;
     }
 
-    static ProjectInfoNode& projectTreeRootInfo()
+    static [[nodiscard]] ProjectInfoNode& projectTreeRootInfo()
     {
         static ProjectInfoNode root("root");
         return root;
     }
 
-    static std::shared_ptr<ProjectInfo> findProjectInfo(int sim_uid)
+    static [[nodiscard]] std::shared_ptr<ProjectInfo> findProjectInfo(int sim_uid)
     {
         for (auto& info : projectInfoList())
         {
@@ -583,7 +549,7 @@ public:
         return nullptr;
     }
 
-    static std::shared_ptr<ProjectInfo> findProjectInfo(const char *name)
+    static [[nodiscard]] std::shared_ptr<ProjectInfo> findProjectInfo(const char *name)
     {
         for (auto& info : projectInfoList())
         {
@@ -653,7 +619,7 @@ public:
         });
     }
 
-    std::shared_ptr<ProjectInfo> getProjectInfo()
+    [[nodiscard]] std::shared_ptr<ProjectInfo> getProjectInfo()
     {
         return findProjectInfo(sim_uid);
     }
@@ -677,7 +643,7 @@ public:
     // Shared Scene creators
 
     template<typename SceneType>
-    SceneType* create()
+    [[nodiscard]] SceneType* create()
     {
         auto config = std::make_shared<typename SceneType::Config>();
         SceneType* scene;
@@ -698,7 +664,7 @@ public:
         return scene;
     }
 
-    template<typename SceneType> SceneType* create(typename SceneType::Config config)
+    template<typename SceneType> [[nodiscard]] SceneType* create(typename SceneType::Config config)
     {
         auto config_ptr = std::make_shared<typename SceneType::Config>(config);
 
@@ -712,7 +678,7 @@ public:
     }
 
     template<typename SceneType>
-    SceneType* create(std::shared_ptr<typename SceneType::Config> config)
+    [[nodiscard]] SceneType* create(std::shared_ptr<typename SceneType::Config> config)
     {
         if (!config)
             throw "Launch Config wasn't created";
@@ -727,7 +693,7 @@ public:
     }
 
     template<typename SceneType>
-    std::shared_ptr<SimSceneList> create(int count)
+    [[nodiscard]] std::shared_ptr<SimSceneList> create(int count)
     {
         auto ret = std::make_shared<SimSceneList>();
         for (int i = 0; i < count; i++)
@@ -742,7 +708,7 @@ public:
     }
 
     template<typename SceneType>
-    std::shared_ptr<SimSceneList> create(int count, typename SceneType::Config config)
+    [[nodiscard]] std::shared_ptr<SimSceneList> create(int count, typename SceneType::Config config)
     {
         auto ret = std::make_shared<SimSceneList>();
         for (int i = 0; i < count; i++)
@@ -758,16 +724,16 @@ public:
 
     Layout& newLayout();
     Layout& newLayout(int _viewports_x, int _viewports_y);
-    Layout& currentLayout()
+    [[nodiscard]] Layout& currentLayout()
     {
         return viewports;
     }
 
-    int fboWidth() { return canvas->fboWidth(); }
-    int fboHeight() { return canvas->fboHeight(); }
+    [[nodiscard]] int fboWidth() { return canvas->fboWidth(); }
+    [[nodiscard]] int fboHeight() { return canvas->fboHeight(); }
 
     virtual void projectAttributes() {}
-    virtual void projectPrepare() = 0;
+    virtual void projectPrepare(Layout& layout) = 0;
     virtual void projectStart() {}
     virtual void projectStop() {}
     virtual void projectDestroy() {}

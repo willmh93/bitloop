@@ -13,7 +13,7 @@ namespace Math
     constexpr double HALF_PI = std::numbers::pi / 2.0;
     constexpr double INV_TWO_PI = 1.0 / TWO_PI;
 
-    inline int countDecimals(double num)
+    [[nodiscard]] inline int countDecimals(double num)
     {
         // todo: Optimize?
         std::ostringstream out;
@@ -25,7 +25,7 @@ namespace Math
         return int(str.size() - pos - 1);
     }
 
-    inline int countDigits(int n)
+    [[nodiscard]] inline int countDigits(int n)
     {
         if (n == 0) return 1;
 
@@ -36,8 +36,9 @@ namespace Math
 
         return static_cast<int>(std::log10(static_cast<double>(v))) + 1;
     }
+    
     template <typename Float>
-    int countWholeDigits(Float x)
+    [[nodiscard]] int countWholeDigits(Float x)
     {
         static_assert(std::is_floating_point_v<Float>,
             "Float must be a floating-point type");
@@ -54,7 +55,7 @@ namespace Math
     }
 
     template<typename T, typename... Rest>
-    constexpr T avg(T first, Rest... rest)
+    [[nodiscard]] constexpr T avg(T first, Rest... rest)
     {
         T sum = (first + ... + rest);
         constexpr std::size_t count = 1 + sizeof...(rest);
@@ -62,19 +63,19 @@ namespace Math
     }
 
     // Ratios (a->b,  0->1)
-    template<typename T> constexpr T ratio(T a, T b) { return ((b-a)/a); }
-    template<typename T> constexpr T abs_ratio(T a, T b) { return abs((b-a)/a); }
-    template<typename T> constexpr T avg_ratio(T a, T b) { return ((a-b)/((a+b)/T{2})); }
-    template<typename T> constexpr T abs_avg_ratio(T a, T b) { return (abs(a-b)/((a+b)/T{2})); }
+    template<typename T> [[nodiscard]] constexpr T ratio(T a, T b) { return ((b-a)/a); }
+    template<typename T> [[nodiscard]] constexpr T abs_ratio(T a, T b) { return abs((b-a)/a); }
+    template<typename T> [[nodiscard]] constexpr T avg_ratio(T a, T b) { return ((a-b)/((a+b)/T{2})); }
+    template<typename T> [[nodiscard]] constexpr T abs_avg_ratio(T a, T b) { return (abs(a-b)/((a+b)/T{2})); }
 
     // Percentages (a->b,  0->100)
-    template<typename T> constexpr T pct(T a, T b) { return ((b-a)/a)*T{100}; }
-    template<typename T> constexpr T abs_pct(T a, T b) { return abs((b-a)/a)*T{100}; }
-    template<typename T> constexpr T avg_pct(T a, T b) { return (((a-b)/((a+b)/T{2}))*T{100}); }
-    template<typename T> constexpr T abs_avg_pct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
+    template<typename T> [[nodiscard]] constexpr T pct(T a, T b) { return ((b-a)/a)*T{100}; }
+    template<typename T> [[nodiscard]] constexpr T abs_pct(T a, T b) { return abs((b-a)/a)*T{100}; }
+    template<typename T> [[nodiscard]] constexpr T avg_pct(T a, T b) { return (((a-b)/((a+b)/T{2}))*T{100}); }
+    template<typename T> [[nodiscard]] constexpr T abs_avg_pct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
 
     // Coordinate offset rotation
-    inline DVec2 rotateOffset(double dx, double dy, double rotation)
+    [[nodiscard]]inline DVec2 rotateOffset(double dx, double dy, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -83,14 +84,14 @@ namespace Math
             (dy * _cos + dx * _sin)
         };
     }
-    inline DVec2 rotateOffset(double dx, double dy, double _cos, double _sin)
+    [[nodiscard]]inline DVec2 rotateOffset(double dx, double dy, double _cos, double _sin)
     {
         return {
             (dx * _cos - dy * _sin),
             (dy * _cos + dx * _sin)
         };
     }
-    inline DVec2 rotateOffset(const DVec2& offset, double rotation)
+    [[nodiscard]]inline DVec2 rotateOffset(const DVec2& offset, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -99,7 +100,7 @@ namespace Math
             (offset.y * _cos + offset.x * _sin)
         };
     }
-    inline DVec2 rotateOffset(const DVec2& offset, double _cos, double _sin)
+    [[nodiscard]]inline DVec2 rotateOffset(const DVec2& offset, double _cos, double _sin)
     {
         return {
             (offset.x * _cos - offset.y * _sin),
@@ -107,7 +108,7 @@ namespace Math
         };
     }
 
-    inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
+    [[nodiscard]]inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -116,14 +117,14 @@ namespace Math
             (dy * _cos - dx * _sin)
         };
     }
-    inline DVec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
+    [[nodiscard]]inline DVec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
     {
         return {
             (dx * _cos + dy * _sin),
             (dy * _cos - dx * _sin)
         };
     }
-    inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
+    [[nodiscard]]inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -132,7 +133,7 @@ namespace Math
             (offset.y * _cos - offset.x * _sin)
         };
     }
-    inline DVec2 reverseRotateOffset(const DVec2& offset, double _cos, double _sin)
+    [[nodiscard]]inline DVec2 reverseRotateOffset(const DVec2& offset, double _cos, double _sin)
     {
         return {
             (offset.x * _cos + offset.y * _sin),
@@ -141,7 +142,7 @@ namespace Math
     }
 
     // Angles
-    inline double closestAngleDifference(double angle, double target_angle)
+    [[nodiscard]] inline double closestAngleDifference(double angle, double target_angle)
     {
         double diff = std::fmod((target_angle - angle) + PI, TWO_PI);
         if (diff < 0)
@@ -291,13 +292,13 @@ namespace Math
 
     // Lerp
     template<typename ValueT, typename Scalar>
-    constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar x) {
+    [[nodiscard]] constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar x) {
 
         return (ValueT)(a + (b - a) * x);
     }
     
     template<typename ValueT, typename Scalar>
-    inline Rect<ValueT> lerp(const Rect<ValueT>& src, const Rect<ValueT>& targ, Scalar factor)
+    [[nodiscard]] inline Rect<ValueT> lerp(const Rect<ValueT>& src, const Rect<ValueT>& targ, Scalar factor)
     {
         Rect<ValueT> ret = src;
         ret.x1 += (targ.x1 - src.x1) * factor;
@@ -308,7 +309,7 @@ namespace Math
     }
 
     template<typename T>
-    inline T lerpFactor(T value, T min, T max) {
+    [[nodiscard]] inline T lerpFactor(T value, T min, T max) {
         return ((value - min) / (max - min));
     }
 
@@ -338,7 +339,7 @@ namespace Math
                 return average();
             }
 
-            double average()
+            [[nodiscard]] double average()
             {
                 return (sum / static_cast<double>(samples.size()));
             }

@@ -2,15 +2,15 @@
 #include "main_window.h"
 #include "project.h"
 
-CProjectWorker* CProjectWorker::singleton = nullptr;
+ProjectWorker* ProjectWorker::singleton = nullptr;
 
-void CProjectWorker::startWorker()
+void ProjectWorker::startWorker()
 {
-    worker_thread = std::thread(&CProjectWorker::worker_loop, singleton);
+    worker_thread = std::thread(&ProjectWorker::worker_loop, singleton);
     shared_sync.project_thread_started = true;
 }
 
-void CProjectWorker::end()
+void ProjectWorker::end()
 {
     if (shared_sync.project_thread_started)
     {
@@ -23,7 +23,7 @@ void CProjectWorker::end()
 }
 
 
-void CProjectWorker::_destroyActiveProject()
+void ProjectWorker::_destroyActiveProject()
 {
     if (active_project)
     {
@@ -34,7 +34,7 @@ void CProjectWorker::_destroyActiveProject()
 }
 
 
-void CProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
+void ProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
 {
     switch (e.type)
     {
@@ -45,7 +45,7 @@ void CProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
         _destroyActiveProject();
 
         active_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
-        active_project->configure(e.project_uid, MainWindow()->getCanvas(), &project_log);
+        active_project->configure(e.project_uid, MainWindow::instance()->getCanvas(), &project_log);
         active_project->_projectPrepare();
     }
     break;
@@ -77,7 +77,7 @@ void CProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
     }
 }
 
-void CProjectWorker::worker_loop()
+void ProjectWorker::worker_loop()
 {
     while (!shared_sync.quitting.load())
     {
@@ -128,13 +128,13 @@ void CProjectWorker::worker_loop()
     }
 }
 
-void CProjectWorker::queueEvent(const SDL_Event& event)
+void ProjectWorker::queueEvent(const SDL_Event& event)
 {
     std::lock_guard<std::mutex> lock(event_queue_mutex);
     input_event_queue.push_back(event);
 }
 
-void CProjectWorker::queueData()
+void ProjectWorker::queueData()
 {
     if (!shared_sync.editing_ui.load())
     {
@@ -147,7 +147,7 @@ void CProjectWorker::queueData()
     }
 }
 
-void CProjectWorker::pollData()
+void ProjectWorker::pollData()
 {
     if (shared_sync.editing_ui.load())
     {
@@ -164,7 +164,7 @@ void CProjectWorker::pollData()
     }
 }
 
-void CProjectWorker::pollEvents()
+void ProjectWorker::pollEvents()
 {
     // Grab event queue data (and clear via swap with empty queue)
     std::vector<SDL_Event> local;
@@ -177,37 +177,37 @@ void CProjectWorker::pollEvents()
         _onEvent(e);
 }
 
-void CProjectWorker::updateLiveAttributes()
+void ProjectWorker::updateLiveAttributes()
 {
     if (active_project)
         active_project->updateAllLiveAttributes();
 }
 
-void CProjectWorker::updateShadowAttributes()
+void ProjectWorker::updateShadowAttributes()
 {
     if (active_project)
         active_project->updateAllShadowAttributes();
 }
 
-void CProjectWorker::populateAttributes()
+void ProjectWorker::populateAttributes()
 {
     if (active_project)
         active_project->_populateAllAttributes();
 }
 
-void CProjectWorker::_onEvent(SDL_Event& e)
+void ProjectWorker::_onEvent(SDL_Event& e)
 {
     if (active_project)
         active_project->_onEvent(e);
 }
 
-void CProjectWorker::process()
+void ProjectWorker::process()
 {
     if (active_project)
         active_project->_projectProcess();
 }
 
-void CProjectWorker::draw()
+void ProjectWorker::draw()
 {
     if (active_project)
         active_project->_projectDraw();

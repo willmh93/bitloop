@@ -17,14 +17,16 @@ struct ToolbarButtonState
 extern ImDebugLog project_log;
 extern ImDebugLog debug_log;
 
-class CMainWindow
+class MainWindow
 {
-    static CMainWindow* singleton;
+    static MainWindow* singleton;
 
     bool initialized = false;
     bool done_first_focus = false;
     bool update_docking_layout = false;
     bool vertical_layout = false;
+
+    bool need_draw = false;
 
     ToolbarButtonState play = { ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
     ToolbarButtonState stop = { ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
@@ -41,15 +43,15 @@ class CMainWindow
 
 public:
 
-    static CMainWindow* get() { 
+    static MainWindow* instance() { 
         return singleton; 
     }
 
-    CMainWindow(SharedSync& _shared_sync) : shared_sync(_shared_sync) {
+    MainWindow(SharedSync& _shared_sync) : shared_sync(_shared_sync) {
         singleton = this;
     }
 
-    Canvas* getCanvas() {
+    [[nodiscard]] Canvas* getCanvas() {
         return &canvas;
     }
 
@@ -74,12 +76,15 @@ public:
     
     /// Main Window populate
     bool manageDockingLayout();
+    bool focusWindow(const char* id);
+
     void populateCollapsedLayout();
+    void populateViewport();
     void populateExpandedLayout();
     void populateUI();
 };
 
-static CMainWindow* MainWindow()
-{
-    return CMainWindow::get();
-}
+//static MainWindow* MainWindow()
+//{
+//    return MainWindow::get();
+//}

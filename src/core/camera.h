@@ -7,7 +7,7 @@ class Event;
 
 struct FingerInfo
 {
-    Viewport* owner_ctx = nullptr;
+    Viewport* ctx_owner = nullptr;
     int64_t fingerId;
     double x;
     double y;
@@ -102,8 +102,8 @@ public:
 
     void setStagePanX(int px);
     void setStagePanY(int py);
-    double getStagePanX();
-    double getStagePanY();
+    [[nodiscard]] double getStagePanX();
+    [[nodiscard]] double getStagePanY();
 
     void setCameraPos(double _x, double _y);
     void setPan(double pan_x, double pan_y, bool immediate=true);
@@ -111,7 +111,7 @@ public:
     void setZoomX(double zoom_x, bool immediate= true);
     void setZoomY(double zoom_y, bool immediate= true);
 
-    DVec2 getRelativeZoomFactor() { 
+    [[nodiscard]] DVec2 getRelativeZoomFactor() {
         return { 
             zoom_x / reference_zoom_x, 
             zoom_y / reference_zoom_x 
@@ -139,7 +139,7 @@ public:
 
     void originToCenterViewport();
 
-    DVec2 toStageOffset(const DVec2& world_offset)
+    [[nodiscard]] DVec2 toStageOffset(const DVec2& world_offset)
     {
         if (this->transform_coordinates)
         {
@@ -156,7 +156,7 @@ public:
             };
         }
     }
-    DVec2 toWorldOffset(const DVec2& stage_offset)
+    [[nodiscard]] DVec2 toWorldOffset(const DVec2& stage_offset)
     {
         if (this->transform_coordinates)
         {
@@ -174,42 +174,44 @@ public:
         }
     }
 
-    DVec2 toStageOffset(double world_ox, double world_oy)
+    [[nodiscard]] DVec2 toStageOffset(double world_ox, double world_oy)
     {
         return toStageOffset({ world_ox, world_oy });
     }
-    DVec2 toWorldOffset(double stage_ox, double stage_oy)
+    [[nodiscard]] DVec2 toWorldOffset(double stage_ox, double stage_oy)
     {
         return toWorldOffset({ stage_ox, stage_oy });
     }
 
-    DVec2 originPixelOffset();
-    DVec2 originWorldOffset();
-    DVec2 panPixelOffset();
+    [[nodiscard]] DVec2 originPixelOffset();
+    [[nodiscard]] DVec2 originWorldOffset();
+    [[nodiscard]] DVec2 panPixelOffset();
 
-    DVec2 toWorld(const DVec2& pt);
-    DVec2 toWorld(double x, double y);
-    DRect toWorldRect(const DRect& r);
-    DRect toWorldRect(double x1, double y1, double x2, double y2);
+    [[nodiscard]] DVec2 toWorld(const DVec2& pt);
+    [[nodiscard]] DVec2 toWorld(double x, double y);
+    [[nodiscard]] DRect toWorldRect(const DRect& r);
+    [[nodiscard]] DRect toWorldRect(double x1, double y1, double x2, double y2);
 
-    DQuad toWorldQuad(const DVec2 &a, const DVec2& b, const DVec2& c, const DVec2& d);
-    DQuad toWorldQuad(const DQuad& quad);
-    DQuad toWorldQuad(const DRect& quad);
-    DQuad toWorldQuad(double x1, double y1, double x2, double y2);
+    [[nodiscard]] DQuad toWorldQuad(const DVec2 &a, const DVec2& b, const DVec2& c, const DVec2& d);
+    [[nodiscard]] DQuad toWorldQuad(const DQuad& quad);
+    [[nodiscard]] DQuad toWorldQuad(const DRect& quad);
+    [[nodiscard]] DQuad toWorldQuad(double x1, double y1, double x2, double y2);
 
-    DVec2 toStage(const DVec2& pt);
-    DVec2 toStage(double x, double y);
-    DVec2 toStageSize(const DVec2& size);
-    DVec2 toStageSize(double w, double h);
-    DRect toStageRect(double x0, double y0, double x1, double y1);
-    DRect toStageRect(const DVec2& pt1, const DVec2& pt2);
-    DQuad toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d);
+    [[nodiscard]] DVec2 toStage(const DVec2& pt);
+    [[nodiscard]] DVec2 toStage(double x, double y);
+    [[nodiscard]] DVec2 toStageSize(const DVec2& size);
+    [[nodiscard]] DVec2 toStageSize(double w, double h);
+    [[nodiscard]] DRect toStageRect(double x0, double y0, double x1, double y1);
+    [[nodiscard]] DRect toStageRect(const DVec2& pt1, const DVec2& pt2);
+    [[nodiscard]] DQuad toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d);
 
     void setPanningUsesOffset(bool b) { use_panning_offset = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
     void panDrag(int _x, int _y, double touch_dist, double touch_angle);
     void panEnd(int _x, int _y);
     void panZoomProcess();
+
+private:
 
     std::vector<FingerInfo> pressed_fingers;
     double touchAngle()
@@ -234,7 +236,9 @@ public:
         return 0.0;
     }
 
-    void handleWorldNavigation(Event& e, bool single_touch_pan);
+public:
+
+    void handleWorldNavigation(Event e, bool single_touch_pan);
 };
 
 inline void Camera::setStageOffset(double ox, double oy)

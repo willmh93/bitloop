@@ -24,9 +24,9 @@ struct ProjectControlEvent
     int project_uid = CURRENT_PROJECT;
 };
 
-class CProjectWorker
+class ProjectWorker
 {
-    static CProjectWorker* singleton;
+    static ProjectWorker* singleton;
 
     SharedSync& shared_sync;
 
@@ -45,7 +45,7 @@ class CProjectWorker
 
 protected:
 
-    friend class CMainWindow;
+    friend class MainWindow;
 
     void process();
     void draw();
@@ -53,11 +53,11 @@ protected:
 
 public:
 
-    static CProjectWorker* get() {
+    static [[nodiscard]] ProjectWorker* instance() {
         return singleton;
     }
 
-    CProjectWorker(SharedSync& _shared_sync) : shared_sync(_shared_sync) {
+    ProjectWorker(SharedSync& _shared_sync) : shared_sync(_shared_sync) {
         singleton = this;
     }
 
@@ -79,7 +79,7 @@ public:
     void updateShadowAttributes();
 
     // ======== Project Control ========
-    ProjectBase* getActiveProject() { return active_project; }
+    [[nodiscard]] ProjectBase* getActiveProject() { return active_project; }
 
     void setActiveProject(int uid)  { msg_queue.push_back({ PROJECT_SET,   uid }); }
     void startProject()             { msg_queue.push_back({ PROJECT_START, CURRENT_PROJECT }); }
@@ -87,7 +87,7 @@ public:
     void pauseProject()             { msg_queue.push_back({ PROJECT_PAUSE, CURRENT_PROJECT }); }
 };
 
-static CProjectWorker* ProjectWorker()
-{
-    return CProjectWorker::get();
-}
+//static ProjectWorker* ProjectWorker()
+//{
+//    return ProjectWorker::get();
+//}

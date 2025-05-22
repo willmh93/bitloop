@@ -10,10 +10,8 @@ SIM_DECLARE(Mandelbrot, "Fractal", "Mandelbrot", "Mandelbrot Viewer")
 ///   Project   ///
 ///-------------///
 
-void Mandelbrot_Project::projectPrepare()
+void Mandelbrot_Project::projectPrepare(Layout& layout)
 {
-    auto& layout = newLayout();
-
     Mandelbrot_Scene::Config config1;
     //auto config2 = make_shared<Test_Scene::Config>(Test_Scene::Config());
 
@@ -655,17 +653,17 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     ctx->print() << "\nframe progress: " << (((float)current_row / (float)pending_bmp->height()) * 100.0f) << "%";
 }
 
-void Mandelbrot_Scene::onEvent(Event& e)
+void Mandelbrot_Scene::onEvent(Event e)
 {
-    if (e.owner_ctx())
+    if (e.ctx_owner())
     {
-        //DQuad old_quad = e.owner_ctx()->worldQuad();
-        e.owner_ctx()->camera.handleWorldNavigation(e, true);
+        //DQuad old_quad = e.ctx_owner()->worldQuad();
+        e.ctx_owner()->camera.handleWorldNavigation(e, true);
 
         // If view quad has changed, cancel current frame 
         // (unless compute phase is still 0, in which case we have no frame to fallback to)
         /*if (compute_phase > 0 && 
-            e.owner_ctx()->worldQuad() != old_quad)
+            e.ctx_owner()->worldQuad() != old_quad)
         {
             if (cancel_frame_callback)
                 cancel_frame_callback();
