@@ -12,7 +12,7 @@ struct Particle : public DVec2
     {}
 };
 
-struct Test_Scene_Attributes : public VarBuffer
+/*struct Test_Scene_Attributes : public VarBuffer
 {
     sync_struct
     {
@@ -42,9 +42,9 @@ struct Test_Scene_Attributes : public VarBuffer
         zoom_x = rhs.zoom_x;
         zoom_y = rhs.zoom_y;
     }
-};
+};*/
 
-struct Test_Scene : public Scene<Test_Scene_Attributes>
+struct Test_Scene : public BasicScene//Scene<Test_Scene_Attributes>
 {
     // --- Custom Launch Config Example ---
     struct Config
@@ -62,10 +62,33 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
 
     std::vector<Particle> particles;
 
+    bool transform_coordinates = true;
+    bool scale_lines_text = true;
+    bool scale_sizes = true;
+    bool rotate_text = true;
+
+    double camera_x = 0;
+    double camera_y = 0;
+    double camera_rotation = 0;
+    double zoom_x = 1;
+    double zoom_y = 1;
+
+    //float x_spline_points[ImSpline::PointsArrSize(9)] = {
+    //        0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
+    //        0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
+    //        0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
+    //};
+    //ImSpline::Spline x_spline;
+    /*ImSpline::Spline spline(100, {
+        {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
+        {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
+        {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
+    });*/
+    ImSpline::Spline spline;
     //
 
     // Scene management
-    //void populate() override;
+    void _sceneAttributes() override;
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
     void sceneDestroy() override;

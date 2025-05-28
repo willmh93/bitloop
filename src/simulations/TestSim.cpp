@@ -30,22 +30,36 @@ void Test_Project::projectPrepare(Layout& layout)
 /// ========= Scene =========
 /// =========================
 
-void Test_Scene_Attributes::populate()
+/*void Test_Scene_Attributes::populate()
 {
-    ImGui::Checkbox("Transform coordinates", &transform_coordinates); // updated in realtime
-    ImGui::Checkbox("Scale Lines & Text", &scale_lines_text); // updated in realtime
-    ImGui::Checkbox("Scale Sizes", &scale_sizes); // updated in realtime
-    ImGui::Checkbox("Rotate Text", &rotate_text); // updated in realtime
-    
-    ImGui::SliderDouble("Camera Rotatation", &camera_rotation, 0.0, pi * 2.0); // updated in realtime
-    ImGui::SliderDouble("Camera X", &camera_x, -500.0, 500.0); // updated in realtime
-    ImGui::SliderDouble("Camera Y", &camera_y, -500.0, 500.0); // updated in realtime
-    ImGui::SliderDouble("Zoom X", &zoom_x, -2.0, 2.0); // updated in realtime
-    ImGui::SliderDouble("Zoom Y", &zoom_y, -2.0, 2.0); // updated in realtime
+   
+}*/
+
+void Test_Scene::_sceneAttributes()
+{
+    ImGui::Checkbox("Transform coordinates", &sync(transform_coordinates)); // updated in realtime
+    ImGui::Checkbox("Scale Lines & Text", &sync(scale_lines_text)); // updated in realtime
+    ImGui::Checkbox("Scale Sizes", &sync(scale_sizes)); // updated in realtime
+    ImGui::Checkbox("Rotate Text", &sync(rotate_text)); // updated in realtime
+
+    ImGui::SliderDouble("Camera Rotatation", &sync(camera_rotation), 0.0, pi * 2.0); // updated in realtime
+    ImGui::SliderDouble("Camera X", &sync(camera_x), -500.0, 500.0); // updated in realtime
+    ImGui::SliderDouble("Camera Y", &sync(camera_y), -500.0, 500.0); // updated in realtime
+    ImGui::SliderDouble("Zoom X",   &sync(zoom_x), -2.0, 2.0); // updated in realtime
+    ImGui::SliderDouble("Zoom Y",   &sync(zoom_y), -2.0, 2.0); // updated in realtime
+
+    static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
+    ImSpline::SplineEditor("X/Y Spline", &sync(spline), &vr);
 }
 
 void Test_Scene::sceneStart()
 {
+    spline.create(100, {
+        {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
+        {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
+        {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
+    });
+
     // Initialize scene
     for (int i = 0; i < 50; i++)
     {
@@ -75,7 +89,7 @@ void Test_Scene::sceneDestroy()
     // Destroy scene
 }
 
-/*// Very naive prime checker
+// Very naive prime checker
 bool is_prime(unsigned long long n) {
     if (n < 2) return false;
     for (unsigned long long i = 2; i * i <= n; ++i) {
@@ -97,15 +111,15 @@ unsigned long long find_large_prime(unsigned long long start, int count) {
         a += rand();
     }
     return candidate - 1;
-}*/
+}
 
 void Test_Scene::sceneProcess()
 {
     // Process scene update
-    /*for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 10; i++)
     {
         unsigned long long prime = find_large_prime(2000000000000ul + rand()%100000ul, 1);
-    }*/
+    }
 
     for (Particle& p : particles)
     {
@@ -114,6 +128,12 @@ void Test_Scene::sceneProcess()
         p.vx -= p.x * 0.0001;
         p.vy -= p.y * 0.0001;
     }
+
+    camera_rotation += 0.01;
+
+    static double a = 0.0;
+    spline[0].y = (float(sin(a) * 0.5 + 0.5));
+    a += 0.01;
 }
 
 void Test_Scene::viewportProcess(Viewport* ctx)
@@ -139,6 +159,8 @@ void Test_Scene::viewportProcess(Viewport* ctx)
         camera->zoom_y = zoom_y;
         camera->rotation = camera_rotation;
     }
+
+
 
     ///obj.align_x = 0.5;
     ///obj.align_y = 0.5;
@@ -285,6 +307,8 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
     ///{
     ///    ctx->print() << finger.fingerId << ": (" << finger.x << ", " << finger.y << ")\n";
     ///}
+    
+    //ctx->print() << toString().c_str();
 }
 
 void Test_Scene::onEvent(Event e)

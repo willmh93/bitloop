@@ -47,6 +47,42 @@ static const char* ColorGradientNames[GRADIENT_TEMPLATE_COUNT] = {
     "FOREST"
 };
 
+struct EscapeField : public std::vector<double>
+{
+    int w, h;
+    void setDimensions(int _w, int _h)
+    {
+        w = _w;
+        h = _h;
+        resize(w * h);
+    }
+    void setPixelDepth(int x, int y, double depth)
+    {
+        at(y * w + x) = depth;
+    }
+    double getPixelDepth(int x, int y)
+    {
+        return at(y * w + x);
+    }
+};
+
+inline int mandelbrot_depth(double x0, double y0, int iter_lim)
+{
+    double x = 0.0, y = 0.0, xx = 0.0, yy = 0.0;
+    int iter = 0;
+
+    while (xx + yy <= 4.0 && iter < iter_lim)
+    {
+        y = (2.0 * x * y + y0);
+        x = (xx - yy + x0);
+        xx = x * x;
+        yy = y * y;
+        iter++;
+    }
+
+    return iter;
+}
+
 template<bool smooth>
 inline double mandelbrot_iter(double x0, double y0, int iter_lim)
 {
@@ -185,71 +221,102 @@ void colorGradientTemplate(ColorGradientTemplate type, double t, uint8_t& r, uin
     };
 };*/
 
-
-struct Mandelbrot_Scene_Vars : public VarBuffer
+struct Mandelbrot_Scene : public BasicScene
 {
-    //struct Primatives : public TweenableMandelState
-    //{
+    // --- Custom Launch Config ---
+    struct Config {};
+    Mandelbrot_Scene(Config& info)
+    {}
 
-    sync_struct
-    {
-        FiniteDouble cam_x = 0.0;
-        double cam_y = 0.0;
-        double cam_rot = 0.0;
-        double cam_zoom = 1.0;
-        DVec2  cam_zoom_xy = DVec2(1, 1);
-        int iter_lim = 0; // Actual iter limit
-        double cardioid_lerp_amount = 1.0; // 1 - flatten
+   // synced<double> cam_x = 0.0;
+    double cam_x = 0.0;
+    double cam_y = 0.0;
+    double cam_rot = 0.0;
+    double cam_zoom = 1.0;
+    DVec2  cam_zoom_xy = DVec2(1, 1);
+    int iter_lim = 0; // Actual iter limit
+    double cardioid_lerp_amount = 1.0; // 1 - flatten
 
-        float x_spline_points[ImSpline::PointsArrSize(9)] = {
-            0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
-            0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
-            0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
-        };
-        float y_spline_points[ImSpline::PointsArrSize(9)] = {
-             0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
-             0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
-             0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
-        };
+    //float x_spline_points[ImSpline::PointsArrSize(9)] = {
+    //    0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
+    //    0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
+    //    0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
+    //};
+    //float y_spline_points[ImSpline::PointsArrSize(9)] = {
+    //        0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
+    //        0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
+    //        0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
+    //};
 
-        bool colors_updated = false;
+    bool colors_updated = false;
 
-        char config_buf[1024] = "";
+    char config_buf[1024] = "";
 
-        bool flatten = false;
-        bool dynamic_iter_lim = true;
-        double quality = 0.8; // Used for UI (ignore during tween until complete)
-        MandelSmoothing smoothing_type = SMOOTH_CONTINUOUS;
-        bool dynamic_color_cycle_limit = true;
-        double color_cycle_value = 1.0; // If dynamic, iter_lim ratio, else iter_lim
-        double color_cycle_iters = 32.0;
-        bool show_axis = true;
-        double cam_degrees = 0.0;
-        double flatten_amount = 0.0;
+    bool flatten = false;
+    bool dynamic_iter_lim = true;
+    double quality = 0.8; // Used for UI (ignore during tween until complete)
+    MandelSmoothing smoothing_type = SMOOTH_CONTINUOUS;
+    bool dynamic_color_cycle_limit = true;
+    double color_cycle_value = 1.0; // If dynamic, iter_lim ratio, else iter_lim
+    double color_cycle_iters = 32.0;
+    bool show_axis = true;
+    double cam_degrees = 0.0;
+    double flatten_amount = 0.0;
 
-        bool show_period2_bulb = true;
-        bool interactive_cardioid = false;
-    }
-    sync_end
+    bool show_period2_bulb = true;
+    bool interactive_cardioid = false;
 
-    // non-trivially copyable data
-    ImSpline::Spline x_spline;
-    ImSpline::Spline y_spline;
-    
+    ImSpline::Spline x_spline = ImSpline::Spline(100, {
+        {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
+        {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
+        {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
+    });
+    ImSpline::Spline y_spline = ImSpline::Spline(100, {
+        {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
+        {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
+        {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
+    });
+
     ImGradient gradient;
-    ImGradientMark* draggingMark = nullptr;
-    ImGradientMark* selectedMark = nullptr;
 
     int active_color_template = GRADIENT_CLASSIC;
 
-    Mandelbrot_Scene_Vars()
-    {
-        x_spline.set(x_spline_points, (int)ImSpline::PointsArrSize(x_spline_points), 1000, 100);
-        y_spline.set(y_spline_points, (int)ImSpline::PointsArrSize(y_spline_points), 1000, 100);
+    int current_row = 0;
+    CanvasImage bmp_9x9;
+    CanvasImage bmp_3x3;
+    CanvasImage bmp_1x1;
 
-    }
+    EscapeField field_9x9;
+    EscapeField field_3x3;
+    EscapeField field_1x1;
 
-    ////////////////////////////////////
+
+    CanvasImage* pending_bmp = nullptr;
+    CanvasImage* active_bmp = nullptr;
+
+    EscapeField* pending_field = nullptr;
+    EscapeField* active_field = nullptr;
+
+    DQuad world_quad;
+
+    Cardioid::CardioidLerper cardioid_lerper;
+
+    // 0 = 9x smaller, 1 = 3x smaller, 2 = full resolution
+    int compute_phase = 0; 
+
+    // Tweening
+    ///TweenableMandelState state_a;
+    ///TweenableMandelState state_b;
+    bool tweening = false;
+    double tween = 0.0; // 0..1
+    ///void lerpState(TweenableMandelState* dst, double f);
+
+    // Per-level boundry tracing
+    std::vector< std::vector<DVec2> > boundary_paths;
+    void generateBoundary(EscapeField* field, double level, std::vector<DVec2>& path);
+
+    // Scene management
+    void _sceneAttributes();//const;
 
     void updateConfigBuffer();
     void loadConfigBuffer();
@@ -311,9 +378,9 @@ struct Mandelbrot_Scene_Vars : public VarBuffer
     }
 
     void loadColorTemplate(ColorGradientTemplate type,
-        float hue_threshold=0.3f,
-        float sat_threshold=0.3f,
-        float val_threshold=0.3f)
+        float hue_threshold = 0.3f,
+        float sat_threshold = 0.3f,
+        float val_threshold = 0.3f)
     {
         gradient.getMarks().clear();
 
@@ -363,7 +430,7 @@ struct Mandelbrot_Scene_Vars : public VarBuffer
 
             float avg_ratio = Math::avg(h_ratio, s_ratio, v_ratio);
             if (h_ratio > hue_threshold ||
-                s_ratio > sat_threshold || 
+                s_ratio > sat_threshold ||
                 v_ratio > val_threshold)
             {
                 gradient.addMark(x, ImColor(r, g, b));
@@ -373,51 +440,6 @@ struct Mandelbrot_Scene_Vars : public VarBuffer
             }
         }
     }
-
-    void populate();
-    void copyFrom(const Mandelbrot_Scene_Vars& rhs)
-    {
-        //varcpy<Primatives>(*this, rhs);
-        varcpy(x_spline, rhs.x_spline);
-        varcpy(y_spline, rhs.y_spline);
-        varcpy(gradient, rhs.gradient);
-
-        // Fix dangling mark pointers on data overwrite
-        draggingMark = gradient.markFromUID(rhs.draggingMark ? rhs.draggingMark->uid : -1);
-        selectedMark = gradient.markFromUID(rhs.selectedMark ? rhs.selectedMark->uid : -1);
-    }
-};
-
-struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Vars>
-{
-    // --- Custom Launch Config ---
-    struct Config {};
-    Mandelbrot_Scene(Config& info)
-    {}
-
-    int current_row = 0;
-    CanvasImage bmp_9x9;
-    CanvasImage bmp_3x3;
-    CanvasImage bmp_1x1;
-
-    CanvasImage* pending_bmp = nullptr;
-    CanvasImage* active_bmp = nullptr;
-
-    DQuad world_quad;
-
-    Cardioid::CardioidLerper cardioid_lerper;
-
-    // 0 = 9x smaller, 1 = 3x smaller, 2 = full resolution
-    int compute_phase = 0; 
-
-    // Tweening
-    ///TweenableMandelState state_a;
-    ///TweenableMandelState state_b;
-    bool tweening = false;
-    double tween = 0.0; // 0..1
-    ///void lerpState(TweenableMandelState* dst, double f);
-
-    // Scene management
 
     //void step_color(double step, uint8_t& r, uint8_t& g, uint8_t& b);
     void iter_ratio_color(double ratio, uint8_t& r, uint8_t& g, uint8_t& b);
@@ -456,6 +478,19 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Vars>
         r = static_cast<uint8_t>(col[0] * 255.0f + 0.5f);
         g = static_cast<uint8_t>(col[1] * 255.0f + 0.5f);
         b = static_cast<uint8_t>(col[2] * 255.0f + 0.5f);
+    }
+
+    void shadeBitmap()
+    {
+        pending_bmp->forEachPixel([&, this](int x, int y)
+        {
+            double iters = active_field->getPixelDepth(x, y);
+
+            uint8_t r, g, b;
+            iter_gradient_color(iters, iter_lim, r, g, b);
+
+            active_bmp->setPixel(x, y, r, g, b, 255);
+        });
     }
 
     template<
@@ -535,7 +570,11 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Vars>
             //    iter_ratio_color(ratio, r, g, b);
             //}
 
-            pending_bmp->setPixel(x, y, r, g, b, 255);
+            ///pending_bmp->setPixel(x, y, r, g, b, 255);
+
+            //int depth = mandelbrot_depth(wx, wy, iter_lim);
+            pending_field->setPixelDepth(x, y, v);
+ 
         });
     };
 
