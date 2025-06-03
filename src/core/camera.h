@@ -252,7 +252,7 @@ inline void Camera::setStagePanX(int px)
 
 inline void Camera::setStagePanY(int py)
 {
-    pan_y = py / zoom_x;
+    pan_y = py / zoom_y;
 }
 
 inline double Camera::getStagePanX()
@@ -262,7 +262,7 @@ inline double Camera::getStagePanX()
 
 inline double Camera::getStagePanY()
 {
-    return pan_x * zoom_x;
+    return pan_y * zoom_y;
 }
 
 inline void Camera::setCameraPos(double _x, double _y)
@@ -277,8 +277,8 @@ inline void Camera::setPan(double pan_x, double pan_y, bool immediate)
     targ_pan_y = pan_y;
     if (immediate)
     {
-        pan_x = pan_x;
-        pan_y = pan_y;
+        this->pan_x = pan_x;
+        this->pan_y = pan_y;
     }
 }
 
