@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(bitloop LANGUAGES C CXX)
 include(FetchContent)
 
+set(CMAKE_PROJECT_NAME BL)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 cmake_policy(SET CMP0169 OLD)

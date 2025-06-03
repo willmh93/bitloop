@@ -44,18 +44,8 @@ struct Particle : public DVec2
     }
 };*/
 
-struct Test_Scene : public BasicScene//Scene<Test_Scene_Attributes>
+struct Test_Scene_Attributes : VarBuffer
 {
-    // --- Custom Launch Config Example ---
-    struct Config
-    {
-        double speed = 10.0;
-    };
-
-    Test_Scene(Config& info) :
-        speed(info.speed)
-    {}
-
     double speed;
 
     DVec2 ball_pos = { 0, 0 };
@@ -73,6 +63,23 @@ struct Test_Scene : public BasicScene//Scene<Test_Scene_Attributes>
     double zoom_x = 1;
     double zoom_y = 1;
 
+    void populate() override;
+};
+
+struct Test_Scene : public Scene<Test_Scene_Attributes>
+{
+    // --- Custom Launch Config Example ---
+    struct Config
+    {
+        //double speed = 10.0;
+    };
+
+    Test_Scene(Config& info) //:
+        //speed(info.speed)
+    {}
+
+    
+
     //float x_spline_points[ImSpline::PointsArrSize(9)] = {
     //        0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
     //        0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
@@ -84,11 +91,11 @@ struct Test_Scene : public BasicScene//Scene<Test_Scene_Attributes>
         {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
         {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
     });*/
-    ImSpline::Spline spline;
+    //ImSpline::Spline spline;
     //
 
     // Scene management
-    void _sceneAttributes() override;
+    //void _sceneAttributes() override;
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
     void sceneDestroy() override;

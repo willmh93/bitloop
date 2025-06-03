@@ -19,7 +19,8 @@ void Canvas::create(double _global_scale)
 
     setGlobalScale(_global_scale);
 
-    SimplePainter::default_font = NanoFont::create("/data/fonts/Roboto-Regular.ttf");
+    //SimplePainter::default_font = NanoFont::create("/data/fonts/Roboto-Regular.ttf");
+    SimplePainter::default_font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
     SimplePainter::default_font->setSize(16.0f);
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <string>
+#include <sstream>
 
 class ProjectBase;
 using ProjectCreatorFunc = std::function<ProjectBase*()>;
@@ -70,12 +71,13 @@ struct Vec2
     [[nodiscard]] Vec2 operator/(const Vec2& rhs) const { return { x / rhs.x, y / rhs.y }; }
     [[nodiscard]] Vec2 operator*(T v) const { return { x * v, y * v }; }
     [[nodiscard]] Vec2 operator/(T v) const { return { x / v, y / v }; }
+    [[nodiscard]] T&   operator[](int i) const { return (&x)[i]; }
 
-    [[nodiscard]] double* asArray() { return &x; }
-    [[nodiscard]] double  angle() const { return atan2(y, x); }
-    [[nodiscard]] double  average() const { return (x + y) / 2; }
-    [[nodiscard]] double  magnitude() const { return sqrt(x * x + y * y); }
-    [[nodiscard]] double  angleTo(const Vec2& b) const { return atan2(b.y - y, b.x - x); }
+    [[nodiscard]] T  (&asArray())[2] { return *reinterpret_cast<T(*)[2]>(&x); }
+    [[nodiscard]] T  angle() const { return atan2(y, x); }
+    [[nodiscard]] T  average() const { return (x + y) / T{ 2 }; }
+    [[nodiscard]] T  magnitude() const { return sqrt(x * x + y * y); }
+    [[nodiscard]] T  angleTo(const Vec2& b) const { return atan2(b.y - y, b.x - x); }
 
     [[nodiscard]] Vec2 floored(double offset = 0) { return { floor(x) + offset, floor(y) + offset }; }
     [[nodiscard]] Vec2 rounded(double offset = 0) { return { round(x) + offset, round(y) + offset }; }
@@ -114,10 +116,14 @@ struct Triangle
         double area = (p2->x - p1->x) * (p3->y - p1->y) - (p2->y - p1->y) * (p3->x - p1->x);
 
         // Store points in CCW order
-        if (area < 0) 
+        if (area < 0)
+        {
             a = p1; b = p3; c = p2;
+        }
         else
+        {
             a = p1; b = p2; c = p3;
+        }
     }
 
     [[nodiscard]] bool containsVertex(VecT* p) const {
@@ -197,6 +203,8 @@ struct Color
 
     Color() = default;
     Color(uint32_t rgba) : u32(rgba) {}
+    Color(const float(&c)[3]) : r(int(c[0]* 255.f)), g(int(c[1] * 255.f)), b(int(c[2] * 255.f)), a(255) {}
+    Color(const float(&c)[4]) : r(int(c[0]* 255.f)), g(int(c[1] * 255.f)), b(int(c[2] * 255.f)), a(int(c[3] * 255.f)) {}
     Color(uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _a=255) 
         : r(_r), g(_g), b(_b), a(_a) {}
 
@@ -277,3 +285,13 @@ struct MassForceParticle : public DVec2
     double vy;
     double mass;
 };
+
+template<typename T>
+std::ostream& operator<<(std::ostream& os, const Vec2<T>& vec) {
+    return os << "(" << vec.x << ", " << vec.y << ")";
+}
+
+template<typename T>
+std::ostream& operator<<(std::ostream& os, const Quad<T>& q) {
+    return os << "{" << q.a << ", " << q.b << ", " << q.c << ", " << q.d << "}";
+}

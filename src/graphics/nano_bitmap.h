@@ -328,14 +328,15 @@ public:
         Camera* camera,
         int& current_row,
         Callback&& callback,
-        int thread_count = 0,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds{ 10 })
+        int thread_count = Thread::idealThreadCount(),
+        int timeout_ms = 0)
     {
         static_assert(std::is_invocable_r_v<void, Callback, int, int, double, double>,
             "Callback must be: void(int x, int y, double wx, double wy)");
 
-        if (thread_count <= 0)
-            thread_count = Thread::idealThreadCount();
+        auto timeout = timeout_ms ?
+            std::chrono::milliseconds{ timeout_ms } :
+            std::chrono::steady_clock::duration::max();
 
         DQuad world_quad = getWorldQuad(camera);
         double ax = world_quad.a.x, ay = world_quad.a.y;
@@ -452,5 +453,21 @@ public:
             return true;
         }
         return false;
+    }
+
+    template<typename Callback>
+    void forEachWorldPixel(
+        Camera* camera,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount())
+    {
+        int row = 0;
+        forEachWorldPixel(
+            camera, 
+            row,
+            callback,
+            thread_count,
+            0
+        );
     }
 };

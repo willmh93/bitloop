@@ -211,9 +211,8 @@ public:
     void panEnd(int _x, int _y);
     void panZoomProcess();
 
-private:
-
     std::vector<FingerInfo> pressed_fingers;
+
     double touchAngle()
     {
         if (pressed_fingers.size() >= 2)
@@ -236,7 +235,6 @@ private:
         return 0.0;
     }
 
-public:
 
     void handleWorldNavigation(Event e, bool single_touch_pan);
 };

@@ -209,11 +209,11 @@ public:
         getStateMap<T>().current[&var] = var;
     }
 
-    template <typename... Args>
+    /*template <typename... Args>
     void commitAll(Args&&... args)
     {
         (commitValue(std::forward<Args>(args)), ...);
-    }
+    }*/
 
     void variableChangedClearMaps()
     {

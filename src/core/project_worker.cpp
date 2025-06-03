@@ -56,7 +56,7 @@ void ProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
             active_project->_projectDestroy();
             active_project->_projectStart();
 
-            updateShadowAttributes();
+            active_project->copyChangedLiveVarsToShadow();
         }
         break;
 
@@ -79,6 +79,7 @@ void ProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
 
 void ProjectWorker::worker_loop()
 {
+    DebugPrint("worker_loop started");
     while (!shared_sync.quitting.load())
     {
         /// ======== Safe place to control project changes ========
@@ -96,16 +97,81 @@ void ProjectWorker::worker_loop()
 
             /// ======== Update live values ========
             // in case any inputs were changed since last .process()
-            shared_sync.processing_frame = true;
+            shared_sync.processing_frame.store(true);
             {
-                pollEvents();
-                pollData();
+                DebugPrint("----------------------------");
+                DebugPrint("----- NEW WORKER FRAME -----");
 
-                process();
+                if (shared_sync.gui_populated_during_process.load())
+                {
+                    // GUI shadow change must have occured during last worker frame,
+                    // meaning shadow still contains an unsynced change
+                    DebugPrint("Found unsynced change");
+                }
 
-                queueData(); // todo: if (shadow_attributes_updated)
+                /// apply shadow data *changes* TO live buffer
+                if (!shared_sync.gui_populated_during_process.load())
+                {
+                    //DebugPrint("pullDataFromShadow()");
+                    pullDataFromShadow();
+                }
+
+                if (active_project && active_project->changedShadow())
+                {
+                    DebugPrint("DETECTED SHADOW CHANGE");
+                }
+
+                bool discard_events = active_project && active_project->changedShadow();
+                
+                if (active_project)
+                {
+                    active_project->markLiveValues();
+                    //if (!shared_sync.gui_populated_during_process.load()) // I don't think this is doing anything
+                        active_project->markShadowValues();
+                }
+
+                //if (!shared_sync.gui_populated_during_process.load())
+                {   
+                    ///DebugPrint("Polling Events");
+                    pollEvents(discard_events);
+                }
+
+
+                // If worker frame completes without GUI overriding value, updating shadow
+                // at the end of *this* frame is allowed
+                shared_sync.gui_populated_during_process.store(false);
+
+
+
+               
+                DebugPrint("projectProcess()");
+                if (active_project)
+                    active_project->_projectProcess(); // imagine GUI changes shadow during this
+
+                
+
+                ///if (active_project)
+                ///    active_project->commitVariableChangeTracker();
+
+                // Then don't update shadow OR marked_shadow if the live variables
+
+                 // apply live data *changes* TO shadow buffer
+                if (!shared_sync.gui_populated_during_process.load())
+                {
+                    //DebugPrint("pushDataToShadow()");
+                    pushDataToShadow(); // worker frame completed without GUI interruption, Update shadow immediately
+                }
+                ///else
+                ///{
+                ///    DebugPrint("pushDataToShadow() SKIPPED (GUI change means we still need that shadow update)");
+                ///}
+  
+
+                DebugPrint("----- END WORKER FRAME -----");
+                DebugPrint("----------------------------");
+                DebugPrint("");
             }
-            shared_sync.processing_frame = false;
+            shared_sync.processing_frame.store(false);
         }
 
         /// ======== Flag ready to draw ========
@@ -134,28 +200,47 @@ void ProjectWorker::queueEvent(const SDL_Event& event)
     input_event_queue.push_back(event);
 }
 
-void ProjectWorker::queueData()
+void ProjectWorker::pushDataToShadow()
 {
-    if (!shared_sync.editing_ui.load())
+    //if (!shared_sync.editing_ui.load())
     {
         // While we update the shadow buffer, we should NOT 
         // permit ui updates (force a small stall)
         std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
 
         if (shadow_lock.owns_lock())
-            updateShadowAttributes();
+        {
+            if (active_project)
+            {
+                if (Global::break_condition)
+                {
+                    int a = 5;
+                }
+
+                active_project->copyChangedLiveVarsToShadow();
+                
+
+                if (Global::break_condition)
+                {
+                    int a = 5;
+                }
+                //DebugPrint("pushDataToShadow::markShadowValues");
+                //active_project->markShadowValues();
+            }
+        }
     }
 }
 
-void ProjectWorker::pollData()
+void ProjectWorker::pullDataFromShadow()
 {
-    if (shared_sync.editing_ui.load())
+    //if (shared_sync.editing_ui.load())
     {
         /// Make sure we can't alter the shadow buffer while we copy them to live buffer
         std::lock_guard<std::mutex> live_buffer_lock(shared_sync.live_buffer_mutex);
         shared_sync.updating_live_buffer.store(true);
 
-        updateLiveAttributes();
+        if (active_project)
+            active_project->copyChangedShadowVarsToLive();
 
         shared_sync.updating_live_buffer.store(false, std::memory_order_release);
 
@@ -164,7 +249,7 @@ void ProjectWorker::pollData()
     }
 }
 
-void ProjectWorker::pollEvents()
+void ProjectWorker::pollEvents(bool discardBatch)
 {
     // Grab event queue data (and clear via swap with empty queue)
     std::vector<SDL_Event> local;
@@ -173,20 +258,9 @@ void ProjectWorker::pollEvents()
         local.swap(input_event_queue);
     }
 
+    if (!discardBatch)
     for (SDL_Event& e : local)
         _onEvent(e);
-}
-
-void ProjectWorker::updateLiveAttributes()
-{
-    if (active_project)
-        active_project->updateAllLiveAttributes();
-}
-
-void ProjectWorker::updateShadowAttributes()
-{
-    if (active_project)
-        active_project->updateAllShadowAttributes();
 }
 
 void ProjectWorker::populateAttributes()
@@ -199,12 +273,6 @@ void ProjectWorker::_onEvent(SDL_Event& e)
 {
     if (active_project)
         active_project->_onEvent(e);
-}
-
-void ProjectWorker::process()
-{
-    if (active_project)
-        active_project->_projectProcess();
 }
 
 void ProjectWorker::draw()

@@ -50,7 +50,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include <list>
+#include <vector>
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -66,20 +66,28 @@ class ImGradient
 {
 public:
     ImGradient();
-    ImGradient(const ImGradient& rhs);            // deep copy
-    ImGradient(ImGradient&& rhs) noexcept;        // move
     ImGradient& operator=(const ImGradient& rhs); // copy-assign
-    ImGradient& operator=(ImGradient&& rhs) noexcept; // move-assign
-    ~ImGradient();                                // frees marks
 
     /* API used by the editor ------------------------------------------------ */
     void   getColorAt(float position, float* color) const;
     void   getColorAt(double position, float* color) const;
     void   addMark(float position, ImColor color);
-    void   removeMark(ImGradientMark* mark);
+    void   removeMark(int uid);
     void   refreshCache();
-    std::list<ImGradientMark*>& getMarks() { return m_marks; }
-    const std::list<ImGradientMark*>& getMarks() const { return m_marks; }
+    std::vector<ImGradientMark>& getMarks() { return m_marks; }
+    const std::vector<ImGradientMark>& getMarks() const { return m_marks; }
+
+    ImGradientMark* getSelectedMark() { return markFromUID(selected_uid); }
+    void  setSelectedMark(const ImGradientMark &m) { selected_uid = m.uid; }
+    int  selectedMarkUID() { return selected_uid; }
+    bool hasSelectedMark() { return selected_uid >= 0 && getSelectedMark(); }
+    void clearSelectedMark() { selected_uid = -1; }
+
+    ImGradientMark* getDraggingMark() { return markFromUID(dragging_uid); }
+    void  setDraggingMark(const ImGradientMark& m) { dragging_uid = m.uid; }
+    int  draggingMarkUID() { return dragging_uid; }
+    bool hasDraggingMark() { return dragging_uid >= 0 && getDraggingMark(); }
+    void clearDraggingMark() { dragging_uid = -1; }
 
     /* Comparison ------------------------------------------------------------ */
     bool operator==(const ImGradient& rhs) const;
@@ -89,40 +97,13 @@ public:
     /* Threading helpers ----------------------------------------------------- */
     static int uid_counter;
 
-    void copyFrom(const ImGradient& rhs)
-    {
-        operator=(rhs);
-    }
-
-    /*int markIndex(ImGradientMark* mark) const
-    {
-        if (mark == nullptr)
-            return -1;
-
-        int index = 0;
-        for (ImGradientMark* item : m_marks) {
-            if (item == mark) return index;
-            ++index;
-        }
-        return -1;
-    }
-    ImGradientMark* markFromIndex(int index) const
-    {
-        if (index < 0 || index >= m_marks.size())
-            return nullptr;
-
-        auto it = m_marks.begin();
-        std::advance(it, index);
-        return *it;
-    }*/
-
     ImGradientMark* markFromUID(int uid) const
     {
-        if (uid < 0)
-            return nullptr;
-
-        for (ImGradientMark* item : m_marks) {
-            if (item->uid == uid) return item;
+        if (uid < 0) return nullptr;
+        for (size_t i=0; i<m_marks.size(); i++)
+        {
+            if (m_marks[i].uid == uid)
+                return (ImGradientMark*)&m_marks[i];
         }
 
         return nullptr;
@@ -132,23 +113,20 @@ private:
     static constexpr float kEps = 1e-6f;
     static constexpr int CACHE_SIZE = 512*6;
 
-    void   clear() noexcept;                 // delete all marks + clear list
-    void   swap(ImGradient& other) noexcept; // member-wise swap
+    void   clear() noexcept;
     void   computeColorAt(float position, float* color) const;
 
-    std::list<ImGradientMark*> m_marks;
-    float                      m_cachedValues[CACHE_SIZE * 3]{}; // 256 rgb triples
+    std::vector<ImGradientMark> m_marks;
+    int dragging_uid = -1;
+    int selected_uid = -1;
+    float m_cachedValues[CACHE_SIZE * 3]{};
 };
 
 /* ---------------------------- editor helpers ------------------------------ */
 namespace ImGui
 {
     bool GradientButton(ImGradient* gradient, float dpr);
-    bool GradientEditor(ImGradient* gradient,
-        ImGradientMark*& draggingMark,
-        ImGradientMark*& selectedMark,
-        float bar_scale,
-        float mark_scale);
+    bool GradientEditor(ImGradient* gradient, float bar_scale, float mark_scale);
 }
 
 /*#include <list>

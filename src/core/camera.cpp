@@ -364,15 +364,10 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 }
 
                 // Erase lifted finger
-                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                std::erase_if(pressed_fingers, [&](const FingerInfo& f) 
                 {
-                    FingerInfo& info = pressed_fingers[i];
-                    if (info.fingerId == e.fingerID())
-                    {
-                        pressed_fingers.erase(pressed_fingers.begin() + i);
-                        break;
-                    }
-                }
+                    return f.fingerId == e.fingerID();
+                });
 
                 if (pressed_fingers.size() == 0)
                 {

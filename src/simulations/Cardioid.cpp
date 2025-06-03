@@ -107,7 +107,7 @@ void Cardioid_Project::projectPrepare(Layout& layout)
 
 /// Scene ///
 
-void Cardioid_Scene_Vars::populate()
+/*void Cardioid_Scene_Vars::populate()
 {
     //ImGui::SliderDouble("Angle", &interact_angle, 0, (2 * M_PI));
     ImGui::Checkbox("Flatten", &flatten);
@@ -126,7 +126,7 @@ void Cardioid_Scene_Vars::populate()
     ///static float v[5] = { 0.390f, 0.575f, 0.565f, 1.000f };
     ///ImGui::Bezier( "easeOutSine", v );       // draw
     ///float y = ImGui::BezierValue( 0.5f, v ); // x delta in [0..1] range
-}
+}*/
 
 void Cardioid_Scene::sceneStart()
 {

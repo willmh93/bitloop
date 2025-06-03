@@ -1,6 +1,8 @@
 #include "project.h"
 #include "main_window.h"
 
+VarTracker* VarTracker::active_tracker = nullptr;
+std::vector<synced_base*> synced_base::vars;
 
 /// Scene
 
@@ -58,12 +60,12 @@ void SceneBase::mountToAll(Layout& viewports)
 
 void SceneBase::pollEvents()
 {
-    ProjectWorker::instance()->pollEvents();
+    ProjectWorker::instance()->pollEvents(false);
 }
 
-void SceneBase::pollData()
+void SceneBase::pullDataFromShadow()
 {
-    ProjectWorker::instance()->pollData();
+    ProjectWorker::instance()->pullDataFromShadow();
 }
 
 void SceneBase::handleWorldNavigation(Event e, bool single_touch_pan)
@@ -611,18 +613,34 @@ void ProjectBase::_populateAllAttributes()
     auto& scenes = layout.scenes();
     for (SceneBase* scene : scenes)
     {
-        if (!scene->has_var_buffer)
-            continue;
+        //if (!scene->has_var_buffer)
+        //    continue;
 
         std::string sceneName = scene->name() + " " + std::to_string(scene->sceneIndex());
         std::string section_id = sceneName + "_section";
         bool showSceneUI = ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
         if (showSceneUI)
         {
+            //DebugPrint("_populateAllAttributes::markShadowValues");
+            //scene->markShadowValues();
+
             // Allow Scene to populate inputs for section
             ImGui::PushID(section_id.c_str());
+            ///scene->populating_ui = true;
+
+
+            if (ProjectWorker::instance()->shared_sync.processing_frame)
+            {
+                DebugPrint("gui_populated_during_process = true");
+                ProjectWorker::instance()->shared_sync.gui_populated_during_process.store(true);
+            }
+
             scene->_sceneAttributes();
+            ///scene->populating_ui = false;
             ImGui::PopID();
+
+            /// TODO: Do safely inside mutex? (new function call from worker)
+            //scene->copyChangedShadowVarsToLive();
         }
     }
 }
@@ -812,6 +830,8 @@ void ProjectBase::_projectProcess()
                 scene->dt_call_index = 0;
                 auto scene_t0 = std::chrono::steady_clock::now();
 
+                //scene->_markLiveValues();
+
                 scene->mouse = &mouse;
                 scene->sceneProcess();
 
@@ -819,6 +839,8 @@ void ProjectBase::_projectProcess()
                 scene->dt_sceneProcess = static_cast<int>(
                     std::chrono::duration_cast<std::chrono::milliseconds>(scene_dt).count()
                 );
+
+                //scene->copyChangedLiveVarsToShadow();
             }
 
 
@@ -1137,14 +1159,14 @@ void SceneBase::logMessage(std::string_view fmt, ...)
     va_end(ap);
 }
 
-void ProjectBase::pollData()
+void ProjectBase::pullDataFromShadow()
 {
-    ProjectWorker::instance()->pollData();
+    ProjectWorker::instance()->pullDataFromShadow();
 }
 
 void ProjectBase::pollEvents()
 {
-    ProjectWorker::instance()->pollEvents();
+    ProjectWorker::instance()->pollEvents(false);
 }
 
 void ProjectBase::logMessage(const char* fmt, ...)

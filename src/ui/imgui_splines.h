@@ -378,11 +378,14 @@ namespace ImSpline
 		bool bInitialized = false;
 
 		// Externally provided x/y point buffer
-		float* points = nullptr;
-		int point_count = 0;
+		//float* points = nullptr;
+		ImVector<ImVec2> point_arr;
+		//int point_count = 0;
 		//int point_count_max = 0;
 
-		inline ImVec2* pointVecArray() { return reinterpret_cast<ImVec2*>(points); }
+		//inline ImVec2* pointVecArray() { return reinterpret_cast<ImVec2*>(points); }
+		inline float* floatArray() const { return reinterpret_cast<float*>(point_arr.Data); }
+		inline ImVec2* pointVecArray() { return point_arr.Data; }
 
 		// Generated path info
 		ImVector<ImVec2> path;
@@ -432,14 +435,15 @@ namespace ImSpline
 
 			path.clear();
 
-			for (int i = 1; i < point_count - 4; i += 3)
+			float* xy_points = floatArray();
+			for (int i = 1; i < point_arr.Size - 4; i += 3)
 			{
-				p0_x = points[i * 2];      p0_y = points[i * 2 + 1];
-				p1_x = points[i * 2 + 2];  p1_y = points[i * 2 + 3];
-				p2_x = points[i * 2 + 4];  p2_y = points[i * 2 + 5];
-				p3_x = points[i * 2 + 6];  p3_y = points[i * 2 + 7];
+				p0_x = xy_points[i * 2];      p0_y = xy_points[i * 2 + 1];
+				p1_x = xy_points[i * 2 + 2];  p1_y = xy_points[i * 2 + 3];
+				p2_x = xy_points[i * 2 + 4];  p2_y = xy_points[i * 2 + 5];
+				p3_x = xy_points[i * 2 + 6];  p3_y = xy_points[i * 2 + 7];
 
-				t1 = (i == point_count - 5) ? (1 + inc) : 1;
+				t1 = (i == point_arr.Size - 5) ? (1 + inc) : 1;
 
 				for (; t < t1; t += inc)
 				{
@@ -565,7 +569,7 @@ namespace ImSpline
 
 		void updateHash()
 		{
-			spline_hash = hashFloatArray(points, point_count * 2);
+			spline_hash = hashFloatArray(floatArray(), point_arr.Size * 2);
 		}
 
 		// Serializing
@@ -668,6 +672,43 @@ namespace ImSpline
 		{
 			*this = rhs;
 		}
+		Spline(int segment_count)
+		{
+			if (path_length != segment_count)
+				bInitialized = false;
+	
+			if (bInitialized)
+				return;
+
+			point_arr.clear();
+			path_length = segment_count;
+
+			bInitialized = true;
+			onChanged();
+		}
+
+		Spline(int segment_count, std::initializer_list<ImVec2> points)
+		{
+			create(segment_count, points);
+		}
+
+		void create(int segment_count, std::initializer_list<ImVec2> points)
+		{
+			if (path_length != segment_count)
+				bInitialized = false;
+
+			if (bInitialized)
+				return;
+
+			point_arr.clear();
+			for (const ImVec2& p : points)
+				point_arr.push_back(p);
+
+			path_length = segment_count;
+
+			bInitialized = true;
+			onChanged();
+		}
 
 		// Assumes both lhs/rhs have preallocated point arrays
 		Spline& operator =(const Spline& rhs)
@@ -677,8 +718,7 @@ namespace ImSpline
 			//if (spline_hash != rhs.spline_hash)
 			{
 				bInitialized = rhs.bInitialized;
-				point_count = rhs.point_count;
-				memcpy(points, rhs.points, point_count * 2 * sizeof(float));
+				point_arr = rhs.point_arr;
 
 				path = rhs.path;
 				path_length = rhs.path_length;
@@ -690,19 +730,9 @@ namespace ImSpline
 				col_x_snap = rhs.col_x_snap;
 
 				// 2D deep clone
-				col_segments.resize(rhs.col_segments.size());
+				col_segments.resize(rhs.col_segments.size(), ImVector<int>());
 				for (int i = 0; i < rhs.col_segments.size(); i++)
-				{
-					col_segments[i].clear();
-
-					const ImVector<int>& src_segments = rhs.col_segments[i];
-					ImVector<int>& targ_segments = col_segments[i];
-
-					for (int j=0; j<src_segments.size(); j++)
-						targ_segments.push_back(src_segments[j]);
-				}
-
-				//col_segments = rhs.col_segments;
+					col_segments[i] = rhs.col_segments[i];
 
 				optimization_type = rhs.optimization_type;
 				linear_gradient = rhs.linear_gradient;
@@ -713,7 +743,29 @@ namespace ImSpline
 
 			return *this;
 		}
+
+		bool operator ==(const Spline& rhs) const
+		{
+			bool a_empty = point_arr.empty();
+			bool b_empty = rhs.point_arr.empty();
+
+			if (a_empty && b_empty)
+				return true; // Both empty = same
+			else if (a_empty || b_empty)
+				return false; // Only one empty = different
+
+			return memcmp(point_arr.Data, rhs.point_arr.Data, rhs.point_arr.size_in_bytes()) == 0;
+		}
+		bool operator !=(const Spline& rhs) const
+		{
+			return !(operator==(rhs));
+		}
 		
+		ImVec2& operator[](int i)
+		{
+			return point_arr[i];
+		}
+
 		void copyFrom(const Spline& rhs)
 		{
 			operator=(rhs);
@@ -741,7 +793,7 @@ namespace ImSpline
 			// Step C: Convert that spline to (anchor, handle_in, handle_out) data
 			// We assume you have a function for that. Here's a quick sample implementation:
 			ImVec2* points = pointVecArray();
-			splineToBezierHandles(segments, points, point_count);
+			splineToBezierHandles(segments, points, point_arr.Size);
 
 			// Finally, let your system know we've updated the curve
 			onChanged();
@@ -858,28 +910,7 @@ namespace ImSpline
 			onChanged();
 		}*/
 
-		bool set(float* xy_points, int num_points, int max_points, int segment_count = 100)
-		{
-			if (points != xy_points ||
-				point_count != num_points ||
-				path_length != segment_count)
-			{
-				bInitialized = false;
-			}
 
-			if (bInitialized)
-				return false;
-
-			points = xy_points;
-			point_count = num_points;
-			//point_count_max = max_points;
-			path_length = segment_count;
-
-			bInitialized = true;
-			onChanged();
-
-			return true;
-		}
 
 		bool initialized() const
 		{
@@ -901,13 +932,13 @@ namespace ImSpline
 			int counter = 0;
 
 			// Check whether head/tail intersection is possible. Increase counters if valid
-			float tail_knot_x = points[2];
-			float tail_dx = points[0] - tail_knot_x;
+			float tail_knot_x = point_arr[1].x;// points[2];
+			float tail_dx = point_arr[0].x - tail_knot_x;// points[0] - tail_knot_x;
 			if ((tail_dx < 0 && x < tail_knot_x) || (tail_dx > 0 && x > tail_knot_x))
 				counter++;
 			
-			float head_knot_x = points[(point_count - 2) * 2];
-			float head_dx = points[(point_count - 1) * 2] - head_knot_x;
+			float head_knot_x = point_arr[point_arr.Size-2].x;// points[(point_count - 2) * 2];
+			float head_dx = point_arr[point_arr.Size-1].x - head_knot_x;// points[(point_count - 1) * 2] - head_knot_x;
 			if ((head_dx < 0 && x < head_knot_x) || (head_dx > 0 && x > head_knot_x))
 				counter++;
 
@@ -952,14 +983,14 @@ namespace ImSpline
 			int counter = 0;
 
 			// Handle head/tail projections
-			float tail_knot_x = points[2];
-			float tail_dx = points[0] - tail_knot_x;
+			float tail_knot_x = point_arr[1].x;// points[2];
+			float tail_dx = point_arr[0].x - tail_knot_x;// points[0] - tail_knot_x;
 
 			if ((tail_dx < 0 && x < tail_knot_x) || (tail_dx > 0 && x > tail_knot_x))
 			{
 				// Intersection with tail projection possible. Only calculate if requested intersection_index
-				float tail_knot_y = points[3];
-				float tail_dy = points[1] - tail_knot_y;
+				float tail_knot_y = point_arr[1].y;// points[3];
+				float tail_dy = point_arr[0].y - tail_knot_y;// points[1] - tail_knot_y;
 
 				if (tail_dx * tail_dx > 1e-18f)
 				{
@@ -972,14 +1003,14 @@ namespace ImSpline
 				}
 			}
 
-			float head_knot_x = points[(point_count - 2) * 2];
-			float head_dx = points[(point_count - 1) * 2] - head_knot_x;
+			float head_knot_x = point_arr[point_arr.Size - 2].x;
+			float head_dx = point_arr[point_arr.Size-1].x - head_knot_x;// points[(point_count - 1) * 2] - head_knot_x;
 
 			if ((head_dx < 0 && x < head_knot_x) || (head_dx > 0 && x > head_knot_x))
 			{
 				// Intersection with head projection possible. Only calculate if requested intersection_index
-				float head_knot_y = points[(point_count - 2) * 2 + 1];
-				float head_dy = points[(point_count - 1) * 2 + 1] - head_knot_y;
+				float head_knot_y = point_arr[point_arr.Size - 2].y;
+				float head_dy = point_arr[point_arr.Size - 1].y - head_knot_y;
 				if (head_dx * head_dx > 1e-18f)
 				{
 					float t = (x - head_knot_x) / head_dx;
@@ -1030,14 +1061,14 @@ namespace ImSpline
 			}
 
 			// Handle head/tail projections
-			float tail_knot_x = points[2];
-			float tail_dx = points[0] - tail_knot_x;
+			float tail_knot_x = point_arr[1].x;// points[2];
+			float tail_dx = point_arr[0].x - tail_knot_x; //points[0] - tail_knot_x;
 
 			if ((tail_dx < 0 && x < tail_knot_x) || (tail_dx > 0 && x > tail_knot_x))
 			{
 				// Intersection with tail projection possible. Only calculate if requested intersection_index
-				float tail_knot_y = points[3];
-				float tail_dy = points[1] - tail_knot_y;
+				float tail_knot_y = point_arr[1].y; // points[3];
+				float tail_dy = point_arr[0].y - tail_knot_x;// points[1] - tail_knot_y;
 
 				if (tail_dx * tail_dx > 1e-18f)
 				{
@@ -1047,16 +1078,16 @@ namespace ImSpline
 				}
 			}
 
-			int head_knot_arr_index = (point_count - 2) * 2;
-			int head_handle_arr_index = (point_count - 1) * 2;
-			float head_knot_x = points[head_knot_arr_index];
-			float head_dx = points[head_handle_arr_index] - head_knot_x;
+			//int head_knot_arr_index = (point_count - 2) * 2;
+			//int head_handle_arr_index = (point_count - 1) * 2;
+			float head_knot_x = point_arr[point_arr.Size-2].x;// points[head_knot_arr_index];
+			float head_dx = point_arr[point_arr.Size-1].x - head_knot_x;// points[head_handle_arr_index] - head_knot_x;
 
 			if ((head_dx < 0 && x < head_knot_x) || (head_dx > 0 && x > head_knot_x))
 			{
 				// Intersection with head projection possible. Only calculate if requested intersection_index
-				float head_knot_y = points[head_knot_arr_index + 1];
-				float head_dy = points[head_handle_arr_index + 1] - head_knot_y;
+				float head_knot_y = point_arr[point_arr.Size-2].y;// points[head_knot_arr_index + 1];
+				float head_dy = point_arr[point_arr.Size-1].y - head_knot_y;// points[head_handle_arr_index + 1] - head_knot_y;
 				if (head_dx * head_dx > 1e-18f)
 				{
 					float t = (x - head_knot_x) / head_dx;
@@ -1130,7 +1161,7 @@ namespace ImSpline
 		bool getLinearGradientIntercept(float& gradient, float& intercept, float tolerance = 1e-9)
 		{
 			ImVec2* points = pointVecArray();
-			int n = point_count;
+			int n = point_arr.Size;
 			if (n < 2) {
 				//cerr << "Insufficient number of points to determine a line." << endl;
 				return false;  // At least two points are required.
@@ -1155,7 +1186,7 @@ namespace ImSpline
 			intercept = y0 - gradient * x0;
 
 			// Validate each point in the dataset.
-			for (int i=0; i<point_count; i++)
+			for (int i=0; i< point_arr.Size; i++)
 			{
 				ImVec2& p = points[i];
 				// Calculate the expected y-value using the full line equation.
@@ -1289,6 +1320,9 @@ namespace ImSpline
 			std::string base64_txt;
 			std::string raw_txt;
 
+			int point_count = point_arr.Size;
+			float* points = floatArray();
+
 			// Base-64
 			{
 				std::ostringstream oss(std::ios::binary);
@@ -1365,6 +1399,9 @@ namespace ImSpline
 		void deserialize(const std::string& txt)
 		{
 			size_t old_hash = hash();
+
+			int point_count = point_arr.Size;
+			float* points = floatArray();
 
 			// Determine serialization type
 			if (txt[0] == 'B')
@@ -1490,8 +1527,8 @@ namespace ImSpline
 		ImColor handle_grabber_color = white;
 		ImColor handle_grabber_pressed_color = light_gray;
 
-		float* points = spline->points;
-		int numPoints = spline->point_count;
+		//float* points = spline->points;
+		int numPoints = spline->point_arr.Size;
 
 		ImVec2 pointer = IO.MousePos;
 		bool spline_changed = false;

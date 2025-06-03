@@ -16,16 +16,7 @@ int ImGradient::uid_counter = 0;
 
 void ImGradient::clear() noexcept
 {
-    for (ImGradientMark* m : m_marks) delete m;
     m_marks.clear();
-}
-
-void ImGradient::swap(ImGradient& other) noexcept
-{
-    std::swap(m_marks, other.m_marks);
-    std::swap_ranges(std::begin(m_cachedValues),
-        std::end(m_cachedValues),
-        std::begin(other.m_cachedValues));
 }
 
 ImGradient::ImGradient()
@@ -34,45 +25,13 @@ ImGradient::ImGradient()
     addMark(1.0f, ImColor(1.0f, 1.0f, 1.0f));
 }
 
-ImGradient::~ImGradient()
-{
-    clear();
-}
-
-ImGradient::ImGradient(const ImGradient& rhs)
-{
-    for (const ImGradientMark* src : rhs.m_marks)
-        m_marks.push_back(new ImGradientMark(*src));
-
-    std::memcpy(m_cachedValues, rhs.m_cachedValues, sizeof(m_cachedValues));
-}
-
-ImGradient::ImGradient(ImGradient&& rhs) noexcept
-    : m_marks(std::move(rhs.m_marks))
-{
-    std::memcpy(m_cachedValues, rhs.m_cachedValues, sizeof(m_cachedValues));
-    rhs.m_marks.clear();
-}
-
 ImGradient& ImGradient::operator=(const ImGradient& rhs)
 {
-    if (this != &rhs)
-    {
-        ImGradient tmp(rhs);
-        swap(tmp);
-    }
-    return *this;
-}
+    m_marks = rhs.m_marks;
+    dragging_uid = rhs.dragging_uid;
+    selected_uid = rhs.selected_uid;
+    memcpy(m_cachedValues, rhs.m_cachedValues, sizeof(m_cachedValues));
 
-ImGradient& ImGradient::operator=(ImGradient&& rhs) noexcept
-{
-    if (this != &rhs)
-    {
-        clear();
-        m_marks = std::move(rhs.m_marks);
-        std::memcpy(m_cachedValues, rhs.m_cachedValues, sizeof(m_cachedValues));
-        rhs.m_marks.clear();
-    }
     return *this;
 }
 
@@ -80,22 +39,27 @@ void ImGradient::addMark(float position, ImColor color)
 {
     position = ImClamp(position, 0.0f, 1.0f);
 
-    ImGradientMark* m = new ImGradientMark;
-    m->uid = uid_counter++;
-    m->position = position;
-    m->color[0] = color.Value.x;
-    m->color[1] = color.Value.y;
-    m->color[2] = color.Value.z;
-    m->color[3] = 1.0f;
+    ImGradientMark m;
+    m.uid = uid_counter++;
+    m.position = position;
+    m.color[0] = color.Value.x;
+    m.color[1] = color.Value.y;
+    m.color[2] = color.Value.z;
+    m.color[3] = 1.0f;
 
     m_marks.push_back(m);
     refreshCache();
 }
 
-void ImGradient::removeMark(ImGradientMark* mark)
+void ImGradient::removeMark(int uid)
 {
-    m_marks.remove(mark);
-    delete mark;
+    auto it = std::find_if(m_marks.begin(), m_marks.end(), [uid](ImGradientMark& m) {
+        return m.uid == uid;
+    });
+
+    if (it != m_marks.end())
+        m_marks.erase(it);
+
     refreshCache();
 }
 
@@ -120,19 +84,21 @@ void ImGradient::getColorAt(double position, float* color) const
 bool ImGradient::operator==(const ImGradient& rhs) const
 {
     if (m_marks.size() != rhs.m_marks.size()) return false;
+    if (dragging_uid != rhs.dragging_uid) return false;
+    if (selected_uid != rhs.selected_uid) return false;
 
     auto it1 = m_marks.begin();
     auto it2 = rhs.m_marks.begin();
 
     while (it1 != m_marks.end())
     {
-        const ImGradientMark* a = *it1;
-        const ImGradientMark* b = *it2;
+        const ImGradientMark& a = *it1;
+        const ImGradientMark& b = *it2;
 
-        if (std::abs(a->position - b->position) > kEps) return false;
+        if (std::abs(a.position - b.position) > kEps) return false;
 
         for (int i = 0; i < 3; ++i)
-            if (std::abs(a->color[i] - b->color[i]) > kEps) return false;
+            if (std::abs(a.color[i] - b.color[i]) > kEps) return false;
 
         ++it1; ++it2;
     }
@@ -151,10 +117,10 @@ void ImGradient::computeColorAt(float position, float* color) const
 
     // One mark -> its color
     if (m_marks.size() == 1) {
-        const ImGradientMark* m = m_marks.front();
-        color[0] = m->color[0];
-        color[1] = m->color[1];
-        color[2] = m->color[2];
+        const ImGradientMark& m = m_marks.front();
+        color[0] = m.color[0];
+        color[1] = m.color[1];
+        color[2] = m.color[2];
         return;
     }
 
@@ -162,26 +128,27 @@ void ImGradient::computeColorAt(float position, float* color) const
     position = fmodf(position, 1.0f);
     if (position < 0.0f) position += 1.0f;
 
-    const ImGradientMark* first = m_marks.front();
-    const ImGradientMark* last = m_marks.back();
+    const ImGradientMark& first = m_marks.front();
+    const ImGradientMark& last = m_marks.back();
 
     const ImGradientMark* lower = nullptr; // mark at or before position
     const ImGradientMark* upper = nullptr; // first mark after position
 
     // Walk once through the list to find the first mark with pos > position
-    for (auto it = m_marks.begin(); it != m_marks.end(); ++it) {
-        const ImGradientMark* m = *it;
-        if (m->position > position) {
-            upper = m;
+    for (auto it = m_marks.begin(); it != m_marks.end(); ++it) 
+    {
+        const ImGradientMark& m = *it;
+        if (m.position > position) {
+            upper = &m;
 
             // previous mark becomes lower (wrap if we are at begin)
             if (it == m_marks.begin()) {
-                lower = last; // wrap pair: (last, first)
+                lower = &last; // wrap pair: (last, first)
             }
             else {
                 auto prev = it;
                 --prev;
-                lower = *prev;
+                lower = &*prev;
             }
             break;
         }
@@ -189,8 +156,8 @@ void ImGradient::computeColorAt(float position, float* color) const
 
     // If upper not found, position is after the last mark
     if (!upper) {
-        lower = last;
-        upper = first; // wrap pair: (last, first)
+        lower = &last;
+        upper = &first; // wrap pair: (last, first)
     }
 
     // Interpolate with wrap awareness
@@ -214,8 +181,10 @@ void ImGradient::computeColorAt(float position, float* color) const
 
 void ImGradient::refreshCache()
 {
-    m_marks.sort([](const ImGradientMark* a, const ImGradientMark* b)
-    { return a->position < b->position; });
+    std::sort(m_marks.begin(), m_marks.end(), [](const ImGradientMark& a, const ImGradientMark& b)
+    { 
+        return a.position < b.position;
+    });
 
     for (int i = 0; i < CACHE_SIZE; ++i)
         computeColorAt(i / ((float)(CACHE_SIZE)-1.0f), &m_cachedValues[i * 3]);
@@ -371,10 +340,10 @@ namespace ImGui
 
         for (auto markIt = gradient->getMarks().begin(); markIt != gradient->getMarks().end(); ++markIt)
         {
-            ImGradientMark* mark = *markIt;
+            ImGradientMark& mark = *markIt;
 
             float from = prevX;
-            float to = prevX = bar_pos.x + mark->position * maxWidth;
+            float to = prevX = bar_pos.x + mark.position * maxWidth;
 
             if (prevMark == nullptr)
             {
@@ -389,21 +358,21 @@ namespace ImGui
                 colorA.z = prevMark->color[2];
             }
 
-            colorB.x = mark->color[0];
-            colorB.y = mark->color[1];
-            colorB.z = mark->color[2];
+            colorB.x = mark.color[0];
+            colorB.y = mark.color[1];
+            colorB.z = mark.color[2];
 
             colorAU32 = ImGui::ColorConvertFloat4ToU32(colorA);
             colorBU32 = ImGui::ColorConvertFloat4ToU32(colorB);
 
-            if (mark->position > 0.0)
+            if (mark.position > 0.0)
             {
                 draw_list->AddRectFilledMultiColor(ImVec2(from, bar_pos.y),
                     ImVec2(to, barBottom),
                     colorAU32, colorBU32, colorBU32, colorAU32);
             }
 
-            prevMark = mark;
+            prevMark = &mark;
         }
 
 
@@ -426,8 +395,6 @@ namespace ImGui
     }
 
     static void DrawGradientMarks(ImGradient* gradient,
-        ImGradientMark*& draggingMark,
-        ImGradientMark*& selectedMark,
         struct ImVec2 const& bar_pos,
         float maxWidth,
         float height,
@@ -444,20 +411,21 @@ namespace ImGui
         int i = 0;
         for (auto markIt = gradient->getMarks().begin(); markIt != gradient->getMarks().end(); ++markIt)
         {
-            ImGradientMark* mark = *markIt;
+            ImGradientMark& mark = *markIt;
 
-            if (!selectedMark)
+            //if (!selectedMark)
+            if (!gradient->hasSelectedMark())
             {
-                selectedMark = mark;
+                gradient->setSelectedMark(mark);
             }
 
-            float to = bar_pos.x + mark->position * maxWidth;
+            float to = bar_pos.x + mark.position * maxWidth;
 
             if (prevMark == nullptr)
             {
-                colorA.x = mark->color[0];
-                colorA.y = mark->color[1];
-                colorA.z = mark->color[2];
+                colorA.x = mark.color[0];
+                colorA.y = mark.color[1];
+                colorA.z = mark.color[2];
             }
             else
             {
@@ -466,9 +434,9 @@ namespace ImGui
                 colorA.z = prevMark->color[2];
             }
 
-            colorB.x = mark->color[0];
-            colorB.y = mark->color[1];
-            colorB.z = mark->color[2];
+            colorB.x = mark.color[0];
+            colorB.y = mark.color[1];
+            colorB.z = mark.color[2];
 
             colorAU32 = ImGui::ColorConvertFloat4ToU32(colorA);
             colorBU32 = ImGui::ColorConvertFloat4ToU32(colorB);
@@ -489,7 +457,8 @@ namespace ImGui
                 ImVec2(to + 5.0f * mark_scale, bar_pos.y + (height + (11.0f * mark_scale))),
                 IM_COL32(0, 0, 0, 255), 1.0f);
 
-            if (selectedMark == mark)
+            //if (selectedMark == &mark)
+            if (gradient->selectedMarkUID() == mark.uid)
             {
                 draw_list->AddTriangleFilled(
                     ImVec2(to, bar_pos.y + (height - 3.0f * mark_scale)),
@@ -520,13 +489,15 @@ namespace ImGui
             {
                 if (ImGui::IsMouseClicked(0))
                 {
-                    selectedMark = mark;
-                    draggingMark = mark;
+                    //selectedMark = mark;
+                    //draggingMark = mark;
+                    gradient->setSelectedMark(mark);
+                    gradient->setDraggingMark(mark);
                 }
             }
 
 
-            prevMark = mark;
+            prevMark = &mark;
         }
 
         ImGui::SetCursorScreenPos(ImVec2(bar_pos.x, bar_pos.y + height + 20.0f * mark_scale));
@@ -549,8 +520,6 @@ namespace ImGui
 
     bool GradientEditor(
         ImGradient* gradient,
-        ImGradientMark*& draggingMark,
-        ImGradientMark*& selectedMark,
         float bar_scale,
         float mark_scale)
     {
@@ -580,18 +549,20 @@ namespace ImGui
         }
 
         DrawGradientBar(gradient, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* bar_scale);
-        DrawGradientMarks(gradient, draggingMark, selectedMark, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* bar_scale, mark_scale);
+        DrawGradientMarks(gradient, bar_pos, maxWidth, GRADIENT_BAR_EDITOR_HEIGHT* bar_scale, mark_scale);
 
-        if (!ImGui::IsMouseDown(0) && draggingMark)
+        if (!ImGui::IsMouseDown(0) && gradient->hasDraggingMark())
         {
-            draggingMark = nullptr;
+            gradient->clearDraggingMark();
         }
 
-        if (ImGui::IsMouseDragging(0) && draggingMark)
+        if (ImGui::IsMouseDragging(0) && gradient->hasDraggingMark())
         {
             float increment = ImGui::GetIO().MouseDelta.x / maxWidth;
             bool insideZone = (ImGui::GetIO().MousePos.x > bar_pos.x) &&
                 (ImGui::GetIO().MousePos.x < bar_pos.x + maxWidth);
+
+            ImGradientMark* draggingMark = gradient->getDraggingMark();
 
             if (increment != 0.0f && insideZone)
             {
@@ -605,21 +576,26 @@ namespace ImGui
 
             if (diffY >= GRADIENT_MARK_DELETE_DIFFY * bar_scale)
             {
-                gradient->removeMark(draggingMark);
-                draggingMark = nullptr;
-                selectedMark = nullptr;
+                gradient->removeMark(draggingMark->uid);
+                gradient->clearDraggingMark();
+                gradient->clearSelectedMark();
+                //draggingMark = nullptr;
+                //selectedMark = nullptr;
                 modified = true;
             }
         }
 
-        if (!selectedMark && gradient->getMarks().size() > 0)
+        if (!gradient->hasSelectedMark() && gradient->getMarks().size() > 0)
         {
-            selectedMark = gradient->getMarks().front();
+            gradient->setSelectedMark(gradient->getMarks().front());
+            //selectedMark = &gradient->getMarks().front();
         }
 
-        if (selectedMark)
+        if (gradient->hasSelectedMark())
         {
-            bool colorModified = ImGui::ColorPicker3("Color", selectedMark->color);
+            ImGradientMark* selectedMark = gradient->getSelectedMark();
+            bool colorModified = ImGui::ColorPicker3("Color", selectedMark->color, 
+                ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoSidePreview);
             //bool colorModified = ImGui::ColorPicker3(selectedMark-color);
 
             if (selectedMark && colorModified)

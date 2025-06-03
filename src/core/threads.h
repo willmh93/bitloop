@@ -102,6 +102,8 @@ struct SharedSync
     std::atomic<bool> quitting{ false };
     std::atomic<bool> editing_ui{ false };
     std::atomic<bool> updating_live_buffer{ false };
+    std::atomic<bool> processing_frame{ false };
+    std::atomic<bool> gui_populated_during_process{ false };
 
     std::mutex live_buffer_mutex;
     std::mutex shadow_buffer_mutex;
@@ -116,7 +118,7 @@ struct SharedSync
     bool project_thread_started = false;
     bool frame_ready = false;
     bool frame_consumed = false;
-    bool processing_frame = false;
+    
 
     void wait_until_gui_consumes_frame()
     {

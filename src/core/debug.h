@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 #include <format>
+#include <thread>
+#include <atomic>
 #if defined (_WIN32)
 #define NOMINMAX
 #include <windows.h>
@@ -17,7 +19,7 @@
 /// ======== Config ========
 
 /// ======== Debug Features ========
-//#define DEBUG_FINITE_DOUBLE_CHECKS
+#define DEBUG_FINITE_DOUBLE_CHECKS
 //#define DEBUG_DISABLE_PRINT
 #define DEBUG_INCLUDE_LOG_TABS
 
@@ -39,6 +41,14 @@ constexpr bool THREAD_LOGGING  = false;
 constexpr bool THREAD_TIMING             = false;
 
 
+
+struct Global
+{
+    static inline bool break_condition = false;
+};
+
+
+
 /// ========================= ///
 /// ======== Private ======== ///
 
@@ -51,17 +61,36 @@ constexpr bool THREAD_TIMING             = false;
 
 extern void ImDebugPrint(const char* txt, ...);
 
+static inline std::atomic<size_t> global_thread_counter{ 0 };
+static thread_local size_t thread_index = global_thread_counter.fetch_add(1, std::memory_order_relaxed);
+
+extern std::unordered_map<size_t, size_t> thread_map;
+
+static size_t get_thread_index() {
+    if (!thread_map.contains(thread_index))
+        thread_map[thread_index] = thread_index;
+    return thread_index;
+}
+
+//static size_t get_thread_index() {
+//    return std::hash<std::thread::id>{}(std::this_thread::get_id());
+//}
+
+
 #if defined(_WIN32)
 /// Windows
 #define DebugPrintString(txt) { const char* __buf = txt; OutputDebugStringA(__buf); ImDebugPrint(__buf); }
 #define DebugPrint(fmt, ...)                                \
-        do {                                                \
+        do {                                              \
             char buf[512];                                  \
-            snprintf(buf, sizeof(buf), fmt, ##__VA_ARGS__);   \
+            auto ti = get_thread_index();                    \
+            snprintf(buf, sizeof(buf), "[%llu] "##fmt, ti, ##__VA_ARGS__);   \
             DebugPrintString(buf);                          \
             OutputDebugStringA("\n");                       \
             printf("%s\n", buf);                            \
         } while (0)
+            //if (ti > 0) snprintf(buf, sizeof(buf), "[G] "##fmt, ##__VA_ARGS__); 
+            //else        snprintf(buf, sizeof(buf), "[w] "##fmt, ##__VA_ARGS__); 
 #elif defined(__EMSCRIPTEN__)
 /// Webassembly
 #define DebugPrintString(txt) printf(txt)

@@ -128,12 +128,14 @@ void MainWindow::initFonts()
 
     float base_pt = 16.0f;
     const char* font_path = Platform()->path("/data/fonts/DroidSans.ttf");
+    //const char* font_path2 = Platform()->path("/data/fonts/DroidSans.ttf");
     ImFontConfig config;
     config.OversampleH = 3;
     config.OversampleV = 3;
 
     io.Fonts->Clear();
     io.Fonts->AddFontFromFileTTF(font_path, base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
+    //io.Fonts->AddFontFromFileTTF(font_path2, base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
     io.Fonts->FontBuilderFlags =
         ImGuiFreeTypeBuilderFlags_LightHinting |
         ImGuiFreeTypeBuilderFlags_ForceAutoHint;
@@ -491,6 +493,7 @@ void MainWindow::populateViewport()
             if (!ProjectWorker::instance()->getActiveProject())
             {
                 ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Mandelbrot Viewer")->sim_uid);
+                //ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Canvas Transforms")->sim_uid);
                 ProjectWorker::instance()->startProject();
 
                 // Kick-start work-render-work-render loop
@@ -556,18 +559,8 @@ void MainWindow::populateUI()
     else
         populateExpandedLayout();
 
-    /*static bool first_frame = true; // SetWindowFocus doesn't switch focused tab unless second frame
-    if (initialized && !done_first_focus && !first_frame)
-    {
-        done_first_focus = true;
-        ImGui::SetWindowFocus(collapse_layout ? "Active" : "Projects");
-    }
-    first_frame = false;*/
-
     if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
-    {
         done_first_focus = true;
-    }
 
     ImGui::PopStyleVar();
 

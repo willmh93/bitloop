@@ -20,6 +20,8 @@
 SDL_Window* window = nullptr;
 SharedSync shared_sync;
 
+std::unordered_map<size_t, size_t> thread_map;
+
 void gui_loop()
 {
     // ======== Poll SDL events ========
@@ -61,6 +63,8 @@ void gui_loop()
 
 int main(int argc, char* argv[])
 {
+    DebugPrint("Main Thread Started");
+
     // ======== SDL Window setup ========
     {
         SDL_Init(SDL_INIT_VIDEO);

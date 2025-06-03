@@ -385,26 +385,8 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
 };
 
 
-struct Cardioid_Scene_Vars : public VarBuffer
+/*struct Cardioid_Scene_Vars : public VarBuffer
 {
-    /*bool   show_offset = false;
-    bool   flatten = true;
-    bool   interactive = true;
-
-    double interact_angle_step = (2.0 * M_PI) / 720.0;
-    double interact_spin_mult = 1.0;
-    double interact_angle = 0.0;
-    double interact_dist = 0.0;*/
-
-
-    /*bool show_offset = false;
-    bool flatten = true;
-    bool interactive = true;
-
-    double interact_angle_step = (2 * M_PI) / 720.0;
-    double interact_spin_mult = 1.0;
-    double interact_angle = 0.0;
-    double interact_dist = 0.0;*/
     sync_struct
     {
         bool   show_offset = false;
@@ -430,7 +412,7 @@ struct Cardioid_Scene_Vars : public VarBuffer
         //interact_angle = rhs.interact_angle;
         //interact_dist = rhs.interact_dist;
     }
-};
+};*/
 
 //struct Cardioid_Scene_Vars::Primitives
 //{
@@ -438,9 +420,18 @@ struct Cardioid_Scene_Vars : public VarBuffer
 //};
 
 
-struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
+struct Cardioid_Scene : public BasicScene//<Cardioid_Scene_Vars>
 {
     // --- Variables ---
+    bool   show_offset = false;
+    bool   flatten = false;
+    bool   interactive = false;
+    bool   animate = true;
+    double ani_angle = 0.0;
+    double interact_angle_step = (2.0 * M_PI) / 720.0;
+    double interact_spin_mult = 1.0;
+    double interact_angle = 0.0;
+    double interact_dist = 0.0;
 
     // --- Scene management ---
     

@@ -22,7 +22,8 @@ void Mandelbrot_Project::projectPrepare(Layout& layout)
 ///   Scene   ///
 ///-----------///
 
-void Mandelbrot_Scene::_sceneAttributes() //const
+
+void Mandelbrot_Data::populate()
 {
     /*for (PostFn& f : live_attributes->post_fn_queue)
     {
@@ -43,71 +44,75 @@ void Mandelbrot_Scene::_sceneAttributes() //const
     //if (ImGui::DragDouble("X", &cam_x, 0.01 / cam_zoom, -5.0, 5.0, format))
     //    post([&]() { dst.cam_zoom = cam_zoom; });
     
-    ImGui::Checkbox("Show Axis", &sync(show_axis));
+    ImGui::Checkbox("Show Axis", &show_axis);
 
 
-    ImGui::DragDouble("X", &sync(cam_x), 0.01 / cam_zoom, -5.0, 5.0, format);
-    ImGui::DragDouble("Y", &sync(cam_y), 0.01 / cam_zoom, -5.0, 5.0, format);
+
+    if (ImGui::DragDouble("X", &cam_x, 0.01 / cam_zoom, -5.0, 5.0, format))
+    {
+        DebugPrint("GUI set: cam_x = %.3f", cam_x);
+    }
+    ImGui::DragDouble("Y", &cam_y, 0.01 / cam_zoom, -5.0, 5.0, format);
 
     if (!Platform()->is_mobile())
     {
-        if (ImGui::SliderDouble("Rotation", &sync(cam_degrees), 0.0, 360.0, "%.0f"))
+        if (ImGui::SliderDouble("Rotation", &cam_degrees, 0.0, 360.0, "%.0f"))
         {
-            sync(cam_rot) = sync(cam_degrees) * Math::PI / 180.0;
+            cam_rot = cam_degrees * Math::PI / 180.0;
         }
 
         // 1e16 = double limit before preicions loss
-        static double zoom_speed = sync(cam_zoom) / 100.0;
-        if (ImGui::DragDouble("Zoom Mult", &sync(cam_zoom), zoom_speed, 1.0, 1e16, "%.2f"))
+        static double zoom_speed = cam_zoom / 100.0;
+        if (ImGui::DragDouble("Zoom Mult", &cam_zoom, zoom_speed, 1.0, 1e16, "%.2f"))
         {
-            zoom_speed = sync(cam_zoom) / 100.0;
+            zoom_speed = cam_zoom / 100.0;
         }
     }
 
     //double *zoom_vars[2] = { ref(&cam_zoom_xy[0]), Var(&cam_zoom_xy[1]) };
-    ImGui::SliderDouble2("Zoom X/Y", sync(cam_zoom_xy).asArray(), 0.1, 10.0, "%.2f");
+    ImGui::SliderDouble2("Zoom X/Y", cam_zoom_xy.asArray(), 0.1, 10.0, "%.2f");
 
     /// --------------------------------------------------------------
     ImGui::Dummy(ScaleSize(0, 10));
     ImGui::SeparatorText("Compute");
     /// --------------------------------------------------------------
 
-    ImGui::Checkbox("Flatten", &sync(flatten));
+    ImGui::Checkbox("Flatten", &flatten);
 
     if (flatten)
     {
         ImGui::Indent();
-        if (ImGui::SliderDouble("Flatness", &sync(flatten_amount), 0.0, 1.0, "%.2f"))
-            sync(cardioid_lerp_amount) = 1.0 - flatten_amount;
+        if (ImGui::SliderDouble("Flatness", &flatten_amount, 0.0, 1.0, "%.2f"))
+            cardioid_lerp_amount = 1.0 - flatten_amount;
 
-        ImGui::Checkbox("Show period-2 bulb", &sync(show_period2_bulb));
+        ImGui::Checkbox("Show period-2 bulb", &show_period2_bulb);
         ImGui::Unindent();
         ImGui::Dummy(ScaleSize(0, 10));
     }
     
     if (!flatten)
     {
-        ImGui::Checkbox("Interactive Cardioid", &sync(interactive_cardioid));
+        ImGui::Checkbox("Interactive Cardioid", &interactive_cardioid);
     }
 
-    if (ImGui::Checkbox("Dynamic Iteration Limit", &sync(dynamic_iter_lim)))
+    if (ImGui::Checkbox("Dynamic Iteration Limit", &dynamic_iter_lim))
     {
         if (!dynamic_iter_lim)
         {
-            sync(quality) = iter_lim;
+            quality = iter_lim;
         }
         else
         {
-            sync(quality) = 0.5;
+            quality = 0.5;
         }
     }
 
     if (dynamic_iter_lim)
     {
-        ImGui::SliderDouble("Quality", &sync(quality), 0.1, 1.0, "%.2f");
+        ImGui::SliderDouble("Quality", &quality, 0.1, 1.0, "%.2f");
     }
     else
-        ImGui::DragDouble("Max Iterations", &sync(quality), 1000.0, 1.0, 1000000.0, "%.0f", ImGuiSliderFlags_Logarithmic);
+        ImGui::DragDouble("Max Iterations", &quality, 1000.0, 1.0, 1000000.0, "%.0f", ImGuiSliderFlags_Logarithmic);
 
     
     if (!flatten)
@@ -118,7 +123,7 @@ void Mandelbrot_Scene::_sceneAttributes() //const
         /// --------------------------------------------------------------
     
         static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
-        ImSpline::SplineEditorPair("X/Y Spline", &sync(x_spline), &sync(y_spline), &vr, 900.0f);
+        ImSpline::SplineEditorPair("X/Y Spline", &x_spline, &y_spline, &vr, 900.0f);
     }
 
 
@@ -135,12 +140,13 @@ void Mandelbrot_Scene::_sceneAttributes() //const
     ImGui::SeparatorText("Colour Cycling");
     /// --------------------------------------------------------------
 
-    ImGui::Checkbox("Dynamic Color Cycle", &sync(dynamic_color_cycle_limit));
+    ImGui::Checkbox("Dynamic Color Cycle", &dynamic_color_cycle_limit);
+
 
     if (dynamic_color_cycle_limit)
-        ImGui::SliderDouble("Cycle Limit Ratio", &sync(color_cycle_value), 0.01, 1.0, "%.2f");
+        ImGui::SliderDouble("Cycle Limit Ratio", &color_cycle_value, 0.01, 1.0, "%.2f");
     else
-        ImGui::SliderDouble("Cycle Iterations", &sync(color_cycle_iters), 1.0, iter_lim, "%.0f");
+        ImGui::SliderDouble("Cycle Iterations", &color_cycle_iters, 1.0, iter_lim, "%.0f");
 
     /// --------------------------------------------------------------
     ImGui::Dummy(ScaleSize(0, 10));
@@ -162,10 +168,11 @@ void Mandelbrot_Scene::_sceneAttributes() //const
     ///    );
     ///    colors_updated = true;
     ///}
-    if (ImGui::Combo("###ColorTemplate", &sync(active_color_template), ColorGradientNames, GRADIENT_TEMPLATE_COUNT))
+    /// 
+    if (ImGui::Combo("###ColorTemplate", &active_color_template, ColorGradientNames, GRADIENT_TEMPLATE_COUNT))
     {
-        loadColorTemplate((ColorGradientTemplate)sync(active_color_template));
-        sync(colors_updated) = true;
+        loadColorTemplate((ColorGradientTemplate)active_color_template);
+        colors_updated = true;
     }
 
     //static bool show_gradient_editor = false;
@@ -178,12 +185,25 @@ void Mandelbrot_Scene::_sceneAttributes() //const
     
     {
         if (ImGui::GradientEditor(
-            &sync(gradient),
+            &gradient,
             Platform()->ui_scale_factor(), 
             Platform()->ui_scale_factor(2.0f)))
         {
-            sync(active_color_template) = GRADIENT_CUSTOM;
-            sync(colors_updated) = true;
+            active_color_template = GRADIENT_CUSTOM;
+
+            //DebugPrint("SET BLACK => sync(colors_updated) = true");
+            DebugPrint("colors_updated = TRUE");
+            colors_updated = true;
+
+            if (gradient.getMarks().front().color[0] == 0)
+            {
+                DebugPrint("gradient = BLACK");
+                Global::break_condition = true;
+            }
+            else
+            {
+                DebugPrint("gradient = OTHER");
+            }
         }
     }
     
@@ -436,6 +456,8 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         cam_zoom = camera->getRelativeZoomFactor().x;
     }
 
+    cam_rot += 0.001;
+    cam_degrees = cam_rot * 180.0 / Math::PI;
 
     if (variableChanged(cam_rot))
         camera->rotation = cam_rot;
@@ -459,6 +481,8 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
 
     if (variableChanged(cam_x))
     {
+        //DebugPrint("Detected change: cam_x: %.3f", cam_x);
+
         //DebugPrint("viewportProcess: cam_x WAS %.12f", cam_x);
         camera->x = cam_x; // imgui edited OR panned
         //DebugPrint("viewportProcess: cam_x SET %.12f", cam_x);
@@ -506,20 +530,19 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         interactive_cardioid
     );
 
+    // Color scheme changed? Don't recalculate depth field, but reshade active_bmp colors
     if (variableChanged(color_cycle_iters))
+    {
         colors_updated = true;
-
-    ///if (colors_updated)
-    ///{
-    ///    mandel_changed = true;
-    ///    colors_updated = false;
-    ///}
+        other_option_changed = true;
+    }
 
     // Presented Mandelbrot *actually* changed? Restart on 9x9 bmp (phase 0)
     if (mandel_changed)
-        compute_phase = 0;
-    //if (camera->panning)
-    //    compute_phase = 0;
+    {
+        computing_phase = 0;
+        current_row = 0;
+    }
 
     // Has config changed in any way? Update 
     bool config_changed = mandel_changed || other_option_changed;
@@ -527,28 +550,30 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         updateConfigBuffer();
 
     // Has the compute phase changed? Force update
-    if (variableChanged(compute_phase))
+    if (variableChanged(computing_phase))
     {
-        //if (cancel_frame_callback)
-        //    cancel_frame_callback();
-
         mandel_changed = true;
     }
 
+
     // Set active_bmp
-    switch (compute_phase)
+    switch (computing_phase)
     {
         case 0: pending_bmp = &bmp_9x9; pending_field = &field_9x9; break;
         case 1: pending_bmp = &bmp_3x3; pending_field = &field_3x3; break;
         case 2: pending_bmp = &bmp_1x1; pending_field = &field_1x1; break;
     }
 
+    bool do_compute = false;
+
     // Reshade active_bmp
-    if (current_row != 0 || // Still haven't finished computing the previous frame phase
+    if (first_frame ||
+        current_row != 0 || // Still haven't finished computing the previous frame phase
         mandel_changed ||
-        variableChanged(compute_phase))
+        variableChanged(computing_phase))
     {
-        pending_bmp->setNeedsReshading();
+        do_compute = true;
+        first_frame = false;
     }
 
     pending_bmp->setStageRect(0, 0, ctx->width, ctx->height);
@@ -561,15 +586,17 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
     field_3x3.setDimensions(iw / 3, ih / 3);
     field_1x1.setDimensions(iw, ih);
 
-    bool finished_compute = false;
+    finished_compute = false;
 
-    if (pending_bmp->needsReshading(camera))
+    //if (pending_bmp->needsReshading(camera))
+    if (do_compute)
     {
         if (!flatten)
         {
             // Standard
             bool linear = x_spline.isSimpleLinear() && y_spline.isSimpleLinear();
 
+            // Continue progress calculating depth field for "pending"
             finished_compute = dispatchBooleans(
                 boolsTemplate(regularMandelbrot, [&], ctx),
                 smoothing_type == MandelSmoothing::SMOOTH_CONTINUOUS,
@@ -587,14 +614,14 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
             );
         }
 
+        // Has pending_field finished computing? Set as active field and use for future color updates
         if (finished_compute)
         {
-            // pending_field finished computing, now shade pending_bmp
-
-            
-
             active_bmp = pending_bmp;
             active_field = pending_field;
+
+            visible_phase = computing_phase;
+
 
             // Calculate boundaries for this phase
             {
@@ -609,15 +636,16 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
                 }
             }
 
-            if (compute_phase < 2)
-                compute_phase++;
-
+            if (computing_phase < 2)
+            {
+                computing_phase++;
+            }
         }
 
         // Forward current phase results to next phase
         /*if (finished_compute)
         {
-            switch (compute_phase)
+            switch (computing_phase)
             {
                 case 0:
                 {
@@ -641,15 +669,35 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
 
     }
 
-    if (active_field && (finished_compute || colors_updated))
+    if (finished_compute || colors_updated)
     {
-        shadeBitmap();
-        colors_updated = false;
+        if (gradient.getMarks().front().color[0] == 0)
+            DebugPrint("Mandelbrot shaded BLACK");
+        else
+            DebugPrint("Mandelbrot shaded OTHER");
+
+        shadeBitmap(); // bug info: UI sets shadow gradient to black DURING this
+
+        colors_updated = false; // then LIVE marks that as "shaded" here, but used other color
+
+        /// because gradient used expired data (e.g. mark color), the colors_updated should remain true
+        // 
+        // because GUI was populated during worker process, the shadow data should remain as-is
+        // until the NEXT worker frame
+        // 
+        // i.e. Treated as still "changed" and therefore synced back to true on the next frame
+        // because the GUI value was set AFTER updating live buffer, the marked shadow shouldn't 
+        // be reset to the live value because it occured after the 
+        // you updated the shadow. In fact, the shadow itself shouldn't have updated either 
+        // so that the comparison remains a mismatch
+        DebugPrint("colors_updated = FALSE");
     }
 
-
-
-    
+    /*bool* shadow_updated = getShadow(&colors_updated);
+    if (shadow_updated && *shadow_updated)
+    {
+        int a = 5;
+    }*/
 
     /*if (variableChanged(cam_x))
     {
@@ -758,7 +806,7 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     }
 
     //ctx->print() << "Frame delta time: " << this->project_dt(10) << " ms";
-    ctx->print() << "max_iterations: " << iter_lim;
+    /*ctx->print() << "max_iterations: " << iter_lim;
 
     double zoom_factor = camera->getRelativeZoomFactor().average();
     ctx->print() << "\nzoom: " << cam_zoom;
@@ -766,9 +814,32 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     ctx->print().precision(1);
     ctx->print() << "\nfps: " << std::fixed << fps(60);
     ctx->print() << "\nthreads: " << Thread::idealThreadCount();
-    ctx->print() << "\nframe progress: " << (((float)current_row / (float)pending_bmp->height()) * 100.0f) << "%";
+
+
+    ctx->print() << "\n\ncomputing_phase: " << computing_phase;
+    ctx->print() << "\nvisible_phase: " << visible_phase;
+
+    ctx->print() << "\n\nframe progress: " << (((float)current_row / (float)pending_bmp->height()) * 100.0f) << "%";
+    ctx->print() << "\npending iter_lim: " << iter_lim;
+    ctx->print() << "\nfinished_compute: " << finished_compute;
+
+    ctx->print().precision(3);
+    ctx->print() << "\n\nquad: " << world_quad;*/
 
     ctx->print() << "\n\n" << toString().c_str();
+
+    // Gradient test
+    camera->stageTransform();
+    double x = 8;
+    for (double p=0; p<1.0; p+=0.01)
+    {
+        float c[3];
+        gradient.getColorAt(p, c);
+        //ctx->setFillStyle(int(c[0] * 255.0), int(c[1] * 255.0), int(c[2] * 255.0), 255);
+        ctx->setFillStyle(c);
+        ctx->fillRect(x, 8, 1, 32);
+        x++;
+    }
 }
 
 void Mandelbrot_Scene::onEvent(Event e)
@@ -780,7 +851,7 @@ void Mandelbrot_Scene::onEvent(Event e)
 
         // If view quad has changed, cancel current frame 
         // (unless compute phase is still 0, in which case we have no frame to fallback to)
-        /*if (compute_phase > 0 && 
+        /*if (computing_phase > 0 && 
             e.ctx_owner()->worldQuad() != old_quad)
         {
             if (cancel_frame_callback)

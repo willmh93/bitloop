@@ -1,5 +1,15 @@
 #include "imgui_custom.h"
 
+std::ostream& operator<<(std::ostream& os, const ImSpline::Spline& spline)
+{
+    return os << "Spline";
+}
+
+std::ostream& operator<<(std::ostream& os, const ImGradient& gradient)
+{
+    return os << "Gradient";
+}
+
 namespace ImGui
 {
     IMGUI_API bool SliderDouble(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags)

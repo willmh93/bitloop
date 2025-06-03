@@ -39,6 +39,9 @@ inline ImVec2 ScaleSize(float w, float h)
     return ImVec2(w * dpr, h * dpr);
 }
 
+std::ostream& operator<<(std::ostream& os, const ImSpline::Spline& spline);
+std::ostream& operator<<(std::ostream& os, const ImGradient& gradient);
+
 namespace ImGui
 {
     struct StartValue { void* initial; int size; };
