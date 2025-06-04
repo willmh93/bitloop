@@ -110,11 +110,7 @@ void ProjectWorker::worker_loop()
                 }*/
 
                 /// apply shadow data *changes* TO live buffer
-                if (!shared_sync.gui_populated_during_process.load())
-                {
-                    //DebugPrint("pullDataFromShadow()");
-                    pullDataFromShadow();
-                }
+                pullDataFromShadow();
 
                 if (active_project && active_project->changedShadow())
                 {
@@ -154,15 +150,7 @@ void ProjectWorker::worker_loop()
                 // Then don't update shadow OR marked_shadow if the live variables
 
                  // apply live data *changes* TO shadow buffer
-                if (!shared_sync.gui_populated_during_process.load())
-                {
-                    //DebugPrint("pushDataToShadow()");
-                    pushDataToShadow(); // worker frame completed without GUI interruption, Update shadow immediately
-                }
-                ///else
-                ///{
-                ///    DebugPrint("pushDataToShadow() SKIPPED (GUI change means we still need that shadow update)");
-                ///}
+                pushDataToShadow();
   
 
                 DebugPrint("----- END WORKER FRAME -----");

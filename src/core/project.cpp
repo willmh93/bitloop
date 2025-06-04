@@ -597,9 +597,11 @@ void ProjectBase::_populateAllAttributes()
 
         if (showUI)
         {
+            markShadowValues();
             ImGui::PushID("project_section");
             _projectAttributes();
             ImGui::PopID();
+            markDirtyVariables();
         }
 
         ImGui::Dummy(ScaleSize(0, 8));
@@ -635,6 +637,7 @@ void ProjectBase::_populateAllAttributes()
             scene->_sceneAttributes();
             ///scene->populating_ui = false;
             ImGui::PopID();
+            scene->markDirtyVariables();
 
             /// TODO: Do safely inside mutex? (new function call from worker)
             //scene->updateSceneLiveBuffer();
