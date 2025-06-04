@@ -269,29 +269,29 @@ struct Mandelbrot_Data : public VarBuffer
 
     void setup() override
     {
-        sync3(show_axis);
-        sync3(cam_x);
-        sync3(cam_y);
-        sync3(cam_degrees);
-        sync3(cam_rot);
-        sync3(cam_zoom);
-        sync3(cam_zoom_xy);
-        sync3(flatten);
-        sync3(flatten_amount);
-        sync3(show_period2_bulb);
-        sync3(interactive_cardioid);
-        sync3(dynamic_iter_lim);
-        sync3(quality);
-        sync3(iter_lim);
-        sync3(dynamic_iter_lim);
-        sync3(x_spline);
-        sync3(y_spline);
-        sync3(dynamic_color_cycle_limit);
-        sync3(color_cycle_value);
-        sync3(active_color_template);
-        sync3(gradient);
-        sync3(colors_updated);
-        sync3(config_buf);
+        sync(show_axis);
+        sync(cam_x);
+        sync(cam_y);
+        sync(cam_degrees);
+        sync(cam_rot);
+        sync(cam_zoom);
+        sync(cam_zoom_xy);
+        sync(flatten);
+        sync(flatten_amount);
+        sync(show_period2_bulb);
+        sync(interactive_cardioid);
+        sync(dynamic_iter_lim);
+        sync(quality);
+        sync(iter_lim);
+        sync(dynamic_iter_lim);
+        sync(x_spline);
+        sync(y_spline);
+        sync(dynamic_color_cycle_limit);
+        sync(color_cycle_value);
+        sync(active_color_template);
+        sync(gradient);
+        sync(colors_updated);
+        sync(config_buf);
     }
 
     void populate();

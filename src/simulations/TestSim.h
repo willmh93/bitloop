@@ -78,22 +78,6 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
         //speed(info.speed)
     {}
 
-    
-
-    //float x_spline_points[ImSpline::PointsArrSize(9)] = {
-    //        0.0f, 0.0f,   0.1f, 0.1f,   0.2f, 0.2f,
-    //        0.3f, 0.3f,   0.4f, 0.4f,   0.5f, 0.5f,
-    //        0.6f, 0.6f,   0.7f, 0.7f,   0.8f, 0.8f
-    //};
-    //ImSpline::Spline x_spline;
-    /*ImSpline::Spline spline(100, {
-        {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
-        {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
-        {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
-    });*/
-    //ImSpline::Spline spline;
-    //
-
     // Scene management
     //void _sceneAttributes() override;
     void sceneStart() override;
@@ -119,15 +103,13 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
 
 struct Test_Project_Vars : public VarBuffer
 {
-    sync_struct
-    {
-        int viewport_count = 1;
-    } 
-    sync_end;
+    int viewport_count = 1;
 
     void populate();
-    void copyFrom(const Test_Project_Vars& rhs)
-    {}
+    void setup()
+    {
+        sync(viewport_count);
+    }
 };
 
 struct Test_Project : public Project<Test_Project_Vars>

@@ -456,8 +456,8 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         cam_zoom = camera->getRelativeZoomFactor().x;
     }
 
-    cam_rot += 0.001;
-    cam_degrees = cam_rot * 180.0 / Math::PI;
+    //cam_rot += 0.001;
+    //cam_degrees = cam_rot * 180.0 / Math::PI;
 
     if (variableChanged(cam_rot))
         camera->rotation = cam_rot;

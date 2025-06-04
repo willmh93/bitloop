@@ -385,44 +385,8 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
 };
 
 
-/*struct Cardioid_Scene_Vars : public VarBuffer
+struct Cardioid_Scene_Vars : public VarBuffer
 {
-    sync_struct
-    {
-        bool   show_offset = false;
-        bool   flatten = false;
-        bool   interactive = false;
-        bool   animate = true;
-        double ani_angle = 0.0;
-        double interact_angle_step = (2.0 * M_PI) / 720.0;
-        double interact_spin_mult = 1.0;
-        double interact_angle = 0.0;
-        double interact_dist = 0.0;
-    }
-    sync_end;
-
-
-    void populate();
-    void copyFrom(const Cardioid_Scene_Vars& rhs)
-    {
-        //show_offset = rhs.show_offset;
-        //interactive = rhs.interactive;
-        //interact_angle_step = rhs.interact_angle_step;
-        //interact_spin_mult = rhs.interact_spin_mult;
-        //interact_angle = rhs.interact_angle;
-        //interact_dist = rhs.interact_dist;
-    }
-};*/
-
-//struct Cardioid_Scene_Vars::Primitives
-//{
-//    
-//};
-
-
-struct Cardioid_Scene : public BasicScene//<Cardioid_Scene_Vars>
-{
-    // --- Variables ---
     bool   show_offset = false;
     bool   flatten = false;
     bool   interactive = false;
@@ -433,12 +397,29 @@ struct Cardioid_Scene : public BasicScene//<Cardioid_Scene_Vars>
     double interact_angle = 0.0;
     double interact_dist = 0.0;
 
+    void setup()
+    {
+        sync(show_offset);
+        sync(flatten);
+        sync(interactive);
+        sync(animate);
+        sync(ani_angle);
+        sync(interact_angle_step);
+        sync(interact_spin_mult);
+        sync(interact_angle);
+        sync(interact_dist);
+    }
+    void populate();
+};
+
+struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
+{
     // --- Scene management ---
     
-
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
     void sceneProcess() override;
+
     // --- Update methods ---
 
     void plotCumulativeCardioid(Viewport* ctx, const CumulativeCardioid &items, double angle_mult=1.0);
