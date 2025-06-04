@@ -670,7 +670,7 @@ class ProjectBase
     int sim_uid = -1;
 
     int dt_projectProcess = 0;
-    int dt_frameProcess = 0;
+    int dt_frameProcess 
 
     std::chrono::steady_clock::time_point last_frame_time 
         = std::chrono::steady_clock::now();
