@@ -56,7 +56,7 @@ void ProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
             active_project->_projectDestroy();
             active_project->_projectStart();
 
-            active_project->copyChangedLiveVarsToShadow();
+            active_project->updateShadowBuffers();
         }
         break;
 
@@ -102,12 +102,12 @@ void ProjectWorker::worker_loop()
                 DebugPrint("----------------------------");
                 DebugPrint("----- NEW WORKER FRAME -----");
 
-                if (shared_sync.gui_populated_during_process.load())
+                /*if (shared_sync.gui_populated_during_process.load())
                 {
                     // GUI shadow change must have occured during last worker frame,
                     // meaning shadow still contains an unsynced change
                     DebugPrint("Found unsynced change");
-                }
+                }*/
 
                 /// apply shadow data *changes* TO live buffer
                 if (!shared_sync.gui_populated_during_process.load())
@@ -127,7 +127,7 @@ void ProjectWorker::worker_loop()
                 {
                     active_project->markLiveValues();
                     //if (!shared_sync.gui_populated_during_process.load()) // I don't think this is doing anything
-                        active_project->markShadowValues();
+                    ///    active_project->markShadowValues();
                 }
 
                 //if (!shared_sync.gui_populated_during_process.load())
@@ -142,8 +142,6 @@ void ProjectWorker::worker_loop()
                 shared_sync.gui_populated_during_process.store(false);
 
 
-
-               
                 DebugPrint("projectProcess()");
                 if (active_project)
                     active_project->_projectProcess(); // imagine GUI changes shadow during this
@@ -217,7 +215,7 @@ void ProjectWorker::pushDataToShadow()
                     int a = 5;
                 }
 
-                active_project->copyChangedLiveVarsToShadow();
+                active_project->updateShadowBuffers();
                 
 
                 if (Global::break_condition)
@@ -225,7 +223,7 @@ void ProjectWorker::pushDataToShadow()
                     int a = 5;
                 }
                 //DebugPrint("pushDataToShadow::markShadowValues");
-                //active_project->markShadowValues();
+                active_project->markShadowValues();
             }
         }
     }
@@ -240,7 +238,7 @@ void ProjectWorker::pullDataFromShadow()
         shared_sync.updating_live_buffer.store(true);
 
         if (active_project)
-            active_project->copyChangedShadowVarsToLive();
+            active_project->updateLiveBuffers();
 
         shared_sync.updating_live_buffer.store(false, std::memory_order_release);
 

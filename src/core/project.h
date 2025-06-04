@@ -30,224 +30,20 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
 #define SIM_END(ns) } using ns::ns##_Project;
 
 
-
-/// =================================================================================
-/// ======= varcpy overloads (helper for safely copying data between threads) =======
-/// =================================================================================
-
-// --- varcpy (non-primative requiring ::copyFrom method) ---
 template<typename T>
-concept ImpliedThreadSafeCopyable = requires(T t, const T & rhs) {
-    { t.copyFrom(rhs) } -> std::same_as<void>;
-};
-
-template<ImpliedThreadSafeCopyable T>
-void varcpy(T& dst, const T& src) {
-    dst.copyFrom(src);
-}
-
-// --- varcpy (primative copyable) ---
-template<typename T>
-concept PrimitiveCopyable = std::is_trivially_copyable_v<T> && std::is_assignable_v<T&, const T&>;
-
-template<PrimitiveCopyable T>
-void varcpy(T& dst, const T& src) {
-    dst = src;
-}
-
-// --- varcpy (trivially copyable array) ---
-template<typename T, size_t N>
-void varcpy(T(&dst)[N], const T(&src)[N]) {
-    static_assert(std::is_trivially_copyable_v<T>,
-        "varcpy: array element type must be trivially copyable");
-    std::memcpy(dst, src, sizeof(T) * N);
-}
-
-// --- varcpy (trivially copyable base part of a possibly non-trivially copyable derived class) ---
-template<typename Base, typename Derived>
-void varcpy(Derived& dst, const Derived& src) {
-    varcpy(*static_cast<Base*>(&dst), *static_cast<const Base*>(&src));
-}
-
-/// ---------------------------------------------------------
-/// 
-/// Tiny helper macros to insert sentinel markers around data
-/// which will be automatically synchronized between the live
-/// data buffer and GUI data buffer.
-/// 
-/// Note: Only one sync-block is permitted per VarBuffer.
-/// 
-/// ---------------------------------------------------------
-
-#define sync_struct std::byte __sync_beg__; struct
-#define sync_end    ; std::byte __sync_end__;
-
-template<class T>
-constexpr std::span<std::byte> writable_sync_span(T& obj)
+concept VarBufferConcept = requires(T t, const T & rhs)
 {
-    auto* beg = reinterpret_cast<std::byte*>(&obj.__sync_beg__) + 1;
-    auto* end = reinterpret_cast<std::byte*>(&obj.__sync_end__);
-    return { beg, end };
-}
-
-template<class T>
-constexpr std::span<const std::byte> readonly_sync_span(const T& obj)
-{
-    auto* beg = reinterpret_cast<const std::byte*>(&obj.__sync_beg__) + 1;
-    auto* end = reinterpret_cast<const std::byte*>(&obj.__sync_end__);
-    return { beg, end };
-}
-
-template<typename T>
-concept VarBufferConcept = requires(T t, const T & rhs) {
     { t.populate() } -> std::same_as<void>;
-    //{ t.copyFrom(rhs) } -> std::same_as<void>;
 };
-
-
-
-template<typename T>
-concept HasSyncMembers = requires(T & t) {
-    { t.__sync_beg__ } -> std::convertible_to<std::byte>;
-    { t.__sync_end__ } -> std::convertible_to<std::byte>;
-};
-
-/*template<typename T>
-struct synced
-{
-    static VarTracker* tracker;
-    T value;
-
-    synced(T&& v) : value(std::forward<T>(v))
-    {
-        tracker->sync(value);
-    }
-
-    synced() = default;
-    operator T& () { return value; }
-    operator const T& () const { return value; }
-};*/
-
-struct IVarData
-{
-    uint64_t offset = 0xFFFFFFFFFFFFFFFFull;
-    uint64_t size = 0xFFFFFFFFFFFFFFFFull;
-
-    virtual ~IVarData() = default;
-
-    virtual std::string liveToString() = 0;
-    virtual std::string shadowToString() = 0;
-    virtual std::string liveMarkedToString() = 0;
-    virtual std::string shadowMarkedToString() = 0;
-
-    virtual void* shadowData() = 0;
-
-    virtual void updateLive(void* ptr) = 0;
-    virtual void updateShadow(void* ptr) = 0;
-    virtual void markLiveValue(void* ptr) = 0;
-    virtual void markShadowValue(void* ptr) = 0;
-    virtual bool liveChanged(void* ptr) const = 0;
-    virtual bool shadowChanged(void* ptr) const = 0;
-};
-
-template<typename T>
-struct VarData final : IVarData
-{
-    mutable T* ptr;
-    mutable T shadowValue{};
-    mutable T markedShadowValue{};
-    mutable T markedLiveValue{};
-    bool hasShadow = false;
-
-    explicit VarData(T* _ptr, uint64_t off, uint64_t _size) : ptr(_ptr)
-    {
-        offset = off;
-        size = _size;
-    }
-
-    std::string liveToString()
-    {
-        std::stringstream ss;
-        ss << *ptr;
-        return ss.str();
-    }
-
-    std::string shadowToString()
-    {
-        std::stringstream ss;
-        ss << shadowValue;
-        return ss.str();
-    }
-
-    std::string liveMarkedToString()
-    {
-        std::stringstream ss;
-        ss << markedLiveValue;
-        return ss.str();
-    }
-
-    std::string shadowMarkedToString()
-    {
-        std::stringstream ss;
-        ss << markedShadowValue;
-        return ss.str();
-    }
-
-    void* shadowData()
-    {
-        return static_cast<void*>(&shadowValue);
-    }
-
-    void updateLive(void* ptr) override
-    {
-        if (hasShadow)
-            *static_cast<T*>(ptr) = shadowValue;
-    }
-
-    void updateShadow(void* ptr) override
-    {
-        shadowValue = *static_cast<T*>(ptr);
-        hasShadow = true;
-    }
-
-    void markLiveValue(void* ptr) override
-    {
-        markedLiveValue = *static_cast<T*>(ptr);
-    }
-
-    void markShadowValue(void* /*ptr*/) override
-    {
-        if (hasShadow)
-            markedShadowValue = shadowValue;
-    }
-
-    bool liveChanged(void* ptr) const override
-    {
-        return markedLiveValue != *static_cast<T*>(ptr);
-    }
-
-    bool shadowChanged(void* /*ptr*/) const override
-    {
-        return hasShadow && markedShadowValue != shadowValue;
-    }
-};
-
 
 struct BaseVariable
 {
     std::string name;
 
-    BaseVariable(std::string_view name) : name(name)
-    {}
+    BaseVariable(std::string_view name) : name(name) {}
 
-    virtual BaseVariable* clone() 
-    {
-        return nullptr;
-    }
-    virtual std::string toString()
-    {
-        return "null";
-    }
+    virtual BaseVariable* clone() { return nullptr; }
+    virtual std::string toString() { return "<na>"; }
     virtual void setValue(const BaseVariable* rhs) = 0;
     virtual bool equals(const BaseVariable* rhs) const = 0;
 };
@@ -335,52 +131,43 @@ struct Variable final : public BaseVariable
     }
 };
 
-
-/*template<typename T>
-struct VariablePtr final : public BaseVariable
-{
-    T* ptr = nullptr;
-
-    VariablePtr(T* v) : ptr(v)
-    {
-    }
-
-    BaseVariable* clone() override
-    {
-        if constexpr (std::is_array_v<T>)
-        {
-            using ElementType = std::remove_extent_t<T>;
-            using NonConstElementType = std::remove_const_t<ElementType>;
-            constexpr size_t N = std::extent_v<T>;
-
-            NonConstElementType* new_arr = new NonConstElementType[N];
-            std::copy(std::begin(*ptr), std::end(*ptr), new_arr);
-
-            return new Variable(new_arr, true);
-        }
-        else
-        {
-            return new Variable(new T(*ptr), true);
-        }
-    }
-
-    std::string toString()
-    {
-        std::stringstream ss;
-        ss << *ptr;
-        return ss.str();
-    }
-};*/
-
 struct VariableEntry
 {
     int id;
     std::string name;
 
+    // Actual live/shadow buffers
     BaseVariable* shadow_ptr    = nullptr;
     BaseVariable* live_ptr      = nullptr;
+
+    // "Before" buffers to compare against and detect changes
     BaseVariable* shadow_marked = nullptr;
     BaseVariable* live_marked   = nullptr;
+
+    // Once a live worker change is detected, don't immediately push to shadow buffer.
+    // The live buffer reacted to now-expired data, so don't override the latest shadow changes
+    // 
+    // shadowChanged is broken because you no longer "mark" shadow before _sceneAttributes
+    // 
+    //
+    // -- backup (but complex) solution --
+    // or... do allow immediately pushing to shadow buffer, but if ImGui makes changes,
+    // package those changes up in a "pending shadow update" which overrides it.
+    // If the world panning/rotation/zoom makes changes, they are live changes which
+    // get overriden by the pending package
+    //
+    // This means your current "shadow_ptr" is in-fact being used more like "pending changes"
+    // for the ACTUAL shadow buffer.
+    // Make sceneAttributes act on a copy of the shadow_ptr (the pending package), and if
+    // changes are detected on it, push them to shadow_ptr
+    // 
+    // -- another backup solution --
+    // Make each variable hashable for easy comparison. Then you can take light "snapshots"
+    // to see if a variable changed
+    // > The challenge: Be able to hash any type T value
+    // > At the moment, you expect every T/T[] to be comparable with ==
+    // > Which means you'd need to abandon that and find some way to force T to be hashable
+    // > You'd still be needing each T to provide operator=
 
     void updateLive()      { /* if (id==1) DebugPrint("live:          cam_x = %s", shadow_ptr->toString().c_str()); */ live_ptr->setValue(shadow_ptr); }
     void updateShadow()    { /* if (id==1) DebugPrint("shadow:        cam_x = %s", live_ptr->toString().c_str());   */ shadow_ptr->setValue(live_ptr); }
@@ -388,8 +175,6 @@ struct VariableEntry
     void markShadowValue() { /* if (id==1) DebugPrint("marked_shadow: cam_x = %s", shadow_ptr->toString().c_str()); */ shadow_marked->setValue(shadow_ptr); }
     bool liveChanged()   const  { return !live_ptr->equals(live_marked); }
     bool shadowChanged() const  { return !shadow_ptr->equals(shadow_marked); }
-
-    bool pendingChange() const  { return !shadow_ptr->equals(live_ptr); }
 
     void print()
     {
@@ -418,7 +203,7 @@ struct VarTracker
     std::vector<BaseVariable*> buffer_var_ptrs;
 
     template<typename T>
-    void sync2(const char*name, T& v)
+    void _sync(const char*name, T& v)
     {
         if constexpr (std::is_array_v<T>)
             buffer_var_ptrs.push_back(new Variable<T>(name, v, false));   // v  -> element*
@@ -426,552 +211,106 @@ struct VarTracker
             buffer_var_ptrs.push_back(new Variable<T>(name, &v, false));  // &v -> T*
     }
 
-    #define sync3(v) sync2(#v, v)
+    #define sync(v) _sync(#v, v)
 
     /// Ownership of ptrs claimed by Scene
-    //~VarTracker()
-    //{
-    //    for (BaseVariable* v : buffer_var_ptrs)
-    //        delete v;
-    //    buffer_var_ptrs.clear();
-    //}
-
-
-
-    // Old implementation
-    static VarTracker* active_tracker;
-    mutable std::unordered_map<void*, std::unique_ptr<IVarData>> varMap;
-
-    VarTracker()
-    {
-        active_tracker = this;
-    }
-
-    
-
-    /*std::string toString() const
-    {
-        std::stringstream txt;
-        for (const auto& pair : varMap)
-            txt << "Offset: " 
-              << pair.second->offset
-              << " bytes,  Size: " 
-              << pair.second->size
-              << "     [shadow: " << pair.second->shadowToString() << ", marked: " << pair.second->shadowMarkedToString() << "]"
-              << "     [live: "   << pair.second->liveToString()   << ", marked: " << pair.second->liveMarkedToString() << "]"
-              << "\n";
-
-        return txt.str();
-    }*/
-
-    //bool populating_ui = false;
-
-    template<typename T>
-    auto sync(T const& v) const -> std::remove_cv_t<T>&
-    {
-        using NonConstT = std::remove_cv_t<T>;
-
-        // pointer to the non-const view of v
-        auto* ptr = const_cast<NonConstT*>(&v);
-
-        //if (populating_ui)
-        {
-            if (!varMap.contains(ptr))
-            {
-                std::uint64_t offset =
-                    static_cast<std::uint64_t>(
-                    reinterpret_cast<std::byte*>(ptr) -
-                    reinterpret_cast<std::byte const*>(this));
-
-                varMap[ptr] =
-                    std::make_unique<VarData<NonConstT>>(ptr, offset, sizeof(NonConstT));
-
-                updateShadow(ptr);   // todo: Avoid worker process during shadow initialization, unsafe
-            }
-            
-            // return a non-const reference to the shadow copy
-            return *static_cast<NonConstT*>(varMap[ptr]->shadowData());
-        }
-        //else
-        {
-            return *ptr;
-        }
-    }
-
-    template<typename... Ts>
-    auto expose(Ts&... vars) const 
-    {
-        return std::forward_as_tuple(sync(vars)...);  // returns tuple of T&
-    }
-    
-    /*template<typename T, int N, std::size_t... I>
-    constexpr void syncEachVar(const T(&items)[N], std::index_sequence<I...>) {
-        (sync(items[I]), ...);
-    }
-
-
-    template<typename T, int N>
-    constexpr T(&sync(const T(&items)[N]))[N]
-    {
-        syncEachVar(items, std::make_index_sequence<N>{});
-        return &items[0];
-    }*/
-
-    //template<typename T, int N>
-    //constexpr T* sync(const T(&items)[N])
-    //{
-    //    syncEachVar(items, std::make_index_sequence<N>{});
-    //    return &items[0];
-    //}
-
-    void updateLive(void* ptr)          { varMap[ptr]->updateLive(ptr); }
-    void updateShadow(void* ptr) const  { varMap[ptr]->updateShadow(ptr); }
-    void markLiveValue(void* ptr)       { varMap[ptr]->markLiveValue(ptr); }
-    void markShadowValue(void* ptr)     { varMap[ptr]->markShadowValue(ptr); }
-    bool liveChanged(void* ptr) const   { return varMap.at(ptr)->liveChanged(ptr); }
-    bool shadowChanged(void* ptr) const { return varMap.at(ptr)->shadowChanged(ptr); }
-
-    bool changedShadow()
-    {
-        for (const auto& pair : varMap)
-        {
-            if (pair.second->shadowChanged(pair.first))
-                return true;
-        }
-        return false;
-    }
-
-    void markLiveValues()
-    {
-        for (auto& [ptr, data] : varMap)
-            data->markLiveValue(ptr);
-    }
-
-    void markShadowValues()
-    {
-        for (auto& [ptr, data] : varMap)
-            data->markShadowValue(ptr);
-    }
-
-    void copyChangedShadowVarsToLive()
-    {
-        for (auto& [ptr, data] : varMap)
-        {
-            if (data->shadowChanged(ptr))
-            {
-                //DebugPrint("Shadow [%s] changed to [%s] - Updating Live", 
-                //    data->shadowMarkedToString().c_str(), data->shadowToString().c_str());
-
-                //std::string old_live = data->liveToString();
-                
-                data->updateLive(ptr);
-
-                //DebugPrint("     Live [%s] updated to [%s]",
-                //        old_live.c_str(),  data->liveToString().c_str());
-            }
-        }
-    }
-
-    void copyChangedLiveVarsToShadow()
-    {
-        for (auto& [ptr, data] : varMap)
-        {
-            //if (!data->shadowChanged(ptr)) // if we have not changed shadow since start of worker frame
-            if (data->liveChanged(ptr))
-            {
-                //DebugPrint("Live [%s] changed to [%s] - Updating Live",
-                //    data->liveMarkedToString().c_str(), data->liveToString().c_str());
-
-                //std::string old_shadow = data->shadowToString();
-
-                data->updateShadow(ptr);
-
-                //DebugPrint("     Shadow [%s] updated to [%s]",
-                //    old_shadow.c_str(), data->shadowToString().c_str());
-            }
-        }
-    }
 };
 
-
-
-/*template<Buf which>
-struct synced_interpreter
+struct VarBuffer : public VarTracker
 {
+    VarBuffer() = default;
+    VarBuffer(const VarBuffer&) = delete;
 
+    virtual void setup() {};
+    virtual void populate() {}
 };
 
-struct synced_container
+template<typename T>
+concept DerivedFromVarBuffer = std::derived_from<T, VarBuffer>;
+
+template<DerivedFromVarBuffer VarBufferType>
+class DoubleBuffer : public VarBufferType
 {
-    template<Buf which>
-    synced_interpreter<which>* get()
-    {
-        return nullptr;
-    }
-};*/
-
-enum class Buf : std::uint8_t { Live = 0, Shadow = 1 };
-
-/*template<typename T, Buf which=Buf::Live>
-struct synced
-{
-    T value;
-
-    synced()
-    {
-        // Force instantiation of both live/shadow versions of synced<T> class
-        if constexpr (which == Buf::Shadow)
-            (void)sizeof(synced<T, Buf::Live>);
-        else
-            (void)sizeof(synced<T, Buf::Shadow>);
-    }
-
-    synced(const T& v) 
-    {
-        operator=(v);
-    }
-
-    operator T& () 
-    { 
-        if constexpr (which == Buf::Shadow)
-            return VarTracker::active_tracker->sync(value);
-        else
-            return value;
-    }
-    operator const T& () const
-    {
-        if constexpr (which == Buf::Shadow)
-            return VarTracker::active_tracker->sync(value);
-        else
-            return value;
-    }
-
-    T* operator&() noexcept 
-    { 
-        if constexpr (which == Buf::Shadow)
-            return &VarTracker::active_tracker->sync(value);
-        else
-            return &value;
-    }
-
-    const T* operator&() const noexcept
-    {
-        if constexpr (which == Buf::Shadow)
-            return &VarTracker::active_tracker->sync(value);
-        else
-            return &value;
-    }
-
-    T& operator=(const T& rhs) noexcept
-    {
-        if constexpr (which == Buf::Shadow)
-            VarTracker::active_tracker->sync(value) = rhs;
-        else
-            value = rhs;
-        
-        return *this;
-    }
-};*/
-
-/*template<typename T, typename ContainerView>
-struct synced;
-
-template<typename Derived, Buf Mode = Buf::Live>
-struct SyncedContainerView
-{
-    static constexpr Buf mode = Mode;
-
-    template<Buf Other>
-    using rebind = SyncedContainerView<Derived, Other>;
-
-    template<typename T>
-    using synced_t = synced<T, SyncedContainerView<Derived, Mode>>;
-
-    //using ShadowType = SyncedContainerView<Buf::Shadow>;
-    using Live = SyncedContainerView<Derived, Buf::Live>;
-    using Shadow = SyncedContainerView<Derived, Buf::Shadow>;
-};
-*/
-
-struct synced_base
-{
-    static std::vector<synced_base*> vars;
-};
-
-template<typename T, Buf which= Buf::Live>
-struct synced : synced_base
-{
-    T value;
-    T shadow;
-
-    synced()
-    {
-        // Force instantiation of both live/shadow versions of synced<T> class
-        if constexpr (which == Buf::Shadow)
-            (void)sizeof(synced<T, Buf::Live>);
-        else
-            (void)sizeof(synced<T, Buf::shadow>);
-
-        synced_base::vars.push_back(this);
-    }
-
-    ~synced()
-    {
-        // remove ptr
-    }
-
-    synced(const T& v)
-    {
-        operator=(v);
-    }
-
-    operator T& ()
-    {
-        if constexpr (which == Buf::Shadow)
-            return shadow;
-        else
-            return value;
-    }
-    operator const T& () const
-    {
-        if constexpr (which == Buf::Shadow)
-            return shadow;
-        else
-            return value;
-    }
-
-    T* operator&() noexcept
-    {
-        if constexpr (which == Buf::Shadow)
-            return &shadow;
-        else
-            return &value;
-    }
-
-    const T* operator&() const noexcept
-    {
-        if constexpr (which == Buf::Shadow)
-            return &shadow;
-        else
-            return &value;
-    }
-
-    T& operator=(const T& rhs) noexcept
-    {
-        if constexpr (which == Buf::Shadow)
-            shadow = rhs;
-        else
-            value = rhs;
-
-        return *this;
-    }
-
-    /*operator T& ()
-    {
-        if constexpr (ContainerView::Mode == Buf::Shadow)
-            return VarTracker::active_tracker->sync(value);
-        else
-            return value;
-    }
-    operator const T& () const
-    {
-        if constexpr (ContainerView::Mode == Buf::Shadow)
-            return VarTracker::active_tracker->sync(value);
-        else
-            return value;
-    }
-
-    T* operator&() noexcept
-    {
-        if constexpr (ContainerView::Mode == Buf::Shadow)
-            return &VarTracker::active_tracker->sync(value);
-        else
-            return &value;
-    }
-
-    const T* operator&() const noexcept
-    {
-        if constexpr (ContainerView::Mode == Buf::Shadow)
-            return &VarTracker::active_tracker->sync(value);
-        else
-            return &value;
-    }
-
-    T& operator=(const T& rhs) noexcept
-    {
-        if constexpr (ContainerView::Mode == Buf::Shadow)
-            VarTracker::active_tracker->sync(value) = rhs;
-        else
-            value = rhs;
-
-        return *this;
-    }*/
-};
-
-/*
-template<typename T, typename View>
-struct synced
-{
-    static_assert(std::is_same_v<decltype(View::mode), const Buf>,
-        "Second template parameter must be a SceneBase view type");
-
-    T value{};                                     // the actual object
-
-    using OppositeView = typename View::template rebind<
-        (View::mode == Buf::Live ? Buf::Shadow : Buf::Live)>;
-
-    synced()
-    {
-        (void)sizeof(synced<T, OppositeView>);
-    }
-
-    explicit synced(const T& v) { *this = v; }
-
-private:
-    static constexpr bool is_shadow = (View::mode == Buf::Shadow);
-
-    T& access() const
-    {
-        if constexpr (is_shadow)
-            return VarTracker::active_tracker->sync(const_cast<T&>(value));
-        else
-            return const_cast<T&>(value);
-    }
-
 public:
-    operator T& () { return access(); }
-    operator const T& () const { return access(); }
 
-    T* operator&()       noexcept { return &access(); }
-    const T* operator&() const noexcept { return &access(); }
+    VarBufferType shadow_attributes;
+    VariableMap var_map;
 
-    T& operator=(const T& rhs) noexcept
+
+    DoubleBuffer() : shadow_attributes()
     {
-        access() = rhs;
-        return access();
-    }
-};
+        // Let each buffer list their synced members with sync()
+        shadow_attributes.setup();
+        VarBufferType::setup();
 
-
-
-struct ImaginaryScene : SyncedContainerView<ImaginaryScene>          // default = Live
-{
-    using SyncedContainerView<ImaginaryScene>::Live::synced_t;
-
-    synced_t<double> test_num;
-    ///synced_t<double>      test_num;
-    ///synced_t<std::string> test_str;
-
-    void process() { 
-        ++test_num; 
-    }
-
-    static void sceneAttributes(ImaginaryScene<Buf::Shadow>&& s)
-    {
-        s.test_num = 5;               // shadow semantics
-    }
-};
-*/
-
-    //synced_t<std::string> test_str;
-/*struct VarData
-{
-    uint64_t offset; 
-    size_t size; 
-    uint8_t* shadow_value; 
-    uint8_t* marked_shadow_value; 
-    uint8_t* marked_live_value; 
-};
-
-struct VarTracker
-{
-    std::unordered_map<void*, VarData> var_map;
-
-    template<typename T> T* Var(T* ptr)
-    {
-        if (!var_map.contains(ptr))
+        // Join up the lists into a single 'var_map'
+        for (size_t i = 0; i < VarBufferType::buffer_var_ptrs.size(); i++)
         {
-            uint64_t offset = static_cast<uint64_t>(reinterpret_cast<uint8_t*>(ptr) - reinterpret_cast<uint8_t*>(this));
-            var_map[ptr] = { offset, sizeof(T), nullptr, new uint8_t[sizeof(T)], new uint8_t[sizeof(T)] };
+            VariableEntry entry;
+            entry.shadow_ptr = shadow_attributes.buffer_var_ptrs[i];
+            entry.live_ptr = VarBufferType::buffer_var_ptrs[i];
+            entry.shadow_marked = entry.shadow_ptr->clone();
+            entry.live_marked = entry.live_ptr->clone();
+
+            entry.id = (int)i;
+            entry.name = entry.live_ptr->name;
+            //entry.print();
+
+            var_map.push_back(entry);
         }
-        return ptr;
+
+        // Taken ownership of pointers, clear lists
+        shadow_attributes.buffer_var_ptrs.clear();
+        VarBufferType::buffer_var_ptrs.clear();
     }
 
-    void updateLive(void* var_ptr)
+    ~DoubleBuffer()
     {
-        if (var_map[var_ptr].shadow_value)
-            memcpy(var_ptr, var_map[var_ptr].shadow_value, var_map[var_ptr].size);
+        // todo: Clean up owned data pointers
     }
 
-    void updateShadow(void* var_ptr)
+    void updateLiveBuffer()
     {
-        if (!var_map[var_ptr].shadow_value)
-            var_map[var_ptr].shadow_value = new uint8_t[var_map[var_ptr].size];
-
-        memcpy(var_map[var_ptr].shadow_value, var_ptr, var_map[var_ptr].size);
-    }
-
-    void markLiveValue(void* var_ptr)
-    {
-        memcpy(var_map[var_ptr].marked_live_value, var_ptr, var_map[var_ptr].size);
-    }
-
-    void markShadowValue(void* var_ptr)
-    {
-        if (var_map[var_ptr].shadow_value)
-            memcpy(var_map[var_ptr].marked_shadow_value, var_map[var_ptr].shadow_value, var_map[var_ptr].size);
-    }
-
-    void markLiveValues()
-    {
-        for (const auto& item : var_map)
-            markLiveValue(item.first);
-    }
-
-    void markShadowValues()
-    {
-        for (const auto& item : var_map)
-            markShadowValue(item.first);
-    }
-
-    void copyChangedShadowVarsToLive()
-    {
-        for (const auto& item : var_map)
-        {
-            if (shadowChanged(item.first))
-                updateLive(item.first);
+        DebugPrint("updateLiveBuffers()");
+        for (VariableEntry& entry : var_map) {
+            //if (!entry.shadowChanged()) // if we have not changed live since start of worker frame
+            entry.updateLive();
         }
     }
-    
-    void copyChangedLiveVarsToShadow()
+    void updateShadowBuffer()
     {
-        for (const auto& item : var_map)
-        {
-            if (liveChanged(item.first))
-                updateShadow(item.first);
+        DebugPrint("updateShadowBuffers()");
+        for (VariableEntry& entry : var_map) {
+            if (entry.liveChanged()) // if we have not changed shadow since start of worker frame
+                entry.updateShadow();
         }
     }
 
-    bool liveChanged(void* var_ptr)
-    {
-        return memcmp(var_map[var_ptr].marked_live_value, var_ptr, var_map[var_ptr].size) != 0;
-    }
+    void markLiveValues() { var_map.markLiveValues(); }
+    void markShadowValues() { var_map.markShadowValues(); }
 
-    bool shadowChanged(void* var_ptr)
+    bool changedShadow() { return var_map.changedShadow(); }
+
+    std::string pad(const std::string& str, int width) const
     {
-        if (var_map[var_ptr].shadow_value)
-            return memcmp(var_map[var_ptr].marked_shadow_value, var_map[var_ptr].shadow_value, var_map[var_ptr].size) != 0;
-        return false;
+        return str + std::string(width > str.size() ? width - str.size() : 0, ' ');
     }
 
     std::string toString() const
     {
+        static const int name_len = 28;
+        static const int val_len = 10;
+
         std::stringstream txt;
-        for (const auto& pair : var_map)
-            txt << "Offset: " << pair.second.offset << " bytes,  Size: " << pair.second.size << "\n";
+        for (const auto& entry : var_map)
+            txt << pad(std::to_string(entry.id) + ". ", 4) << pad(entry.name, name_len)
+            << "SHADOW_MARKED: " << pad(entry.shadow_marked->toString(), val_len) << "   SHADOW_VAL: " << pad(entry.shadow_ptr->toString(), val_len)
+            << "    LIVE_MARKED:   " << pad(entry.live_marked->toString(), val_len) << "   LIVE_VAL: " << pad(entry.live_ptr->toString(), val_len)
+            << "\n";
+
         return txt.str();
     }
-};*/
+};
 
 class Layout;
 class Viewport;
@@ -1012,9 +351,10 @@ protected:
     bool has_var_buffer = false;
     virtual void _sceneAttributes() {}
 
+    // In case Scene uses double buffer
+    virtual void updateLiveBuffers() {}
+    virtual void updateShadowBuffers() {}
     virtual bool changedShadow() { return false; }
-    virtual void copyChangedShadowVarsToLive() {}
-    virtual void copyChangedLiveVarsToShadow() {}
     virtual void markLiveValues() {}
     virtual void markShadowValues() {}
 
@@ -1048,17 +388,7 @@ public:
 
     struct Config {};
 
-    SceneBase() : gen(std::random_device{}())
-    {
-        ///ImaginaryScene test;
-
-        ///test.process();
-
-        ///ImaginaryScene::Shadow::
-        //ImaginaryScene::Shadow::sceneAttributes(
-        //    reinterpret_cast<ImaginaryScene::Shadow&>(test));
-
-    }
+    SceneBase() : gen(std::random_device{}()) {}
     virtual ~SceneBase() = default;
 
     void mountTo(Viewport* viewport);
@@ -1121,124 +451,30 @@ public:
     void logClear();
 };
 
-struct VarBuffer : public VarTracker
-{
-    VarBuffer() = default;
-    VarBuffer(const VarBuffer&) = delete;
-
-    virtual void setup() {};
-    virtual void populate() {}
-};
-
-template<typename T>
-concept DerivedFromVarBuffer = std::derived_from<T, VarBuffer>;
-
 template<DerivedFromVarBuffer VarBufferType>
-class Scene : public SceneBase, public VarBufferType
+class Scene : public SceneBase, public DoubleBuffer<VarBufferType>
 {
     friend class ProjectBase;
 
-    VarBufferType shadow_attributes;
-
-    VariableMap var_map;
-
 public:
 
-    Scene() : SceneBase(), shadow_attributes()
+    Scene() : SceneBase(), DoubleBuffer<VarBufferType>()
     {
         has_var_buffer = true;
-        ///shadow_attributes.live_attributes = this;
-
-        // Build both buffer sync lists
-        shadow_attributes.setup();
-        VarBufferType::setup();
-
-        for (size_t i = 0; i < VarBufferType::buffer_var_ptrs.size(); i++)
-        {
-            VariableEntry entry;
-            entry.shadow_ptr    = shadow_attributes.buffer_var_ptrs[i];
-            entry.live_ptr      = VarBufferType::buffer_var_ptrs[i];
-            entry.shadow_marked = entry.shadow_ptr->clone();
-            entry.live_marked   = entry.live_ptr->clone();
-
-            entry.id = (int)i;
-            entry.name = entry.live_ptr->name;
-            //entry.print();
-
-            var_map.push_back(entry);
-        }
-
-        // Taken ownership of pointers, clear lists
-        shadow_attributes.buffer_var_ptrs.clear();
-        VarBufferType::buffer_var_ptrs.clear();
     }
-
 
 protected:
 
-    //bool shadow_marked = false;
-
-    bool changedShadow() override { return var_map.changedShadow(); }
-    void markLiveValues() override 
-    {
-        DebugPrint("markLiveValues()");
-        var_map.markLiveValues();
-    }
-    void markShadowValues() override
-    { 
-        //if (!shadow_marked) 
-        { 
-            DebugPrint("markShadowValues()");
-            var_map.markShadowValues();
-            //shadow_marked = true; 
-        }
-    }
-
-    void copyChangedShadowVarsToLive() override 
-    {
-        DebugPrint("updateLiveBuffer()");
-        for (VariableEntry& entry : var_map) {
-            //if (entry.pendingChange()) // if we have not changed live since start of worker frame
-            //if (!entry.shadowChanged()) // if we have not changed live since start of worker frame
-                entry.updateLive();
-        }
-        //shadow_marked = false;
-    }
-    void copyChangedLiveVarsToShadow() override {
-        DebugPrint("updateShadowBuffer()");
-        for (VariableEntry& entry : var_map) {
-            if (entry.liveChanged()) // if we have not changed shadow since start of worker frame
-            //if (entry.pendingChange()) // if we have not changed shadow since start of worker frame
-            {
-                entry.updateShadow();
-            }
-        }
-    }
-
     virtual void _sceneAttributes() override 
     {
-        shadow_attributes.populate();
+        DoubleBuffer<VarBufferType>::shadow_attributes.populate();
     }
 
-    std::string pad(const std::string& str, int width) const
-    {
-        return str + std::string(width > str.size() ? width - str.size() : 0, ' ');
-    }
-
-    std::string toString() const
-    {
-        static const int name_len = 28;
-        static const int val_len = 10;
-
-        std::stringstream txt;
-        for (const auto& entry : var_map)
-            txt << pad(std::to_string(entry.id) + ". ", 4) << pad(entry.name, name_len)
-            << "SHADOW_MARKED: " << pad(entry.shadow_marked->toString(), val_len) << "   SHADOW_VAL: " << pad(entry.shadow_ptr->toString(), val_len)
-            << "    LIVE_MARKED:   " << pad(entry.live_marked->toString(), val_len) << "   LIVE_VAL: " << pad(entry.live_ptr->toString(), val_len)
-            << "\n";
-
-        return txt.str();
-    }
+    void updateLiveBuffers() override   { DoubleBuffer<VarBufferType>::updateLiveBuffer(); }
+    void updateShadowBuffers() override { DoubleBuffer<VarBufferType>::updateShadowBuffer(); }
+    void markLiveValues() override      { DoubleBuffer<VarBufferType>::markLiveValues();   }
+    void markShadowValues() override    { DoubleBuffer<VarBufferType>::markShadowValues(); }
+    bool changedShadow() override       { return DoubleBuffer<VarBufferType>::changedShadow(); }
 };
 
 class Viewport : public Painter
@@ -1433,35 +669,46 @@ protected:
     [[nodiscard]] DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
     void updateViewportRects();
 
-    // -------- Attributes --------
+    // -------- Data Buffers --------
     bool has_var_buffer = false;
     void _populateAllAttributes();
     virtual void _projectAttributes() {}
-    virtual void _updateLiveProjectAttributes() {}
-    virtual void _updateShadowProjectAttributes() {}
+    virtual void updateProjectLiveBuffer() {}
+    virtual void updateProjectShadowBuffer() {}
 
-    ///void commitVariableChangeTracker()
-    ///{
-    ///    for (SceneBase* scene : viewports.all_scenes)
-    ///        scene->variableChangedUpdateCurrent();
-    ///}
-    
-    bool changedShadow()
+    // Exposed methods for updating project (and contained scenes)
+    // live/shadow buffers from project_worker.
+    // 
+    // Even if this is a BasicProject (no double buffer), Scenes might
+    // still inherit DoubleBuffer if they inherit DoubleBuffer
+
+    virtual void updateLiveBuffers()
     {
         for (SceneBase* scene : viewports.all_scenes)
-        {
+            scene->updateLiveBuffers();
+    }
+    virtual void updateShadowBuffers()
+    {
+        for (SceneBase* scene : viewports.all_scenes)
+            scene->updateShadowBuffers();
+    }
+
+    virtual bool changedShadow()
+    {
+        for (SceneBase* scene : viewports.all_scenes) {
             if (scene->changedShadow())
                 return true;
         }
         return false;
     }
 
-    void markLiveValues()
+    virtual void markLiveValues()
     {
         for (SceneBase* scene : viewports.all_scenes)
             scene->markLiveValues();
     }
-    void markShadowValues()
+
+    virtual void markShadowValues()
     {
         for (SceneBase* scene : viewports.all_scenes)
             scene->markShadowValues();
@@ -1585,22 +832,6 @@ public:
 
     void setProjectInfoState(ProjectInfo::State state);
 
-    /// todo: Find a way to make protected
-
-
-    void copyChangedShadowVarsToLive()
-    {
-        _updateLiveProjectAttributes();
-        for (SceneBase* scene : viewports.all_scenes)
-            scene->copyChangedShadowVarsToLive();
-    }
-    void copyChangedLiveVarsToShadow()
-    {
-        _updateShadowProjectAttributes();
-        for (SceneBase* scene : viewports.all_scenes)
-            scene->copyChangedLiveVarsToShadow();
-    }
-
     // Shared Scene creators
 
     template<typename SceneType>
@@ -1620,7 +851,6 @@ public:
 
         scene->project = this;
         scene->scene_index = scene_counter++;
-        //scene->setGLFunctions(canvas->getGLFunctions());
 
         return scene;
     }
@@ -1633,7 +863,6 @@ public:
         scene->temporary_environment = config_ptr;
         scene->scene_index = scene_counter++;
         scene->project = this;
-        //scene->setGLFunctions(canvas->getGLFunctions());
 
         return scene;
     }
@@ -1648,7 +877,6 @@ public:
         scene->temporary_environment = config;
         scene->scene_index = scene_counter++;
         scene->project = this;
-        //scene->setGLFunctions(canvas->getGLFunctions());
 
         return scene;
     }
@@ -1661,7 +889,6 @@ public:
         {
             SceneType* scene = create<SceneType>();
             scene->project = this;
-            //scene->setGLFunctions(canvas->getGLFunctions());
 
             ret->push_back(scene);
         }
@@ -1676,7 +903,6 @@ public:
         {
             SceneType* scene = create<SceneType>(config);
             scene->project = this;
-            //scene->setGLFunctions(canvas->getGLFunctions());
 
             ret->push_back(scene);
         }
@@ -1709,15 +935,13 @@ public:
 };
 
 template<VarBufferConcept VarBufferType>
-class Project : public ProjectBase, public VarBufferType
+class Project : public ProjectBase, public DoubleBuffer<VarBufferType>
 {
     friend class ProjectBase;
 
-    VarBufferType shadow_attributes;
-
 public:
 
-    Project() : ProjectBase(), shadow_attributes()
+    Project() : ProjectBase(), DoubleBuffer<VarBufferType>()
     {
         has_var_buffer = true;
     }
@@ -1726,34 +950,33 @@ protected:
 
     virtual void _projectAttributes() override
     {
-        shadow_attributes.populate();
+        DoubleBuffer<VarBufferType>::shadow_attributes.populate();
     }
 
-    void _updateLiveProjectAttributes() override
+    void updateLiveBuffers() override
     {
-        if constexpr (HasSyncMembers<VarBufferType>)
-        {
-            auto dst = writable_sync_span(*static_cast<VarBufferType*>(this));
-            auto src = readonly_sync_span(shadow_attributes);
-            std::memcpy(dst.data(), src.data(), dst.size());
-        }
-
-        // Give sim a chance to manually copy non-trivially copyable data
-        VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
-        this_attributes->copyFrom(shadow_attributes);
+        ProjectBase::updateLiveBuffers(); // call on Scenes
+        DoubleBuffer<VarBufferType>::updateLiveBuffer();
     }
-    void _updateShadowProjectAttributes() override
+    void updateShadowBuffers() override
     {
-        if constexpr (HasSyncMembers<VarBufferType>)
-        {
-            auto dst = writable_sync_span(shadow_attributes);
-            auto src = readonly_sync_span(*static_cast<VarBufferType*>(this));
-            std::memcpy(dst.data(), src.data(), dst.size());
-        }
-
-        // Give sim a chance to manually copy non-trivially copyable data
-        VarBufferType* this_attributes = dynamic_cast<VarBufferType*>(this);
-        shadow_attributes.copyFrom(*this);
+        ProjectBase::updateShadowBuffers(); // call on Scenes
+        DoubleBuffer<VarBufferType>::updateShadowBuffer();
+    }
+    void markLiveValues() override
+    {
+        ProjectBase::markLiveValues(); // call on Scenes
+        DoubleBuffer<VarBufferType>::markLiveValues();
+    }
+    void markShadowValues() override
+    { 
+        ProjectBase::markShadowValues(); // call on Scenes
+        DoubleBuffer<VarBufferType>::markShadowValues();
+    }
+    bool changedShadow() override
+    { 
+        if (ProjectBase::changedShadow()) return true; // call on Scenes
+        return DoubleBuffer<VarBufferType>::changedShadow();
     }
 };
 

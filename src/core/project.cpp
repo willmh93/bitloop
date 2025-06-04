@@ -1,9 +1,6 @@
 #include "project.h"
 #include "main_window.h"
 
-VarTracker* VarTracker::active_tracker = nullptr;
-std::vector<synced_base*> synced_base::vars;
-
 /// Scene
 
 void SceneBase::registerMount(Viewport* viewport)
@@ -622,7 +619,7 @@ void ProjectBase::_populateAllAttributes()
         if (showSceneUI)
         {
             //DebugPrint("_populateAllAttributes::markShadowValues");
-            //scene->markShadowValues();
+            scene->markShadowValues();
 
             // Allow Scene to populate inputs for section
             ImGui::PushID(section_id.c_str());
@@ -640,7 +637,7 @@ void ProjectBase::_populateAllAttributes()
             ImGui::PopID();
 
             /// TODO: Do safely inside mutex? (new function call from worker)
-            //scene->copyChangedShadowVarsToLive();
+            //scene->updateSceneLiveBuffer();
         }
     }
 }
@@ -840,7 +837,7 @@ void ProjectBase::_projectProcess()
                     std::chrono::duration_cast<std::chrono::milliseconds>(scene_dt).count()
                 );
 
-                //scene->copyChangedLiveVarsToShadow();
+                //scene->updateSceneShadowBuffer();
             }
 
 
@@ -1129,8 +1126,6 @@ void ProjectBase::_onEvent(SDL_Event& e)
     for (SceneBase* scene : viewports.all_scenes)
         scene->_onEvent(event);
 }
-
-
 
 void ProjectBase::setProjectInfoState(ProjectInfo::State state)
 {

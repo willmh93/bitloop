@@ -81,9 +81,6 @@ public:
     void pullDataFromShadow();     // Process queued events
     void pollEvents(bool discardBatch);   // Process queued data (*if* modified by ImGui inputs)
 
-    //void updateLiveAttributes();
-    //void updateShadowAttributes();
-
     // ======== Project Control ========
     [[nodiscard]] ProjectBase* getActiveProject() { return active_project; }
 
@@ -92,8 +89,3 @@ public:
     void stopProject()              { msg_queue.push_back({ PROJECT_STOP,  CURRENT_PROJECT }); }
     void pauseProject()             { msg_queue.push_back({ PROJECT_PAUSE, CURRENT_PROJECT }); }
 };
-
-//static ProjectWorker* ProjectWorker()
-//{
-//    return ProjectWorker::get();
-//}
