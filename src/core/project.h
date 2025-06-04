@@ -149,6 +149,7 @@ struct VariableEntry
     // external code can detect fresh changes.
     bool dirty = false;
     unsigned int version = 0;
+    unsigned int live_version = 0; // last processed version on live side
 
     // Once a live worker change is detected, don't immediately push to shadow buffer.
     // The live buffer reacted to now-expired data, so don't override the latest shadow changes
@@ -291,6 +292,7 @@ public:
         DebugPrint("updateLiveBuffers()");
         for (VariableEntry& entry : var_map) {
             entry.updateLive();
+            entry.live_version = entry.version;
             if (entry.dirty)
                 entry.dirty = false;
         }
@@ -299,6 +301,8 @@ public:
     {
         DebugPrint("updateShadowBuffers()");
         for (VariableEntry& entry : var_map) {
+            if (entry.live_version < entry.version)
+                continue; // GUI edit not yet processed on live side
             if (entry.dirty)
                 continue;
             if (entry.liveChanged())
