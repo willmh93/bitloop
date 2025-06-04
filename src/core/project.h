@@ -144,6 +144,12 @@ struct VariableEntry
     BaseVariable* shadow_marked = nullptr;
     BaseVariable* live_marked   = nullptr;
 
+    // Track whether shadow value has been edited by the GUI and is awaiting
+    // processing on the live side. 'version' increments on every GUI edit so
+    // external code can detect fresh changes.
+    bool dirty = false;
+    unsigned int version = 0;
+
     // Once a live worker change is detected, don't immediately push to shadow buffer.
     // The live buffer reacted to now-expired data, so don't override the latest shadow changes
     // 
@@ -189,6 +195,17 @@ struct VariableMap : public std::vector<VariableEntry>
 {
     void markLiveValues()   { for (size_t i=0; i<size(); i++) at(i).markLiveValue(); }
     void markShadowValues() { for (size_t i=0; i<size(); i++) at(i).markShadowValue(); }
+    void markDirtyIfShadowChanged()
+    {
+        for (auto& entry : *this)
+        {
+            if (entry.shadowChanged())
+            {
+                entry.dirty = true;
+                ++entry.version;
+            }
+        }
+    }
     bool changedShadow() {
         for (size_t i = 0; i < size(); i++)  {
             if (at(i).shadowChanged())
@@ -273,18 +290,23 @@ public:
     {
         DebugPrint("updateLiveBuffers()");
         for (VariableEntry& entry : var_map) {
-            //if (!entry.shadowChanged()) // if we have not changed live since start of worker frame
             entry.updateLive();
+            if (entry.dirty)
+                entry.dirty = false;
         }
     }
     void updateShadowBuffer()
     {
         DebugPrint("updateShadowBuffers()");
         for (VariableEntry& entry : var_map) {
-            if (entry.liveChanged()) // if we have not changed shadow since start of worker frame
+            if (entry.dirty)
+                continue;
+            if (entry.liveChanged())
                 entry.updateShadow();
         }
     }
+
+    void markDirtyVariables() { var_map.markDirtyIfShadowChanged(); }
 
     void markLiveValues() { var_map.markLiveValues(); }
     void markShadowValues() { var_map.markShadowValues(); }
@@ -357,6 +379,7 @@ protected:
     virtual bool changedShadow() { return false; }
     virtual void markLiveValues() {}
     virtual void markShadowValues() {}
+    virtual void markDirtyVariables() {}
 
     //
     
@@ -474,6 +497,7 @@ protected:
     void updateShadowBuffers() override { DoubleBuffer<VarBufferType>::updateShadowBuffer(); }
     void markLiveValues() override      { DoubleBuffer<VarBufferType>::markLiveValues();   }
     void markShadowValues() override    { DoubleBuffer<VarBufferType>::markShadowValues(); }
+    void markDirtyVariables() override  { DoubleBuffer<VarBufferType>::markDirtyVariables(); }
     bool changedShadow() override       { return DoubleBuffer<VarBufferType>::changedShadow(); }
 };
 
@@ -712,6 +736,12 @@ protected:
     {
         for (SceneBase* scene : viewports.all_scenes)
             scene->markShadowValues();
+    }
+
+    virtual void markDirtyVariables()
+    {
+        for (SceneBase* scene : viewports.all_scenes)
+            scene->markDirtyVariables();
     }
 
     // ---- Project Management ----
@@ -969,12 +999,17 @@ protected:
         DoubleBuffer<VarBufferType>::markLiveValues();
     }
     void markShadowValues() override
-    { 
+    {
         ProjectBase::markShadowValues(); // call on Scenes
         DoubleBuffer<VarBufferType>::markShadowValues();
     }
+    void markDirtyVariables() override
+    {
+        ProjectBase::markDirtyVariables();
+        DoubleBuffer<VarBufferType>::markDirtyVariables();
+    }
     bool changedShadow() override
-    { 
+    {
         if (ProjectBase::changedShadow()) return true; // call on Scenes
         return DoubleBuffer<VarBufferType>::changedShadow();
     }
