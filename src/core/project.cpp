@@ -1,6 +1,8 @@
 #include "project.h"
 #include "main_window.h"
 
+VarTracker* VarTracker::singleton = nullptr;
+
 /// Scene
 
 void SceneBase::registerMount(Viewport* viewport)
@@ -68,7 +70,7 @@ void SceneBase::pullDataFromShadow()
 void SceneBase::handleWorldNavigation(Event e, bool single_touch_pan)
 {
     if (e.ctx_focused())
-        e.ctx_focused()->camera.handleWorldNavigation(e, true);
+        e.ctx_focused()->camera.handleWorldNavigation(e, single_touch_pan);
 }
 
 double SceneBase::frame_dt(int average_samples) const
@@ -324,8 +326,8 @@ void Viewport::drawWorldAxis(
 
     // Get axis intersection with viewport rect
     DVec2 negX_intersect, posX_intersect, negY_intersect, posY_intersect;
-    bool x_axis_visible = Math::rayRectIntersection(&negX_intersect, &posX_intersect, stage_rect, axis_rayX);
-    bool y_axis_visible = Math::rayRectIntersection(&negY_intersect, &posY_intersect, stage_rect, axis_rayY);
+    Math::rayRectIntersection(&negX_intersect, &posX_intersect, stage_rect, axis_rayX);
+    Math::rayRectIntersection(&negY_intersect, &posY_intersect, stage_rect, axis_rayY);
 
     // Convert to world coordinates
     DVec2 negX_intersect_world = camera.toWorld(negX_intersect);
@@ -383,11 +385,11 @@ void Viewport::drawWorldAxis(
     fillText("next_step: " + QString::number(next_step), 0, 40);
     fillText("step_stretch: " + QString::number(step_stretch), 0, 60);*/
 
-    double big_angle = 0;// step_stretch* M_PI * 2;
-    double small_angle = (big_angle)+M_PI / 2;
+    //double big_angle = 0;// step_stretch* M_PI * 2;
+    //double small_angle = (big_angle)+M_PI / 2;
 
     double big_visibility = 1;// sin(big_angle) / 2 + 0.5;
-    double small_visibility = 0;// sin(small_angle) / 2 + 0.5;
+    //double small_visibility = 0;// sin(small_angle) / 2 + 0.5;
 
     /*fillText("big_angle: " + QString::number((int)(big_angle*180.0/M_PI)), 0, 100);
     fillText("big_visibility: " + QString::number(big_visibility), 0, 120);
@@ -544,8 +546,6 @@ void Layout::resize(size_t viewport_count)
     if (viewport_count > rows * cols)
         rows++;
 
-    int count = (cols * rows);
-
     for (int y = 0; y < rows; y++)
     {
         for (int x = 0; x < cols; x++)
@@ -619,20 +619,27 @@ void ProjectBase::_populateAllAttributes()
         if (showSceneUI)
         {
             //DebugPrint("_populateAllAttributes::markShadowValues");
-            scene->markShadowValues();
+            ///scene->markShadowValues();
 
             // Allow Scene to populate inputs for section
             ImGui::PushID(section_id.c_str());
             ///scene->populating_ui = true;
 
 
-            if (ProjectWorker::instance()->shared_sync.processing_frame)
-            {
-                DebugPrint("gui_populated_during_process = true");
-                ProjectWorker::instance()->shared_sync.gui_populated_during_process.store(true);
-            }
+            //if (ProjectWorker::instance()->shared_sync.processing_frame)
+            //{
+            //    DebugPrint("gui_populated_during_process = true");
+            //    ProjectWorker::instance()->shared_sync.gui_populated_during_process.store(true);
+            //}
+
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.6f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(7.0f, 0.4f, 0.4f, 1.0f));
 
             scene->_sceneAttributes();
+
+            ImGui::PopStyleColor(3);
+
             ///scene->populating_ui = false;
             ImGui::PopID();
 
@@ -802,10 +809,12 @@ void ProjectBase::_projectProcess()
             double viewport_mx = mouse.client_x - viewport->x;
             double viewport_my = mouse.client_y - viewport->y;
 
-            if (viewport_mx >= 0 && viewport_my >= 0 &&
-                viewport_mx <= viewport->width && viewport_my <= viewport->height)
+            Camera& cam = viewport->camera;
+
+            if (cam.panning ||
+                (viewport_mx >= 0 && viewport_my >= 0 &&
+                 viewport_mx <= viewport->width && viewport_my <= viewport->height))
             {
-                Camera& cam = viewport->camera;
 
                 DVec2 world_mouse = cam.toWorld(viewport_mx, viewport_my);
                 mouse.viewport = viewport;
@@ -903,7 +912,6 @@ void ProjectBase::_projectDraw()
     ///timer_projectDraw.start();
 
     // Draw each viewport
-    int i = 0;
     for (Viewport* viewport : viewports)
     {
         ctx->setClipRect(viewport->x, viewport->y, viewport->width, viewport->height);

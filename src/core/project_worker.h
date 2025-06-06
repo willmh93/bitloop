@@ -59,7 +59,7 @@ protected:
 
 public:
 
-    static [[nodiscard]] ProjectWorker* instance() {
+    [[nodiscard]] static ProjectWorker* instance() {
         return singleton;
     }
 

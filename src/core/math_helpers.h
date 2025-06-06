@@ -62,6 +62,15 @@ namespace Math
         return sum / static_cast<T>(count);
     }
 
+    template<typename T>
+    [[nodiscard]] T wrap(T value, T min, T max)
+    {
+        T range = max - min;
+        value = std::fmod(value - min, range);
+        if (value < 0) value += range;
+        return value + min;
+    }
+
     // Ratios (a->b,  0->1)
     template<typename T> [[nodiscard]] constexpr T ratio(T a, T b) { return ((b-a)/a); }
     template<typename T> [[nodiscard]] constexpr T abs_ratio(T a, T b) { return abs((b-a)/a); }

@@ -31,6 +31,7 @@ ImGradient& ImGradient::operator=(const ImGradient& rhs)
     dragging_uid = rhs.dragging_uid;
     selected_uid = rhs.selected_uid;
     memcpy(m_cachedValues, rhs.m_cachedValues, sizeof(m_cachedValues));
+    memcpy(m_cachedColors, rhs.m_cachedColors, sizeof(m_cachedColors));
 
     return *this;
 }
@@ -75,6 +76,14 @@ void ImGradient::getColorAt(float position, float* color) const
 void ImGradient::getColorAt(double position, float* color) const
 {
     position = ImClamp(position, 0.0, 1.0);
+    int idx = static_cast<int>(position * (CACHE_SIZE - 1)) * 3;
+    color[0] = m_cachedValues[idx + 0];
+    color[1] = m_cachedValues[idx + 1];
+    color[2] = m_cachedValues[idx + 2];
+}
+
+void ImGradient::getColorAtUnguarded(double position, float* color) const
+{
     int idx = static_cast<int>(position * (CACHE_SIZE - 1)) * 3;
     color[0] = m_cachedValues[idx + 0];
     color[1] = m_cachedValues[idx + 1];
@@ -187,7 +196,18 @@ void ImGradient::refreshCache()
     });
 
     for (int i = 0; i < CACHE_SIZE; ++i)
+    {
         computeColorAt(i / ((float)(CACHE_SIZE)-1.0f), &m_cachedValues[i * 3]);
+
+        uint32_t& u32 = m_cachedColors[i];
+
+        // ABGR
+        //u32 = 0xFFFF0000;
+        u32 = 0xFF000000 |
+              ((uint32_t)(m_cachedValues[i*3]   * 255.0f)) |
+              ((uint32_t)(m_cachedValues[i*3+1] * 255.0f) << 8) |
+              ((uint32_t)(m_cachedValues[i*3+2] * 255.0f) << 16);
+    }
 }
 
 

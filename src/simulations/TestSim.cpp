@@ -72,7 +72,7 @@ void Test_Scene::sceneStart()
     }
 }
 
-void Test_Scene::sceneMounted(Viewport* viewport)
+void Test_Scene::sceneMounted(Viewport*)
 {
     // Initialize viewport
     //if (viewport->viewportIndex() == 0)
@@ -116,10 +116,10 @@ unsigned long long find_large_prime(unsigned long long start, int count) {
 void Test_Scene::sceneProcess()
 {
     // Process scene update
-    for (int i = 0; i < 10; i++)
-    {
-        unsigned long long prime = find_large_prime(2000000000000ul + rand()%100000ul, 1);
-    }
+    ///for (int i = 0; i < 10; i++)
+    ///{
+    ///    unsigned long long prime = find_large_prime(2000000000000ul + rand()%100000ul, 1);
+    ///}
 
     for (Particle& p : particles)
     {
@@ -136,7 +136,7 @@ void Test_Scene::sceneProcess()
     //a += 0.01;
 }
 
-void Test_Scene::viewportProcess(Viewport* ctx)
+void Test_Scene::viewportProcess(Viewport*)
 {
     //if (ctx->viewportIndex() == 1)
     //{
@@ -316,12 +316,12 @@ void Test_Scene::onEvent(Event e)
     handleWorldNavigation(e, true);
 }
 
-void Test_Scene::onPointerDown(PointerEvent e) {}
-void Test_Scene::onPointerUp(PointerEvent e) {}
-void Test_Scene::onPointerMove(PointerEvent e) {}
-void Test_Scene::onWheel(PointerEvent e) {}
-void Test_Scene::onKeyDown(KeyEvent e) {}
-void Test_Scene::onKeyUp(KeyEvent e) {}
+//void Test_Scene::onPointerDown(PointerEvent e) {}
+//void Test_Scene::onPointerUp(PointerEvent e) {}
+//void Test_Scene::onPointerMove(PointerEvent e) {}
+//void Test_Scene::onWheel(PointerEvent e) {}
+//void Test_Scene::onKeyDown(KeyEvent e) {}
+//void Test_Scene::onKeyUp(KeyEvent e) {}
 
 
 SIM_END(Test)

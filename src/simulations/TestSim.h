@@ -74,7 +74,7 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
         //double speed = 10.0;
     };
 
-    Test_Scene(Config& info) //:
+    Test_Scene(Config&) //:
         //speed(info.speed)
     {}
 
@@ -93,12 +93,12 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
 
     // Input
     void onEvent(Event e) override;
-    void onPointerDown(PointerEvent e) override;
-    void onPointerUp(PointerEvent e) override;
-    void onPointerMove(PointerEvent e) override;
-    void onWheel(PointerEvent e) override;
-    void onKeyDown(KeyEvent e) override;
-    void onKeyUp(KeyEvent e) override;
+    //void onPointerDown(PointerEvent e) override;
+    //void onPointerUp(PointerEvent e) override;
+    //void onPointerMove(PointerEvent e) override;
+    //void onWheel(PointerEvent e) override;
+    //void onKeyDown(KeyEvent e) override;
+    //void onKeyUp(KeyEvent e) override;
 };
 
 struct Test_Project_Vars : public VarBuffer

@@ -120,13 +120,14 @@ protected:
     bool pending_resize = false;
 
     std::vector<uint8_t> pixels;
+    uint32_t* colors;
 
 public:
 
-    explicit Image(NVGcontext* ctx = nullptr) {}
-    Image(NVGcontext* ctx, int w, int h) {
-        create(w, h); 
-    }
+    //explicit Image(NVGcontext* ctx = nullptr) {}
+    //Image(NVGcontext* ctx, int w, int h) {
+    //    create(w, h); 
+    //}
 
     [[nodiscard]] int width() const { return bmp_width; }
     [[nodiscard]] int height() const { return bmp_height; }
@@ -136,6 +137,7 @@ public:
     {
         bmp_width = w; bmp_height = h;
         pixels.assign(size_t(w) * h * 4, 0);
+        colors = reinterpret_cast<uint32_t*>(&pixels.front());
         pending_resize = true;
     }
 
@@ -144,7 +146,7 @@ public:
         if (pixels.size() == 0)
             return;
         uint32_t u32 = c.u32;
-        uint32_t* pixel = reinterpret_cast<uint32_t*>(&pixels.front());
+        uint32_t* pixel = colors;
         uint32_t count = bmp_width * bmp_height;
         for (uint32_t i=0; i< count; i++)
             *pixel++ = u32;
@@ -157,20 +159,25 @@ public:
 
     void setPixel(int x, int y, uint32_t rgba)
     {
-        size_t i = (size_t(y) * bmp_width + x) * 4;
-        pixels[i + 0] = rgba & 0xFF;
-        pixels[i + 1] = (rgba >> 8) & 0xFF;
-        pixels[i + 2] = (rgba >> 16) & 0xFF;
-        pixels[i + 3] = (rgba >> 24) & 0xFF;
+        size_t i = (size_t(y) * bmp_width + x);
+        colors[i] = rgba;
     }
+    //void setPixel(int x, int y, uint32_t rgba)
+    //{
+    //    size_t i = (size_t(y) * bmp_width + x) * 4;
+    //    pixels[i + 0] = rgba & 0xFF;
+    //    pixels[i + 1] = (rgba >> 8) & 0xFF;
+    //    pixels[i + 2] = (rgba >> 16) & 0xFF;
+    //    pixels[i + 3] = (rgba >> 24) & 0xFF;
+    //}
 
     void setPixel(int x, int y, int r, int g, int b, int a=255)
     {
         size_t i = (size_t(y) * bmp_width + x) * 4;
-        pixels[i + 0] = r;
-        pixels[i + 1] = g;
-        pixels[i + 2] = b;
-        pixels[i + 3] = a;
+        pixels[i++] = r;
+        pixels[i++] = g;
+        pixels[i++] = b;
+        pixels[i++] = a;
     }
 
     void setPixelSafe(int x, int y, uint32_t rgba)
@@ -309,16 +316,29 @@ public:
     [[nodiscard]] DQuad getWorldQuad(Camera* camera);
 
     template<typename Callback>
-    void forEachPixel(Callback&& callback)
+    void forEachPixel(Callback&& callback, int thread_count = Thread::idealThreadCount())
     {
         static_assert(std::is_invocable_r_v<void, Callback, int, int>,
             "Callback must be: void(int x, int y)");
 
-        for (int bmp_y = 0; bmp_y < bmp_height; bmp_y++)
+        if (thread_count == 0)
         {
-            for (int bmp_x = 0; bmp_x < bmp_width; bmp_x++)
+            for (int bmp_y = 0; bmp_y < bmp_height; bmp_y++)
             {
-                std::forward<Callback>(callback)(bmp_x, bmp_y);
+                for (int bmp_x = 0; bmp_x < bmp_width; bmp_x++)
+                {
+                    std::forward<Callback>(callback)(bmp_x, bmp_y);
+                }
+            }
+        }
+        else
+        {
+            for (int bmp_y = 0; bmp_y < bmp_height; bmp_y++)
+            {
+                for (int bmp_x = 0; bmp_x < bmp_width; bmp_x++)
+                {
+                    std::forward<Callback>(callback)(bmp_x, bmp_y);
+                }
             }
         }
     }
@@ -424,8 +444,6 @@ public:
         }
         else
         {
-            double scanline_origin_dx = (dx - ax) / bmp_fh;
-            double scanline_origin_dy = (dy - ay) / bmp_fh;
             double bmp_fx, bmp_fy;
             for (int bmp_y = 0; bmp_y < bmp_height; ++bmp_y)
             {

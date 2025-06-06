@@ -108,7 +108,7 @@ public:
 
 class Painter;
 
-// Simple nanovg abstract layer
+// Simple nanovg C++ wrapper
 class SimplePainter
 {
 protected:
@@ -226,7 +226,7 @@ public:
     [[nodiscard]] DRect boundingBox(std::string_view txt) const
     {
         float bounds[4];
-        nvgTextBounds(vg, 0, 0, txt._Unchecked_begin(), txt._Unchecked_end(), bounds);
+        nvgTextBounds(vg, 0, 0, txt.data(), txt.data()+txt.size(), bounds);
         return DRect((double)(bounds[0]), (double)(bounds[1]), (double)(bounds[2] - bounds[0]), (double)(bounds[3] - bounds[1]));
     }
 
@@ -234,7 +234,7 @@ public:
     void fillText(std::string_view txt, double x, double y)
     {
         if (!active_font) setFont(default_font);
-        nvgText(vg, (float)(x), (float)(y), txt._Unchecked_begin(), txt._Unchecked_end());
+        nvgText(vg, (float)(x), (float)(y), txt.data(), txt.data() + txt.size());
     }
 };
 
@@ -425,7 +425,6 @@ public:
     {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
-        double len = sqrt(dx * dx + dy * dy);
         double angle = atan2(dy, dx);
         constexpr double tip_sharp_angle = 145.0 * M_PI / 180.0;
         double arrow_size = line_width * 4 / _avgZoom();
@@ -823,3 +822,5 @@ public:
     [[nodiscard]] int fboWidth() { return fbo_width; }
     [[nodiscard]] int fboHeight() { return fbo_height; }
 };
+
+GLuint loadSVG(const char* path, int outputWidth, int outputHeight);

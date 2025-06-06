@@ -61,7 +61,7 @@ void gui_loop()
     SDL_Delay(0);
 }
 
-int main(int argc, char* argv[])
+int main(int, char*[])
 {
     DebugPrint("Main Thread Started");
 
@@ -149,7 +149,7 @@ int main(int argc, char* argv[])
 }
 
 #ifdef _WIN32
-int WINAPI CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+int WINAPI CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     return main(__argc, __argv); // Redirect entry point for WIN32 build
 }
 #endif

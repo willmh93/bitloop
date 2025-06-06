@@ -21,6 +21,23 @@ constexpr double pi = std::numbers::pi;
 #include "imgui_log.h"
 #include "imgui_debug_ui.h"
 
+#ifdef __EMSCRIPTEN__
+#define SDL_MAIN_HANDLED
+#include <GLES3/gl3.h>
+#else
+#include "glad.h"
+#endif
+
+// Image load helpers
+bool LoadPixelsRGBA(const char* path, int* outW, int* outH, std::vector<unsigned char>& outPixels);
+GLuint CreateGLTextureRGBA8(const void* pixels, int w, int h);
+void DestroyTexture(GLuint tex);
+
+inline ImTextureID ToImTextureID(GLuint tex)
+{
+    return (ImTextureID)(intptr_t)tex;
+}
+
 inline ImVec2 ScaleSize(const ImVec2& size)
 {
     float dpr = PlatformManager::get()->dpr();
@@ -52,10 +69,20 @@ namespace ImGui
             memcpy(item.first, item.second.initial, item.second.size);
     }
 
-    IMGUI_API bool SliderDouble(const char* label, double* v, double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);     // adjust format to decorate the value with a prefix or a suffix for in-slider labels or unit display.
-    IMGUI_API bool DragDouble(const char* label, double* v, double v_speed = 1.0, double v_min = 0.0, double v_max = 0.0, const char* format = "%.6f", ImGuiSliderFlags flags = 0);     // If v_min >= v_max we have no bound
-    IMGUI_API bool SliderDouble2(const char* label, double v[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
-    IMGUI_API bool DragDouble2(const char* label, double v[2], double v_speed = 1.0f, double v_min = 0.0f, double v_max = 0.0f, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    bool SceneSection(const char* name, float header_spacing=5.0f, float body_margin_top=2.0f);
+
+    bool ResetBtn(const char* id);
+    bool InlResetBtn(const char* id);
+
+    bool RevertableSliderDouble(const char* label, double* v, double* initial, double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    bool RevertableDragDouble(const char* label, double* v, double* initial, double v_speed, double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    bool RevertableSliderDouble2(const char* label, double v[2], double initial[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    //bool RevertableSliderDouble2(const char* label, double v[2], double initial[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+
+    bool SliderDouble(const char* label, double* v, double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);     // adjust format to decorate the value with a prefix or a suffix for in-slider labels or unit display.
+    bool DragDouble(const char* label, double* v, double v_speed = 1.0, double v_min = 0.0, double v_max = 0.0, const char* format = "%.6f", ImGuiSliderFlags flags = 0);     // If v_min >= v_max we have no bound
+    bool SliderDouble2(const char* label, double v[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    bool DragDouble2(const char* label, double v[2], double v_speed = 1.0f, double v_min = 0.0f, double v_max = 0.0f, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     
     void BeginPaddedRegion(float padding);
     void EndPaddedRegion();

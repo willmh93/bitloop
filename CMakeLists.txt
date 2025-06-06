@@ -44,6 +44,7 @@ file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/nanosvg/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/3rd_party/glad/KHR/*.h"

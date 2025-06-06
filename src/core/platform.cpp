@@ -189,6 +189,19 @@ float PlatformManager::window_size_inches()
     return diag_px / _dpi;
 }
 
+float PlatformManager::line_height()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    return io.Fonts->Fonts[0]->FontSize;
+}
+
+float PlatformManager::input_height()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    ImGuiStyle& s = ImGui::GetStyle();
+    return io.DisplaySize.y / io.Fonts->Fonts[0]->FontSize + s.FramePadding.y * 2.0f;
+}
+
 float PlatformManager::max_char_rows()
 {
     ImGuiIO& io = ImGui::GetIO();

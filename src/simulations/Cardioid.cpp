@@ -14,8 +14,6 @@ void plot(SceneBase *scene, Viewport* ctx, bool interactive, int segments, doubl
     ctx->setStrokeStyle(255, 0, 0);
     ctx->beginPath();
 
-    double r1 = 0.5;
-    double r2 = r1 / 4.0;
     double angle_step = (2 * M_PI) / static_cast<double>(segments);
     bool first = true;
 
@@ -135,7 +133,7 @@ void Cardioid_Scene::sceneStart()
 
 }
 
-void Cardioid_Scene::sceneMounted(Viewport* viewport)
+void Cardioid_Scene::sceneMounted(Viewport*)
 {
     /// Initialize viewport (after sceneStart)
     camera->setPanningUsesOffset(false);
@@ -165,7 +163,7 @@ double originalAngleFromPerpAngle(double perp_angle)
     return Math::wrapRadians2PI((perp_angle + M_PI / 2.0) / 1.5);
 }
 
-void Cardioid_Scene::viewportProcess(Viewport* ctx)
+void Cardioid_Scene::viewportProcess(Viewport*)
 {
     /// Process Viewports running this Scene
     //interact_angle = originalAngleFromPoint(mouse->world_x, mouse->world_y);
@@ -295,7 +293,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
     
     
     // Draw perpendicular arrow (to mouse)
-    double perp_angle = Math::wrapRadians2PI(tangent_angle - M_PI / 2.0);
+    //double perp_angle = Math::wrapRadians2PI(tangent_angle - M_PI / 2.0);
     ///tx2 = tx1 + cos(perp_angle) * d;
     ///ty2 = ty1 + sin(perp_angle) * d;
     DVec2 tp = fromPolarCoordinate(orig_angle, dist);
@@ -407,15 +405,12 @@ void Cardioid_Scene::fullPlotAlternative(Viewport* ctx, double scale, double ox)
     ctx->setLineWidth(4);
     ctx->setStrokeStyle(255, 0, 255);
 
-    double r1 = scale * 0.5;
-    double r2 = r1 / 4.0;
-
     double angle_step = (2 * M_PI) / 100.0;
 
     bool first = true;
     for (double angle = 0.0; angle < 2 * M_PI; angle += angle_step)
     {
-        double a = sin(angle * 0.5);
+        //double a = sin(angle * 0.5);
         double plot_x = cos(angle) * pow(sin(angle * 0.5), 2) + (ox + 0.25) * scale;
         double plot_y = sin(angle) * pow(sin(angle * 0.5), 2);
 
@@ -436,7 +431,7 @@ void Cardioid_Graph_Scene::sceneStart()
 {
 }
 
-void Cardioid_Graph_Scene::sceneMounted(Viewport* viewport)
+void Cardioid_Graph_Scene::sceneMounted(Viewport*)
 {
     camera->setOriginViewportAnchor(Anchor::CENTER);
     camera->focusWorldRect(-0.9, -1, 0.6, 1);

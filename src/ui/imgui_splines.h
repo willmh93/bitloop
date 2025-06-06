@@ -713,10 +713,10 @@ namespace ImSpline
 		// Assumes both lhs/rhs have preallocated point arrays
 		Spline& operator =(const Spline& rhs)
 		{
-			//deserialize(rhs.serialize());
+			deserialize(rhs.serialize());
 
 			//if (spline_hash != rhs.spline_hash)
-			{
+			/*{
 				bInitialized = rhs.bInitialized;
 				point_arr = rhs.point_arr;
 
@@ -739,7 +739,7 @@ namespace ImSpline
 				linear_intercept = rhs.linear_intercept;
 
 				spline_hash = rhs.spline_hash;
-			}
+			}*/
 
 			return *this;
 		}
@@ -1111,7 +1111,7 @@ namespace ImSpline
 					float p_max_x = std::max(p0.x, p1.x);
 					float dx = p_max_x - p_min_x;
 
-					if (dx > 1e-9 && x >= p_min_x && x < p_max_x)
+					if (dx > 1e-9 && x >= p_min_x && x <= p_max_x)
 					{
 						float t = (x - p0.x) / dx;
 						if (t >= 0.0f && t <= 1.0f)
@@ -1121,7 +1121,7 @@ namespace ImSpline
 			}
 
 			/// DEBUG TEST NAN
-			/*//assert(false);
+			//assert(false);
 			if (col >= 0 && col <= col_count)
 			{
 				const ImVector<int>& segments = col_segments[col];
@@ -1136,14 +1136,14 @@ namespace ImSpline
 					float p_max_x = std::max(p0.x, p1.x);
 					float dx = p_max_x - p_min_x;
 
-					if (dx > 1e-9 && x >= p_min_x && x < p_max_x)
+					if (dx > 1e-9 && x >= p_min_x && x <= p_max_x)
 					{
 						float t = (x - p0.x) / dx;
 						if (t >= 0.0f && t <= 1.0f)
 							return p0.y + t * (p1.y - p0.y);
 					}
 				}
-			}*/
+			}
 
 			return std::numeric_limits<float>::quiet_NaN();
 		}
@@ -1401,7 +1401,8 @@ namespace ImSpline
 			size_t old_hash = hash();
 
 			int point_count = point_arr.Size;
-			float* points = floatArray();
+
+			
 
 			// Determine serialization type
 			if (txt[0] == 'B')
@@ -1412,6 +1413,9 @@ namespace ImSpline
 
 				// Read point_count
 				iss.read(reinterpret_cast<char*>(&point_count), sizeof(int));
+				point_arr.resize(point_count);
+
+				float* points = floatArray();
 
 				// Allocate or nullify points based on count
 				if (point_count > 0)
@@ -1434,6 +1438,8 @@ namespace ImSpline
 				iss.ignore(); // Skip first char
 
 				iss >> point_count;
+				float* points = floatArray();
+
 				if (point_count > 0)
 				{
 					for (int i = 0; i < point_count; i++)
@@ -1460,18 +1466,18 @@ namespace ImSpline
 	};
 
 
-	inline ImColor adjustBrightness(ImColor c, float mult)
-	{
-		ImVec4 ret = c.Value * 0.9f;
-		ret.w = c.Value.w;
-		return ret;
-	}
+	//inline ImColor adjustBrightness(ImColor c, float mult)
+	//{
+	//	ImVec4 ret = c.Value * 0.9f;
+	//	ret.w = c.Value.w;
+	//	return ret;
+	//}
 
 	inline bool SplineEditor(const char* label, Spline* spline, ImRect* view_rect, float max_editor_size=300.0f)
 	{
 		using namespace ImGui;
 
-		const ImGuiStyle& Style = GetStyle();
+		//const ImGuiStyle& Style = GetStyle();
 		const ImGuiIO& IO = GetIO();
 		ImDrawList* DrawList = GetWindowDrawList();
 		ImGuiWindow* Window = GetCurrentWindow();
@@ -1553,7 +1559,7 @@ namespace ImSpline
 
 		// Handle knot/handle dragging
 		float handle_size = ImGui::GetFontSize() / 4.0f;
-		float handle_size_sq = handle_size * handle_size;
+		//float handle_size_sq = handle_size * handle_size;
 
 		// Cast float* to ImVec2*
 		ImVec2* point_arr = spline->pointVecArray();
@@ -1812,7 +1818,7 @@ namespace ImSpline
 			DrawList->AddPolyline(eq_points.Data, eq_points.Size, red, false, 1);
 		}
 
-		float spline_thickness = ImGui::GetFontSize() / 10.0f;
+		//float spline_thickness = ImGui::GetFontSize() / 10.0f;
 
 		// Draw Spline
 		ImVector<ImVec2> spline_path;

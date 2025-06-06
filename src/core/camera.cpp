@@ -252,7 +252,6 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             int dx = _x - pan_down_touch_x;
             int dy = _y - pan_down_touch_y;
 
-            double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
 
             DVec2 world_offset = toWorldOffset(dx, dy);
             //qDebug() << "(dx,dy) = (" << dx << ", " << dy << ")";
@@ -266,8 +265,18 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
                 zoom_x = pan_beg_cam_zoom_x * delta_zoom;
                 zoom_y = pan_beg_cam_zoom_y * delta_zoom;
             }
+            
+            if (pressed_fingers.size() >= 2)
+            {
+                double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
+                rotation = pan_beg_cam_angle + delta_rotation;
+                DebugPrint("Setting rotation: %.3f", (double)rotation);
 
-            rotation = pan_beg_cam_angle + delta_rotation;
+                // todo: In order to lock camera during pan, you may need to manually
+                //       send an event mimicking a mouse move in order to trigger pollEvents
+
+                //ProjectWorker::instance()->queueEvent()
+            }
         }
     }
 
@@ -292,10 +301,21 @@ void Camera::panZoomProcess()
     pan_y += (targ_pan_y - pan_y) * ease;
     ///zoom_x += (targ_zoom_x - zoom_x) * ease;
     ///zoom_y += (targ_zoom_y - zoom_y) * ease;
+    
+    if (pressed_fingers.size() == 1)
+    {
+        panDrag((int)pressed_fingers[0].x, (int)pressed_fingers[0].y, 0.0, 0.0);
+    }
+    else if (pressed_fingers.size() == 2)
+    {
+        double avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
+        double avg_y = (pressed_fingers[0].y + pressed_fingers[1].y) / 2.0;
+        panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+    }
 }
 
 
-void Camera::panEnd(int _x, int _y)
+void Camera::panEnd()
 {
     ///panDrag(_x, _y, 0, 0);
     panning = false;
@@ -338,7 +358,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                     if (panning)
                     {
                         // Was already panning with a single finger. Restart with 2 fingers
-                        panEnd((int)pressed_fingers.front().x, (int)pressed_fingers.front().y);
+                        panEnd();
                     }
 
                     double avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
@@ -373,12 +393,12 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 {
                     // End single-finger pan (previously had 1 remaining pressed finger)
                     if (single_touch_pan)
-                        panEnd((int)e.x(), (int)e.y());
+                        panEnd();
                 }
                 else if (pressed_fingers.size() == 1)
                 {
                     // End 2-finger pan, switch to single-finger pan
-                    panEnd((int)avg_x, (int)avg_y);
+                    panEnd();
 
                     // Switch to whichever finger is still pressed (might not be finger index 0)
                     if (single_touch_pan)
@@ -406,17 +426,18 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                     }
                 }
 
-                if (pressed_fingers.size() == 1)
-                {
-                    if (single_touch_pan)
-                        panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
-                }
-                else if (pressed_fingers.size() == 2)
-                {
-                    double avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
-                    double avg_y = (pressed_fingers[0].y + pressed_fingers[1].y) / 2.0;
-                    panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
-                }
+                panZoomProcess();
+
+                ///if (pressed_fingers.size() == 1)
+                ///{
+                ///    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
+                ///}
+                ///else if (pressed_fingers.size() == 2)
+                ///{
+                ///    double avg_x = (pressed_fingers[0].x + pressed_fingers[1].x) / 2.0;
+                ///    double avg_y = (pressed_fingers[0].y + pressed_fingers[1].y) / 2.0;
+                ///    panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+                ///}
             }
             break;
         }
@@ -427,26 +448,46 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
         {
             case SDL_MOUSEBUTTONDOWN:
             {
-                if (e.button() == SDL_BUTTON_MIDDLE ||
+                if (pressed_fingers.size() == 0)
+                {
+                    FingerInfo info;
+                    info.fingerId = 0;
+                    info.x = e.x();
+                    info.y = e.y();
+                    pressed_fingers.push_back(info);
+                }
+
+                if (!panning &&
+                    e.button() == SDL_BUTTON_MIDDLE ||
                     (single_touch_pan && e.button() == SDL_BUTTON_LEFT))
                 {
+
                     panBegin((int)e.x(), (int)e.y(), 0.0, 0.0);
                 }
             }
             break;
             case SDL_MOUSEBUTTONUP:
             {
+                pressed_fingers.clear();
                 if (e.button() == SDL_BUTTON_MIDDLE ||
                     (single_touch_pan && e.button() == SDL_BUTTON_LEFT))
                 {
-                    panEnd((int)e.x(), (int)e.y());
+                    panEnd();
                 }
             }
             break;
             case SDL_MOUSEMOTION:
             {
-                if (panning)
-                    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
+                if (pressed_fingers.size() > 0)
+                {
+                    FingerInfo& info = pressed_fingers[0];
+                    info.x = e.x();
+                    info.y = e.y();
+                }
+
+                panZoomProcess();
+                //if (panning)
+                //    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
             }
             break;
             case SDL_MOUSEWHEEL:

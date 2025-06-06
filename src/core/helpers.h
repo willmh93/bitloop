@@ -10,6 +10,13 @@
 
 #include "debug.h"
 
+#if defined(__clang__) || defined(__GNUC__)
+#define FORCEINLINE inline __attribute__((always_inline))
+#elif defined(_MSC_VER)
+#define FORCEINLINE __forceinline
+#else
+#define FORCEINLINE inline
+#endif
 
 namespace Helpers
 {

@@ -473,7 +473,7 @@ void MainWindow::populateExpandedLayout()
 void MainWindow::populateViewport()
 {
     // Always process viewport, even if not visible
-    bool viewport_visible = ImGui::Begin("Viewport");
+    ImGui::Begin("Viewport");
     {
         ImVec2 size = ImGui::GetContentRegionAvail();
         int width = static_cast<int>(size.x);

@@ -30,6 +30,7 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
 #define SIM_END(ns) } using ns::ns##_Project;
 
 
+
 template<typename T>
 concept VarBufferConcept = requires(T t, const T & rhs)
 {
@@ -123,7 +124,7 @@ struct Variable final : public BaseVariable
         }
     }
 
-    std::string toString()
+    std::string toString() override 
     {
         std::stringstream ss;
         ss << *ptr;
@@ -189,6 +190,13 @@ struct VariableMap : public std::vector<VariableEntry>
 {
     void markLiveValues()   { for (size_t i=0; i<size(); i++) at(i).markLiveValue(); }
     void markShadowValues() { for (size_t i=0; i<size(); i++) at(i).markShadowValue(); }
+    bool changedLive() {
+        for (size_t i = 0; i < size(); i++) {
+            if (at(i).liveChanged())
+                return true;
+        }
+        return false;
+    }
     bool changedShadow() {
         for (size_t i = 0; i < size(); i++)  {
             if (at(i).shadowChanged())
@@ -200,13 +208,20 @@ struct VariableMap : public std::vector<VariableEntry>
 
 struct VarTracker
 {
+    static VarTracker* singleton;
+
+    VarTracker()
+    {
+        singleton = this;
+    }
+
     std::vector<BaseVariable*> buffer_var_ptrs;
 
     template<typename T>
     void _sync(const char*name, T& v)
     {
         if constexpr (std::is_array_v<T>)
-            buffer_var_ptrs.push_back(new Variable<T>(name, v, false));   // v  -> element*
+            buffer_var_ptrs.push_back(new Variable<std::remove_extent_t<T>>(name, v, false));   // v  -> element*
         else
             buffer_var_ptrs.push_back(new Variable<T>(name, &v, false));  // &v -> T*
     }
@@ -216,6 +231,95 @@ struct VarTracker
     /// Ownership of ptrs claimed by Scene
 };
 
+
+
+/*enum class Buf : std::uint8_t { Live = 0, Shadow = 1 };
+
+template<typename T>
+struct synced
+{
+    T value;
+
+    synced()
+    {
+        VarTracker::singleton->_sync("synced_var", value);
+    }
+
+    synced(const T& v)
+    {
+        VarTracker::singleton->_sync("synced_var", value);
+        operator=(v);
+    }
+
+    FORCEINLINE operator T& ()
+    {
+        return value;
+    }
+    FORCEINLINE operator const T& () const
+    {
+        return value;
+    }
+
+    FORCEINLINE T* operator&() noexcept
+    {
+        return &value;
+    }
+
+    FORCEINLINE const T* operator&() const noexcept
+    {
+        return &value;
+    }
+
+    FORCEINLINE T& operator=(const T& rhs) noexcept
+    {
+        value = rhs;
+        return *this;
+    }
+};*/
+
+/*operator T&()
+{
+    if constexpr (which == Buf::Live)
+        return value;
+    else
+        return before;
+}
+operator const T& () const
+{
+    if constexpr (which == Buf::Live)
+        return value;
+    else
+        return before;
+}
+
+T* operator&() noexcept
+{
+    if constexpr (which == Buf::Live)
+        return &value;
+    else
+        return &before;
+}
+
+const T* operator&() const noexcept
+{
+    if constexpr (which == Buf::Live)
+        return &value;
+    else
+        return &before;
+}
+
+T& operator=(const T& rhs) noexcept
+{
+    if constexpr (which == Buf::Live)
+        value = rhs;
+    else
+        before = rhs;
+
+    return *this;
+}*/
+
+
+//template<Buf which=Buf::Live>
 struct VarBuffer : public VarTracker
 {
     VarBuffer() = default;
@@ -271,7 +375,7 @@ public:
 
     void updateLiveBuffer()
     {
-        DebugPrint("updateLiveBuffers()");
+        //DebugPrint("updateLiveBuffers()");
         for (VariableEntry& entry : var_map) {
             //if (!entry.shadowChanged()) // if we have not changed live since start of worker frame
             entry.updateLive();
@@ -279,16 +383,17 @@ public:
     }
     void updateShadowBuffer()
     {
-        DebugPrint("updateShadowBuffers()");
+        //DebugPrint("updateShadowBuffers()");
         for (VariableEntry& entry : var_map) {
             if (entry.liveChanged()) // if we have not changed shadow since start of worker frame
                 entry.updateShadow();
         }
     }
 
-    void markLiveValues() { var_map.markLiveValues(); }
+    void markLiveValues()   { var_map.markLiveValues(); }
     void markShadowValues() { var_map.markShadowValues(); }
 
+    bool changedLive()   { return var_map.changedLive(); }
     bool changedShadow() { return var_map.changedShadow(); }
 
     std::string pad(const std::string& str, int width) const
@@ -354,6 +459,7 @@ protected:
     // In case Scene uses double buffer
     virtual void updateLiveBuffers() {}
     virtual void updateShadowBuffers() {}
+    virtual bool changedLive() { return false; }
     virtual bool changedShadow() { return false; }
     virtual void markLiveValues() {}
     virtual void markShadowValues() {}
@@ -396,25 +502,25 @@ public:
     void mountToAll(Layout& viewports);
 
     virtual void sceneStart() {}
-    virtual void sceneMounted(Viewport* ctx) {}
+    virtual void sceneMounted(Viewport*) {}
     virtual void sceneStop() {}
     virtual void sceneDestroy() {}
     virtual void sceneProcess() {}
-    virtual void viewportProcess(Viewport* ctx) {}
-    virtual void viewportDraw(Viewport* ctx) const = 0;
+    virtual void viewportProcess(Viewport*) {}
+    virtual void viewportDraw(Viewport*) const = 0;
 
-    virtual void onEvent(Event e) {}
+    virtual void onEvent(Event e) { (void)e; }
 
     void pollEvents();
     void pullDataFromShadow();
 
-    virtual void onPointerEvent(PointerEvent e) {}
-    virtual void onPointerDown(PointerEvent e) {}
-    virtual void onPointerUp(PointerEvent e) {}
-    virtual void onPointerMove(PointerEvent e) {} 
-    virtual void onWheel(PointerEvent e) {}
-    virtual void onKeyDown(KeyEvent e) {}
-    virtual void onKeyUp(KeyEvent e) {}
+    virtual void onPointerEvent(PointerEvent) {}
+    virtual void onPointerDown(PointerEvent) {}
+    virtual void onPointerUp(PointerEvent) {}
+    virtual void onPointerMove(PointerEvent) {}
+    virtual void onWheel(PointerEvent) {}
+    virtual void onKeyDown(KeyEvent) {}
+    virtual void onKeyUp(KeyEvent) {}
 
     void handleWorldNavigation(Event e, bool single_touch_pan);
 
@@ -474,6 +580,7 @@ protected:
     void updateShadowBuffers() override { DoubleBuffer<VarBufferType>::updateShadowBuffer(); }
     void markLiveValues() override      { DoubleBuffer<VarBufferType>::markLiveValues();   }
     void markShadowValues() override    { DoubleBuffer<VarBufferType>::markShadowValues(); }
+    bool changedLive() override         { return DoubleBuffer<VarBufferType>::changedLive(); }
     bool changedShadow() override       { return DoubleBuffer<VarBufferType>::changedShadow(); }
 };
 
@@ -594,10 +701,10 @@ public:
         viewports.clear();
     }
 
-    void setSize(int targ_viewports_x, int targ_viewports_y)
+    void setSize(int _targ_viewports_x, int _targ_viewports_y)
     {
-        this->targ_viewports_x = targ_viewports_x;
-        this->targ_viewports_y = targ_viewports_y;
+        this->targ_viewports_x = _targ_viewports_x;
+        this->targ_viewports_y = _targ_viewports_y;
     }
 
 
@@ -693,6 +800,15 @@ protected:
             scene->updateShadowBuffers();
     }
 
+    virtual bool changedLive()
+    {
+        for (SceneBase* scene : viewports.all_scenes) {
+            if (scene->changedLive())
+                return true;
+        }
+        return false;
+    }
+
     virtual bool changedShadow()
     {
         for (SceneBase* scene : viewports.all_scenes) {
@@ -733,19 +849,19 @@ public:
     virtual ~ProjectBase() = default;
     
     // BasicProject Factory methods
-    static [[nodiscard]] std::vector<std::shared_ptr<ProjectInfo>>& projectInfoList()
+    [[nodiscard]] static std::vector<std::shared_ptr<ProjectInfo>>& projectInfoList()
     {
         static std::vector<std::shared_ptr<ProjectInfo>> info_list;
         return info_list;
     }
 
-    static [[nodiscard]] ProjectInfoNode& projectTreeRootInfo()
+    [[nodiscard]] static ProjectInfoNode& projectTreeRootInfo()
     {
         static ProjectInfoNode root("root");
         return root;
     }
 
-    static [[nodiscard]] std::shared_ptr<ProjectInfo> findProjectInfo(int sim_uid)
+    [[nodiscard]] static std::shared_ptr<ProjectInfo> findProjectInfo(int sim_uid)
     {
         for (auto& info : projectInfoList())
         {
@@ -755,7 +871,7 @@ public:
         return nullptr;
     }
 
-    static [[nodiscard]] std::shared_ptr<ProjectInfo> findProjectInfo(const char *name)
+    [[nodiscard]] static std::shared_ptr<ProjectInfo> findProjectInfo(const char *name)
     {
         for (auto& info : projectInfoList())
         {
@@ -925,7 +1041,7 @@ public:
     virtual void projectStop() {}
     virtual void projectDestroy() {}
 
-    virtual void onEvent(Event& e) {}
+    virtual void onEvent(Event&) {}
 
     void pullDataFromShadow();
     void pollEvents();

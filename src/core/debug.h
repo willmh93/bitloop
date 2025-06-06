@@ -31,7 +31,7 @@
 
 /// ======== Timer filters ========
 
-//#define TIMERS_ENABLED
+#define TIMERS_ENABLED
 
 //-- Timer thresholds -- 
 constexpr double TIMER_ELAPSED_LIMIT = 1.0; // ms
@@ -51,6 +51,13 @@ struct Global
 
 /// ========================= ///
 /// ======== Private ======== ///
+
+#pragma warning(error: 4189) // local variable is initialized but not referenced
+#pragma warning(error: 4458) // declaration hides class member
+#pragma warning(error: 4100) // unreferenced formal parameter
+
+#define UNUSED(x) ((void)(x))
+
 
 // Disable debug flags for Release builds
 #ifdef NDEBUG
@@ -155,11 +162,11 @@ void DashedDebugPrint(int width=0, const char* fmt=nullptr, Args... args)
 #define DebugPrintEx(fmt, ...)
 #endif
 
-#if TIMERS_ENABLED
+#ifdef TIMERS_ENABLED
 #define T0(name)      auto _timer_##name = std::chrono::steady_clock::now();
 #define T1(name, ...) auto waited_##name = std::chrono::steady_clock::now() - _timer_##name;\
                       double dt_##name = std::chrono::duration<double, std::milli>(waited_##name).count();\
-                      if (dt_##name >= TIMER_ELAPSED_LIMIT) DebugPrint("Timer (%s): %.4f", #name, dt_##name);
+                      if (dt_##name >= TIMER_ELAPSED_LIMIT) { DebugPrint("Timer (%s): %.4f", #name, dt_##name); }
 #else
 #define T0(name)     
 #define T1(name, ...)
@@ -214,6 +221,7 @@ public:
     FiniteDouble() = default;
     FiniteDouble(const FiniteDouble& v, bool _break_on_assignment = false)
     {
+        break_on_assignment = _break_on_assignment;
         set(v);
     }
     FiniteDouble(double v, bool _break_on_assignment=false)

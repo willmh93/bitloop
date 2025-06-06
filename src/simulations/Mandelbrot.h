@@ -1,6 +1,7 @@
 #pragma once
 #include "project.h"
 #include "Cardioid.h"
+#include <math.h>
 
 SIM_BEG(Mandelbrot)
 
@@ -34,7 +35,7 @@ enum ColorGradientTemplate
 
     GRADIENT_CLASSIC,
     GRADIENT_SINUSOIDAL_RAINBOW_CYCLE,
-    GRADIENT_FOREST,
+    GRADIENT_WAVES,
 
 
     GRADIENT_TEMPLATE_COUNT
@@ -44,17 +45,24 @@ static const char* ColorGradientNames[GRADIENT_TEMPLATE_COUNT] = {
     "",
     "CLASSIC",
     "SINUSOIDAL_RAINBOW_CYCLE",
-    "FOREST"
+    "WAVES"
 };
 
 struct EscapeField : public std::vector<double>
 {
     int w, h;
+    void setAllDepth(double value)
+    {
+        for (int i = 0; i < size(); i++)
+            at(i) = value;
+    }
     void setDimensions(int _w, int _h)
     {
+        if (size() >= (_w * _h))
+            return;
         w = _w;
         h = _h;
-        resize(w * h);
+        resize(w * h, -1.0);
     }
     void setPixelDepth(int x, int y, double depth)
     {
@@ -89,7 +97,7 @@ inline double mandelbrot_iter(double x0, double y0, int iter_lim)
     double x = 0.0, y = 0.0, xx = 0.0, yy = 0.0;
     int iter = 0;
 
-    while (xx + yy <= 4.0 && iter < iter_lim)
+    while (xx + yy <= 64.0 && iter < iter_lim)
     {
         y = (2.0 * x * y + y0);
         x = (xx - yy + x0);
@@ -103,6 +111,11 @@ inline double mandelbrot_iter(double x0, double y0, int iter_lim)
         return iter_lim;
 
     if constexpr (smooth)
+    //{
+    //    double mod = std::sqrt(xx + yy);
+    //    double mu = iter + 1 - std::log(std::log(mod)) / log(2);
+    //    return mu;                         // perfectly continuous
+    //}
         return iter + (1.0 - log2(log2(xx + yy) / 2.0));
     else
         return iter;
@@ -250,11 +263,19 @@ struct Mandelbrot_Data : public VarBuffer
     MandelSmoothing smoothing_type = SMOOTH_CONTINUOUS;
 
     bool dynamic_color_cycle_limit = true;
-    double color_cycle_value = 1.0; // If dynamic, iter_lim ratio, else iter_lim
+    double color_cycle_value = 0.1; // If dynamic, iter_lim ratio, else iter_lim
     double color_cycle_iters = 32.0;
     bool colors_updated = false;
 
+    // animate
+    bool show_color_animation_options = false;
+    double gradient_shift_step = 0.0078;
+    double hue_shift_step = 0.136;
+
     ImGradient gradient;
+    ImGradient gradient_shifted;
+    double hue_shift = 0.0;
+    double gradient_shift = 0.0;
 
     ImSpline::Spline x_spline = ImSpline::Spline(100, {
         {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
@@ -266,6 +287,11 @@ struct Mandelbrot_Data : public VarBuffer
         {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f},
         {0.6f, 0.6f}, {0.7f, 0.7f}, {0.8f, 0.8f}
     });
+    /*ImSpline::Spline iter_gradient_spline = ImSpline::Spline(100, {
+        {0.0f, 0.0f}, {0.1f, 0.1f}, {0.2f, 0.2f},
+        {0.3f, 0.3f}, {0.4f, 0.4f}, {0.5f, 0.5f}
+    });*/
+    
 
     void setup() override
     {
@@ -283,18 +309,25 @@ struct Mandelbrot_Data : public VarBuffer
         sync(dynamic_iter_lim);
         sync(quality);
         sync(iter_lim);
-        sync(dynamic_iter_lim);
         sync(x_spline);
         sync(y_spline);
+        //sync(iter_gradient_spline);
         sync(dynamic_color_cycle_limit);
         sync(color_cycle_value);
+        sync(color_cycle_iters);
         sync(active_color_template);
         sync(gradient);
+        sync(gradient_shifted);
+        sync(hue_shift);
+        sync(show_color_animation_options);
+        sync(gradient_shift);
+        sync(gradient_shift_step);
+        sync(hue_shift_step);
         sync(colors_updated);
         sync(config_buf);
     }
 
-    void populate();
+    void populate() override;
 
     void RGBtoHSV(uint8_t r, uint8_t g, uint8_t b,
         float& h, float& s, float& v)
@@ -335,6 +368,19 @@ struct Mandelbrot_Data : public VarBuffer
             h += 360.0f;
     }
 
+    void updateShiftedGradient()
+    {
+        auto& marks = gradient.getMarks();
+        auto& shifted_marks = gradient_shifted.getMarks();
+        for (size_t i = 0; i < marks.size(); i++)
+        {
+            auto adjusted = Color(marks[i].color).adjustHue((float)hue_shift).vec4();
+            memcpy(shifted_marks[i].color, adjusted.asArray(), sizeof(FVec4));
+            shifted_marks[i].position = Math::wrap(marks[i].position + (float)gradient_shift, 0.0f, 1.0f);
+        }
+        gradient_shifted.refreshCache();
+    }
+
     void loadColorTemplate(ColorGradientTemplate type,
         float hue_threshold = 0.3f,
         float sat_threshold = 0.3f,
@@ -344,59 +390,62 @@ struct Mandelbrot_Data : public VarBuffer
 
         switch (type)
         {
-        case GRADIENT_CLASSIC:
-        {
-            gradient.addMark(0.0f, ImColor(0, 0, 0));
-            gradient.addMark(0.2f, ImColor(39, 39, 214));
-            gradient.addMark(0.4f, ImColor(0, 143, 255));
-            gradient.addMark(0.6f, ImColor(255, 255, 68));
-            gradient.addMark(0.8f, ImColor(255, 30, 0));
-            return;
-        }
-        break;
-        case GRADIENT_FOREST:
-        {
-            gradient.addMark(0.0f, ImColor(0, 0, 0));
-            gradient.addMark(0.2f, ImColor(0, 91, 255));
-            gradient.addMark(0.4f, ImColor(94, 224, 119));
-            gradient.addMark(0.6f, ImColor(0, 120, 80));
-            gradient.addMark(0.8f, ImColor(0, 69, 119));
-            return;
-        }
-        break;
-        default: break;
-        }
-
-        uint8_t last_r, last_g, last_b;
-        colorGradientTemplate(type, 0.0f, last_r, last_g, last_b);
-        gradient.addMark(0.0f, ImColor(last_r, last_g, last_b));
-
-        float last_h, last_s, last_v;
-        RGBtoHSV(last_r, last_g, last_b, last_h, last_s, last_v);
-
-        for (float x = 0.0f; x < 1.0f; x += 0.01f)
-        {
-            uint8_t r, g, b;
-            float h, s, v;
-
-            colorGradientTemplate(type, x, r, g, b);
-            RGBtoHSV(r, g, b, h, s, v);
-
-            float h_ratio = Math::abs_avg_ratio(last_h, h);
-            float s_ratio = Math::abs_avg_ratio(last_s, s);
-            float v_ratio = Math::abs_avg_ratio(last_v, v);
-
-            float avg_ratio = Math::avg(h_ratio, s_ratio, v_ratio);
-            if (h_ratio > hue_threshold ||
-                s_ratio > sat_threshold ||
-                v_ratio > val_threshold)
+            case GRADIENT_CLASSIC:
             {
-                gradient.addMark(x, ImColor(r, g, b));
-                last_h = h;
-                last_s = s;
-                last_v = v;
+                gradient.addMark(0.0f, ImColor(0, 0, 0));
+                gradient.addMark(0.2f, ImColor(39, 39, 214));
+                gradient.addMark(0.4f, ImColor(0, 143, 255));
+                gradient.addMark(0.6f, ImColor(255, 255, 68));
+                gradient.addMark(0.8f, ImColor(255, 30, 0));
             }
+            break;
+
+            case GRADIENT_WAVES:
+            {
+                gradient.addMark(0.14f, ImColor(11, 14, 64));
+                gradient.addMark(0.3f, ImColor(255, 255, 255));
+                gradient.addMark(0.5f, ImColor(73, 179, 255));
+                gradient.addMark(0.8f, ImColor(50, 90, 113));
+            }
+            break;
+
+            default:
+            {
+                uint8_t last_r, last_g, last_b;
+                colorGradientTemplate(type, 0.0f, last_r, last_g, last_b);
+                gradient.addMark(0.0f, ImColor(last_r, last_g, last_b));
+
+                float last_h, last_s, last_v;
+                RGBtoHSV(last_r, last_g, last_b, last_h, last_s, last_v);
+
+                for (float x = 0.0f; x < 1.0f; x += 0.01f)
+                {
+                    uint8_t r, g, b;
+                    float h, s, v;
+
+                    colorGradientTemplate(type, x, r, g, b);
+                    RGBtoHSV(r, g, b, h, s, v);
+
+                    float h_ratio = Math::abs_avg_ratio(last_h, h);
+                    float s_ratio = Math::abs_avg_ratio(last_s, s);
+                    float v_ratio = Math::abs_avg_ratio(last_v, v);
+
+                    //float avg_ratio = Math::avg(h_ratio, s_ratio, v_ratio);
+                    if (h_ratio > hue_threshold ||
+                        s_ratio > sat_threshold ||
+                        v_ratio > val_threshold)
+                    {
+                        gradient.addMark(x, ImColor(r, g, b));
+                        last_h = h;
+                        last_s = s;
+                        last_v = v;
+                    }
+                }
+            }
+            break;
         }
+
+        gradient_shifted = gradient;
     }
 };
 
@@ -404,7 +453,9 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
 {
     // --- Custom Launch Config ---
     struct Config {};
-    Mandelbrot_Scene(Config& info) {}
+    Mandelbrot_Scene(Config&) {}
+
+   
     
     int current_row = 0;
     EscapeField field_9x9; // Processed in a single frame
@@ -427,9 +478,12 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
 
     // 0 = 9x smaller, 1 = 3x smaller, 2 = full resolution
     int computing_phase = 0;
-    int visible_phase = 0;
+    //int visible_phase = 0;
     bool first_frame = true;
     bool finished_compute = false;
+
+    std::chrono::steady_clock::time_point compute_t0;
+    Math::MovingAverage::MA timer_ma = Math::MovingAverage::MA(10);
 
     // Tweening
     ///TweenableMandelState state_a;
@@ -455,40 +509,45 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
     //void step_color(double step, uint8_t& r, uint8_t& g, uint8_t& b);
     void iter_ratio_color(double ratio, uint8_t& r, uint8_t& g, uint8_t& b);
 
-    void iter_gradient_color(double mu, int iter_lim,
-        uint8_t& r, uint8_t& g, uint8_t& b) const
+    //inline void iter_gradient_color(double mu, uint8_t& r, uint8_t& g, uint8_t& b) const
+    inline void iter_gradient_color(double mu, uint32_t& c) const
     {
         // interior of the set -> black
         if (mu >= iter_lim) {
-            r = g = b = 0;
+            c = 0xFF000000;
             return;
         }
 
+        //mu = pow(mu, 0.2);
+
+        //mu = iter_gradient_spline((float)(mu / color_cycle_iters)) * mu;
+
         // wrap smooth iteration count so the gradient repeats
-        double t = std::fmod(mu, color_cycle_iters) / color_cycle_iters;  // 0..1
-        if (t < 0.0) t += 1.0; // protect against negative fmod on some platforms
+        double t = (mu - color_cycle_iters * std::floor(mu / color_cycle_iters)) / color_cycle_iters;
 
-        //colorGradientTemplate<GRADIENT_GAMMA_POWER_RAMPS>(t, r, g, b);
+        //double t = std::fmod(mu, color_cycle_iters) / color_cycle_iters;  // 0..1
+        ///if (t < 0.0) t += 1.0; // protect against negative fmod on some platforms
 
-        float col[3];
-        gradient.getColorAt(t, col);
+        //float col[3];
+        //gradient_shifted.getColorAtUnguarded(t, col);
+        gradient_shifted.unguardedRGBA(t, c);
 
-        r = static_cast<uint8_t>(col[0] * 255.0f + 0.5f);
-        g = static_cast<uint8_t>(col[1] * 255.0f + 0.5f);
-        b = static_cast<uint8_t>(col[2] * 255.0f + 0.5f);
+        //r = static_cast<uint8_t>(col[0] * 255.0f /*+ 0.5f*/);
+        //g = static_cast<uint8_t>(col[1] * 255.0f /*+ 0.5f*/);
+        //b = static_cast<uint8_t>(col[2] * 255.0f /*+ 0.5f*/);
     }
 
     // TODO: Switch to using Color struct everywhere
-    void gradient_ratio_color(double ratio, uint8_t& r, uint8_t& g, uint8_t& b) const
+    inline void gradient_ratio_color(double ratio, uint8_t& r, uint8_t& g, uint8_t& b) const
     {
         //ratio = fmod(ratio, 1.0);
 
         float col[3];
-        gradient.getColorAt(ratio, col);
+        gradient_shifted.getColorAtUnguarded(ratio, col);
 
-        r = static_cast<uint8_t>(col[0] * 255.0f + 0.5f);
-        g = static_cast<uint8_t>(col[1] * 255.0f + 0.5f);
-        b = static_cast<uint8_t>(col[2] * 255.0f + 0.5f);
+        r = static_cast<uint8_t>(col[0] * 255.0f /*+ 0.5f*/);
+        g = static_cast<uint8_t>(col[1] * 255.0f /*+ 0.5f*/);
+        b = static_cast<uint8_t>(col[2] * 255.0f /*+ 0.5f*/);
     }
 
     void shadeBitmap()
@@ -497,10 +556,10 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
         {
             double iters = active_field->getPixelDepth(x, y);
 
-            uint8_t r, g, b;
-            iter_gradient_color(iters, iter_lim, r, g, b);
+            uint32_t u32;
+            iter_gradient_color(iters, u32);
 
-            active_bmp->setPixel(x, y, r, g, b, 255);
+            active_bmp->setPixel(x, y, u32);
         });
     }
 
@@ -509,20 +568,18 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
         bool Smooth_Dist,
         bool Use_Splines
     >
-    bool regularMandelbrot(Viewport* ctx)
+    bool regularMandelbrot()
     {
-        double f_max_iter = static_cast<double>(iter_lim);
-
         //DebugPrint("begin forEachWorldPixel2()");
         return pending_bmp->forEachWorldPixel(
             camera, current_row, [&](int x, int y, double wx, double wy)
         {
             // Result already calculated in previous phase? (forwarded to active_bmp)
-            //if (pending_bmp->getPixel(x, y).a)
-            //    return;
+            if (pending_field->getPixelDepth(x, y) >= 0)
+                return;
 
             double v;
-            uint8_t r, g, b;
+            //uint8_t r, g, b;
            
             /// ------------------------ Compute -------------------------
             ///-----------------------------------------------------------
@@ -549,7 +606,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
 
             /// ------------------------ Coloring -------------------------
             ///------------------------------------------------------------
-            if constexpr (Smooth_Dist)
+            /*if constexpr (Smooth_Dist)
             {
                 if (v < 0)
                 {
@@ -568,8 +625,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
             else
             {
                 // If Smooth_Iter *or* all smoothing options are disabled, handle here
-                iter_gradient_color(v, iter_lim, r, g, b);
-            }
+                iter_gradient_color(v, r, g, b);
+            }*/
 
             //double ratio = Smooth_Iter / f_max_iter;
             //iter_ratio_color(ratio, r, g, b);
@@ -593,9 +650,9 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
         bool Smooth,
         bool Show_Period2_Bulb
     >
-    bool radialMandelbrot(Viewport* ctx)
+    bool radialMandelbrot()
     {
-        double f_max_iter = static_cast<double>(iter_lim);
+        //double f_max_iter = static_cast<double>(iter_lim);
         return pending_bmp->forEachWorldPixel(camera, current_row, [&](int x, int y, double angle, double point_dist)
         {
             DVec2 polard_coord = cardioid_lerper.originalPolarCoordinate(angle, point_dist, cardioid_lerp_amount);
@@ -633,13 +690,13 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
 
             double smooth_iter = mandelbrot_iter<Smooth>(mandel_pt.x, mandel_pt.y, iter_lim);
 
-            uint8_t r, g, b;
-            iter_gradient_color(smooth_iter, iter_lim, r, g, b);
+            uint32_t u32;
+            iter_gradient_color(smooth_iter, u32);
 
             //double ratio = Smooth_Iter / f_max_iter;
             //iter_ratio_color(ratio, r, g, b);
 
-            pending_bmp->setPixel(x, y, r, g, b, 255);
+            pending_bmp->setPixel(x, y, u32);
         });
     };
 

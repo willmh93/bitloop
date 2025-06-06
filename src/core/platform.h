@@ -95,6 +95,8 @@ public:
     [[nodiscard]] float window_size_inches();
 
     // Layout helpers
+    [[nodiscard]] float line_height();
+    [[nodiscard]] float input_height();
     [[nodiscard]] float max_char_rows();
     [[nodiscard]] float max_char_cols();
 
@@ -110,4 +112,9 @@ public:
 [[nodiscard]] inline float ScaleSize(float length)
 {
     return PlatformManager::get()->dpr() * length;
+}
+
+[[nodiscard]] inline int ScaleSize(int length)
+{
+    return static_cast<int>(PlatformManager::get()->dpr() * static_cast<float>(length));
 }

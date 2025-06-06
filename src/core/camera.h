@@ -174,13 +174,13 @@ public:
         }
     }
 
-    [[nodiscard]] DVec2 toStageOffset(double world_ox, double world_oy)
+    [[nodiscard]] DVec2 toStageOffset(double _world_ox, double _world_oy)
     {
-        return toStageOffset({ world_ox, world_oy });
+        return toStageOffset({ _world_ox, _world_oy });
     }
-    [[nodiscard]] DVec2 toWorldOffset(double stage_ox, double stage_oy)
+    [[nodiscard]] DVec2 toWorldOffset(double _stage_ox, double _stage_oy)
     {
-        return toWorldOffset({ stage_ox, stage_oy });
+        return toWorldOffset({ _stage_ox, _stage_oy });
     }
 
     [[nodiscard]] DVec2 originPixelOffset();
@@ -208,7 +208,7 @@ public:
     void setPanningUsesOffset(bool b) { use_panning_offset = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
     void panDrag(int _x, int _y, double touch_dist, double touch_angle);
-    void panEnd(int _x, int _y);
+    void panEnd();
     void panZoomProcess();
 
     std::vector<FingerInfo> pressed_fingers;
@@ -271,14 +271,14 @@ inline void Camera::setCameraPos(double _x, double _y)
     y = _y;
 }
 
-inline void Camera::setPan(double pan_x, double pan_y, bool immediate)
+inline void Camera::setPan(double _pan_x, double _pan_y, bool immediate)
 {
-    targ_pan_x = pan_x;
-    targ_pan_y = pan_y;
+    targ_pan_x = _pan_x;
+    targ_pan_y = _pan_y;
     if (immediate)
     {
-        this->pan_x = pan_x;
-        this->pan_y = pan_y;
+        this->pan_x = _pan_x;
+        this->pan_y = _pan_y;
     }
 }
 
@@ -358,9 +358,9 @@ inline DVec2 Camera::toWorld(const DVec2& pt)
     return { world_x, world_y };
 }
 
-inline DVec2 Camera::toWorld(double x, double y)
+inline DVec2 Camera::toWorld(double _x, double _y)
 {
-    return toWorld({ x, y });
+    return toWorld({ _x, _y });
 }
 
 
@@ -449,9 +449,9 @@ inline DVec2 Camera::toStage(const DVec2& pt)
     return { ret_x, ret_y };
 }
 
-inline DVec2 Camera::toStage(double x, double y)
+inline DVec2 Camera::toStage(double _x, double _y)
 {
-    return toStage({ x, y });
+    return toStage({ _x, _y });
 }
 
 inline DVec2 Camera::toStageSize(const DVec2& size)

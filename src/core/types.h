@@ -96,6 +96,47 @@ struct Vec2
 };
 
 template<typename T>
+struct Vec4
+{
+    T x = 0, y = 0, z = 0, w = 0;
+
+    Vec4() = default;
+    Vec4(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {}
+
+    [[nodiscard]] Vec4 operator-() const { return Vec4(-x, -y, -z, -w); }
+    [[nodiscard]] bool operator==(const Vec4& other) const { return x == other.x && y == other.y && z == other.z && w == other.w; }
+    [[nodiscard]] bool operator!=(const Vec4& other) const { return x != other.x || y != other.y || z != other.z || w != other.w; }
+    [[nodiscard]] Vec4 operator+(const Vec4& rhs) const { return { x + rhs.x, y + rhs.y, z + rhs.z, w + rhs.w }; }
+    [[nodiscard]] Vec4 operator-(const Vec4& rhs) const { return { x - rhs.x, y - rhs.y, z - rhs.z, w - rhs.w }; }
+    [[nodiscard]] Vec4 operator*(const Vec4& rhs) const { return { x * rhs.x, y * rhs.y, z * rhs.z, w * rhs.w }; }
+    [[nodiscard]] Vec4 operator/(const Vec4& rhs) const { return { x / rhs.x, y / rhs.y, z / rhs.z, w / rhs.w }; }
+    [[nodiscard]] Vec4 operator*(T v) const { return { x * v, y * v, z * v, w * v }; }
+    [[nodiscard]] Vec4 operator/(T v) const { return { x / v, y / v, z / v, w / v }; }
+    [[nodiscard]] T& operator[](int i) const { return (&x)[i]; }
+
+    [[nodiscard]] T(&asArray())[4] { return *reinterpret_cast<T(*)[4]>(&x); }
+    //[[nodiscard]] T  average() const { return (x + y) / T{ 2 }; }
+    //[[nodiscard]] T  magnitude() const { return sqrt(x * x + y * y); }
+
+    [[nodiscard]] Vec4 floored(double off = 0) { return { floor(x) + off, floor(y) + off, floor(z) + off, floor(w) + off };}
+    [[nodiscard]] Vec4 rounded(double off = 0) { return { round(x) + off, round(y) + off, round(z) + off, round(w) + off }; }
+    //[[nodiscard]] Vec2 normalized() const {
+    //    T mag = sqrt(x * x + y * y);
+    //    return { x / mag, y / mag };
+    //}
+
+    [[nodiscard]] static Vec4 lerp(const Vec4& a, Vec4& b, T ratio)
+    {
+        return {
+            (a.x + (b.x - a.x) * ratio),
+            (a.y + (b.y - a.y) * ratio),
+            (a.z + (b.z - a.z) * ratio),
+            (a.w + (b.w - a.w) * ratio)
+        };
+    }
+};
+
+template<typename T>
 struct Ray : public Vec2<T>
 {
     double angle;
@@ -211,8 +252,75 @@ struct Color
     Color& operator =(const Color& rhs) { u32 = rhs.u32; return *this; }
     [[nodiscard]] bool operator ==(const Color& rhs) const { return u32 == rhs.u32; }
 
-    operator uint32_t() const {
-        return u32;
+    operator uint32_t() const { return u32; }
+    Vec4<float> vec4() { return { (float)r/255.0f, (float)g/255.0f, (float)b/255.0f, (float)a/255.0f }; }
+
+    Color& adjustHue(float amount)
+    {
+        setHue(getHue() + amount);
+        return *this;
+    }
+
+    // Return hue in degrees [0,360).
+    [[nodiscard]] float getHue() const
+    {
+        float rf = r / 255.0f;
+        float gf = g / 255.0f;
+        float bf = b / 255.0f;
+
+        float maxc = std::max({ rf, gf, bf });
+        float minc = std::min({ rf, gf, bf });
+        float delta = maxc - minc;
+
+        if (delta < 1e-6f) return 0.0f;
+
+        float hue;
+        if (maxc == rf)
+            hue = 60.f * std::fmod((gf - bf) / delta, 6.f);
+        else if (maxc == gf)
+            hue = 60.f * (((bf - rf) / delta) + 2.f);
+        else
+            hue = 60.f * (((rf - gf) / delta) + 4.f);
+
+        if (hue < 0.f) hue += 360.f;
+        return hue;
+    }
+
+    // Rotate to given hue (degrees). Keeps original S and V.
+    void setHue(float hue)
+    {
+        // normalise hue to [0,360)
+        hue = std::fmod(hue, 360.f);
+        if (hue < 0.f) hue += 360.f;
+
+        float rf = r / 255.f;
+        float gf = g / 255.f;
+        float bf = b / 255.f;
+
+        float maxc = std::max({ rf, gf, bf });
+        float minc = std::min({ rf, gf, bf });
+        float delta = maxc - minc;
+
+        float v = maxc;
+        float s = (maxc == 0.f) ? 0.f : delta / maxc;
+
+        // HSV -> RGB with new hue
+        float c = v * s;
+        float hprime = hue / 60.f;
+        float x = c * (1.f - std::fabs(std::fmod(hprime, 2.f) - 1.f));
+
+        float r1, g1, b1;
+        if (hprime < 1.f) { r1 = c; g1 = x; b1 = 0.f; }
+        else if (hprime < 2.f) { r1 = x; g1 = c; b1 = 0.f; }
+        else if (hprime < 3.f) { r1 = 0.f; g1 = c; b1 = x; }
+        else if (hprime < 4.f) { r1 = 0.f; g1 = x; b1 = c; }
+        else if (hprime < 5.f) { r1 = x; g1 = 0.f; b1 = c; }
+        else { r1 = c; g1 = 0.f; b1 = x; }
+
+        float m = v - c;
+        r = uint8_t(std::round((r1 + m) * 255.f));
+        g = uint8_t(std::round((g1 + m) * 255.f));
+        b = uint8_t(std::round((b1 + m) * 255.f));
     }
 };
 
@@ -266,6 +374,7 @@ struct Quad
 typedef Vec2<float>  FVec2;
 typedef Vec2<double> DVec2;
 typedef Vec2<int>    IVec2;
+typedef Vec4<float>  FVec4;
 typedef Rect<float>  FRect;
 typedef Rect<double> DRect;
 typedef Rect<int>    IRect;

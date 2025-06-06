@@ -49,6 +49,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
+//#include "types.h"
 
 #include <vector>
 #include <algorithm>
@@ -62,6 +63,7 @@ struct ImGradientMark
     float position{};
 };
 
+
 class ImGradient
 {
 public:
@@ -71,6 +73,7 @@ public:
     /* API used by the editor ------------------------------------------------ */
     void   getColorAt(float position, float* color) const;
     void   getColorAt(double position, float* color) const;
+    void   getColorAtUnguarded(double position, float* color) const;
     void   addMark(float position, ImColor color);
     void   removeMark(int uid);
     void   refreshCache();
@@ -93,6 +96,15 @@ public:
     bool operator==(const ImGradient& rhs) const;
     bool operator!=(const ImGradient& rhs) const { return !(*this == rhs); }
 
+    /* Transformations ------------------------------------------------------- */
+
+    //void shiftHue(float degrees)
+    //{
+    //    for (size_t i = 0; i < m_marks.size(); i++)
+    //    {
+    //        m_marks[i].color
+    //    }
+    //}
 
     /* Threading helpers ----------------------------------------------------- */
     static int uid_counter;
@@ -108,10 +120,20 @@ public:
 
         return nullptr;
     }
+    
+    inline void unguardedRGBA(float position, uint32_t& c) const
+    {
+        c = m_cachedColors[(int)(position * CACHE_SIZE_M1)];
+    }
+    inline void unguardedRGBA(double position, uint32_t& c) const
+    {
+        c = m_cachedColors[(int)(position * CACHE_SIZE_M1)];
+    }
 
 private:
     static constexpr float kEps = 1e-6f;
     static constexpr int CACHE_SIZE = 512*6;
+    static constexpr int CACHE_SIZE_M1 = CACHE_SIZE - 1;
 
     void   clear() noexcept;
     void   computeColorAt(float position, float* color) const;
@@ -120,6 +142,9 @@ private:
     int dragging_uid = -1;
     int selected_uid = -1;
     float m_cachedValues[CACHE_SIZE * 3]{};
+    uint32_t m_cachedColors[CACHE_SIZE]{};
+
+    
 };
 
 /* ---------------------------- editor helpers ------------------------------ */

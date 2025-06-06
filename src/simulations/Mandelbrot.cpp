@@ -25,14 +25,26 @@ void Mandelbrot_Project::projectPrepare(Layout& layout)
 
 void Mandelbrot_Data::populate()
 {
-    /*for (PostFn& f : live_attributes->post_fn_queue)
+    /*static GLuint reset_icon = 0;
+    static bool reset_loaded = false;
+    static int reset_w, reset_h;
+    static std::vector<unsigned char> reset_pixels;
+
+    if (!reset_loaded)
     {
-        f(*this, *live_attributes);
-    }
-    live_attributes->post_fn_queue.clear();*/
+        if (LoadPixelsRGBA("/data/icon/reset_icon.png", &reset_w, &reset_h, reset_pixels))
+        {
+            reset_icon = CreateGLTextureRGBA8(reset_pixels.data(), reset_w, reset_h);
+            reset_loaded = true;
+        }
+    }*/
+
+    
+
 
     /// --------------------------------------------------------------
-    ImGui::SeparatorText("View");
+    //ImGui::SeparatorText("View");
+    if (ImGui::SceneSection("View")) {
     /// --------------------------------------------------------------
 
     static ImGuiID active_id = 0;
@@ -46,35 +58,37 @@ void Mandelbrot_Data::populate()
     
     ImGui::Checkbox("Show Axis", &show_axis);
 
-
-
-    if (ImGui::DragDouble("X", &cam_x, 0.01 / cam_zoom, -5.0, 5.0, format))
-    {
-        DebugPrint("GUI set: cam_x = %.3f", cam_x);
-    }
-    ImGui::DragDouble("Y", &cam_y, 0.01 / cam_zoom, -5.0, 5.0, format);
+    static double init_cam_x = cam_x;
+    static double init_cam_y = cam_y;
+    ImGui::RevertableDragDouble("X", &cam_x, &init_cam_x, 0.01 / cam_zoom, -5.0, 5.0, format);
+    ImGui::RevertableDragDouble("Y", &cam_y, &init_cam_y, 0.01 / cam_zoom, -5.0, 5.0, format);
 
     if (!Platform()->is_mobile())
     {
-        if (ImGui::SliderDouble("Rotation", &cam_degrees, 0.0, 360.0, "%.0f"))
+        static double init_degrees = cam_degrees;
+        if (ImGui::RevertableSliderDouble("Rotation", &cam_degrees, &init_degrees, 0.0, 360.0, "%.0f"))
         {
             cam_rot = cam_degrees * Math::PI / 180.0;
         }
 
         // 1e16 = double limit before preicions loss
         static double zoom_speed = cam_zoom / 100.0;
-        if (ImGui::DragDouble("Zoom Mult", &cam_zoom, zoom_speed, 1.0, 1e16, "%.2f"))
+        static double init_cam_zoom = 1.0;
+        if (ImGui::RevertableDragDouble("Zoom Mult", &cam_zoom, &init_cam_zoom, zoom_speed, 1.0, 1e16, "%.2f"))
         {
             zoom_speed = cam_zoom / 100.0;
         }
     }
 
     //double *zoom_vars[2] = { ref(&cam_zoom_xy[0]), Var(&cam_zoom_xy[1]) };
-    ImGui::SliderDouble2("Zoom X/Y", cam_zoom_xy.asArray(), 0.1, 10.0, "%.2f");
+    static DVec2 init_cam_zoom_xy = cam_zoom_xy;
+    ImGui::RevertableSliderDouble2("Zoom X/Y", cam_zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2f");
+
+    } // End Header
 
     /// --------------------------------------------------------------
-    ImGui::Dummy(ScaleSize(0, 10));
-    ImGui::SeparatorText("Compute");
+    //ImGui::SeparatorText("Compute");
+    if (ImGui::SceneSection("Compute")) {
     /// --------------------------------------------------------------
 
     ImGui::Checkbox("Flatten", &flatten);
@@ -115,18 +129,7 @@ void Mandelbrot_Data::populate()
         ImGui::DragDouble("Max Iterations", &quality, 1000.0, 1.0, 1000000.0, "%.0f", ImGuiSliderFlags_Logarithmic);
 
     
-    if (!flatten)
-    {
-        /// --------------------------------------------------------------
-        ImGui::Dummy(ScaleSize(0, 10));
-        ImGui::SeparatorText("XX, YY Spline Relationship");
-        /// --------------------------------------------------------------
     
-        static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
-        ImSpline::SplineEditorPair("X/Y Spline", &x_spline, &y_spline, &vr, 900.0f);
-    }
-
-
     // /// --------------------------------------------------------------
     // ImGui::Dummy(ScaleSize(0, 10));
     // ImGui::SeparatorText("Visual Options");
@@ -135,22 +138,44 @@ void Mandelbrot_Data::populate()
     
     //ImGui::Checkbox("Smoothing", &smoothing);
 
+    } // End Header
+
     /// --------------------------------------------------------------
-    ImGui::Dummy(ScaleSize(0, 10));
-    ImGui::SeparatorText("Colour Cycling");
+    //ImGui::SeparatorText("Colour Cycling");
+    if (ImGui::SceneSection("Colour Cycling")) {
     /// --------------------------------------------------------------
 
     ImGui::Checkbox("Dynamic Color Cycle", &dynamic_color_cycle_limit);
 
 
     if (dynamic_color_cycle_limit)
-        ImGui::SliderDouble("Cycle Limit Ratio", &color_cycle_value, 0.01, 1.0, "%.2f");
+        ImGui::SliderDouble("Cycle Limit Ratio", &color_cycle_value, 0.0001, 1.0, "%.6f", ImGuiSliderFlags_Logarithmic);
     else
-        ImGui::SliderDouble("Cycle Iterations", &color_cycle_iters, 1.0, iter_lim, "%.0f");
+        ImGui::SliderDouble("Cycle Iterations", &color_cycle_iters, 0.001, iter_lim, "%.4f", ImGuiSliderFlags_Logarithmic);
+
+    if (ImGui::DragDouble("Gradient Shift", &gradient_shift, 0.01, -100.0, 100.0, " %.3f"))
+    {
+        gradient_shift = Math::wrap(gradient_shift, 0.0, 1.0);
+        colors_updated = true;
+    }
+
+    if (ImGui::SliderDouble("Hue Shift", &hue_shift, 0.0, 360, "%.3f"))
+    {
+        colors_updated = true;
+    }
+
+    ImGui::Checkbox("Animate", &show_color_animation_options);
+    if (show_color_animation_options)
+    {
+        ImGui::SliderDouble("Gradient Shift Speed", &gradient_shift_step, -0.02, 0.02, "%.4f");
+        ImGui::SliderDouble("Hue Shift Speed", &hue_shift_step, -5.0, 5.0, "%.3f");
+    }
+
+    } // End Header
 
     /// --------------------------------------------------------------
-    ImGui::Dummy(ScaleSize(0, 10));
-    ImGui::SeparatorText("Colour Gradient");
+    //ImGui::SeparatorText("Colour Gradient");
+    if (ImGui::SceneSection("Colour Gradient")) {
     /// --------------------------------------------------------------
 
     ///static float hue_threshold = 0.3f;
@@ -180,38 +205,53 @@ void Mandelbrot_Data::populate()
     //{
     //    show_gradient_editor = !show_gradient_editor;
     //}
-    //
+   
+
     //if (show_gradient_editor)
-    
     {
         if (ImGui::GradientEditor(
             &gradient,
             Platform()->ui_scale_factor(), 
             Platform()->ui_scale_factor(2.0f)))
         {
-            active_color_template = GRADIENT_CUSTOM;
-
-            //DebugPrint("SET BLACK => sync(colors_updated) = true");
-            DebugPrint("colors_updated = TRUE");
+            //active_color_template = GRADIENT_CUSTOM;
             colors_updated = true;
-
-            if (gradient.getMarks().front().color[0] == 0)
-            {
-                DebugPrint("gradient = BLACK");
-                Global::break_condition = true;
-            }
-            else
-            {
-                DebugPrint("gradient = OTHER");
-            }
+            gradient_shifted = gradient;
         }
     }
+
+    } // End Header
+
+
+
+    if (ImGui::SceneSection("Experimental")) {
+
+        static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
+
+        /*ImGui::SeparatorText("Iteration Spline Mapping");
+        if (ImSpline::SplineEditor("iter_spline", &iter_gradient_spline, &vr))
+        {
+            colors_updated = true;
+        }*/
+
+        if (!flatten)
+        {
+            /// --------------------------------------------------------------
+            ImGui::SeparatorText("XX, YY Spline Relationship");
+            /// --------------------------------------------------------------
+
+            static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
+            ImSpline::SplineEditorPair("X/Y Spline", &x_spline, &y_spline, &vr, 900.0f);
+        }
+
+    } // End Header
+
     
     if (Platform()->is_desktop_native())
     {
         /// --------------------------------------------------------------
-        ImGui::Dummy(ScaleSize(0, 10));
-        ImGui::SeparatorText("Saving & Loading");
+        //ImGui::SeparatorText("Saving & Loading");
+        if (ImGui::SceneSection("Saving & Loading")) {
         /// --------------------------------------------------------------
 
         /*if (ImGui::InputTextMultiline("###Config", &sync(config_buf)[0], 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput))
@@ -222,7 +262,15 @@ void Mandelbrot_Data::populate()
         {
             ImGui::SetClipboardText(config_buf);
         }*/
+
+        }
     }
+
+    if (colors_updated)
+    {
+        updateShiftedGradient();
+    }
+
     //if (ImGui::IsAnyItemActive())            // true while the mouse is still held,
     //{                                        // a text box has focus, etc.
     //}
@@ -241,7 +289,7 @@ void Mandelbrot_Data::populate()
 std::string Mandelbrot_Scene::serializeConfig()
 {
     uint32_t flags = 0;
-    uint32_t version = 1;
+    uint32_t version = 0;
 
     if (dynamic_iter_lim)           flags |= MANDEL_DYNAMIC_ITERS;
     if (show_axis)                  flags |= MANDEL_SHOW_AXIS;
@@ -252,8 +300,10 @@ std::string Mandelbrot_Scene::serializeConfig()
     flags |= (version << MANDEL_VERSION_BITSHIFT);
 
     JSON::json info;
+
+    // Version >= 0
     info["f"] = Encoding::base64_encode((const unsigned char*)&flags, sizeof(flags));
-    info["x"] = (double)cam_x;
+    info["x"] = cam_x;
     info["y"] = cam_y;
     info["z"] = cam_zoom;
     info["a"] = cam_zoom_xy.x;
@@ -262,6 +312,7 @@ std::string Mandelbrot_Scene::serializeConfig()
     info["q"] = quality;
     info["A"] = x_spline.serialize(false);
     info["B"] = y_spline.serialize(false);
+    info["h"] = hue_shift;
 
     if (true)
     {
@@ -304,26 +355,32 @@ bool Mandelbrot_Scene::deserializeConfig(std::string txt)
 
     auto flag_bytes = Encoding::base64_decode(info.value("f", "AAAA"));
     uint32_t flags = *reinterpret_cast<uint32_t*>(flag_bytes.data());
-
     uint32_t version = (flags & MANDEL_VERSION_MASK) >> MANDEL_VERSION_BITSHIFT;
-    smoothing_type = (MandelSmoothing)((flags & MANDEL_SMOOTH_MASK) >> MANDEL_SMOOTH_BITSHIFT);
 
-    dynamic_iter_lim          = flags & MANDEL_DYNAMIC_ITERS;
-    show_axis                 = flags & MANDEL_SHOW_AXIS;
-    flatten                   = flags & MANDEL_FLATTEN;
-    dynamic_color_cycle_limit = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
+    if (version >= 0)
+    {
+        smoothing_type = (MandelSmoothing)((flags & MANDEL_SMOOTH_MASK) >> MANDEL_SMOOTH_BITSHIFT);
 
-    cam_x = info.value("x", 0.0);
-    cam_y = info.value("y", 0.0);
-    cam_zoom = info.value("z", 1.0);
-    cam_zoom_xy.x = info.value("a", 1.0);
-    cam_zoom_xy.y = info.value("b", 1.0);
-    cam_degrees = info.value("r", 0.0);
-    cam_rot = cam_degrees * Math::PI / 180.0;
-    quality = info.value("q", quality);
+        dynamic_iter_lim = flags & MANDEL_DYNAMIC_ITERS;
+        show_axis = flags & MANDEL_SHOW_AXIS;
+        flatten = flags & MANDEL_FLATTEN;
+        dynamic_color_cycle_limit = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
 
-    if (info.contains("A")) x_spline.deserialize(info["A"].get<std::string>());
-    if (info.contains("B")) y_spline.deserialize(info["B"].get<std::string>());
+        cam_x = info.value("x", 0.0);
+        cam_y = info.value("y", 0.0);
+        cam_zoom = info.value("z", 1.0);
+        cam_zoom_xy.x = info.value("a", 1.0);
+        cam_zoom_xy.y = info.value("b", 1.0);
+        cam_degrees = info.value("r", 0.0);
+        cam_rot = cam_degrees * Math::PI / 180.0;
+        quality = info.value("q", quality);
+        hue_shift = info.value("h", 0.0);
+
+        if (info.contains("A")) x_spline.deserialize(info["A"].get<std::string>());
+        if (info.contains("B")) y_spline.deserialize(info["B"].get<std::string>());
+
+    }
+
     return true;
 }
 
@@ -339,17 +396,16 @@ void Mandelbrot_Scene::loadConfigBuffer()
 
 void Mandelbrot_Scene::sceneStart()
 {
-    //gradient.getMarks().clear();
-    //gradient.addMark(0.0, ImVec4(0, 0, 0, 1));
-    //gradient.addMark(0.5, ImVec4(1, 1, 1, 1));
-    //gradient.addMark(1.0, ImVec4(0, 0, 0, 1));
+    // todo: Stop this getting called twice on startup
+
+    
 
     loadColorTemplate(GRADIENT_CLASSIC);
 
     cardioid_lerper.create((2.0 * M_PI) / 5760.0, 0.005);
 }
 
-void Mandelbrot_Scene::sceneMounted(Viewport* viewport)
+void Mandelbrot_Scene::sceneMounted(Viewport*)
 {
     camera->setOriginViewportAnchor(Anchor::CENTER);
     camera->setPanningUsesOffset(false);
@@ -457,7 +513,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
     }
 
     //cam_rot += 0.001;
-    //cam_degrees = cam_rot * 180.0 / Math::PI;
+    cam_degrees = cam_rot * 180.0 / Math::PI;
 
     if (variableChanged(cam_rot))
         camera->rotation = cam_rot;
@@ -496,8 +552,10 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
     //else 
     //    cam_y = camera->y;
 
-    int iw = static_cast<int>(ctx->width);
-    int ih = static_cast<int>(ctx->height);
+    // Ensure the bitmap size divisble by 9 for perfect
+    // result forwarding from:  [9x9] to [3x3] to [1x1]
+    int iw = (static_cast<int>(ceil(ctx->width / 9))) * 9;
+    int ih = (static_cast<int>(ceil(ctx->height / 9))) * 9;
 
     if (dynamic_iter_lim)
         iter_lim = static_cast<int>(mandelbrotIterLimit(camera->zoom_x) * quality);
@@ -510,7 +568,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
     //    color_cycle_iters = color_cycle_value;
 
 
-    world_quad = camera->toWorldQuad(0, 0, ctx->width, ctx->height);
+    world_quad = camera->toWorldQuad(0, 0, iw, ih);
 
     // Has the view changed?
     bool mandel_changed = anyChanged(
@@ -542,6 +600,9 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
     {
         computing_phase = 0;
         current_row = 0;
+        field_9x9.setAllDepth(-1.0);
+
+        compute_t0 = std::chrono::steady_clock::now();
     }
 
     // Has config changed in any way? Update 
@@ -576,7 +637,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         first_frame = false;
     }
 
-    pending_bmp->setStageRect(0, 0, ctx->width, ctx->height);
+    pending_bmp->setStageRect(0, 0, iw, ih);
     
     bmp_9x9.setBitmapSize(iw / 9, ih / 9);
     bmp_3x3.setBitmapSize(iw / 3, ih / 3);
@@ -598,7 +659,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
 
             // Continue progress calculating depth field for "pending"
             finished_compute = dispatchBooleans(
-                boolsTemplate(regularMandelbrot, [&], ctx),
+                boolsTemplate(regularMandelbrot, [&]),
                 smoothing_type == MandelSmoothing::SMOOTH_CONTINUOUS,
                 smoothing_type == MandelSmoothing::SMOOTH_DISTANCE,
                 !linear
@@ -608,7 +669,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         {
             // Flat lerp
             finished_compute = dispatchBooleans(
-                boolsTemplate(radialMandelbrot, [&], ctx),
+                boolsTemplate(radialMandelbrot, [&]),
                 smoothing_type != MandelSmoothing::SMOOTH_NONE,
                 show_period2_bulb
             );
@@ -620,11 +681,11 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
             active_bmp = pending_bmp;
             active_field = pending_field;
 
-            visible_phase = computing_phase;
+            //visible_phase = computing_phase;
 
 
             // Calculate boundaries for this phase
-            {
+            /*{
                 int max_boundary_depth = 1;
                 boundary_paths.resize(max_boundary_depth);
                 for (int i = 0; i < max_boundary_depth; i++)
@@ -634,6 +695,44 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
                     path.clear();
                     generateBoundary(active_field, i, path);
                 }
+            }*/
+
+           
+        }
+
+        // Forward current phase results to next phase
+        if (finished_compute)
+        {
+            switch (computing_phase)
+            {
+                case 0:
+                {
+                    field_3x3.setAllDepth(-1.0);
+                    bmp_9x9.forEachPixel([this](int x, int y) {
+                        field_3x3.setPixelDepth(x*3 + 1, y*3 + 1, field_9x9.getPixelDepth(x, y));
+                    });
+                }
+                break;
+
+                case 1:
+                {
+                    field_1x1.setAllDepth(-1.0);
+                    bmp_3x3.forEachPixel([this](int x, int y) {
+                        field_1x1.setPixelDepth(x*3 + 1, y*3 + 1, field_3x3.getPixelDepth(x, y));
+                    });
+                }
+                break;
+
+                case 2:
+                {
+                    // Finish final 1x1 compute
+                    auto elapsed = std::chrono::steady_clock::now() - compute_t0;
+                    double dt = std::chrono::duration<double, std::milli>(elapsed).count();
+                    double dt_avg = timer_ma.push(dt);
+
+                    DebugPrint("Compute timer: %.4f", dt_avg);
+                }
+                break;
             }
 
             if (computing_phase < 2)
@@ -641,44 +740,41 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
                 computing_phase++;
             }
         }
+    }
 
-        // Forward current phase results to next phase
-        /*if (finished_compute)
+    if (show_color_animation_options)
+    {
+        // Animation
+        bool updated_gradient = false;
+        if (fabs(gradient_shift_step) > 1.0e-4) {
+            gradient_shift = Math::wrap(gradient_shift + gradient_shift_step, 0.0, 1.0);
+            updated_gradient = true;
+        }
+        if (fabs(hue_shift_step) > 1.0e-4) {
+            hue_shift = Math::wrap(hue_shift + hue_shift_step, 0.0, 360.0);
+            updated_gradient = true;
+        }
+
+        if (updated_gradient)
         {
-            switch (computing_phase)
-            {
-                case 0:
-                {
-                    bmp_3x3.clear(0);
-                    bmp_9x9.forEachPixel([this](int x, int y) {
-                        bmp_3x3.setPixel(x * 3 + 1, y * 3 + 1, bmp_9x9.getPixel(x, y));
-                    });
-                }
-                break;
-
-                case 1:
-                {
-                    bmp_1x1.clear(0);
-                    bmp_3x3.forEachPixel([this](int x, int y) {
-                        bmp_1x1.setPixel(x * 3 + 1, y * 3 + 1, bmp_3x3.getPixel(x, y));
-                    });
-                }
-                break;
-            }
-        }*/
-
+            updateShiftedGradient();
+            colors_updated = true;
+        }
     }
 
     if (finished_compute || colors_updated)
     {
-        if (gradient.getMarks().front().color[0] == 0)
-            DebugPrint("Mandelbrot shaded BLACK");
-        else
-            DebugPrint("Mandelbrot shaded OTHER");
-
+        //if (gradient.getMarks().front().color[0] == 0)
+        //    DebugPrint("Mandelbrot shaded BLACK");
+        //else
+        //    DebugPrint("Mandelbrot shaded OTHER");
+        //T0(shadeBitmap);
         shadeBitmap(); // bug info: UI sets shadow gradient to black DURING this
+        //T1(shadeBitmap);
 
         colors_updated = false; // then LIVE marks that as "shaded" here, but used other color
+
+        
 
         /// because gradient used expired data (e.g. mark color), the colors_updated should remain true
         // 
@@ -690,7 +786,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx)
         // be reset to the live value because it occured after the 
         // you updated the shadow. In fact, the shadow itself shouldn't have updated either 
         // so that the comparison remains a mismatch
-        DebugPrint("colors_updated = FALSE");
+        //DebugPrint("colors_updated = FALSE");
     }
 
     /*bool* shadow_updated = getShadow(&colors_updated);
@@ -752,6 +848,10 @@ inline void addSeg(std::vector<DVec2>& out,
 
 void Mandelbrot_Scene::generateBoundary(EscapeField* field, double level, std::vector<DVec2>& path)
 {
+    UNUSED(field);
+    UNUSED(level);
+    UNUSED(path);
+
     /*int w = field->w;
     int h = field->h;
     auto step = camera->toWorldOffset({ 1, 1 });
@@ -826,7 +926,7 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     ctx->print().precision(3);
     ctx->print() << "\n\nquad: " << world_quad;*/
 
-    ctx->print() << "\n\n" << toString().c_str();
+    ///ctx->print() << "\n\n" << toString().c_str();
 
     // Gradient test
     camera->stageTransform();
@@ -834,7 +934,7 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     for (double p=0; p<1.0; p+=0.01)
     {
         float c[3];
-        gradient.getColorAt(p, c);
+        gradient_shifted.getColorAt(p, c);
         //ctx->setFillStyle(int(c[0] * 255.0), int(c[1] * 255.0), int(c[2] * 255.0), 255);
         ctx->setFillStyle(c);
         ctx->fillRect(x, 8, 1, 32);
@@ -845,30 +945,9 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
 void Mandelbrot_Scene::onEvent(Event e)
 {
     if (e.ctx_owner())
-    {
-        //DQuad old_quad = e.ctx_owner()->worldQuad();
         e.ctx_owner()->camera.handleWorldNavigation(e, true);
-
-        // If view quad has changed, cancel current frame 
-        // (unless compute phase is still 0, in which case we have no frame to fallback to)
-        /*if (computing_phase > 0 && 
-            e.ctx_owner()->worldQuad() != old_quad)
-        {
-            if (cancel_frame_callback)
-                cancel_frame_callback();
-        }*/
-    }
-
-    //DebugPrint("onEvent() called!");
    
-    if (cam_x != camera->x)
-    {
-        //DebugPrint("onEvent: cam_x WAS %.12f", cam_x);
-        cam_x = camera->x;
-        //DebugPrint("onEvent: cam_x SET %.12f", cam_x);
-        //cam_x.breakOnAssignment();
-    }
-
+    cam_x = camera->x;
     cam_y = camera->y;
     cam_rot = camera->rotation;
     cam_zoom = (camera->getRelativeZoomFactor().x / cam_zoom_xy.x);
