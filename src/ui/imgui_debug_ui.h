@@ -6,7 +6,7 @@
 
 inline void dpiDebugInfo()
 {
-    ImGuiIO& io = ImGui::GetIO();
+    /*ImGuiIO& io = ImGui::GetIO();
 
     //ImVec2 initSize(io.DisplaySize.x * 0.2f, io.DisplaySize.y * 0.25f);
 
@@ -79,5 +79,5 @@ inline void dpiDebugInfo()
         ImGui::Text("CanvasSize (css):      %.1f x %.1f", css_w, css_h);
         #endif
     }
-    ImGui::End();
+    ImGui::End();*/
 }

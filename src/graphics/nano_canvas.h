@@ -198,6 +198,10 @@ public:
         bmp.draw(vg, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h); 
     }
 
+    void drawImage(Image& bmp, DQuad quad) {
+        bmp.drawSheared(vg, quad);
+    }
+
     // --- Text ---
 
     void setTextAlign(TextAlign align)          { text_align = align;       nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
@@ -241,7 +245,7 @@ public:
 
 class Painter : private SimplePainter
 {
-    double _avgZoom() { return (abs(camera.zoom_x) + abs(camera.zoom_y)) * 0.5; }
+    double _avgZoom() { return (abs(camera.zoomX()) + abs(camera.zoomY())) * 0.5; }
 
 public:
 
@@ -252,7 +256,6 @@ public:
 
     [[nodiscard]] DVec2 PT(double x, double y)
     {
-        // todo: Alter point reference instead of returning new point
         if (camera.transform_coordinates)
         {
             DVec2 o = camera.toWorldOffset({ camera.stage_ox, camera.stage_oy });
@@ -295,7 +298,7 @@ public:
         if (camera.scale_sizes)
             SimplePainter::ellipse(pt.x, pt.y, rx, ry);
         else
-            SimplePainter::ellipse(pt.x, pt.y, rx * camera.zoom_x, ry * camera.zoom_y);
+            SimplePainter::ellipse(pt.x, pt.y, rx * camera.zoomX(), ry * camera.zoomY());
     }
 
     void moveTo(double px, double py) { DVec2 pt = PT(px, py);   SimplePainter::moveTo(pt.x, pt.y); }
@@ -310,6 +313,17 @@ public:
         moveTo(path[0]);
         for (size_t i = 1; i < len; i++)
             lineTo(path[i]);
+    }
+
+    template<typename T> void strokeQuad(const Quad<T>& quad)
+    {
+        beginPath();
+        moveTo(quad.a);
+        lineTo(quad.b);
+        lineTo(quad.c);
+        lineTo(quad.d);
+        lineTo(quad.a);
+        stroke();
     }
 
     void strokeRect(double x, double y, double w, double h)
@@ -381,7 +395,7 @@ public:
         }
         else
         {
-            SimplePainter::ellipse(cx, cy, r / camera.zoom_x, r / camera.zoom_y);
+            SimplePainter::ellipse(cx, cy, r / camera.zoomX(), r / camera.zoomY());
         }
         SimplePainter::stroke();
     }
@@ -395,7 +409,7 @@ public:
         }
         else
         {
-            SimplePainter::ellipse(cx, cy, rx / camera.zoom_x, ry / camera.zoom_y);
+            SimplePainter::ellipse(cx, cy, rx / camera.zoomX(), ry / camera.zoomY());
         }
         SimplePainter::stroke();
     }
@@ -407,7 +421,7 @@ public:
         if (camera.scale_sizes)
             SimplePainter::ellipse(cx, cy, r, r);
         else
-            SimplePainter::ellipse(cx, cy, r / camera.zoom_x, r / camera.zoom_y);
+            SimplePainter::ellipse(cx, cy, r / camera.zoomX(), r / camera.zoomY());
         SimplePainter::fill();
     }
 
@@ -417,7 +431,7 @@ public:
         if (camera.scale_sizes)
             SimplePainter::ellipse(cx, cy, rx, ry);
         else
-            SimplePainter::ellipse(cx, cy, rx / camera.zoom_x, ry / camera.zoom_y);
+            SimplePainter::ellipse(cx, cy, rx / camera.zoomX(), ry / camera.zoomY());
         SimplePainter::fill();
     }
 
@@ -455,31 +469,45 @@ public:
 
     // --- Image ---
 
+    
+
     void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) {
         SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
+    }
+    void drawImage(Image& bmp, DQuad quad) {
+        SimplePainter::drawImage(bmp, quad);
     }
     void drawImage(CanvasImage& bmp)
     {
         camera.saveCameraTransform();
-        if (bmp.coordinate_type == CoordinateType::STAGE)
-            camera.stageTransform();
-        else
-            camera.worldTransform();
+        //if (bmp.coordinate_type == CoordinateType::STAGE)
+        //    camera.stageTransform();
+        //else
+        camera.worldTransform();
+
+        camera.scalingLines(false);
+        setStrokeStyle(255, 0, 255);
+        setLineWidth(20);
+
+        //strokeQuad(bmp.worldQuad());
 
         if (camera.transform_coordinates)
         {
             save();
 
-            translate(bmp.x, bmp.y);
-            rotate(bmp.rotation);
-            translate(bmp.localAlignOffsetX(), bmp.localAlignOffsetY());
-            scale(bmp.w / bmp.bmp_width, bmp.h / bmp.bmp_height);
+            //translate(bmp.x, bmp.y);
+            //translate(bmp.worldAlignOffsetX(), bmp.worldAlignOffsetY());
+            //scale(bmp.worldWidth() / bmp.bmp_width, bmp.worldHeight() / bmp.bmp_height);
+            //rotate(-bmp.stageRotation());
 
-            SimplePainter::drawImage(bmp, 0, 0);
+            //SimplePainter::drawImage(bmp, 0, 0);
+            SimplePainter::drawImage(bmp, bmp.worldQuad());
+            
 
             restore();
         }
-        else
+
+        /*else
         {
             glm::mat3 cur_transform = currentTransform();
             resetTransform();
@@ -487,14 +515,14 @@ public:
 
             translate(bmp.x, bmp.y);
             rotate(bmp.rotation);
-            translate(bmp.localAlignOffsetX(), bmp.localAlignOffsetY());
-            scale(bmp.w / bmp.bmp_width, bmp.h / bmp.bmp_height);
+            translate(bmp.worldAlignOffsetX(), bmp.worldAlignOffsetY());
+            scale(bmp.worldWidth() / bmp.bmp_width, bmp.worldHeight() / bmp.bmp_height);
 
             SimplePainter::drawImage(bmp, 0, 0);
 
             resetTransform();
             transform(cur_transform);
-        }
+        }*/
 
         camera.restoreCameraTransform();
     }
@@ -519,7 +547,7 @@ public:
                     transform(default_viewport_transform);
 
                     translate(camera.toStage(px, py));
-                    scale(camera.zoom_x, camera.zoom_y);
+                    scale(camera.zoomX(), camera.zoomY());
                     SimplePainter::fillText(txt, 0, 0);
 
                     resetTransform();
@@ -817,8 +845,6 @@ public:
     void end();
 
     GLuint texture() { return tex; }
-    //int logicalWidth() { return (int)(fbo_width/global_scale); }   // Logical pixel width
-    //int logicalHeight() { return (int)(fbo_height/global_scale); } // Logical pixel height
     [[nodiscard]] int fboWidth() { return fbo_width; }
     [[nodiscard]] int fboHeight() { return fbo_height; }
 };

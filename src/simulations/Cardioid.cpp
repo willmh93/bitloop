@@ -4,7 +4,7 @@
 SIM_DECLARE(Cardioid, "Fractal", "Mandelbrot", "Main Cardioid")
 
 // Exported
-void plot(SceneBase *scene, Viewport* ctx, bool interactive, int segments, double ox)
+void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments, double ox)
 {
     ctx->camera.saveCameraTransform();
     ctx->camera.setTransformFilters(true, false, false, false);
@@ -139,7 +139,7 @@ void Cardioid_Scene::sceneMounted(Viewport*)
     camera->setPanningUsesOffset(false);
     camera->setOriginViewportAnchor(Anchor::CENTER);
     camera->focusWorldRect(-0.9, -1, 0.6, 1);
-    camera->setRelativeZoomRange(0.001, 100);
+    camera->restrictRelativeZoomRange(0.001, 100);
 }
 
 void Cardioid_Scene::sceneProcess()
@@ -163,7 +163,7 @@ double originalAngleFromPerpAngle(double perp_angle)
     return Math::wrapRadians2PI((perp_angle + M_PI / 2.0) / 1.5);
 }
 
-void Cardioid_Scene::viewportProcess(Viewport*)
+void Cardioid_Scene::viewportProcess(Viewport*, double)
 {
     /// Process Viewports running this Scene
     //interact_angle = originalAngleFromPoint(mouse->world_x, mouse->world_y);
@@ -437,7 +437,7 @@ void Cardioid_Graph_Scene::sceneMounted(Viewport*)
     camera->focusWorldRect(-0.9, -1, 0.6, 1);
 }
 
-void Cardioid_Graph_Scene::viewportProcess(Viewport* ctx)
+void Cardioid_Graph_Scene::viewportProcess(Viewport* ctx, double)
 {
     int iw = static_cast<int>(ctx->width / 2);
     int ih = static_cast<int>(ctx->height / 2);
@@ -445,11 +445,11 @@ void Cardioid_Graph_Scene::viewportProcess(Viewport* ctx)
     bmp.setBitmapSize(iw, ih);
     bmp.setStageRect(0, 0, ctx->width, ctx->height);
 
-    if (bmp.needsReshading(camera))
+    if (bmp.needsReshading())
     {
         // Tangent angle heatmap
         int current_row = 0;
-        bmp.forEachWorldPixel(camera, current_row, [this](int x, int y, double wx, double wy)
+        bmp.forEachWorldPixel(current_row, [this](int x, int y, double wx, double wy)
         {
             double tx1, ty1, ta, oa, d;
             cardioidPolarCoord(wx, wy, tx1, ty1, ta, d, oa);

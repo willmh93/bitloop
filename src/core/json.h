@@ -5,9 +5,11 @@ namespace JSON
 {
     using namespace nlohmann;
 
-    inline std::string markCleanFloat(float value, int max_decimals = 6, float precision = 0.0f) {
-        return "CLEANFLOAT(" + Helpers::floatToCleanString(value, max_decimals, precision) + ")";
+    template<typename T>
+    std::string markCleanFloat(T value, int max_decimals = 6, T precision = 0.0f) {
+        return "CLEANFLOAT(" + Helpers::floatToCleanString<T>(value, max_decimals, precision) + ")";
     }
+
 
     inline std::string unquoteCleanFloats(const std::string& json)
     {

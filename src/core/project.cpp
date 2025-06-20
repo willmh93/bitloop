@@ -155,11 +155,11 @@ void Viewport::draw()
 
     rotate(camera.rotation);
     translate(
-        floor(-camera.x * camera.zoom_x),
-        floor(-camera.y * camera.zoom_y)
+        floor(-camera.x * camera.zoomX()),
+        floor(-camera.y * camera.zoomY())
     );
 
-    scale(camera.zoom_x, camera.zoom_y);
+    scale(camera.zoomX(), camera.zoomY());
 
     /// GL Transform/Projection
     /*{
@@ -268,7 +268,7 @@ void Viewport::printTouchInfo()
     print() << "cam.position:               (" << camera.x << ",  " << camera.y << ")\n";
     print() << "cam.pan:                     (" << camera.pan_x << ",  " << camera.pan_y << ")\n";
     print() << "cam.rotation:              " << camera.rotation << "\n";
-    print() << "cam.zoom:                  (" << camera.zoom_x << ", " << camera.zoom_y << ")\n\n";
+    print() << "cam.zoom:                  (" << camera.zoomX() << ", " << camera.zoomY() << ")\n\n";
     print() << "---------------------------------------------------------------\n";
     print() << "pan_down_touch_x           = " << camera.pan_down_touch_x << "\n";
     print() << "pan_down_touch_y           = " << camera.pan_down_touch_y << "\n";
@@ -353,8 +353,8 @@ void Viewport::drawWorldAxis(
 
     // Draw axis ticks
     camera.setTransformFilters(false);
-    double ideal_step_wx = ((width / aspect_ratio) / 7.0) / camera.zoom_x;
-    double ideal_step_wy = (height / 7.0) / camera.zoom_y;
+    double ideal_step_wx = ScaleSize(((width / aspect_ratio) / 7.0) / camera.zoomX());
+    double ideal_step_wy = ScaleSize((height / 7.0) / camera.zoomY());
     double step_wx = roundAxisTickStep(ideal_step_wx);
     double step_wy = roundAxisTickStep(ideal_step_wy);
     /*double step, ideal_step;
@@ -397,11 +397,11 @@ void Viewport::drawWorldAxis(
     fillText("small_angle: " + QString::number((int)(small_angle * 180.0 / M_PI)), 0, 160);
     fillText("small_visibility: " + QString::number(small_visibility), 0, 180);*/
 
-    DVec2 x_perp_off = camera.toStageOffset(0, 6 * world_zoom);
-    DVec2 x_perp_norm = camera.toStageOffset(0, 1).normalized();
+    DVec2 x_perp_off = camera.toStageOffset(0, ScaleSize(6) * world_zoom);
+    DVec2 x_perp_norm = camera.toStageOffset(0, ScaleSize(1)).normalized();
 
-    DVec2 y_perp_off = camera.toStageOffset(6 * world_zoom, 0);
-    DVec2 y_perp_norm = camera.toStageOffset(1, 0).normalized();
+    DVec2 y_perp_off = camera.toStageOffset(ScaleSize(6) * world_zoom, 0);
+    DVec2 y_perp_norm = camera.toStageOffset(ScaleSize(1), 0).normalized();
 
     setTextAlign(TextAlign::ALIGN_CENTER);
     setTextBaseline(TextBaseline::BASELINE_MIDDLE);
@@ -615,7 +615,7 @@ void ProjectBase::_populateAllAttributes()
 
         std::string sceneName = scene->name() + " " + std::to_string(scene->sceneIndex());
         std::string section_id = sceneName + "_section";
-        bool showSceneUI = ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+        bool showSceneUI = (scenes.size() == 1) || ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
         if (showSceneUI)
         {
             //DebugPrint("_populateAllAttributes::markShadowValues");
@@ -790,9 +790,7 @@ void ProjectBase::updateViewportRects()
 void ProjectBase::_projectProcess()
 {
     auto frame_dt = std::chrono::steady_clock::now() - last_frame_time;
-    dt_frameProcess = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(frame_dt).count()
-    );
+    dt_frameProcess = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(frame_dt).count());
     
     last_frame_time = std::chrono::steady_clock::now();
 
@@ -855,12 +853,13 @@ void ProjectBase::_projectProcess()
             {
                 //viewport->camera.panZoomProcess();
                 viewport->scene->camera = &viewport->camera;
+                Camera::active = &viewport->camera;
 
                 ///viewport->just_resized =
                 ///    (viewport->width != viewport->old_width) ||
                 ///    (viewport->height != viewport->old_height);
 
-                viewport->scene->viewportProcess(viewport);
+                viewport->scene->viewportProcess(viewport, dt_frameProcess/1000.0);
 
                 ///viewport->old_width = viewport->width;
                 ///viewport->old_height = viewport->height;
@@ -928,7 +927,9 @@ void ProjectBase::_projectDraw()
         viewport->camera.worldTransform();
 
         // Draw Scene to Viewport
+        Camera::active = &viewport->camera;
         viewport->scene->camera = &viewport->camera;
+
         viewport->draw();
 
         /// ======== Restore initial canvas transform ========

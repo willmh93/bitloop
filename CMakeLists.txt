@@ -14,6 +14,7 @@ if (MSVC)
     #add_compile_options(/Bt+) # optinal: Show compile-time reporting
 endif()
 
+
 # sets default startup project in Visual Studio
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT bitloop)
 
@@ -68,6 +69,23 @@ add_executable(bitloop
     ${SIMULATION_SOURCES}
     ${EXTERNAL_SOURCES}
 )
+
+if (EMSCRIPTEN)
+    target_compile_options(bitloop PRIVATE -msimd128)
+    target_link_options(bitloop PRIVATE -msimd128)
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    if(MSVC)
+        target_compile_options(bitloop PRIVATE /arch:AVX2)
+    else()
+        target_compile_options(bitloop PRIVATE -mavx2)
+    endif()
+endif()
+
+#if(MSVC)
+#    target_compile_options(bitloop PRIVATE /fp:fast)
+#else()
+#    target_compile_options(bitloop PRIVATE -ffast-math)
+#endif()
 
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(bitloop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ui)

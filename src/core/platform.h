@@ -114,6 +114,11 @@ public:
     return PlatformManager::get()->dpr() * length;
 }
 
+[[nodiscard]] inline double ScaleSize(double length)
+{
+    return static_cast<double>(PlatformManager::get()->dpr()) * length;
+}
+
 [[nodiscard]] inline int ScaleSize(int length)
 {
     return static_cast<int>(PlatformManager::get()->dpr() * static_cast<float>(length));

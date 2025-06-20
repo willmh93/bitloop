@@ -136,11 +136,16 @@ void MainWindow::initFonts()
     io.Fonts->Clear();
     io.Fonts->AddFontFromFileTTF(font_path, base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
     //io.Fonts->AddFontFromFileTTF(font_path2, base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
-    io.Fonts->FontBuilderFlags =
+    //io.Fonts->FontBuilderFlags =
+    io.Fonts->FontLoaderFlags =
         ImGuiFreeTypeBuilderFlags_LightHinting |
         ImGuiFreeTypeBuilderFlags_ForceAutoHint;
 
-    ImGuiFreeType::GetBuilderForFreeType()->FontBuilder_Build(io.Fonts);
+    io.Fonts->Build();
+    //io.Fonts->SetFontBuilderFunctions(ImGuiFreeType::BuildFontAtlas);
+    //ImFontBuilder
+    //ImGuiFreeType::GetFontLoader()->FontBuilder_Build(io.Fonts);
+    //ImGuiFreeType::GetBuilderForFreeType()->FontBuilder_Build(io.Fonts);
 }
 
 void MainWindow::populateProjectUI()
@@ -220,8 +225,8 @@ bool MainWindow::toolbarButton(const char* id, const char* symbol, const Toolbar
 
 void MainWindow::populateToolbar()
 {
-    //if (Platform()->is_mobile())
-    //    return;
+    if (Platform()->is_mobile())
+        return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
 
@@ -247,10 +252,11 @@ void MainWindow::populateToolbar()
     ImGui::SameLine();
     toolbarButton("##pause", "pause", pause, ImVec2(size, size));
 
-    #ifndef WEB_UI
-    ImGui::SameLine();
-    toolbarButton("##record", "record", record, ImVec2(size, size));
-    #endif
+    if (Platform()->is_desktop_native())
+    {
+        ImGui::SameLine();
+        toolbarButton("##record", "record", record, ImVec2(size, size));
+    }
 
     ImGui::EndChild();
 
@@ -576,12 +582,12 @@ void MainWindow::populateUI()
     populateViewport();
 
     #ifdef DEBUG_INCLUDE_LOG_TABS
-    if (ImGui::Begin("Project Log"))
+    if (ImGui::Begin("Project Log", nullptr, window_flags))
     {
         project_log.draw();
     }
     ImGui::End();
-    if (ImGui::Begin("Debug Log"))
+    if (ImGui::Begin("Debug Log", nullptr, window_flags))
     {
         debug_log.draw();
     }

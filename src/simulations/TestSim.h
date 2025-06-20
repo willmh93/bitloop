@@ -88,7 +88,7 @@ struct Test_Scene : public Scene<Test_Scene_Attributes>
     void sceneProcess() override;
 
     // Viewport handling
-    void viewportProcess(Viewport* ctx) override;
+    void viewportProcess(Viewport* ctx, double dt) override;
     void viewportDraw(Viewport* ctx) const override;
 
     // Input
@@ -106,7 +106,7 @@ struct Test_Project_Vars : public VarBuffer
     int viewport_count = 1;
 
     void populate();
-    void setup()
+    void registerSynced()
     {
         sync(viewport_count);
     }

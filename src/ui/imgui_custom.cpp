@@ -118,13 +118,14 @@ std::ostream& operator<<(std::ostream& os, const ImGradient& gradient)
 
 namespace ImGui
 {
-    bool SceneSection(const char* name, float header_spacing, float body_margin_top)
+    bool SceneSection(const char* name, float header_spacing, float body_margin_top, bool open_by_default)
     {
         ImGui::Dummy(ScaleSize(0.0f, header_spacing));
-        bool ret = ImGui::CollapsingHeader(name);
+        bool ret = ImGui::CollapsingHeader(name, open_by_default ? ImGuiTreeNodeFlags_DefaultOpen : 0);
         if (ret) ImGui::Dummy(ScaleSize(0.0f, body_margin_top));
         return ret;
     }
+
     bool ResetBtn(const char* id)
     {
         static int size = (int)Platform()->line_height();

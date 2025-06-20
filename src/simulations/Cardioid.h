@@ -6,7 +6,7 @@ SIM_BEG(Cardioid)
 
 // Expose
 
-void plot(SceneBase* scene, Viewport* ctx, bool interactive, int segments = 720, double ox=0);
+void plot(const SceneBase* scene, Viewport* ctx, bool interactive, int segments = 720, double ox=0);
 
 inline double cardioidSquaredDistance(double angle, double mx, double my)
 {
@@ -397,7 +397,7 @@ struct Cardioid_Scene_Vars : public VarBuffer
     double interact_angle = 0.0;
     double interact_dist = 0.0;
 
-    void setup()
+    void registerSynced()
     {
         sync(show_offset);
         sync(flatten);
@@ -433,7 +433,7 @@ struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
     void animatePlot(Viewport* ctx, double scale, double ox, double orig_angle, double dist) const;
 
     // --- Viewport ---
-    void viewportProcess(Viewport* ctx) override;
+    void viewportProcess(Viewport* ctx, double dt) override;
     void viewportDraw(Viewport* ctx) const override;
 
     void onEvent(Event e) override;
@@ -455,7 +455,7 @@ struct Cardioid_Graph_Scene : public BasicScene
     void sceneStart() override;
 
     void sceneMounted(Viewport* viewport) override;
-    void viewportProcess(Viewport* ctx) override;
+    void viewportProcess(Viewport* ctx, double dt) override;
     void viewportDraw(Viewport* ctx) const override;
 };
 

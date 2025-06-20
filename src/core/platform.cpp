@@ -129,13 +129,13 @@ bool PlatformManager::is_mobile()
     #ifdef DEBUG_SIMULATE_MOBILE
     return true;
     #else
-    return is_mobile_device;// (bool)_is_mobile_device(); /// todo: Cache (ensure consistency from first call by logging return value)
+    return is_mobile_device;
     #endif
 }
 
 bool PlatformManager::is_desktop_native()
 {
-    #ifdef __EMSCRIPTEN__
+    #if defined __EMSCRIPTEN__ || defined FORCE_WEB_UI
     return false;
     #else
     return true;
@@ -161,7 +161,6 @@ float PlatformManager::touch_accuracy()
 
 float PlatformManager::font_scale()
 {
-
     return is_mobile() ? 1.3f : 1.0f;
     //return 1.0f / touch_accuracy(window);
     //return dpr(window) / touch_accuracy(window);
@@ -191,27 +190,26 @@ float PlatformManager::window_size_inches()
 
 float PlatformManager::line_height()
 {
-    ImGuiIO& io = ImGui::GetIO();
-    return io.Fonts->Fonts[0]->FontSize;
+    return ImGui::GetFontSize();
 }
 
 float PlatformManager::input_height()
 {
     ImGuiIO& io = ImGui::GetIO();
     ImGuiStyle& s = ImGui::GetStyle();
-    return io.DisplaySize.y / io.Fonts->Fonts[0]->FontSize + s.FramePadding.y * 2.0f;
+    return io.DisplaySize.y / ImGui::GetFontSize() + s.FramePadding.y * 2.0f;
 }
 
 float PlatformManager::max_char_rows()
 {
     ImGuiIO& io = ImGui::GetIO();
-    return io.DisplaySize.y / io.Fonts->Fonts[0]->FontSize;
+    return io.DisplaySize.y / ImGui::GetFontSize();
 }
 
 float PlatformManager::max_char_cols()
 {
     ImGuiIO& io = ImGui::GetIO();
-    return io.DisplaySize.x / io.Fonts->Fonts[0]->FontSize;
+    return io.DisplaySize.x / ImGui::GetFontSize();
 }
 
 

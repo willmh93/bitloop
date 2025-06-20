@@ -13,6 +13,21 @@ namespace Math
     constexpr double HALF_PI = std::numbers::pi / 2.0;
     constexpr double INV_TWO_PI = 1.0 / TWO_PI;
 
+    template<typename T> [[nodiscard]] inline bool isfinite(const T& v) { return std::isfinite(v); }
+    [[nodiscard]] inline bool isfinite(const DoubleDouble& v) {
+        return std::isfinite(v.hi) && std::isfinite(v.lo);
+    }
+
+    template<typename T> [[nodiscard]] inline bool isnan(const T& v) { return std::isnan(v); }
+    [[nodiscard]] inline bool isnan(const DoubleDouble& v) {
+        return std::isnan(v.hi) || std::isnan(v.lo);
+    }
+
+    template<typename T> [[nodiscard]] inline bool isinf(const T& v) { return std::isinf(v); }
+    [[nodiscard]] inline bool isinf(const DoubleDouble& v) {
+        return std::isinf(v.hi);
+    }
+
     [[nodiscard]] inline int countDecimals(double num)
     {
         // todo: Optimize?
@@ -71,17 +86,33 @@ namespace Math
         return value + min;
     }
 
+    template<typename T>
+    [[nodiscard]] constexpr T fast_log1p(T x)
+    {
+        T y = x / (2 + x);
+        T y2 = y * y;
+        return 2 * y * (1 + y2 * (T{ 1.0 } / 3 + y2 * (T{ 1.0 } / 5 + y2 * (T{ 1.0 } / 7))));
+    }
+
+    template<typename T>
+    [[nodiscard]] inline T log1pLerp(T a, T lerp_factor)
+    {
+        //return a + (fast_log1p(a) - a) * lerp_factor;
+        return a + (log(1 + a) - a) * lerp_factor;
+        //return a + (log1p(a) - a) * lerp_factor;
+    }
+
     // Ratios (a->b,  0->1)
     template<typename T> [[nodiscard]] constexpr T ratio(T a, T b) { return ((b-a)/a); }
-    template<typename T> [[nodiscard]] constexpr T abs_ratio(T a, T b) { return abs((b-a)/a); }
-    template<typename T> [[nodiscard]] constexpr T avg_ratio(T a, T b) { return ((a-b)/((a+b)/T{2})); }
-    template<typename T> [[nodiscard]] constexpr T abs_avg_ratio(T a, T b) { return (abs(a-b)/((a+b)/T{2})); }
+    template<typename T> [[nodiscard]] constexpr T absRatio(T a, T b) { return abs((b-a)/a); }
+    template<typename T> [[nodiscard]] constexpr T avgRatio(T a, T b) { return ((a-b)/((a+b)/T{2})); }
+    template<typename T> [[nodiscard]] constexpr T absAvgRatio(T a, T b) { return (abs(a-b)/((a+b)/T{2})); }
 
     // Percentages (a->b,  0->100)
     template<typename T> [[nodiscard]] constexpr T pct(T a, T b) { return ((b-a)/a)*T{100}; }
-    template<typename T> [[nodiscard]] constexpr T abs_pct(T a, T b) { return abs((b-a)/a)*T{100}; }
-    template<typename T> [[nodiscard]] constexpr T avg_pct(T a, T b) { return (((a-b)/((a+b)/T{2}))*T{100}); }
-    template<typename T> [[nodiscard]] constexpr T abs_avg_pct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
+    template<typename T> [[nodiscard]] constexpr T absPct(T a, T b) { return abs((b-a)/a)*T{100}; }
+    template<typename T> [[nodiscard]] constexpr T avgPct(T a, T b) { return (((a-b)/((a+b)/T{2}))*T{100}); }
+    template<typename T> [[nodiscard]] constexpr T absAvgPct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
 
     // Coordinate offset rotation
     [[nodiscard]]inline DVec2 rotateOffset(double dx, double dy, double rotation)
@@ -151,21 +182,19 @@ namespace Math
     }
 
     // Angles
-    [[nodiscard]] inline double closestAngleDifference(double angle, double target_angle)
+    template<typename T> [[nodiscard]] constexpr T toRadians(T degrees) { return degrees * std::numbers::pi_v<T> / T{ 180 }; }
+    template<typename T> [[nodiscard]] constexpr T toDegrees(T radians) { return radians * T{ 180 } / std::numbers::pi_v<T>; }
+
+    template<typename T> [[nodiscard]] inline T closestAngleDifference(T angle, T target_angle)
     {
-        double diff = std::fmod((target_angle - angle) + PI, TWO_PI);
-        if (diff < 0)
-            diff += TWO_PI;
-        return diff - PI;
+        T diff = std::fmod((target_angle - angle) + std::numbers::pi_v<T>, std::numbers::pi_v<T>*2);
+        if (diff < 0) diff += std::numbers::pi_v<T>*2;
+        return diff - std::numbers::pi_v<T>;
     }
-
-    [[nodiscard]] inline double wrapRadians(double a) noexcept {
-        return std::remainder(a, TWO_PI);
-    }
-    [[nodiscard]] inline double wrapRadians2PI(double a) noexcept {
-        return a - TWO_PI * std::floor(a * INV_TWO_PI);
-    }
-
+    template<typename T> [[nodiscard]] inline T wrapRadians(T a) noexcept { return std::remainder(a, std::numbers::pi_v<T>*2); }
+    template<typename T> [[nodiscard]] inline T wrapRadians2PI(T a) noexcept { return a - std::numbers::pi_v<T>*2 * std::floor(a * T{1}/(std::numbers::pi_v<T>*2)); }
+    template<typename T> [[nodiscard]] inline T lerpAngle(T a, T b, T f) { return wrapRadians(a + f * closestAngleDifference(a, b)); }
+    template<typename T> [[nodiscard]] inline T avgAngle(T a, T b) { return lerpAngle(a, b, T{ 0.5 }); }
 
     // Intersections
     inline bool lineEqIntersect(DVec2* targ, const DRay& ray1, const DRay& ray2, bool bidirectional)
@@ -314,6 +343,16 @@ namespace Math
         ret.y1 += (targ.y1 - src.y1) * factor;
         ret.x2 += (targ.x2 - src.x2) * factor;
         ret.y2 += (targ.y2 - src.y2) * factor;
+        return ret;
+    }
+
+    template<typename ValueT, typename Scalar>
+    [[nodiscard]] inline AngledRect<ValueT> lerp(const AngledRect<ValueT>& src, const AngledRect<ValueT>& targ, Scalar factor)
+    {
+        AngledRect<ValueT> ret;
+        ret.cen = lerp(src.cen, targ.cen, factor);
+        ret.size = lerp(src.size, targ.size, factor);
+        ret.angle = lerpAngle(src.angle, targ.angle, factor);
         return ret;
     }
 

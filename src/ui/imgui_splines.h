@@ -10,6 +10,13 @@
 #include <algorithm>
 #include <stdio.h>
 
+enum SplineSerializationMode
+{
+	COMPRESS_BASE64,
+	COMPRESS_SHORTEST,
+	CPP_ARRAY
+};
+
 // Cubic polynomial segment data:
 struct CubicSegment
 {
@@ -687,6 +694,20 @@ namespace ImSpline
 			onChanged();
 		}
 
+		Spline(int segment_count, const char* serialized)
+		{
+			if (path_length != segment_count)
+				bInitialized = false;
+
+			if (bInitialized)
+				return;
+
+			path_length = segment_count;
+			deserialize(serialized);
+
+			bInitialized = true;
+		}
+
 		Spline(int segment_count, std::initializer_list<ImVec2> points)
 		{
 			create(segment_count, points);
@@ -713,10 +734,11 @@ namespace ImSpline
 		// Assumes both lhs/rhs have preallocated point arrays
 		Spline& operator =(const Spline& rhs)
 		{
-			deserialize(rhs.serialize());
+			// regular serialization not saving/loading path_length?
+			///deserialize(rhs.serialize());
 
 			//if (spline_hash != rhs.spline_hash)
-			/*{
+			{
 				bInitialized = rhs.bInitialized;
 				point_arr = rhs.point_arr;
 
@@ -739,7 +761,7 @@ namespace ImSpline
 				linear_intercept = rhs.linear_intercept;
 
 				spline_hash = rhs.spline_hash;
-			}*/
+			}
 
 			return *this;
 		}
@@ -1068,7 +1090,7 @@ namespace ImSpline
 			{
 				// Intersection with tail projection possible. Only calculate if requested intersection_index
 				float tail_knot_y = point_arr[1].y; // points[3];
-				float tail_dy = point_arr[0].y - tail_knot_x;// points[1] - tail_knot_y;
+				float tail_dy = point_arr[0].y - tail_knot_y;// points[1] - tail_knot_y;
 
 				if (tail_dx * tail_dx > 1e-18f)
 				{
@@ -1314,7 +1336,8 @@ namespace ImSpline
 			return str;
 		}
 
-		std::string serialize(int try_shortest=false) const
+		//std::string serialize(bool compress=true, int try_shortest = false) const
+		std::string serialize(SplineSerializationMode mode, int decimal_places=12) const
 		{
 			// First try binary
 			std::string base64_txt;
@@ -1323,7 +1346,12 @@ namespace ImSpline
 			int point_count = point_arr.Size;
 			float* points = floatArray();
 
+			bool compressed = mode == COMPRESS_BASE64 || mode == COMPRESS_SHORTEST;
+			bool cpp_readable = mode == CPP_ARRAY;
+
 			// Base-64
+			//if (compress)
+			if (compressed)
 			{
 				std::ostringstream oss(std::ios::binary);
 
@@ -1341,28 +1369,37 @@ namespace ImSpline
 
 				// Encode as base64
 				base64_txt = base64_encode(reinterpret_cast<const unsigned char*>(binaryData.data()), binaryData.size());
-				if (!try_shortest)
+				if (mode != COMPRESS_SHORTEST)
 					return "B" + base64_txt;
 			}
 			
 			// Text
 			{
 				std::ostringstream oss;
-				oss << point_count << "_";
+				if (cpp_readable)
+					oss << "{";
+				else
+					oss << point_count << "_";
 				int flt_count = point_count * 2;
-				for (int i = 0; i < flt_count; i++)
+				for (int i = 0; i < flt_count; i+=2)
 				{
-					oss << floatToCleanString(points[i], 12, 1e-14f, true);
-					if (i < flt_count-1)
-						oss << "_";
+					if (cpp_readable) oss << "{";
+					oss << floatToCleanString(points[i], decimal_places, 1e-14f, compressed);
+					oss << (cpp_readable ? "," : "_");
+					oss << floatToCleanString(points[i+1], decimal_places, 1e-14f, compressed);
+					if (cpp_readable) oss << "}";
+
+					if (i < flt_count-2) oss << (cpp_readable? "," : "_");
 				}
+				if (cpp_readable)
+					oss << "}";
 				raw_txt = oss.str();
 			}
 
 			// Compare shortest
-			if (raw_txt.size() < base64_txt.size())
+			if (!compressed || raw_txt.size() < base64_txt.size())
 			{
-				return "A" + raw_txt;
+				return (cpp_readable ? "" : "A") + raw_txt;
 			}
 			else
 			{
@@ -1438,6 +1475,8 @@ namespace ImSpline
 				iss.ignore(); // Skip first char
 
 				iss >> point_count;
+				point_arr.resize(point_count);
+
 				float* points = floatArray();
 
 				if (point_count > 0)

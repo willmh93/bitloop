@@ -58,7 +58,6 @@ void gui_loop()
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window);
-    SDL_Delay(0);
 }
 
 int main(int, char*[])
@@ -131,7 +130,10 @@ int main(int, char*[])
         #else
         {
             while (!shared_sync.quitting.load())
+            {
                 gui_loop();
+                SDL_Delay(0);
+            }
 
             // Gracefully exit
             ProjectWorker::instance()->end();

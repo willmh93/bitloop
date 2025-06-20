@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 #include "debug.h"
+#include "math_helpers.h"
 
 class Viewport;
 class Event;
@@ -15,7 +16,12 @@ struct FingerInfo
 
 class Camera
 {
+    finite_double zoom_x = 1;
+    finite_double zoom_y = 1;
+
 public:
+
+    static inline Camera* active = nullptr;
 
     Viewport* viewport = nullptr;
 
@@ -24,8 +30,6 @@ public:
 
     finite_double x = 0;
     finite_double y = 0;
-    finite_double zoom_x = 1;
-    finite_double zoom_y = 1;
     finite_double rotation = 0;
 
     double targ_zoom_x = 1;
@@ -111,48 +115,65 @@ public:
     void setZoomX(double zoom_x, bool immediate= true);
     void setZoomY(double zoom_y, bool immediate= true);
 
-    [[nodiscard]] DVec2 getRelativeZoomFactor() {
-        return { 
-            zoom_x / reference_zoom_x, 
-            zoom_y / reference_zoom_x 
-        };
+    [[nodiscard]] double zoomX() { return zoom_x; }
+    [[nodiscard]] double zoomY() { return zoom_y; }
+
+    // ======== World rect focusing ========
+    void focusWorldRect(double left, double top, double right, double bottom, bool stretch=false);
+    void focusWorldRect(const DRect &r, bool stretch = false);
+    
+    /// todo: Use current view as the focus rect
+    //void focusWorldRect(); 
+
+    /// Once a world rect is focused, the zoom can be used as a "reference" for
+    /// scaling relative to that reference zoom, e.g.
+    /// setRelativeZoom(2)  will zoom 2x relative to that focused rect
+
+    // Retrieves the cached zoom set by focusWorldRect()
+    [[nodiscard]] DVec2 getReferenceZoom()  {
+        return {reference_zoom_x, reference_zoom_y};
     }
-    void setRelativeZoomRange(double min, double max);
-    void setRelativeZoomFactor(double relative_zoom)
+
+    // Gets the current relative scale factor
+    [[nodiscard]] DVec2 getRelativeZoom() {
+        return { zoom_x / reference_zoom_x, zoom_y / reference_zoom_y };
+    }
+
+    // Set zoom (relative to the reference)
+    void setRelativeZoom(double relative_zoom)
     {
         zoom_x = reference_zoom_x * relative_zoom;
         zoom_y = reference_zoom_y * relative_zoom;
     }
-    void setRelativeZoomFactorX(double relative_zoom_x)
-    {
+    void setRelativeZoomX(double relative_zoom_x) {
         zoom_x = reference_zoom_x * relative_zoom_x;
     }
-    void setRelativeZoomFactorY(double relative_zoom_y)
-    {
+    void setRelativeZoomY(double relative_zoom_y) {
         zoom_y = reference_zoom_y * relative_zoom_y;
     }
 
+    // Clamp the relative zoom range (relative to the reference)
+    void restrictRelativeZoomRange(double min, double max);
+
+    DVec2 getViewportFocusedWorldSize();
+
+    // ======== Camera controls ========
 
     void cameraToViewport(double left, double top, double right, double bottom);
-    void focusWorldRect(double left, double top, double right, double bottom, bool stretch=false);
-    void focusWorldRect(const DRect &r, bool stretch = false);
 
     void originToCenterViewport();
 
-    [[nodiscard]] DVec2 toStageOffset(const DVec2& world_offset)
+    [[nodiscard]] DVec2 toStageOffset(const DVec2& o)
     {
         if (this->transform_coordinates)
-        {
-            return world_offset;
-        }
+            return o;
         else
         {
             double cos_r = cos(rotation);
             double sin_r = sin(rotation);
-
             return {
-                (world_offset.x * cos_r - world_offset.y * sin_r) * zoom_x,
-                (world_offset.y * cos_r + world_offset.x * sin_r) * zoom_y
+                (o.x * cos_r - o.y * sin_r) * zoom_x,
+                (o.y * cos_r + o.x * sin_r) * zoom_y
             };
         }
     }
@@ -160,9 +181,23 @@ public:
     {
         if (this->transform_coordinates)
         {
+            DVec2 rotated_zoom = Math::rotateOffset({ zoomX(), zoomY() }, rotation);
+            // double ox = stage_offset.x / rotated_zoom.x;
+            // double oy = stage_offset.y / rotated_zoom.y;
+            // DVec2 unscaled_offset = Math::reverseRotateOffset({ox, oy}, rotation);
+            // //DVec2 unscaled_offset = Math::reverseRotateOffset(stage_offset, rotation);
+            // return unscaled_offset / DVec2(zoomX(), zoomY());
+
+            //~ // do you just need to rotate zoom properly? (MAYBE NOT THOUGH)
+              // looks like it SHOULD be possible if you get right size
+              // for already positioned/rotated bmp
+              // this function already tested correct?
+            //
+            // bmp is being drawn with weird quality in one direction? Or just your
+            // mind playing tricks on you
             double cos_r = cos(rotation);
             double sin_r = sin(rotation);
-
+            
             return {
                 (stage_offset.x * cos_r + stage_offset.y * sin_r) / zoom_x,
                 (stage_offset.y * cos_r - stage_offset.x * sin_r) / zoom_y
@@ -174,14 +209,28 @@ public:
         }
     }
 
-    [[nodiscard]] DVec2 toStageOffset(double _world_ox, double _world_oy)
+    [[nodiscard]] DVec2 worldToStageOffset(const DVec2& o)
     {
-        return toStageOffset({ _world_ox, _world_oy });
+        double cos_r = cos(rotation);
+        double sin_r = sin(rotation);
+        return {
+            (o.x * cos_r - o.y * sin_r) * zoom_x,
+            (o.y * cos_r + o.x * sin_r) * zoom_y
+        };
     }
-    [[nodiscard]] DVec2 toWorldOffset(double _stage_ox, double _stage_oy)
+    [[nodiscard]] DVec2 stageToWorldOffset(const DVec2& stage_offset)
     {
-        return toWorldOffset({ _stage_ox, _stage_oy });
+        double cos_r = cos(rotation);
+        double sin_r = sin(rotation);
+
+        return {
+            (stage_offset.x * cos_r + stage_offset.y * sin_r) / zoom_x,
+            (stage_offset.y * cos_r - stage_offset.x * sin_r) / zoom_y
+        };
     }
+
+    [[nodiscard]] DVec2 toStageOffset(double wx, double wy) { return toStageOffset({wx, wy}); }
+    [[nodiscard]] DVec2 toWorldOffset(double sx, double sy) { return toWorldOffset({sx, sy}); }
 
     [[nodiscard]] DVec2 originPixelOffset();
     [[nodiscard]] DVec2 originWorldOffset();
@@ -204,6 +253,9 @@ public:
     [[nodiscard]] DRect toStageRect(double x0, double y0, double x1, double y1);
     [[nodiscard]] DRect toStageRect(const DVec2& pt1, const DVec2& pt2);
     [[nodiscard]] DQuad toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d);
+
+    //[[nodiscard]] DAngledRect toWorldRect(const DAngledRect& r);
+    //[[nodiscard]] DAngledRect toStageRect(const DAngledRect& r);
 
     void setPanningUsesOffset(bool b) { use_panning_offset = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
@@ -378,6 +430,14 @@ inline DRect Camera::toWorldRect(double x1, double y1, double x2, double y2)
     return { tl.x, tl.y, br.x, br.y };
 }
 
+//inline DAngledRect Camera::toWorldRect(const DAngledRect& r)
+//{
+//    DAngledRect ret;
+//    ret.cen = toWorld(r.cen);
+//    ret.size = toWorldOffset(r.size);
+//    ret.angle = r.angle; // todo: toWorldAngle
+//    return ret;
+//}
 
 inline DQuad Camera::toWorldQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d)
 {
@@ -385,7 +445,7 @@ inline DQuad Camera::toWorldQuad(const DVec2& a, const DVec2& b, const DVec2& c,
     DVec2 qB = toWorld(b);
     DVec2 qC = toWorld(c);
     DVec2 qD = toWorld(d);
-    return { qA, qB, qC, qD };
+    return DQuad(qA, qB, qC, qD);
 }
 
 inline DQuad Camera::toWorldQuad(const DQuad& quad)
@@ -470,6 +530,15 @@ inline DRect Camera::toStageRect(double x0, double y0, double x1, double y1)
     DVec2 p2 = toStage({ x1, y1 });
     return { p1.x, p1.y, p2.x, p2.y };
 }
+
+//inline DAngledRect Camera::toStageRect(const DAngledRect& r)
+//{
+//    DAngledRect ret;
+//    ret.cen = toStage(r.cen);
+//    ret.size = toStageOffset(r.size);
+//    ret.angle = r.angle; // todo: toStageAngle
+//    return ret;
+//}
 
 inline DRect Camera::toStageRect(const DVec2& pt1, const DVec2& pt2)
 {

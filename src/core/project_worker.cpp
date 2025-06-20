@@ -34,7 +34,7 @@ void ProjectWorker::_destroyActiveProject()
 }
 
 
-void ProjectWorker::handleProjectControlEvent(ProjectControlEvent& e)
+void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 {
     switch (e.type)
     {
@@ -86,8 +86,15 @@ void ProjectWorker::worker_loop()
     while (!shared_sync.quitting.load())
     {
         /// ======== Safe place to control project changes ========
-        for (auto& e : msg_queue) handleProjectControlEvent(e);
-        msg_queue.clear();
+        if (!project_command_queue.empty())
+        {
+            // We don't call populateAttributes() if holding shadow_buffer_mutex,
+            // meaning we won't loop over scenes here while processing project commands
+            std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+
+            for (auto& e : project_command_queue) handleProjectCommands(e);
+            project_command_queue.clear();
+        }
 
         // Wait for GUI to consume the freshly-rendered previous frame
         shared_sync.wait_until_gui_consumes_frame();

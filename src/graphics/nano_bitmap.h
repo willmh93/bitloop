@@ -14,96 +14,95 @@
 #include "threads.h"
 #include "camera.h"
 
-struct CanvasObject
+
+class CanvasObject
 {
+    DVec2 toStage(const DVec2& p)             const { return Camera::active->toStage(p); }
+    DVec2 toWorld(double sx, double sy)       const { return Camera::active->toWorld(sx, sy); }
+    DVec2 toWorldOffset(double sx, double sy) const { return Camera::active->toWorldOffset(sx, sy); }
+    DVec2 toStageOffset(const DVec2& o)       const { return Camera::active->worldToStageOffset(o); }
+
+    // local basis vectors after all transforms
+    DVec2 u{ 1, 0 };   // width direction
+    DVec2 v{ 0, 1 };   // height direction
+
+public:
+
     union {
         DVec2 pos = { 0, 0 };
         struct { double x, y; };
     };
-
-    union {
-        DVec2 size = { 0, 0 };
-        struct { double w, h; };
-    };
-
+    
     union {
         DVec2 align = { -1, -1 };
         struct { double align_x, align_y; };
     };
 
     double rotation = 0.0;
-    CoordinateType coordinate_type = CoordinateType::WORLD;
 
     ~CanvasObject() {}
 
-    void setCoordinateType(CoordinateType type)
-    {
-        coordinate_type = type;
+    void setAlign(int ax, int ay)      { align_x = ax; align_y = ay; }
+    void setAlign(const DVec2& _align) { align = _align; }
+
+    // ======== Stage Methods ========
+
+    [[nodiscard]] DVec2  stagePos()      const { return toStage(pos); }
+    [[nodiscard]] double stageWidth()    const { return toStageOffset(u).magnitude(); }
+    [[nodiscard]] double stageHeight()   const { return toStageOffset(v).magnitude(); }
+    [[nodiscard]] DVec2  stageSize()     const { return {stageWidth(), stageHeight()}; }
+    [[nodiscard]] double stageRotation() const {
+        double cos_r = std::cos(rotation);
+        double sin_r = std::sin(rotation);
+        DVec2 local_u = DVec2{ worldSize().x * cos_r, worldSize().x * sin_r };
+
+        DVec2 stage_origin = Camera::active->toStage(pos);
+        DVec2 stage_u_end = Camera::active->toStage(pos + local_u);
+        DVec2 u_stage = stage_u_end - stage_origin;
+
+        return std::atan2(u_stage.y, u_stage.x);
     }
 
-    void setAlign(int ax, int ay)
+    void setStagePos(double sx, double sy) { pos = toWorld(sx, sy); }
+    void setStageRect(double sx, double sy, double sw, double sh)
     {
-        align_x = ax;
-        align_y = ay;
+        pos = toWorld(sx, sy) - worldAlignOffset();
+        u = toWorld(sx + sw, sy) - pos;
+        v = toWorld(sx, sy + sh) - pos;
     }
 
-    void setAlign(const DVec2& _align)
+    void setStageSize(double sw, double sh)
     {
-        align = _align;
+        u = toWorldOffset(sw, 0);
+        v = toWorldOffset(0, sh);
     }
 
-    void setStageRect(double _x, double _y, double _w, double _h)
-    {
-        coordinate_type = CoordinateType::STAGE;
-        rotation = 0.0;
-        x = _x;
-        y = _y;
-        w = _w;
-        h = _h;
+    // ======== World Methods ========
+
+    [[nodiscard]] double worldWidth()  const { return u.magnitude(); }
+    [[nodiscard]] double worldHeight() const { return v.magnitude(); }
+    [[nodiscard]] DVec2  worldSize() const { return { u.magnitude(), v.magnitude() }; }
+    [[nodiscard]] DQuad worldQuad() {
+        DVec2 offset = 0.5 * ((-align_x - 1.0) * u + (-align_y - 1.0) * v);
+        DVec2 p = pos + offset;
+        return { p, p + u, p + u + v, p + v };
     }
+    [[nodiscard]] DVec2 topLeft() {
+        DVec2 offset = 0.5 * ((-align_x - 1.0) * u + (-align_y - 1.0) * v);
+        return pos + offset;
+    }
+
+    [[nodiscard]] DVec2 worldAlignOffset()   { return -(align + 1.0) * 0.5 * worldSize(); }
+    [[nodiscard]] double worldAlignOffsetX() { return -(align_x + 1) * 0.5 * worldWidth(); }
+    [[nodiscard]] double worldAlignOffsetY() { return -(align_y + 1) * 0.5 * worldHeight(); }
 
     void setWorldRect(double _x, double _y, double _w, double _h)
     {
-        coordinate_type = CoordinateType::WORLD;
         rotation = 0.0;
-        x = _x;
-        y = _y;
-        w = _w;
-        h = _h;
-    }
-
-    [[nodiscard]] DVec2 topLeft()
-    {
-        DVec2 offset = { -(align_x + 1) / 2 * w , -(align_y + 1) / 2 * h };
-        return Math::rotateOffset(offset, rotation) + pos;
-    }
-
-    [[nodiscard]] DQuad getQuad()
-    {
-        DVec2 pivot = { (align_x + 1) / 2 * w , (align_y + 1) / 2 * h };
-        DQuad quad = { { 0, 0 }, { w, 0 }, { w, h }, { 0, h } };
-
-        // Precompute cos and sin of rotation
-        double _cos = cos(rotation);
-        double _sin = sin(rotation);
-
-        // Shift corner by negative pivot & Rotate around (0,0)
-        quad.a = Math::rotateOffset(quad.a - pivot, _cos, _sin) + pos;
-        quad.b = Math::rotateOffset(quad.b - pivot, _cos, _sin) + pos;
-        quad.c = Math::rotateOffset(quad.c - pivot, _cos, _sin) + pos;
-        quad.d = Math::rotateOffset(quad.d - pivot, _cos, _sin) + pos;
-
-        return quad;
-    }
-
-    [[nodiscard]] double localAlignOffsetX()
-    {
-        return -(align_x + 1) * 0.5 * w;
-    }
-
-    [[nodiscard]] double localAlignOffsetY()
-    {
-        return -(align_y + 1) * 0.5 * h;
+        x = _x - worldAlignOffsetX();
+        y = _y - worldAlignOffsetY();
+        u = { _w, 0 };
+        v = { 0, _h };
     }
 };
 
@@ -264,6 +263,41 @@ protected:
         nvgFillPaint(vg, p);
         nvgFill(vg);
     }
+
+    void drawSheared(NVGcontext* vg, DQuad quad)
+    {
+        if (bmp_width <= 0 || bmp_height <= 0)
+            return;
+
+        if (pending_resize)
+        {
+            if (nano_img) nvgDeleteImage(vg, nano_img);
+            nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, NVG_IMAGE_NEAREST, pixels.data());
+            pending_resize = false;
+        }
+        else
+        {
+            nvgUpdateImage(vg, nano_img, pixels.data());
+        }
+
+        DVec2 a = quad.a;
+        DVec2 u = quad.b - quad.a;
+        DVec2 v = quad.d - quad.a;
+
+        nvgSave(vg);
+        nvgTransform(vg,
+            (float)u.x, (float)u.y,
+            (float)v.x, (float)v.y,
+            (float)a.x, (float)a.y);
+
+        NVGpaint paint = nvgImagePattern(vg, 0, 0, 1, 1, 0.0f, nano_img, 1.0f);
+        nvgBeginPath(vg);
+        nvgRect(vg, 0, 0, 1, 1);
+        nvgFillPaint(vg, paint);
+        nvgFill(vg);
+
+        nvgRestore(vg);
+    }
 };
 
 class CanvasImage : public Image, public CanvasObject
@@ -284,9 +318,10 @@ public:
         needs_reshading = b;
     }
 
-    [[nodiscard]] bool needsReshading(Camera* camera)
+    [[nodiscard]] bool needsReshading()
     {
-        DQuad world_quad = getWorldQuad(camera);
+        //DQuad world_quad = worldQuad(camera);
+        DQuad world_quad = worldQuad();
         if (needs_reshading || (world_quad != prev_world_quad))
         {
             needs_reshading = false; // todo: Move to when drawn?
@@ -313,56 +348,136 @@ public:
         }
     }
 
-    [[nodiscard]] DQuad getWorldQuad(Camera* camera);
+    //[[nodiscard]] DQuad worldQuad(Camera* camera);
 
-    template<typename Callback>
-    void forEachPixel(Callback&& callback, int thread_count = Thread::idealThreadCount())
+    [[nodiscard]] IVec2 pixelPosFromWorld(DVec2 /*p*/)
     {
-        static_assert(std::is_invocable_r_v<void, Callback, int, int>,
-            "Callback must be: void(int x, int y)");
-
-        if (thread_count == 0)
-        {
-            for (int bmp_y = 0; bmp_y < bmp_height; bmp_y++)
-            {
-                for (int bmp_x = 0; bmp_x < bmp_width; bmp_x++)
-                {
-                    std::forward<Callback>(callback)(bmp_x, bmp_y);
-                }
-            }
-        }
-        else
-        {
-            for (int bmp_y = 0; bmp_y < bmp_height; bmp_y++)
-            {
-                for (int bmp_x = 0; bmp_x < bmp_width; bmp_x++)
-                {
-                    std::forward<Callback>(callback)(bmp_x, bmp_y);
-                }
-            }
-        }
+        return { 0, 0 };
+        //DVec2 tl = topLeft();
+        //DVec2 world_offset = p - tl;
+        //DVec2 rotated_offset = Math::rotateOffset(world_offset, -rotation);
+        //DVec2 fPos = rotated_offset / size * DVec2(bmp_width, bmp_height);
+        //return static_cast<IVec2>(fPos);
     }
 
-    template<typename Callback>
-    bool forEachWorldPixel(
-        Camera* camera,
+    template<typename T = double, typename Callback>
+    bool forEachPixel(
         int& current_row,
         Callback&& callback,
         int thread_count = Thread::idealThreadCount(),
         int timeout_ms = 0)
     {
-        static_assert(std::is_invocable_r_v<void, Callback, int, int, double, double>,
-            "Callback must be: void(int x, int y, double wx, double wy)");
+        static_assert(std::is_invocable_r_v<void, Callback, int, int>,
+            "Callback must be: void(int x, int y)");
 
         auto timeout = timeout_ms ?
             std::chrono::milliseconds{ timeout_ms } :
             std::chrono::steady_clock::duration::max();
 
-        DQuad world_quad = getWorldQuad(camera);
-        double ax = world_quad.a.x, ay = world_quad.a.y;
-        double bx = world_quad.b.x, by = world_quad.b.y;
-        double cx = world_quad.c.x, cy = world_quad.c.y;
-        double dx = world_quad.d.x, dy = world_quad.d.y;
+        if (thread_count > 0)
+        {
+            auto start_time = std::chrono::steady_clock::now();
+
+            std::vector<std::future<void>> futures(thread_count);
+            std::vector<std::atomic<bool>> active_threads(thread_count);
+
+            for (int ti = 0; ti < thread_count; ti++)
+                active_threads[ti].store(false);
+
+            std::atomic<bool> timed_out{ false };
+
+            // Continuously spin checking for idle threads and scheduling new rows...
+            while (!timed_out.load(std::memory_order_relaxed))
+            {
+                for (int ti = 0; ti < thread_count; ti++)
+                {
+                    if (timed_out.load(std::memory_order_relaxed))
+                        break;
+
+                    if (active_threads[ti].load(std::memory_order_relaxed))
+                        continue;
+
+                    // Found an idle thread...
+
+                    const int thread_index = ti;
+                    const int row = current_row++;
+
+                    if (row >= bmp_height)
+                    {
+                        timed_out.store(true);
+                        break;
+                    }
+
+                    active_threads[ti].store(true);
+
+                    futures[ti] = Thread::pool().submit_task([&, row, thread_index]()
+                    {
+                        for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
+                            std::forward<Callback>(callback)(bmp_x, row);
+
+                        // After each row solved, check if timeout exceeded
+                        if (std::chrono::steady_clock::now() - start_time >= timeout)
+                        {
+                            // If so, signal that we shouldn't pick up any new tasks - break out the loop
+                            timed_out.store(true);
+                        }
+                        else
+                        {
+                            // Otherwise, schedule the next available row
+                            active_threads[thread_index].store(false);
+                        }
+                    });
+                }
+
+                std::this_thread::yield();
+            }
+
+            // After timing out, wait for remaining threads to finalize
+            for (int ti = 0; ti < thread_count; ti++)
+            {
+                if (futures[ti].valid())
+                    futures[ti].get();
+            }
+        }
+        else
+        {
+            for (int bmp_y = 0; bmp_y < bmp_height; ++bmp_y)
+            {
+                for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
+                    std::forward<Callback>(callback)(bmp_x, bmp_y);
+            }
+        }
+
+        if (current_row >= bmp_height)
+        {
+            current_row = 0;
+            return true;
+        }
+        return false;
+    }
+
+    template<typename T = double, typename Callback>
+    bool forEachWorldPixel(
+        int& current_row,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount(),
+        int timeout_ms = 0)
+    {
+        static_assert(std::is_invocable_r_v<void, Callback, int, int, T, T>,
+            "Callback must be: void(int x, int y, float_t wx, float_y wy)");
+
+        auto timeout = timeout_ms ?
+            std::chrono::milliseconds{ timeout_ms } :
+            std::chrono::steady_clock::duration::max();
+
+        Quad<T> world_quad = static_cast<Quad<T>>(worldQuad());
+        T ax = world_quad.a.x, ay = world_quad.a.y;
+        T bx = world_quad.b.x, by = world_quad.b.y;
+        T cx = world_quad.c.x, cy = world_quad.c.y;
+        T dx = world_quad.d.x, dy = world_quad.d.y;
+
+        T t_bmp_w = static_cast<T>(bmp_fw);
+        T t_bmp_h = static_cast<T>(bmp_fh);
 
         if (thread_count > 0)
         {
@@ -403,18 +518,18 @@ public:
                     futures[ti] = Thread::pool().submit_task([&, row, thread_index]()
                     {
                         // Interpolate row pixel coordinate and invoke callback
-                        double bmp_fx, bmp_fy = static_cast<double>(row) + 0.5;
-                        double v = bmp_fy / bmp_fh;
-                        double scan_left_x = ax + (dx - ax) * v;
-                        double scan_left_y = ay + (dy - ay) * v;
-                        double scan_right_x = bx + (cx - bx) * v;
-                        double scan_right_y = by + (cy - by) * v;
+                        T bmp_fx, bmp_fy = static_cast<T>(row) + T{ 0.5 };
+                        T _v = bmp_fy / t_bmp_h;
+                        T scan_left_x = ax + (dx - ax) * _v;
+                        T scan_left_y = ay + (dy - ay) * _v;
+                        T scan_right_x = bx + (cx - bx) * _v;
+                        T scan_right_y = by + (cy - by) * _v;
                         for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
                         {
-                            bmp_fx = static_cast<double>(bmp_x) + 0.5;
-                            double u = bmp_fx / bmp_fw;
-                            double wx = scan_left_x + (scan_right_x - scan_left_x) * u;
-                            double wy = scan_left_y + (scan_right_y - scan_left_y) * u;
+                            bmp_fx = static_cast<T>(bmp_x) + T{ 0.5 };
+                            T _u = bmp_fx / t_bmp_w;
+                            T wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
+                            T wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
                             std::forward<Callback>(callback)(bmp_x, row, wx, wy);
                         }
 
@@ -444,22 +559,22 @@ public:
         }
         else
         {
-            double bmp_fx, bmp_fy;
+            T bmp_fx, bmp_fy;
             for (int bmp_y = 0; bmp_y < bmp_height; ++bmp_y)
             {
                 // Interpolate left and right edges of the scanline
-                bmp_fy = static_cast<double>(bmp_y) + 0.5;
-                double v = bmp_fy / bmp_fh;
-                double scan_left_x = ax + (dx - ax) * v;
-                double scan_left_y = ay + (dy - ay) * v;
-                double scan_right_x = bx + (cx - bx) * v;
-                double scan_right_y = by + (cy - by) * v;
+                bmp_fy = static_cast<T>(bmp_y) + T{ 0.5 };
+                T _v = bmp_fy / t_bmp_h;
+                T scan_left_x = ax + (dx - ax) * _v;
+                T scan_left_y = ay + (dy - ay) * _v;
+                T scan_right_x = bx + (cx - bx) * _v;
+                T scan_right_y = by + (cy - by) * _v;
                 for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
                 {
-                    bmp_fx = static_cast<double>(bmp_x) + 0.5;
-                    double u = bmp_fx / bmp_fw;
-                    double wx = scan_left_x + (scan_right_x - scan_left_x) * u;
-                    double wy = scan_left_y + (scan_right_y - scan_left_y) * u;
+                    bmp_fx = static_cast<T>(bmp_x) + T{ 0.5 };
+                    T _u = bmp_fx / t_bmp_w;
+                    T wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
+                    T wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
                     std::forward<Callback>(callback)(bmp_x, bmp_y, wx, wy);
                 }
             }
@@ -471,6 +586,20 @@ public:
             return true;
         }
         return false;
+    }
+
+    template<typename Callback>
+    void forEachPixel(
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount())
+    {
+        int row = 0;
+        forEachPixel(
+            row,
+            callback,
+            thread_count,
+            0
+        );
     }
 
     template<typename Callback>

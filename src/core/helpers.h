@@ -7,7 +7,7 @@
 #include <functional>
 #include <unordered_map>
 #include <memory>
-
+#include <variant>
 #include "debug.h"
 
 #if defined(__clang__) || defined(__GNUC__)
@@ -18,125 +18,165 @@
 #define FORCEINLINE inline
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+# define FAST_MATH_FN __attribute__((optimize("fast-math")))
+#elif defined(_MSC_VER)
+# define FAST_MATH_FN __pragma(float_control(precise, off)) \
+                      __forceinline
+#else
+# define FAST_MATH_FN
+#endif
+
+
 namespace Helpers
 {
-    std::string floatToCleanString(float value, int decimal_places = 6, float precision = 0.0f, bool minimize = true);
+    template<typename T>
+    std::string floatToCleanString(T value, int max_decimal_places, T precision, bool minimize=true)
+    {
+        // Optional snapping
+        if (precision > 0)
+            value = std::round(value / precision) * precision;
+
+        // Use fixed formatting
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(max_decimal_places) << value;
+        std::string str = oss.str();
+
+        // Remove trailing zeros
+        size_t dot = str.find('.');
+        if (dot != std::string::npos)
+        {
+            size_t last_non_zero = str.find_last_not_of('0');
+            if (last_non_zero != std::string::npos)
+                str.erase(last_non_zero + 1);
+
+            // Remove trailing dot
+            if (str.back() == '.')
+                str.pop_back();
+        }
+
+        if (minimize)
+        {
+            if (str == "-0")
+                str = "0";
+
+            // Remove the leading '0' for values between -1 and 1
+            // (e.g. 0.7351 -> .7351)
+            if (!str.empty())
+            {
+                bool negative = (str[0] == '-');
+                std::size_t first = negative ? 1 : 0;
+                if (first + 1 < str.size() && str[first] == '0' && str[first + 1] == '.')
+                    str.erase(first, 1);
+            }
+        }
+
+        return str;
+    }
 
     // Wrapping/Unwrapping strings with '\n' at given length
     std::string wrapString(const std::string& input, size_t width);
     std::string unwrapString(const std::string& input);
 }
 
-///--------------------------------///
-/// constexpr function dispatcher  ///
-///--------------------------------///
+///------------------------------------------------///
+/// constexpr typed bool/enum function dispatcher  ///
+///------------------------------------------------///
 
-// Notes:
-// > Supports only boolean template args for now
-// > Table size grows exponentially, lots of bools will result in larger binary size
+template<typename T>
+concept DispatchArg = std::is_same_v<T, bool> || (std::is_enum_v<T> && requires { T::COUNT; });
 
-template <size_t I, size_t N>
-constexpr auto makeBoolsTuple()
+// Determine size of domain (2 for bool, Enum::COUNT for enums)
+template<typename T>
+consteval std::size_t domain_size_helper()
 {
-    // We expand over [0..N-1] and produce a tuple of integral_constant<bool, …>
-    return[]<size_t... Bs>(std::index_sequence<Bs...>) {
-        return std::tuple{
-            std::integral_constant<bool, ((I >> (N - 1 - Bs)) & 1)>{}...
-        };
-    }(std::make_index_sequence<N>{});
+    if constexpr (std::is_same_v<T, bool>)
+        return 2;
+    else
+        return static_cast<std::size_t>(T::COUNT);
 }
 
-// Step 1: the "core" – what does f(bool_c<0>, bool_c<1>...) return?
-template<typename F, std::size_t... Is>
-using dispatch_result_t_ =
-std::invoke_result_t<F,
-    std::integral_constant<bool, ((void)Is, false)>...>;
+template<DispatchArg T> inline constexpr std::size_t domain_size_v = domain_size_helper<T>();
+template<std::size_t Idx, DispatchArg... Es> struct idx_to_tuple; 
 
-// Step 2: unwrap std::index_sequence into the pack <Is...> 
-template<typename F, typename Seq>
-struct dispatch_result_impl;                     // primary template
-
-template<typename F, std::size_t... Is>
-struct dispatch_result_impl<F, std::index_sequence<Is...>>   // specialization
+template<std::size_t Idx, DispatchArg First, DispatchArg... Rest>
+struct idx_to_tuple<Idx, First, Rest...>
 {
-    using type = dispatch_result_t_<F, Is...>;
+    static constexpr std::size_t rest_prod = (domain_size_v<Rest> * ... * 1);
+    static constexpr std::size_t digit = Idx / rest_prod;
+    static constexpr std::size_t rem = Idx % rest_prod;
+
+    using head = std::integral_constant<First, static_cast<First>(digit)>;
+    using tail = typename idx_to_tuple<rem, Rest...>::type;
+    using type = decltype(std::tuple_cat(std::tuple<head>{}, tail{}));
 };
 
-// Step 3: public alias
-template<typename F, std::size_t N>
-using dispatch_result_t =
-typename dispatch_result_impl<F, std::make_index_sequence<N>>::type;
-
-// Build the dispatch table by enumerating all bitmask combinations
-template<typename F, std::size_t... Is>
-auto dispatchBooleansImpl(const std::array<bool, sizeof...(Is)>& flags,
-    F&& f,
-    std::index_sequence<Is...>) -> dispatch_result_t<F, sizeof...(Is)>
+template<std::size_t Idx, DispatchArg Last>
+struct idx_to_tuple<Idx, Last>
 {
-    using Ret = dispatch_result_t<F, sizeof...(Is)>;
+    static constexpr std::size_t digit = Idx;
+    using type = std::tuple<std::integral_constant<Last, static_cast<Last>(digit)>>;
+};
 
-    // Compute the flat index from the actual runtime flags
-    int index = 0;
-    const size_t shift = sizeof...(Is) - 1;
-    ((index |= (flags[Is] ? 1 : 0) << (shift - Is)), ...);
+template<typename Fun, typename... Ts>
+struct enum_table_leading
+{
+    template<DispatchArg... Es>
+    struct impl
+    {
+        using Ret = decltype(
+            std::declval<Fun>().template operator() < Ts... > (
+            std::integral_constant<Es, static_cast<Es>(0)>()...));
 
-    using FnPtr = Ret(*)(F&);
+        using FnPtr = Ret(*)(Fun&);
+        static constexpr std::size_t total = (domain_size_v<Es> * ...);
 
-    static constexpr std::array<FnPtr, 1 << sizeof...(Is)> dispatch_table = [] {
-        std::array<FnPtr, 1 << sizeof...(Is)> table{};
-
-        [&] <std::size_t... Idxs>(std::index_sequence<Idxs...>)
+        template<std::size_t I>
+        static consteval FnPtr make_entry()
         {
-            ((table[Idxs] = +[](F& f_inner) -> Ret
-            {
-                constexpr auto bools =
-                    makeBoolsTuple<Idxs, sizeof...(Is)>();
-
+            return +[](Fun& f) -> Ret {
+                using Tup = typename idx_to_tuple<I, Es...>::type;
                 if constexpr (std::is_void_v<Ret>)
-                {
-                    std::apply([&](auto... Bs) { f_inner(Bs...); }, bools);
-                }
+                    std::apply([&](auto... Cs) { f.template operator()<Ts...> (Cs...); }, Tup{});
                 else
-                {
-                    return std::apply(
-                        [&](auto... Bs) { return f_inner(Bs...); }, bools);
-                }
-            }), ...);
-        }(std::make_index_sequence<1 << sizeof...(Is)>{});
+                    return std::apply([&](auto... Cs) { return f.template operator()<Ts...> (Cs...); }, Tup{});
+            };
+        }
 
-        return table;
-    }();
+        template<std::size_t... Is>
+        static consteval auto build(std::index_sequence<Is...>) {
+            return std::array<FnPtr, total>{ make_entry<Is>()... };
+        }
 
-    if constexpr (std::is_void_v<Ret>)
-    {
-        dispatch_table[index](f);
-    }
-    else
-    {
-        return dispatch_table[index](f);
-    }
-}
+        static constexpr auto table = build(std::make_index_sequence<total>{});
+    };
+};
 
-template <typename... Bools, typename F>
-decltype(auto) dispatchBooleans(F&& f, Bools... flags)
+template<typename... Ts, typename F, DispatchArg... Es> 
+decltype(auto) table_invoke(F&& f, Es... vs)
 {
-    static_assert((std::is_same_v<Bools, bool> && ...), "All flags must be bool");
-    auto flagArray = std::array{ flags... };
-    return dispatchBooleansImpl(flagArray,
-        std::forward<F>(f),
-        std::make_index_sequence<sizeof...(Bools)>{});
+    using Fun = std::decay_t<F>;
+    using Tab = typename enum_table_leading<Fun, Ts...>::template impl<Es...>;
+
+    std::size_t idx = 0;
+    ((idx = idx * domain_size_v<Es> +static_cast<std::size_t>(vs)), ...);
+
+    if constexpr (std::is_void_v<typename Tab::Ret>)
+        Tab::table[idx](f);
+    else
+        return Tab::table[idx](f);
 }
-// Helper that creates a function lookup table for each boolean combination
-// usage:  dispatchBooleans( bools_template(FUNC_NAME, [CAPTURE], FUNC_ARGS), BOOL_ARGS )
-// note:   The function call itself is not likely to get inlined
 
-//#define boolsTemplate(func, capture, ...) capture<typename... Bools>(Bools... passed) { func<Bools::value...>(__VA_ARGS__); }
-
-#define boolsTemplate(func, capture, ...)            \
-    capture <typename... Bools>(Bools...)            \
-    -> decltype(auto) {                              \
-        return func<Bools::value...>(__VA_ARGS__);   \
+#define build_table(func, capture, ...)                         \
+    capture <typename... Ts>(auto... Cs) -> decltype(auto) {    \
+        return [&]<typename... Us>(std::tuple<Us...>*) {        \
+            if constexpr (sizeof...(Ts) == 0)                   \
+                return func<Us::value...>(__VA_ARGS__);         \
+            else                                                \
+                return func<Ts..., Us::value...>(__VA_ARGS__);  \
+        }((std::tuple<decltype(Cs)...>*)nullptr);               \
     }
+
 
 ///--------------------------///
 /// Variable Changed Tracker ///
@@ -199,13 +239,13 @@ public:
             return changed;
         }
         else {
-            maps.current[key] = var;
+            maps.current[key] = var; // todo: Should never begin tracking here? Inconsistent results depending on when it's called
             return false;
         }
     }
 
     template <typename... Args>
-    [[nodiscard]] bool anyChanged(Args&&... args) const
+    [[nodiscard]] bool Changed(Args&&... args) const
     {
         return (variableChanged(std::forward<Args>(args)) || ...);
     }

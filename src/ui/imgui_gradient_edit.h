@@ -54,6 +54,8 @@
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <string>
+#include <sstream>
 #include <utility>
 
 struct ImGradientMark
@@ -67,7 +69,7 @@ struct ImGradientMark
 class ImGradient
 {
 public:
-    ImGradient();
+    ImGradient(bool empty=false);
     ImGradient& operator=(const ImGradient& rhs); // copy-assign
 
     /* API used by the editor ------------------------------------------------ */
@@ -75,6 +77,7 @@ public:
     void   getColorAt(double position, float* color) const;
     void   getColorAtUnguarded(double position, float* color) const;
     void   addMark(float position, ImColor color);
+    void   addMark(const ImGradientMark& mark);
     void   removeMark(int uid);
     void   refreshCache();
     std::vector<ImGradientMark>& getMarks() { return m_marks; }
@@ -92,19 +95,52 @@ public:
     bool hasDraggingMark() { return dragging_uid >= 0 && getDraggingMark(); }
     void clearDraggingMark() { dragging_uid = -1; }
 
+    std::string serialize() const;
+    void deserialize(std::string txt);
+
     /* Comparison ------------------------------------------------------------ */
     bool operator==(const ImGradient& rhs) const;
     bool operator!=(const ImGradient& rhs) const { return !(*this == rhs); }
 
     /* Transformations ------------------------------------------------------- */
 
-    //void shiftHue(float degrees)
-    //{
-    //    for (size_t i = 0; i < m_marks.size(); i++)
-    //    {
-    //        m_marks[i].color
-    //    }
-    //}
+    static void lerp(ImGradient& out, const ImGradient& a, const ImGradient& b, float x)
+    {
+        // Return gradient with same number of marks as 'b'
+        // If 'b' > marks than 'a': Find nearest mark to 'a' and split it up
+        // If 'b' < marks than 'a': Find nearest mark to 'a' and merge there
+
+        if (x <= 0.0f) { out = a; return; };
+        if (x >= 1.0f) { out = b; return; };
+
+        out.m_marks.clear();
+
+        //ImGradient out(true);
+        for (int i=0; i<=10; i++)
+        {
+            float t = static_cast<float>(i) / 10.0f;
+            float colA[4], colB[4];
+            a.computeColorAt(t, colA);
+            b.computeColorAt(t, colB);
+
+            ImGradientMark m;
+            m.color[0] = colA[0] + (colB[0] - colA[0]) * x;
+            m.color[1] = colA[1] + (colB[1] - colA[1]) * x;
+            m.color[2] = colA[2] + (colB[2] - colA[2]) * x;
+            m.color[3] = colA[3] + (colB[3] - colA[3]) * x;
+            m.position = t;
+            m.uid = out.uid_counter++;
+
+            out.m_marks.push_back(m);
+        }
+
+        out.refreshCache();
+        //return out;
+
+        /*
+        for (int i=0; i<a.m_marks.size(); i++) out.addMark(a.m_marks[i].position, );
+        for (int i=0; i<b.m_marks.size(); i++) out.addMark(b.m_marks[i]);*/
+    }
 
     /* Threading helpers ----------------------------------------------------- */
     static int uid_counter;
@@ -143,8 +179,6 @@ private:
     int selected_uid = -1;
     float m_cachedValues[CACHE_SIZE * 3]{};
     uint32_t m_cachedColors[CACHE_SIZE]{};
-
-    
 };
 
 /* ---------------------------- editor helpers ------------------------------ */

@@ -6,7 +6,7 @@ class ProjectBase;
 class Canvas;
 struct ImDebugLog;
 
-enum ProjectControlEventType
+enum ProjectCommandType
 {
     PROJECT_SET,
     PROJECT_START,
@@ -18,9 +18,9 @@ constexpr int CURRENT_PROJECT = -1;
 
 extern ImDebugLog project_log;
 
-struct ProjectControlEvent
+struct ProjectCommandEvent
 {
-    ProjectControlEventType type;
+    ProjectCommandType type;
     int project_uid = CURRENT_PROJECT;
 };
 
@@ -38,7 +38,7 @@ class ProjectWorker
 
     ProjectBase* active_project = nullptr;
 
-    std::vector<ProjectControlEvent> msg_queue;
+    std::vector<ProjectCommandEvent> project_command_queue;
 
     void _destroyActiveProject();
 
@@ -53,7 +53,6 @@ protected:
     friend class MainWindow;
     friend class ProjectBase;
 
-    void process();
     void draw();
     void populateAttributes();
 
@@ -73,7 +72,7 @@ public:
     void worker_loop();
 
     // ======== Events / Data ========
-    void handleProjectControlEvent(ProjectControlEvent& e);
+    void handleProjectCommands(ProjectCommandEvent& e);
 
     void queueEvent(const SDL_Event& event); // Feed SDL event to event queue
     void pushDataToShadow();                        // Feed Live data to shadow buffer (i.e. Queue it)
@@ -84,8 +83,8 @@ public:
     // ======== Project Control ========
     [[nodiscard]] ProjectBase* getActiveProject() { return active_project; }
 
-    void setActiveProject(int uid)  { msg_queue.push_back({ PROJECT_SET,   uid }); }
-    void startProject()             { msg_queue.push_back({ PROJECT_START, CURRENT_PROJECT }); }
-    void stopProject()              { msg_queue.push_back({ PROJECT_STOP,  CURRENT_PROJECT }); }
-    void pauseProject()             { msg_queue.push_back({ PROJECT_PAUSE, CURRENT_PROJECT }); }
+    void setActiveProject(int uid)  { project_command_queue.push_back({ PROJECT_SET,   uid }); }
+    void startProject()             { project_command_queue.push_back({ PROJECT_START, CURRENT_PROJECT }); }
+    void stopProject()              { project_command_queue.push_back({ PROJECT_STOP,  CURRENT_PROJECT }); }
+    void pauseProject()             { project_command_queue.push_back({ PROJECT_PAUSE, CURRENT_PROJECT }); }
 };

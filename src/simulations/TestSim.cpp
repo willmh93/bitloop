@@ -136,7 +136,7 @@ void Test_Scene::sceneProcess()
     //a += 0.01;
 }
 
-void Test_Scene::viewportProcess(Viewport*)
+void Test_Scene::viewportProcess(Viewport*, double)
 {
     //if (ctx->viewportIndex() == 1)
     //{
@@ -155,8 +155,8 @@ void Test_Scene::viewportProcess(Viewport*)
     {
         camera->x = camera_x;
         camera->y = camera_y;
-        camera->zoom_x = zoom_x;
-        camera->zoom_y = zoom_y;
+        camera->setZoomX(zoom_x);
+        camera->setZoomY(zoom_y);
         camera->rotation = camera_rotation;
     }
 
@@ -266,7 +266,7 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
         false
     );
 
-    ///ctx->strokeQuad(obj.getQuad());
+    ///ctx->strokeQuad(obj.worldQuad());
 
     // Camera
     ctx->setFillStyle(255, 0, 0);

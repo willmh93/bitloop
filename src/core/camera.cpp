@@ -98,6 +98,14 @@ DVec2 Camera::originPixelOffset()
     );
 }
 
+DVec2 Camera::getViewportFocusedWorldSize()
+{
+    // You want to know how big the viewport is (in world size) at the reference zoom
+    DVec2 ctx_size = viewport->viewportRect().size();
+    DVec2 focused_size = ctx_size / getReferenceZoom();
+    return focused_size;
+}
+
 // Scale world to fit viewport rect
 void Camera::cameraToViewport(
     double left,
@@ -143,8 +151,6 @@ void Camera::focusWorldRect(
     {
         double aspect_view = viewport_w / viewport_h;
         double aspect_rect = world_w / world_h;
-
-        DVec2 stage_rect_tl;
 
         if (aspect_rect > aspect_view)
         {
@@ -195,7 +201,7 @@ void Camera::originToCenterViewport()
 }
 
 
-void Camera::setRelativeZoomRange(double min, double max)
+void Camera::restrictRelativeZoomRange(double min, double max)
 {
     min_zoom = min;
     max_zoom = max;
@@ -287,16 +293,16 @@ void Camera::panZoomProcess()
 {
     double ease = 1.0;
 
-    /*if (targ_zoom_x < reference_zoom_x*min_zoom) targ_zoom_x = reference_zoom_x*min_zoom;
-    if (targ_zoom_y < reference_zoom_y*min_zoom) targ_zoom_y = reference_zoom_y*min_zoom;
+    //if (targ_zoom_x < reference_zoom_x*min_zoom) targ_zoom_x = reference_zoom_x*min_zoom;
+    //if (targ_zoom_y < reference_zoom_y*min_zoom) targ_zoom_y = reference_zoom_y*min_zoom;
     if (zoom_x < reference_zoom_x*min_zoom) zoom_x = reference_zoom_x*min_zoom;
     if (zoom_y < reference_zoom_y*min_zoom) zoom_y = reference_zoom_y*min_zoom;
 
-    if (targ_zoom_x > reference_zoom_x * max_zoom) targ_zoom_x = reference_zoom_x * max_zoom;
-    if (targ_zoom_y > reference_zoom_y * max_zoom) targ_zoom_y = reference_zoom_y * max_zoom;
+    //if (targ_zoom_x > reference_zoom_x * max_zoom) targ_zoom_x = reference_zoom_x * max_zoom;
+    //if (targ_zoom_y > reference_zoom_y * max_zoom) targ_zoom_y = reference_zoom_y * max_zoom;
     if (zoom_x > reference_zoom_x * max_zoom) zoom_x = reference_zoom_x * max_zoom;
     if (zoom_y > reference_zoom_y * max_zoom) zoom_y = reference_zoom_y * max_zoom;
-    */
+    
     pan_x += (targ_pan_x - pan_x) * ease;
     pan_y += (targ_pan_y - pan_y) * ease;
     ///zoom_x += (targ_zoom_x - zoom_x) * ease;
@@ -494,6 +500,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
             {
                 zoom_x += (e.wheelY() / 10.0) * zoom_x;
                 zoom_y += (e.wheelY() / 10.0) * zoom_y;
+                panZoomProcess();
             }
             break;
         }

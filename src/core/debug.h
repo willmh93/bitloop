@@ -20,11 +20,12 @@
 
 /// ======== Debug Features ========
 #define DEBUG_FINITE_DOUBLE_CHECKS
+//#define FORCE_RELEASE_FINITE_DOUBLE_CHECKS
 //#define DEBUG_DISABLE_PRINT
-#define DEBUG_INCLUDE_LOG_TABS
+//#define DEBUG_INCLUDE_LOG_TABS
 
 /// ======== Platform Simulation ========
-//#define DEBUG_SIMULATE_WEB_UI
+#define DEBUG_SIMULATE_WEB_UI
 //#define DEBUG_SIMULATE_MOBILE
 //#define DEBUG_SIMULATE_DPR 2.625f
 
@@ -307,18 +308,22 @@ namespace std {
 /// --- Debug & Release ---
 
 #if defined DEBUG_SIMULATE_WEB_UI || defined __EMSCRIPTEN__
-#define WEB_UI
+#define FORCE_WEB_UI
 #endif
 
-#ifdef NDEBUG
+#if defined NDEBUG
 
 /// --- Release Mode ---
+#if defined FORCE_RELEASE_FINITE_DOUBLE_CHECKS
+#define finite_double FiniteDouble
+#else
 #define finite_double double
+#endif
 
 #else
 
 /// --- Debug Mode ---
-#ifdef DEBUG_FINITE_DOUBLE_CHECKS
+#if defined DEBUG_FINITE_DOUBLE_CHECKS
 #define finite_double FiniteDouble
 #else
 #define finite_double double

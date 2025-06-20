@@ -92,7 +92,7 @@ struct Variable final : public BaseVariable
         }
     }
 
-    bool equals(const BaseVariable* rhs) const override
+    /*bool equals(const BaseVariable* rhs) const override
     {
         const auto rhs_var = dynamic_cast<const Variable<T>*>(rhs);
         if (!rhs_var)
@@ -106,6 +106,28 @@ struct Variable final : public BaseVariable
         else
         {
             return *ptr == *rhs_var->ptr;
+        }
+    }*/
+    bool equals(const BaseVariable* rhs) const override
+    {
+        const auto rhs_var = dynamic_cast<const Variable<T>*>(rhs);
+        if (!rhs_var)
+            return false; // bad cast
+
+        if constexpr (std::is_array_v<T>)
+        {
+            constexpr std::size_t N = std::extent_v<T>;
+            return std::equal(ptr, ptr + N, rhs_var->ptr);
+        }
+        else if constexpr (std::is_standard_layout_v<T> && std::is_trivially_copyable_v<T>)
+        {
+            // Safe to compare as raw memory
+            return std::memcmp(ptr, rhs_var->ptr, sizeof(T)) == 0;
+        }
+        else
+        {
+            /// If you get an error here, your data type requires an operator==(const T&) overload
+            return *ptr == *rhs_var->ptr; 
         }
     }
 
@@ -131,6 +153,18 @@ struct Variable final : public BaseVariable
         return ss.str();
     }
 };
+
+//template<typename T>
+//concept TypePrintable = requires(std::ostream & os, const T & t) {
+//    { os << t } -> std::same_as<std::ostream&>;
+//};
+//
+//template<typename T>
+//requires (!TypePrintable<T>)
+//std::ostream& operator<<(std::ostream& os, const T&)
+//{
+//    return os << "unknown_type";
+//}
 
 struct VariableEntry
 {
@@ -221,7 +255,8 @@ struct VarTracker
     void _sync(const char*name, T& v)
     {
         if constexpr (std::is_array_v<T>)
-            buffer_var_ptrs.push_back(new Variable<std::remove_extent_t<T>>(name, v, false));   // v  -> element*
+            buffer_var_ptrs.push_back(new Variable<T>(name, v, false));   // v  -> element*
+            //buffer_var_ptrs.push_back(new Variable<std::remove_extent_t<T>>(name, v, false));   // v  -> element*
         else
             buffer_var_ptrs.push_back(new Variable<T>(name, &v, false));  // &v -> T*
     }
@@ -325,7 +360,8 @@ struct VarBuffer : public VarTracker
     VarBuffer() = default;
     VarBuffer(const VarBuffer&) = delete;
 
-    virtual void setup() {};
+    virtual void registerSynced() {};
+    virtual void initData() {}
     virtual void populate() {}
 };
 
@@ -343,9 +379,11 @@ public:
 
     DoubleBuffer() : shadow_attributes()
     {
+        shadow_attributes.initData();
+
         // Let each buffer list their synced members with sync()
-        shadow_attributes.setup();
-        VarBufferType::setup();
+        shadow_attributes.registerSynced();
+        VarBufferType::registerSynced();
 
         // Join up the lists into a single 'var_map'
         for (size_t i = 0; i < VarBufferType::buffer_var_ptrs.size(); i++)
@@ -506,7 +544,7 @@ public:
     virtual void sceneStop() {}
     virtual void sceneDestroy() {}
     virtual void sceneProcess() {}
-    virtual void viewportProcess(Viewport*) {}
+    virtual void viewportProcess(Viewport*, double) {}
     virtual void viewportDraw(Viewport*) const = 0;
 
     virtual void onEvent(Event e) { (void)e; }
@@ -628,6 +666,9 @@ public:
     [[nodiscard]] int viewportGridY() { return viewport_grid_y; }
     [[nodiscard]] DRect viewportRect() { return DRect(x, y, x + width, y + height); }
     [[nodiscard]] DQuad worldQuad() { return camera.toWorldQuad(0, 0, width, height); }
+    [[nodiscard]] DVec2 stageSize() { return DVec2(width, height); }
+    [[nodiscard]] DVec2 worldSize() { return camera.toWorldOffset(width, height); }
+    //[[nodiscard]] DAngledRect worldRect() { return camera.toWorldRect(DAngledRect(width/2, height/2, width, height, 0.0)); }
 
     template<typename T>
     T* mountScene(T* _sim)
@@ -749,7 +790,7 @@ class ProjectBase
     int sim_uid = -1;
 
     int dt_projectProcess = 0;
-    int dt_frameProcess = 0;
+    double dt_frameProcess = 0;
 
     std::chrono::steady_clock::time_point last_frame_time 
         = std::chrono::steady_clock::now();

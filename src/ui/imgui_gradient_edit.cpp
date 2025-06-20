@@ -19,10 +19,13 @@ void ImGradient::clear() noexcept
     m_marks.clear();
 }
 
-ImGradient::ImGradient()
+ImGradient::ImGradient(bool empty)
 {
-    addMark(0.0f, ImColor(0.0f, 0.0f, 0.0f));
-    addMark(1.0f, ImColor(1.0f, 1.0f, 1.0f));
+    if (!empty)
+    {
+        addMark(0.0f, ImColor(0.0f, 0.0f, 0.0f));
+        addMark(1.0f, ImColor(1.0f, 1.0f, 1.0f));
+    }
 }
 
 ImGradient& ImGradient::operator=(const ImGradient& rhs)
@@ -50,6 +53,12 @@ void ImGradient::addMark(float position, ImColor color)
 
     m_marks.push_back(m);
     refreshCache();
+}
+
+void ImGradient::addMark(const ImGradientMark& mark)
+{
+    m_marks.push_back(mark);
+    m_marks.back().uid = uid_counter++;
 }
 
 void ImGradient::removeMark(int uid)
@@ -88,6 +97,146 @@ void ImGradient::getColorAtUnguarded(double position, float* color) const
     color[0] = m_cachedValues[idx + 0];
     color[1] = m_cachedValues[idx + 1];
     color[2] = m_cachedValues[idx + 2];
+}
+
+// Serializing
+        // 
+        // Check if a character is a valid base64 character.
+inline bool is_base64(unsigned char c) {
+    return (isalnum(c) || (c == '+') || (c == '/'));
+}
+
+static const char* base64_chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
+
+std::string base64_encode(const unsigned char* data, size_t len) {
+    std::string encoded;
+    encoded.reserve(((len + 2) / 3) * 4);
+
+    size_t i = 0;
+    while (i < len) {
+        unsigned char a = data[i++];
+        unsigned char b = (i < len ? data[i++] : 0);
+        unsigned char c = (i < len ? data[i++] : 0);
+
+        // Pack the three bytes into a 24-bit integer
+        unsigned int triple = (a << 16) + (b << 8) + c;
+
+        // Extract four 6-bit values and map them to base64 characters.
+        encoded.push_back(base64_chars[(triple >> 18) & 0x3F]);
+        encoded.push_back(base64_chars[(triple >> 12) & 0x3F]);
+        encoded.push_back((i - 1 < len) ? base64_chars[(triple >> 6) & 0x3F] : '=');
+        encoded.push_back((i < len) ? base64_chars[triple & 0x3F] : '=');
+    }
+
+    return encoded;
+}
+
+static unsigned int indexOf(char c)
+{
+    const char* pos = std::strchr(base64_chars, c);
+    if (!pos)
+        throw std::runtime_error("Invalid character in Base64 string");
+    return static_cast<unsigned int>(pos - base64_chars);
+}
+
+std::vector<unsigned char> base64_decode(const std::string& encoded)
+{
+    size_t len = encoded.size();
+    if (len % 4 != 0)
+        throw std::runtime_error("Invalid Base64 string length");
+
+    // Determine the number of padding characters.
+    size_t padding = 0;
+    if (len) {
+        if (encoded[len - 1] == '=') padding++;
+        if (encoded[len - 2] == '=') padding++;
+    }
+
+    std::vector<unsigned char> decoded;
+    decoded.reserve((len / 4) * 3 - padding);
+
+    // Process every 4 characters as a block.
+    for (size_t i = 0; i < len; i += 4) {
+        unsigned int sextet_a = (encoded[i] == '=') ? 0 : indexOf(encoded[i]);
+        unsigned int sextet_b = (encoded[i + 1] == '=') ? 0 : indexOf(encoded[i + 1]);
+        unsigned int sextet_c = (encoded[i + 2] == '=') ? 0 : indexOf(encoded[i + 2]);
+        unsigned int sextet_d = (encoded[i + 3] == '=') ? 0 : indexOf(encoded[i + 3]);
+
+        // Pack the 4 sextets into a 24-bit integer.
+        unsigned int triple = (sextet_a << 18) | (sextet_b << 12) | (sextet_c << 6) | sextet_d;
+
+        // Extract the original bytes from the 24-bit number.
+        decoded.push_back((triple >> 16) & 0xFF);
+        if (encoded[i + 2] != '=') decoded.push_back((triple >> 8) & 0xFF);
+        if (encoded[i + 3] != '=') decoded.push_back(triple & 0xFF);
+    }
+
+    return decoded;
+}
+
+std::string ImGradient::serialize() const
+{
+    std::ostringstream oss(std::ios::binary);
+
+    short num_marks = static_cast<short>(m_marks.size());
+    oss.write(reinterpret_cast<const char*>(&num_marks), sizeof(short));
+
+    for (short i = 0; i < num_marks; i++)
+    {
+        const ImGradientMark& mark = m_marks[i];
+        float c[3];
+        computeColorAt(mark.position, c);
+
+        uint32_t u32 = 0xFF000000 |
+            ((uint32_t)(c[0] * 255.0f)) |
+            ((uint32_t)(c[1] * 255.0f) << 8) |
+            ((uint32_t)(c[2] * 255.0f) << 16);
+
+        oss.write(reinterpret_cast<const char*>(&mark.position), sizeof(float));
+        oss.write(reinterpret_cast<const char*>(&u32), sizeof(uint32_t));
+    }
+
+    // Convert stream to string
+    std::string binaryData = oss.str();
+
+    // Encode as base64
+    std::string base64_txt = base64_encode(
+        reinterpret_cast<const unsigned char*>(binaryData.data()), binaryData.size());
+
+    return base64_txt;
+}
+
+void ImGradient::deserialize(std::string txt)
+{
+    m_marks.clear();
+
+    std::vector<unsigned char> buffer = base64_decode(txt);
+    std::istringstream in(std::string(buffer.begin(), buffer.end()), std::ios::binary);
+
+    // Read num_marks
+    short num_marks;
+    in.read(reinterpret_cast<char*>(&num_marks), sizeof(short));
+
+    // Read marks
+    for (short i = 0; i < num_marks; i++)
+    {
+        ImGradientMark mark;
+        in.read(reinterpret_cast<char*>(&mark.position), sizeof(float));
+
+        uint32_t u32;
+        in.read(reinterpret_cast<char*>(&u32), sizeof(uint32_t));
+        mark.color[0] = static_cast<float>(u32 & 0x000000FF) / 255.0f;
+        mark.color[1] = static_cast<float>((u32 & 0x0000FF00) >> 8) / 255.0f;
+        mark.color[2] = static_cast<float>((u32 & 0x00FF0000) >> 16) / 255.0f;
+        mark.color[3] = static_cast<float>((u32 & 0xFF000000) >> 24) / 255.0f;
+
+        m_marks.push_back(mark);
+    }
+
+    refreshCache();
 }
 
 bool ImGradient::operator==(const ImGradient& rhs) const
@@ -134,7 +283,9 @@ void ImGradient::computeColorAt(float position, float* color) const
     }
 
     // Put position in [0,1)
-    position = fmodf(position, 1.0f);
+    if (position < 0.0f || position > 1.0f)
+        position = fmodf(position, 1.0f);
+
     if (position < 0.0f) position += 1.0f;
 
     const ImGradientMark& first = m_marks.front();
@@ -147,7 +298,7 @@ void ImGradient::computeColorAt(float position, float* color) const
     for (auto it = m_marks.begin(); it != m_marks.end(); ++it) 
     {
         const ImGradientMark& m = *it;
-        if (m.position > position) {
+        if (m.position >= position) {
             upper = &m;
 
             // previous mark becomes lower (wrap if we are at begin)
