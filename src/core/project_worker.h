@@ -1,6 +1,6 @@
 #pragma once
 #include "threads.h"
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 class ProjectBase;
 class Canvas;

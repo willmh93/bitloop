@@ -10,9 +10,9 @@ set(FETCHCONTENT_TRY_ENABLE_BY_DEFAULT OFF)
 set(CMAKE_INSTALL_MESSAGE NEVER)
 
 
-# ─────────────────────────  SDL2  ─────────────────────────
+# ─────────────────────────  SDL3  ─────────────────────────
 if (NOT EMSCRIPTEN)
-    message(STATUS "Fetching SDL2...")
+    message(STATUS "Fetching SDL3...")
 
     # Disable build tests
     set(SDL_TEST OFF CACHE BOOL "" FORCE)
@@ -22,24 +22,23 @@ if (NOT EMSCRIPTEN)
     # Important: Use the d-suffix for Debug builds
     set(SDL_CMAKE_DEBUG_POSTFIX "" CACHE STRING "" FORCE)
 
-    FetchContent_Declare(SDL2
+    FetchContent_Declare(SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG        release-2.30.2
+        GIT_TAG        release-3.2.16
     )
-    FetchContent_MakeAvailable(SDL2)
+    FetchContent_MakeAvailable(SDL3)
 
-    # Install SDL2 library targets
-    install(TARGETS SDL2main SDL2-static EXPORT depsTargets)
+    # Install SDL3 library targets
+    install(TARGETS SDL3-static EXPORT depsTargets)
 
-    # Install SDL2 headers manually
-    install(DIRECTORY ${SDL2_SOURCE_DIR}/include/
-            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SDL2)
+    # Install SDL3 headers manually
+    install(DIRECTORY ${SDL3_SOURCE_DIR}/include/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SDL3)
 
-    add_library(deps::SDL2-static ALIAS SDL2-static)
-    add_library(deps::SDL2main ALIAS SDL2main)
+    add_library(deps::SDL3-static ALIAS SDL3-static)
 else()
     add_compile_options(
-        "-sUSE_SDL=2"
+        "-sUSE_SDL=3"
         "-sUSE_PTHREADS=1"
         "-pthread"          # Recommended: expands to -matomics and -mbulk-memory
         "-matomics"
@@ -81,7 +80,7 @@ set(IMGUI_SOURCES
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp
 )
@@ -95,14 +94,14 @@ endforeach()
 file(APPEND "${CMAKE_BINARY_DIR}/imgui_sources.cmake" ")\n")
 
 
-# link SDL2/freetype to ImGui
+# link SDL3/freetype to ImGui
 if(NOT EMSCRIPTEN)
-    target_link_libraries(imgui_freetype PUBLIC freetype SDL2-static)
+    target_link_libraries(imgui_freetype PUBLIC freetype SDL3-static)
 else()
     target_link_libraries(imgui_freetype PUBLIC freetype)
 endif()
 
-# SDL2 headers for the Emscripten tool‑chain
+# SDL headers for the Emscripten tool‑chain
 if (EMSCRIPTEN)
     # inside bitloopDeps CMakeLists.txt  (only for EMSCRIPTEN)
     #get_filename_component(EMSDK_SYSROOT "${CMAKE_SYSROOT}" ABSOLUTE)

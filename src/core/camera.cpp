@@ -326,7 +326,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
         // Support both single-finger pan & 2 finger transform
         switch (e.type())
         {
-            case SDL_FINGERDOWN:
+            case SDL_EVENT_FINGER_DOWN:
             {
                 if (fingers.size() >= 2)
                 {
@@ -360,7 +360,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 }
             }
             break;
-            case SDL_FINGERUP:
+            case SDL_EVENT_FINGER_UP:
             {
                 if (fingers.size() > 2)
                 {
@@ -399,7 +399,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 }
             }
             break;
-            case SDL_FINGERMOTION:
+            case SDL_EVENT_FINGER_MOTION:
             {
                 if (fingers.size() > 2)
                 {
@@ -439,7 +439,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
     {
         switch (e.type())
         {
-            case SDL_MOUSEBUTTONDOWN:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 if (fingers.size() == 0)
                 {
@@ -459,7 +459,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 }
             }
             break;
-            case SDL_MOUSEBUTTONUP:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 fingers.clear();
                 if (e.button() == SDL_BUTTON_MIDDLE ||
@@ -469,7 +469,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 }
             }
             break;
-            case SDL_MOUSEMOTION:
+            case SDL_EVENT_MOUSE_MOTION:
             {
                 if (fingers.size() > 0)
                 {
@@ -484,7 +484,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
                 //    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
             }
             break;
-            case SDL_MOUSEWHEEL:
+            case SDL_EVENT_MOUSE_WHEEL:
             {
                 zoom_x += (e.wheelY() / 10.0) * zoom_x;
                 zoom_y += (e.wheelY() / 10.0) * zoom_y;

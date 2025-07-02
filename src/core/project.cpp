@@ -711,14 +711,14 @@ void ProjectBase::_onEvent(SDL_Event& e)
     // Track "cursor" position (pointer/first touch)
     switch (e.type)
     {
-        case SDL_MOUSEMOTION:
+        case SDL_EVENT_MOUSE_MOTION:
         {
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
         }
         break;
 
-        case SDL_FINGERMOTION:
+        case SDL_EVENT_FINGER_MOTION:
         {
             mouse.client_x = (double)(e.tfinger.x * (float)fboWidth());
             mouse.client_y = (double)(e.tfinger.y * (float)fboHeight());
@@ -735,8 +735,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
     // Track "focused" and "hovered" viewports
     switch (e.type)
     {
-        case SDL_MOUSEBUTTONDOWN:
-        case SDL_FINGERDOWN:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_FINGER_DOWN:
         {
             bool captured = false;
             for (Viewport* ctx : viewports)
@@ -753,8 +753,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
         break;
 
-        case SDL_MOUSEMOTION:
-        case SDL_FINGERMOTION:
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_FINGER_MOTION:
         {
             bool captured = false;
             for (Viewport* ctx : viewports)
@@ -782,7 +782,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         // Support both single-finger pan & 2 finger transform
         switch (e.type)
         {
-        case SDL_FINGERDOWN:
+        case SDL_EVENT_FINGER_DOWN:
         {
             ctx_owner = ctx_focused;
             PointerEvent pointer_event(event);
@@ -800,7 +800,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
         break;
 
-        case SDL_FINGERMOTION:
+        case SDL_EVENT_FINGER_MOTION:
         {
             for (size_t i = 0; i < pressed_fingers.size(); i++)
             {
@@ -816,7 +816,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
         break;
 
-        case SDL_FINGERUP:
+        case SDL_EVENT_FINGER_UP:
         {
             for (size_t i = 0; i < pressed_fingers.size(); i++)
             {
@@ -848,14 +848,14 @@ void ProjectBase::_onEvent(SDL_Event& e)
     {
         switch (e.type)
         {
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-            case SDL_MOUSEMOTION:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+            case SDL_EVENT_MOUSE_MOTION:
             {
                 event.setOwnerViewport(ctx_focused);
             }
             break;
-            case SDL_MOUSEWHEEL:
+            case SDL_EVENT_MOUSE_WHEEL:
             {
                 event.setOwnerViewport(ctx_hovered);
             }

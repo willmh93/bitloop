@@ -1,7 +1,7 @@
 #pragma once
 
 #include <imgui.h>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include "platform.h"
 
 inline void dpiDebugInfo()
