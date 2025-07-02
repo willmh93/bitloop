@@ -31,7 +31,7 @@ function(apply_common_settings target)
         )
 
         target_link_options(${target} PRIVATE
-            "-sUSE_SDL=2"
+            "-sUSE_SDL=3"
             "-sUSE_WEBGL2=1"
             "-sFULL_ES3=1"
             "-sALLOW_MEMORY_GROWTH=1"
@@ -39,9 +39,6 @@ function(apply_common_settings target)
             "-sPTHREAD_POOL_SIZE=16"
             "--shell-file=${CMAKE_SOURCE_DIR}/static/bitloop.html"
             "--preload-file=${CMAKE_SOURCE_DIR}/data@/data"
-
-            # ―― keep the JS helpers that the clipboard lib calls ――
-            "-sEXPORTED_RUNTIME_METHODS=[ccall,UTF8ToString,stringToUTF8,lengthBytesUTF8]"
         )
     endif()
 endfunction()
@@ -195,10 +192,9 @@ function(link_common_deps target)
             deps::glm)
     else()
         target_link_libraries(${target} PRIVATE
-            deps::SDL2-static
-            deps::SDL2main
-            deps::freetype 
-            deps::imgui_freetype 
+            deps::SDL3-static
+            deps::freetype
+            deps::imgui_freetype
             deps::glm)
     endif()
 
@@ -465,9 +461,9 @@ endif()
 # ~~~~~ Webassembly ~~~~~
 
 if (EMSCRIPTEN)
-    message(STATUS "Linking emscripten SDL2")
+    message(STATUS "Linking emscripten SDL3")
 
-    # Link SDL2
+    # Link SDL3
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
 
     ## Compilation flags
@@ -479,7 +475,7 @@ if (EMSCRIPTEN)
     #)
     #
     #target_link_options(bitloop PRIVATE
-    #    "-sUSE_SDL=2"
+    #    "-sUSE_SDL=3"
     #    "-sUSE_WEBGL2=1"
     #    "-sFULL_ES3=1"
     #    "-sALLOW_MEMORY_GROWTH=1"

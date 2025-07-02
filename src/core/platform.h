@@ -1,13 +1,12 @@
 #pragma once
 
-/// SDL2
-#include <SDL2/SDL.h>
+/// SDL3
+#include <SDL3/SDL.h>
 
 /// emscripten
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/html5.h>
-#include "emscripten_browser_clipboard.h"
 #endif
 
 /// Windows

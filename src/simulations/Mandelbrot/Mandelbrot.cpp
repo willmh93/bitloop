@@ -520,10 +520,6 @@ void Mandelbrot_Data::populate()
             
             if (ImGui::Button("Copy to Clipboard"))
             {
-                emscripten_browser_clipboard::copy([](void*) {
-                    return "This is something for the clipboard.";
-                });
-
                 ImGui::SetClipboardText(config_buf);
             }
             if (ImGui::InputTextMultiline("###Config", config_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput))

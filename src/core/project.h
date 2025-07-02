@@ -121,16 +121,16 @@ protected:
 
         switch (e.type())
         {
-        case SDL_FINGERDOWN:       onPointerDown(PointerEvent(e));  break;
-        case SDL_MOUSEBUTTONDOWN:  onPointerDown(PointerEvent(e));  break;
-        case SDL_FINGERUP:         onPointerUp(PointerEvent(e));    break;
-        case SDL_MOUSEBUTTONUP:    onPointerUp(PointerEvent(e));    break;
-        case SDL_FINGERMOTION:     onPointerMove(PointerEvent(e));  break;
-        case SDL_MOUSEMOTION:      onPointerMove(PointerEvent(e));  break;
-        case SDL_MOUSEWHEEL:       onWheel(PointerEvent(e));        break;
+        case SDL_EVENT_FINGER_DOWN:       onPointerDown(PointerEvent(e));  break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN: onPointerDown(PointerEvent(e));  break;
+        case SDL_EVENT_FINGER_UP:         onPointerUp(PointerEvent(e));    break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:   onPointerUp(PointerEvent(e));    break;
+        case SDL_EVENT_FINGER_MOTION:     onPointerMove(PointerEvent(e));  break;
+        case SDL_EVENT_MOUSE_MOTION:      onPointerMove(PointerEvent(e));  break;
+        case SDL_EVENT_MOUSE_WHEEL:       onWheel(PointerEvent(e));        break;
 
-        case SDL_KEYDOWN:          onKeyDown(KeyEvent(e));          break;
-        case SDL_KEYUP:            onKeyUp(KeyEvent(e));            break;
+        case SDL_EVENT_KEY_DOWN:          onKeyDown(KeyEvent(e));          break;
+        case SDL_EVENT_KEY_UP:            onKeyUp(KeyEvent(e));            break;
         }
     }
 

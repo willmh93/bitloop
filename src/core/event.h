@@ -1,5 +1,5 @@
 #pragma once
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <string>
 
 class ProjectBase;
@@ -31,13 +31,13 @@ protected:
     {
         switch (sdl_event.type)
         {
-        case SDL_FINGERDOWN:
-        case SDL_MOUSEBUTTONDOWN:
-        case SDL_FINGERUP:
-        case SDL_MOUSEBUTTONUP:
-        case SDL_FINGERMOTION:
-        case SDL_MOUSEMOTION:
-        case SDL_MOUSEWHEEL:
+        case SDL_EVENT_FINGER_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_FINGER_UP:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+        case SDL_EVENT_FINGER_MOTION:
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_MOUSE_WHEEL:
             return true;
         }
         return false;
@@ -47,9 +47,9 @@ protected:
     {
         switch (sdl_event.type)
         {
-        case SDL_FINGERDOWN:
-        case SDL_FINGERUP:
-        case SDL_FINGERMOTION:
+        case SDL_EVENT_FINGER_DOWN:
+        case SDL_EVENT_FINGER_UP:
+        case SDL_EVENT_FINGER_MOTION:
             return true;
         }
         return false;
