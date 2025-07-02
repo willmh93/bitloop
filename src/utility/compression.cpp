@@ -1,7 +1,7 @@
-#include "encoding.h"
+#include "compression.h"
 #include <unordered_map>
 
-namespace Encoding {
+namespace Compression {
 
 std::string base64_encode(const uint8_t* data, size_t len)
 {
@@ -233,19 +233,19 @@ ByteVec decompressBitstreamBytes(Bitstream& in)
 
 std::string base64_compress(const std::string& txt)
 {
-    Encoding::Bitstream compressed;
-    Encoding::compressBitstream(txt, compressed);
-    std::string base64_txt = Encoding::base64_encode(compressed.getData(), compressed.getSize());
+    Compression::Bitstream compressed;
+    Compression::compressBitstream(txt, compressed);
+    std::string base64_txt = Compression::base64_encode(compressed.getData(), compressed.getSize());
     return base64_txt;
 }
 
 std::string base64_decompress(const std::string& base64_txt)
 {
-    ByteVec data = Encoding::base64_decode(base64_txt);
-    Encoding::Bitstream compressed;
+    ByteVec data = Compression::base64_decode(base64_txt);
+    Compression::Bitstream compressed;
     compressed.openBytes(data.data(), data.size());
-    return Encoding::decompressBitstream(compressed);
+    return Compression::decompressBitstream(compressed);
 }
 
 
-} // End NS Encoding
+} // End NS Compression

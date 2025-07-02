@@ -7,7 +7,7 @@ SIM_DECLARE(Cardioid, "Fractal", "Mandelbrot", "Main Cardioid")
 void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments, double ox)
 {
     ctx->camera.saveCameraTransform();
-    ctx->camera.setTransformFilters(true, false, false, false);
+    ctx->camera.worldHudTransform();
 
     // Full plot
     ctx->setLineWidth(2);
@@ -136,7 +136,7 @@ void Cardioid_Scene::sceneStart()
 void Cardioid_Scene::sceneMounted(Viewport*)
 {
     /// Initialize viewport (after sceneStart)
-    camera->setPanningUsesOffset(false);
+    camera->setDirectCameraPanning(false);
     camera->setOriginViewportAnchor(Anchor::CENTER);
     camera->focusWorldRect(-0.9, -1, 0.6, 1);
     camera->restrictRelativeZoomRange(0.001, 100);
@@ -173,8 +173,8 @@ void Cardioid_Scene::viewportProcess(Viewport*, double)
 void Cardioid_Scene::viewportDraw(Viewport* ctx) const
 {
     /// Draw Scene to Viewport
-    ctx->drawWorldAxis(1, 0);
-    camera->setTransformFilters(true, false, false, false);
+    ctx->drawWorldAxis();
+    camera->worldHudTransform();
 
     double ox = show_offset ? -0.25 : 0;
 
@@ -358,6 +358,7 @@ void Cardioid_Scene::fullPlot(Viewport* ctx, double scale, double ox) const
     // Full plot
     ctx->setStrokeStyle(255, 0, 0);
     ctx->beginPath();
+    ctx->setLineWidth(3);
 
     double r1 = scale * 0.5;
     double r2 = r1 / 4.0;
@@ -525,7 +526,7 @@ void Cardioid_Graph_Scene::viewportDraw(Viewport* ctx) const
     /// Bmp plotting
     //ctx->drawImage(bmp);
     ctx->drawWorldAxis();
-    camera->setTransformFilters(true, false, false, false);
+    camera->worldHudTransform();
     
     double angle_step = (2.0 * M_PI) / 720.0;
     bool first;

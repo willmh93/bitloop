@@ -128,24 +128,18 @@ void MainWindow::initFonts()
 
     float base_pt = 16.0f;
     const char* font_path = Platform()->path("/data/fonts/DroidSans.ttf");
-    //const char* font_path2 = Platform()->path("/data/fonts/DroidSans.ttf");
     ImFontConfig config;
     config.OversampleH = 3;
     config.OversampleV = 3;
 
     io.Fonts->Clear();
     io.Fonts->AddFontFromFileTTF(font_path, base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
-    //io.Fonts->AddFontFromFileTTF(font_path2, base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
-    //io.Fonts->FontBuilderFlags =
+
     io.Fonts->FontLoaderFlags =
         ImGuiFreeTypeBuilderFlags_LightHinting |
         ImGuiFreeTypeBuilderFlags_ForceAutoHint;
 
     io.Fonts->Build();
-    //io.Fonts->SetFontBuilderFunctions(ImGuiFreeType::BuildFontAtlas);
-    //ImFontBuilder
-    //ImGuiFreeType::GetFontLoader()->FontBuilder_Build(io.Fonts);
-    //ImGuiFreeType::GetBuilderForFreeType()->FontBuilder_Build(io.Fonts);
 }
 
 void MainWindow::populateProjectUI()
@@ -498,8 +492,9 @@ void MainWindow::populateViewport()
             // Launch initial simulation 1 frame late (background thread)
             if (!ProjectWorker::instance()->getActiveProject())
             {
-                ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Mandelbrot Viewer")->sim_uid);
+                //ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Mandelbrot Viewer")->sim_uid);
                 //ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Canvas Transforms")->sim_uid);
+                ProjectWorker::instance()->setActiveProject(ProjectBase::findProjectInfo("Image Transforms")->sim_uid);
                 ProjectWorker::instance()->startProject();
 
                 // Kick-start work-render-work-render loop
@@ -514,6 +509,8 @@ void MainWindow::populateViewport()
                 std::unique_lock<std::mutex> lock(shared_sync.state_mutex);
 
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+
+                //DebugPrint("projectDraw()");
                 ProjectWorker::instance()->draw();
                 canvas.end();
 
@@ -540,7 +537,7 @@ void MainWindow::populateViewport()
             ImVec2(1.0f, 0.0f)    // UV bottom-right);
         );
 
-        shared_sync.editing_ui.store(isEditingUI(), std::memory_order_release);
+        //shared_sync.editing_ui.store(isEditingUI(), std::memory_order_release);
     }
     ImGui::End();
 }

@@ -8,7 +8,7 @@
 #else
 #include "glad.h"
 #endif
-#include "glm/glm.hpp"
+
 #include "nanovg.h"
 #include "nanovg_gl.h"
 
@@ -108,7 +108,10 @@ public:
 
 class Painter;
 
-// Simple nanovg C++ wrapper
+// ===========================================
+// ======== Simple nanovg C++ wrapper ========
+// ===========================================
+
 class SimplePainter
 {
 protected:
@@ -140,17 +143,23 @@ public:
     [[nodiscard]] NVGcontext* getRenderTarget() { return vg; }
     [[nodiscard]] std::shared_ptr<NanoFont> getDefaultFont() { return default_font; }
 
-    // --- Transforms ---
+    // ======== Transforms ========
 
     void save() const { nvgSave(vg); }
     void restore() { nvgRestore(vg); }
+    struct LocalTransform
+    {
+        SimplePainter* painter;
+        LocalTransform(SimplePainter* p) : painter(p) { p->save(); p->resetTransform(); }
+        ~LocalTransform() { painter->restore(); }
+    };
 
     void resetTransform()                                    { nvgResetTransform(vg); }
     void transform(const glm::mat3& m)                       { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
     glm::mat3 currentTransform() const                       { float x[6]; nvgCurrentTransform(vg, x); return glm::mat3(x[0], x[1], 0, x[2], x[3], 0, x[4], x[5], 1); }
 
     void translate(double x, double y)                       { nvgTranslate(vg, (float)(x), (float)(y)); }
-    void translate(const DVec2& p)                           { nvgTranslate(vg, (float)(p.x), (float)(p.y)); }
+    void translate(DVec2 p)                                  { nvgTranslate(vg, (float)(p.x), (float)(p.y)); }
     void rotate(double angle)                                { nvgRotate(vg, (float)(angle)); }
     void scale(double scale)                                 { nvgScale(vg, (float)(scale), (float)(scale)); }
     void scale(double scale_x, double scale_y)               { nvgScale(vg, (float)(scale_x), (float)(scale_y)); }
@@ -159,7 +168,7 @@ public:
     void setClipRect(double x, double y, double w, double h) { nvgScissor(vg, (float)(x), (float)(y), (float)(w), (float)(h)); }
     void resetClipping() { nvgResetScissor(vg); }
 
-    // --- Styles ---
+    // ======== Styles ========
 
     void setStrokeStyle(const Color& color)                  { nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
     void setFillStyle(const Color& color)                    { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
@@ -171,16 +180,20 @@ public:
     void setLineCap(LineCap cap)                             { nvgLineCap(vg, cap); }
     void setLineJoin(LineJoin join)                          { nvgLineJoin(vg, join); }
 
-    // --- Paths ---
+    // ======== Paths ========
 
     void beginPath()                                         { nvgBeginPath(vg); }
     void moveTo(double x, double y)                          { nvgMoveTo(vg, (float)(x), (float)(y)); }
     void lineTo(double x, double y)                          { nvgLineTo(vg, (float)(x), (float)(y)); }
+    void moveTo(DVec2 p)                                     { nvgMoveTo(vg, (float)(p.x), (float)(p.y)); }
+    void lineTo(DVec2 p)                                     { nvgLineTo(vg, (float)(p.x), (float)(p.y)); }
     void stroke()                                            { nvgStroke(vg); }
     void fill()                                              { nvgFill(vg); }
 
-    void circle(double x, double y, double r)                { nvgCircle(vg, (float)(x), (float)(y), (float)(r)); }
-    void ellipse(double x, double y, double rx, double ry)   { nvgEllipse(vg, (float)(x), (float)(y), (float)(rx), (float)(ry)); }
+    void circle(double cx, double cy, double r)              { nvgCircle(vg, (float)(cx), (float)(cy), (float)(r)); }
+    void circle(DVec2 p, double r)                           { nvgCircle(vg, (float)(p.x), (float)(p.y), (float)(r)); }
+    void ellipse(double cx, double cy, double rx, double ry) { nvgEllipse(vg, (float)(cx), (float)(cy), (float)(rx), (float)(ry)); }
+    void ellipse(DVec2 cen, DVec2 size)                      { nvgEllipse(vg, (float)(cen.x), (float)(cen.y), (float)(size.x), (float)(size.y)); }
     void fillRect(double x, double y, double w, double h)    { nvgBeginPath(vg); nvgRect(vg, (float)(x), (float)(y), (float)(w), (float)(h)); nvgFill(vg); }
     void strokeRect(double x, double y, double w, double h)  { nvgBeginPath(vg); nvgRect(vg, (float)(x), (float)(y), (float)(w), (float)(h)); nvgStroke(vg); }
    
@@ -192,17 +205,17 @@ public:
         }
     }
 
-    // --- Image ---
+    // ======== Image ========
 
-    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) { 
-        bmp.draw(vg, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h); 
-    }
+    //void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) { 
+    //    bmp.draw(vg, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h); 
+    //}
 
-    void drawImage(Image& bmp, DQuad quad) {
-        bmp.drawSheared(vg, quad);
-    }
+    //void drawImage(Image& bmp, DQuad quad) {
+    //    bmp.drawSheared(vg, quad);
+    //}
 
-    // --- Text ---
+    // ======== Text ========
 
     void setTextAlign(TextAlign align)          { text_align = align;       nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
     void setTextBaseline(TextBaseline baseline) { text_baseline = baseline; nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
@@ -234,7 +247,7 @@ public:
         return DRect((double)(bounds[0]), (double)(bounds[1]), (double)(bounds[2] - bounds[0]), (double)(bounds[3] - bounds[1]));
     }
 
-    void fillText(std::string_view txt, const DVec2& pos) { fillText(txt, pos.x, pos.y); }
+    void fillText(std::string_view txt, DVec2 pos) { fillText(txt, pos.x, pos.y); }
     void fillText(std::string_view txt, double x, double y)
     {
         if (!active_font) setFont(default_font);
@@ -242,10 +255,23 @@ public:
     }
 };
 
+// ==================================
+// ======== Advanced Painter ========
+// ==================================
+//
+// > Pretransforms world coordinates (double precision) before rendering in screen-space with nanovg 
+// > Supports toggling between screen-space / world-space
+//
 
 class Painter : private SimplePainter
 {
-    double _avgZoom() { return (abs(camera.zoomX()) + abs(camera.zoomY())) * 0.5; }
+    double _avgZoom() {
+        return (abs(camera.zoomX()) + abs(camera.zoomY())) * 0.5;
+    }
+    DVec2 align_full(DVec2 p)              { return DVec2{ floor(p.x), floor(p.y) }; }
+    DVec2 align_full(double px, double py) { return DVec2{ floor(px),  floor(py) }; }
+    DVec2 align_half(DVec2 p)              { return DVec2{ floor(p.x) + 0.5, floor(p.y) + 0.5 }; }
+    DVec2 align_half(double px, double py) { return DVec2{ floor(px)  + 0.5, floor(py)  + 0.5 }; }
 
 public:
 
@@ -254,57 +280,58 @@ public:
     double line_width = 1;
 
 
-    [[nodiscard]] DVec2 PT(double x, double y)
-    {
-        if (camera.transform_coordinates)
-        {
-            DVec2 o = camera.toWorldOffset({ camera.stage_ox, camera.stage_oy });
-            return { x + o.x, y + o.y };
-        }
-        else
-        {
-            // (x,y) represents stage coordinate, but transform is active
-            DVec2 ret = camera.toWorld(x + camera.stage_ox, y + camera.stage_oy);
-            return ret;
-        }
-    }
+    ///[[nodiscard]] DVec2 PT(double x, double y)
+    ///{
+    ///    if (camera.transform_coordinates)
+    ///    {
+    ///        DVec2 o = camera.toWorldOffset({ camera.stage_ox, camera.stage_oy });
+    ///        return { x + o.x, y + o.y };
+    ///    }
+    ///    else
+    ///    {
+    ///        // (x,y) represents stage coordinate, but transform is active
+    ///        DVec2 ret = camera.toWorld(x + camera.stage_ox, y + camera.stage_oy);
+    ///        return ret;
+    ///    }
+    ///}
+    
+    
 
-    // --- Styles ---
+    // ======== Position/Size wrappers (applies only enabled camera transforms) ========
+
+    DVec2 PT(double x, double y)       { return camera.transform_coordinates ? camera.toStage(x, y) : DVec2{ x, y }; }
+    DVec2 PT(DVec2 p)                  { return camera.transform_coordinates ? camera.toStage(p.x, p.y) : p; }
+    DQuad QUAD(DQuad q)                { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
+    DVec2 SIZE(double w, double h)     { return camera.scale_sizes ? DVec2{w*camera.zoomX(), h*camera.zoomY()} : DVec2{w, h}; }
+    DVec2 SIZE(DVec2 s)                { return camera.scale_sizes ? DVec2{s.x*camera.zoomX(), s.y*camera.zoomY()} : s; }
+    double SIZE(double radius)         { return camera.scale_sizes ? (radius * _avgZoom()) : radius; }
+
+    void ROTATE(double r)              { if (/*camera.transform_coordinates &&*/ r != 0.0) rotate(r); }
+    void TRANSLATE(double x, double y) { translate(PT(x, y)); }
+
+
+    // ======== Styles ========
 
     void setLineWidth(double w)
     {
         this->line_width = w;
         if (camera.scale_lines_text)
+            SimplePainter::setLineWidth(w * _avgZoom());
+        else
             SimplePainter::setLineWidth(w);
-        else
-            SimplePainter::setLineWidth(w / _avgZoom());
     }
 
-    // --- Paths (overrides) ---
+    // ======== Paths (overrides) ========
 
-    void circle(double cx, double cy, double radius)
-    {
-        DVec2 pt = PT(cx, cy);
-        if (camera.scale_sizes)
-            SimplePainter::circle(pt.x, pt.y, radius);
-        else
-            SimplePainter::circle(pt.x, pt.y, radius / _avgZoom());
-    }
+    void moveTo(double px, double py)                      { SimplePainter::moveTo(PT(px, py)); }
+    void lineTo(double px, double py)                      { SimplePainter::lineTo(PT(px, py)); }
+    void moveTo(DVec2 p)                                   { SimplePainter::moveTo(PT(p)); }
+    void lineTo(DVec2 p)                                   { SimplePainter::lineTo(PT(p)); }
 
-    void circle(DVec2 cen, double r) { circle(cen.x, cen.y, r); }
-    void ellipse(double x, double y, double rx, double ry)
-    {
-        DVec2 pt = PT(x, y);
-        if (camera.scale_sizes)
-            SimplePainter::ellipse(pt.x, pt.y, rx, ry);
-        else
-            SimplePainter::ellipse(pt.x, pt.y, rx * camera.zoomX(), ry * camera.zoomY());
-    }
-
-    void moveTo(double px, double py) { DVec2 pt = PT(px, py);   SimplePainter::moveTo(pt.x, pt.y); }
-    void lineTo(double px, double py) { DVec2 pt = PT(px, py);   SimplePainter::lineTo(pt.x, pt.y); }
-    void moveTo(DVec2 p)              { DVec2 pt = PT(p.x, p.y); SimplePainter::moveTo(pt.x, pt.y); }
-    void lineTo(DVec2 p)              { DVec2 pt = PT(p.x, p.y); SimplePainter::lineTo(pt.x, pt.y); }
+    void circle(double cx, double cy, double r)            { SimplePainter::circle(PT(cx, cy), SIZE(r)); }
+    void circle(DVec2 cen, double r)                       { SimplePainter::circle(PT(cen), SIZE(r)); }
+    void ellipse(double x, double y, double rx, double ry) { SimplePainter::ellipse(PT(x, y), SIZE(rx, ry)); }
+    void ellipse(DVec2 cen, DVec2 size)                    { SimplePainter::ellipse(PT(cen), SIZE(size)); }
 
     template<typename PointT> void drawPath(const std::vector<PointT>& path)
     {
@@ -315,125 +342,79 @@ public:
             lineTo(path[i]);
     }
 
-    template<typename T> void strokeQuad(const Quad<T>& quad)
+    template<typename PointT, size_t N>
+    void drawPath(const PointT(&path)[N])
+    {
+        if constexpr (N < 2) return;
+        moveTo(path[0]);
+        for (size_t i = 1; i < N; ++i)
+            lineTo(path[i]);
+    }
+
+    template<typename PointT, size_t N>
+    void drawClosedPath(const PointT(&path)[N])
+    {
+        if constexpr (N < 2) return;
+        moveTo(path[0]);
+        for (size_t i = 1; i < N; ++i)
+            lineTo(path[i]);
+        lineTo(path[0]);
+    }
+
+    template<typename T> void strokeQuad(const Quad<T>& q) 
     {
         beginPath();
-        moveTo(quad.a);
-        lineTo(quad.b);
-        lineTo(quad.c);
-        lineTo(quad.d);
-        lineTo(quad.a);
+        drawClosedPath(q._data);
         stroke();
     }
 
     void strokeRect(double x, double y, double w, double h)
     {
-        if (camera.transform_coordinates)
-        {
-            if (camera.scale_lines_text)
-                SimplePainter::strokeRect(x, y, w, h);
-            else
-            {
-                double old_linewidth = line_width;
-                SimplePainter::setLineWidth(line_width / _avgZoom());
-                SimplePainter::strokeRect(x, y, w, h);
-                SimplePainter::setLineWidth(old_linewidth);
-            }
-        }
-        else
-        {
-            auto cur_transform = SimplePainter::currentTransform();
-            SimplePainter::resetTransform();
-            SimplePainter::transform(default_viewport_transform);
-
-            if (camera.scale_lines_text)
-            {
-                double old_linewidth = line_width;
-                SimplePainter::setLineWidth(line_width * _avgZoom());
-                SimplePainter::strokeRect(x, y, w, h);
-                SimplePainter::setLineWidth(old_linewidth);
-            }
-            else
-            {
-                SimplePainter::setLineWidth(line_width); // Refresh cached line width
-                SimplePainter::strokeRect(x, y, w, h);
-            }
-
-            SimplePainter::resetTransform();
-            SimplePainter::transform(cur_transform);
-        }
+        LocalTransform t(this);
+        TRANSLATE(x, y);
+        ROTATE(camera.rotation());
+        DVec2 s = SIZE(w, h);
+        SimplePainter::strokeRect(0, 0, s.x, s.y);
     }
 
     void fillRect(double x, double y, double w, double h)
     {
-        if (camera.transform_coordinates)
-        {
-            SimplePainter::fillRect(x, y, w, h);
-        }
-        else
-        {
-            auto cur_transform = SimplePainter::currentTransform();
-            SimplePainter::resetTransform();
-            SimplePainter::transform(default_viewport_transform);
-
-            SimplePainter::fillRect(x, y, w, h);
-
-            SimplePainter::resetTransform();
-            SimplePainter::transform(cur_transform);
-        }
-    }
-
-    void strokeRect(const FRect& r) { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    void fillRect(const FRect& r) { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-
-    void strokeEllipse(double cx, double cy, double r)
-    {
-        SimplePainter::beginPath();
-        if (camera.scale_sizes)
-        {
-            SimplePainter::ellipse(cx, cy, r, r);
-        }
-        else
-        {
-            SimplePainter::ellipse(cx, cy, r / camera.zoomX(), r / camera.zoomY());
-        }
-        SimplePainter::stroke();
+        LocalTransform t(this);
+        TRANSLATE(x, y);
+        ROTATE(camera.rotation());
+        DVec2 s = SIZE(w, h);
+        SimplePainter::fillRect(0, 0, s.x, s.y);
     }
 
     void strokeEllipse(double cx, double cy, double rx, double ry)
     {
-        SimplePainter::beginPath();
-        if (camera.scale_sizes)
-        {
-            SimplePainter::ellipse(cx, cy, rx, ry);
-        }
-        else
-        {
-            SimplePainter::ellipse(cx, cy, rx / camera.zoomX(), ry / camera.zoomY());
-        }
-        SimplePainter::stroke();
-    }
+        LocalTransform t(this);
+        TRANSLATE(cx, cy);
+        ROTATE(camera.rotation());
+        DVec2 s = SIZE(rx, ry);
 
-    void fillEllipse(double cx, double cy, double r)
-    {
-        DVec2 pt = PT(cx, cy);
         SimplePainter::beginPath();
-        if (camera.scale_sizes)
-            SimplePainter::ellipse(cx, cy, r, r);
-        else
-            SimplePainter::ellipse(cx, cy, r / camera.zoomX(), r / camera.zoomY());
-        SimplePainter::fill();
+        SimplePainter::ellipse(0, 0, s.x, s.y);
+        SimplePainter::stroke();
     }
 
     void fillEllipse(double cx, double cy, double rx, double ry)
     {
+        LocalTransform t(this);
+        TRANSLATE(cx, cy);
+        ROTATE(camera.rotation());
+        DVec2 s = SIZE(rx, ry);
+
         SimplePainter::beginPath();
-        if (camera.scale_sizes)
-            SimplePainter::ellipse(cx, cy, rx, ry);
-        else
-            SimplePainter::ellipse(cx, cy, rx / camera.zoomX(), ry / camera.zoomY());
+        SimplePainter::ellipse(0, 0, s.x, s.y);
         SimplePainter::fill();
     }
+
+    // Overloads
+    void strokeRect(const FRect& r)                    { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    void fillRect(const FRect& r)                      { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    void strokeEllipse(double cx, double cy, double r) { strokeEllipse(cx, cy, r, r); }
+    void fillEllipse(double cx, double cy, double r)   { fillEllipse(cx, cy, r, r); }
 
     void drawArrow(DVec2 a, DVec2 b, Color color)
     {
@@ -467,71 +448,46 @@ public:
     void arrowMoveTo(double px, double py) { arrow_x0 = px; arrow_y0 = py; }
     void arrowDrawTo(double px, double py, Color color = Color(255, 255, 255)) { drawArrow({ arrow_x0, arrow_y0 }, { px, py }, color); }
 
-    // --- Image ---
+    // ======== Image ========
 
-    
+    //void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) {
+    //    SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
+    //}
 
-    void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) {
-        SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
-    }
     void drawImage(Image& bmp, DQuad quad) {
-        SimplePainter::drawImage(bmp, quad);
+
+        quad = QUAD(quad);
+
+        DVec2 a = quad.a;
+        DVec2 u = quad.b - quad.a;
+        DVec2 v = quad.d - quad.a;
+
+        bmp.refreshData(vg);
+
+        nvgSave(vg);
+        nvgTransform(vg, (float)u.x, (float)u.y, (float)v.x, (float)v.y, (float)a.x, (float)a.y);
+        NVGpaint paint = nvgImagePattern(vg, 0, 0, 1, 1, 0.0f, bmp.imageId(), 1.0f);
+        nvgBeginPath(vg);
+        nvgRect(vg, 0, 0, 1, 1);
+        nvgFillPaint(vg, paint);
+        nvgFill(vg);
+
+        nvgRestore(vg);
     }
     void drawImage(CanvasImage& bmp)
     {
-        camera.saveCameraTransform();
-        //if (bmp.coordinate_type == CoordinateType::STAGE)
-        //    camera.stageTransform();
-        //else
-        camera.worldTransform();
-
-        camera.scalingLines(false);
-        setStrokeStyle(255, 0, 255);
-        setLineWidth(20);
-
-        //strokeQuad(bmp.worldQuad());
-
-        if (camera.transform_coordinates)
-        {
-            save();
-
-            //translate(bmp.x, bmp.y);
-            //translate(bmp.worldAlignOffsetX(), bmp.worldAlignOffsetY());
-            //scale(bmp.worldWidth() / bmp.bmp_width, bmp.worldHeight() / bmp.bmp_height);
-            //rotate(-bmp.stageRotation());
-
-            //SimplePainter::drawImage(bmp, 0, 0);
-            SimplePainter::drawImage(bmp, bmp.worldQuad());
-            
-
-            restore();
-        }
-
-        /*else
-        {
-            glm::mat3 cur_transform = currentTransform();
-            resetTransform();
-            transform(default_viewport_transform);
-
-            translate(bmp.x, bmp.y);
-            rotate(bmp.rotation);
-            translate(bmp.worldAlignOffsetX(), bmp.worldAlignOffsetY());
-            scale(bmp.worldWidth() / bmp.bmp_width, bmp.worldHeight() / bmp.bmp_height);
-
-            SimplePainter::drawImage(bmp, 0, 0);
-
-            resetTransform();
-            transform(cur_transform);
-        }*/
-
-        camera.restoreCameraTransform();
+        drawImage(bmp, bmp.worldQuad());
     }
 
-    // --- Text ---
+
+    // ======== Text ========
 
     void fillText(std::string_view txt, double px, double py)
     {
-        if (camera.transform_coordinates)
+        DVec2 p = PT(px, py);
+        SimplePainter::fillText(txt, p.x, p.y);
+
+        /*if (camera.transform_coordinates)
         {
             if (camera.scale_lines_text)
             {
@@ -586,7 +542,7 @@ public:
 
             resetTransform();
             transform(cur_transform);
-        }
+        }*/
     }
 
     void fillText(std::string_view txt, const DVec2& p) {
@@ -667,18 +623,19 @@ public:
         return mantissa + exponent;
     }*/
 
+    const float exponent_font_scale = 0.85f;
+    const float exponent_spacing_x = 0.06f;
+    const float exponent_spacing_y = -0.3f;
+
     void fillNumberScientific(double v, DVec2 pos, float fontSize = 12)
     {
         std::string txt = format_number(v);
-
-        double scale = 1.0;// fontSize;// ScaleSize(1.0);
-        double exponent_spacing = 3.0 * scale;
 
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
         {
             const int  exponent = std::stoi(txt.substr(ePos + 1));
-            std::string mantissa_txt = txt.substr(0, ePos) + "x10";
+            std::string mantissa_txt = txt.substr(0, ePos) + "e";// "x10";
             std::string exponent_txt = std::to_string(exponent);
 
             //setFont(active_font);
@@ -687,20 +644,20 @@ public:
             pos.x = floor(pos.x);
             pos.y = floor(pos.y);
 
-            double mantissaWidth = boundingBox(mantissa_txt).x2 + (1.0 * scale);
+            double mantissaWidth = boundingBox(mantissa_txt).x2 + exponent_spacing_x;
 
             /// todo: Take whatever alignment you're given and adjust right bound
             setTextAlign(TextAlign::ALIGN_CENTER);
             setFontSize(fontSize);
             fillTextSharp(mantissa_txt.c_str(), pos);
 
-            pos.x += mantissaWidth/2.0f + exponent_spacing;
-            pos.y -= (int)(fontSize * 0.7 + (1.0 * scale));
+            pos.x += mantissaWidth/2.0f + (fontSize * exponent_spacing_x);
+            pos.y -= (int)(fontSize * (exponent_font_scale + exponent_spacing_y));
 
             //font.setPixelSize((int)(fontSize * 0.85));
             //painter->setFont(font);
             setTextAlign(TextAlign::ALIGN_LEFT);
-            setFontSize(fontSize * 0.85);
+            setFontSize(fontSize * exponent_font_scale);
 
             fillTextSharp(exponent_txt.c_str(), pos);
 
@@ -719,18 +676,16 @@ public:
         }
     }
 
-    [[nodiscard]] DRect boundingBoxNumberScientific(double v, float fontSize = 12)
+    [[nodiscard]] DRect boundingBoxScientific(double v, float fontSize = 12)
     {
         std::string txt = format_number(v);
 
-        double scale = 1.0;// fontSize;// ScaleSize(1.0);
-        double exponent_spacing = 3.0 * scale;
 
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
         {
             const int  exponent = std::stoi(txt.substr(ePos + 1));
-            std::string mantissa_txt = txt.substr(0, ePos) + "x10";
+            std::string mantissa_txt = txt.substr(0, ePos) + "e";// "x10";
             std::string exponent_txt = std::to_string(exponent);
 
             //font.setPixelSize(fontSize);
@@ -744,8 +699,8 @@ public:
             DRect exponentRect = boundingBox(exponent_txt);
             DRect ret = mantissaRect;
 
-            ret.y1 -= (int)(fontSize * 0.7 + (1.0 * scale));
-            ret.x2 += exponentRect.width() + exponent_spacing;
+            ret.x2 += exponentRect.width() + (fontSize * exponent_spacing_x);
+            ret.y1 -= (int)(fontSize * (exponent_font_scale + exponent_spacing_y));
 
             //font.setPixelSize(fontSize);
             //painter->setFont(font);
@@ -760,43 +715,65 @@ public:
 
    
 
-    // --- Sharp variants ---
+    // ======== Sharp variants ========
 
     void moveToSharp(double px, double py)
     {
-        moveTo(px, py);
-        //DVec2 pt = sharp(PT(px, py));
+        SimplePainter::moveTo(align_half(PT(px, py)));
+        //DVec2 pt = align_pixel(PT(px, py));
         //painter->moveTo(pt.x, pt.y);
     }
 
     void moveToSharp(DVec2 p)
     {
-        moveTo(p.x, p.y);
-        //DVec2 pt = sharp(PT(p.x, p.y));
+        SimplePainter::moveTo(align_half(PT(p)));
+        //DVec2 pt = align_pixel(PT(p.x, p.y));
         //painter->moveTo(pt.x, pt.y);
     }
 
     void lineToSharp(double px, double py)
     {
-        lineTo(px, py);
-        //DVec2 pt = sharp(PT(px, py));
+        SimplePainter::lineTo(align_half(PT(px, py)));
+        //DVec2 pt = align_pixel(PT(px, py));
         //painter->lineTo(pt.x, pt.y);
     }
 
     void lineToSharp(DVec2 p)
     {
-        lineTo(p.x, p.y);
-        //DVec2 pt = sharp(PT(p.x, p.y));
-        //painter->lineTo(pt.x, pt.y);
+        SimplePainter::lineTo(align_half(PT(p.x, p.y)));
+    }
+
+    void strokeLine(DVec2 p1, DVec2 p2)
+    {
+        beginPath();
+        moveTo(p1);
+        lineTo(p2);
+        stroke();
+    }
+
+    void strokeLineSharp(DVec2 p1, DVec2 p2)
+    {
+        beginPath();
+        moveToSharp(p1);
+        lineToSharp(p2);
+        stroke();
     }
 
     void fillTextSharp(std::string_view txt, const DVec2& pos)
     {
         //painter->setPixelAlignText(QNanoPainter::PixelAlign::PIXEL_ALIGN_FULL);
-        fillText(txt, /*sharpX*/(pos.x), /*sharpY*/(pos.y));
+        //fillText(txt, /*sharpX*/(pos.x), /*sharpY*/(pos.y));
+        SimplePainter::fillText(txt, align_full(PT(pos)));
     }
 
-    // --- Expose unchanged methods ---
+    // ======== Axis Drawer ========
+    void drawWorldAxis(
+        double axis_opacity = 0.3,//0.3,
+        double grid_opacity = 0.075,
+        double text_opacity = 0.45// 0.4
+    );
+
+    // ======== Expose unchanged methods ========
 
     using SimplePainter::setRenderTarget;
     using SimplePainter::getRenderTarget;

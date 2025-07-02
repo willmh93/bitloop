@@ -1,4 +1,9 @@
+#include "platform_macros.h"
+
+BL_PUSH_PRECISE
 #include "nlohmann_json.hpp"
+BL_POP_PRECISE
+
 #include <regex>
 
 namespace JSON

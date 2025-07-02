@@ -100,17 +100,12 @@ namespace Thread
 struct SharedSync
 {
     std::atomic<bool> quitting{ false };
-    std::atomic<bool> editing_ui{ false };
+    //std::atomic<bool> editing_ui{ false };
     std::atomic<bool> updating_live_buffer{ false };
-    std::atomic<bool> processing_frame{ false };
-    std::atomic<bool> gui_populated_during_process{ false };
 
     std::mutex live_buffer_mutex;
     std::mutex shadow_buffer_mutex;
-
-    std::mutex project_mutex;
     std::mutex state_mutex;
-    std::mutex working_mutex;
 
     std::condition_variable cv;
     std::condition_variable cv_updating_live_buffer;

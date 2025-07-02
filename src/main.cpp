@@ -1,4 +1,4 @@
-#include <memory>
+﻿#include <memory>
 #ifdef __EMSCRIPTEN__
 #define SDL_MAIN_HANDLED
 #include <GLES3/gl3.h>
@@ -17,6 +17,8 @@
 #include "project_worker.h"
 #include "main_window.h"
 
+#include "simulations_registry.h"
+
 SDL_Window* window = nullptr;
 SharedSync shared_sync;
 
@@ -29,6 +31,7 @@ void gui_loop()
     while (SDL_PollEvent(&e))
     {
         ImGui_ImplSDL2_ProcessEvent(&e);
+
         switch (e.type)
         {
             case SDL_QUIT: shared_sync.quit(); break;
@@ -60,9 +63,38 @@ void gui_loop()
     SDL_GL_SwapWindow(window);
 }
 
-int main(int, char*[])
+#ifdef __EMSCRIPTEN__
+std::string clipboard_buffer;
+
+const char* getClipboardContents(ImGuiContext*) 
+{ 
+    /// Callback for imgui, to return clipboard content (ctrl-V)
+    DebugPrint("ImGui requested clipboard content, returning: %s", clipboard_buffer.c_str());
+    return clipboard_buffer.c_str();
+};
+void setClipboardContents(ImGuiContext*, const char* imgui_txt) 
 {
-    DebugPrint("Main Thread Started");
+    /// Called from imgui with textbox data, set clipboard content (ctrl-C)
+    clipboard_buffer = imgui_txt;
+
+    DebugPrint("ImGui setting clipboard content to: %s", imgui_txt);
+    EM_ASM({ navigator.clipboard.writeText(UTF8ToString($0)); }, imgui_txt);
+};
+
+extern "C" {
+    EMSCRIPTEN_KEEPALIVE
+    void ImGuiReceivePaste(char const* str)      // called from JS
+    {
+        DebugPrint("ImGuiReceivePaste: %s", str);
+        clipboard_buffer = str;
+    }
+}
+#endif
+
+
+int main(int, char* [])
+{
+    force_link_all_simulations();
 
     // ======== SDL Window setup ========
     {
@@ -77,6 +109,35 @@ int main(int, char*[])
 
         #ifdef __EMSCRIPTEN__
         emscripten_get_canvas_element_size("#canvas", &fb_w, &fb_h);
+
+        //SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas"); // disabled, breaks imgui input
+
+        EM_ASM({
+            const cv = Module['canvas'];
+            cv.setAttribute('tabindex', '0');
+            cv.setAttribute('contenteditable', 'true');
+            cv.addEventListener('mousedown', () => cv.focus());
+
+            var original_addEventListener = window.addEventListener;
+            window.addEventListener = function(type, handler, opts)
+            {
+                if (type === "keyup" || type === "keydown" || type === "keypress") {
+                    original_addEventListener(type, function(e) {
+                        let key = e.which || e.keyCode;
+                        let ctrl = e.ctrlKey ? e.ctrlKey : ((key == = 17) ? true : false);
+                        if (ctrl && (key == 86)) return false; // block Ctrl-V
+                        handler(e);
+                    }, opts);
+                }
+                else { original_addEventListener(type, handler, opts); }
+            };
+
+            window.addEventListener('paste', e => {
+                e.preventDefault(); // stop browser DOM insert
+                const txt = (e.clipboardData || window.clipboardData).getData('text/plain');
+                Module.ccall('ImGuiReceivePaste', null, ['string'], [txt]);
+            }, true); // capture phase
+        });
         #endif
 
         window = SDL_CreateWindow("bitloop", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, fb_w, fb_h,
@@ -90,7 +151,7 @@ int main(int, char*[])
     {
         gl_context = SDL_GL_CreateContext(window);
         SDL_GL_MakeCurrent(window, gl_context);
-        SDL_GL_SetSwapInterval(1);
+        SDL_GL_SetSwapInterval(1); // enforces 60fps / v-sync
 
         #ifndef __EMSCRIPTEN__
         if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
@@ -110,8 +171,15 @@ int main(int, char*[])
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
+
         #ifdef __EMSCRIPTEN__
         ImGui_ImplOpenGL3_Init("#version 300 es");
+
+        ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+        pio.Platform_ClipboardUserData = nullptr;
+        pio.Platform_GetClipboardTextFn = getClipboardContents;
+        pio.Platform_SetClipboardTextFn = setClipboardContents;
+
         #else
         ImGui_ImplOpenGL3_Init();
         #endif

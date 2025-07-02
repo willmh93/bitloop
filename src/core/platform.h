@@ -7,6 +7,7 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/html5.h>
+#include "emscripten_browser_clipboard.h"
 #endif
 
 /// Windows
@@ -19,6 +20,7 @@
 
 #include "debug.h"
 #include "types.h"
+#include "platform_macros.h"
 
 class PlatformManager
 {

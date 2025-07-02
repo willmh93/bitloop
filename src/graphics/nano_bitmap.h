@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "math_helpers.h"
+#include "color.h"
 #include "threads.h"
 #include "camera.h"
 
@@ -19,7 +20,7 @@ class CanvasObject
 {
     DVec2 toStage(const DVec2& p)             const { return Camera::active->toStage(p); }
     DVec2 toWorld(double sx, double sy)       const { return Camera::active->toWorld(sx, sy); }
-    DVec2 toWorldOffset(double sx, double sy) const { return Camera::active->toWorldOffset(sx, sy); }
+    DVec2 toWorldOffset(double sx, double sy) const { return Camera::active->stageToWorldOffset(sx, sy); }
     DVec2 toStageOffset(const DVec2& o)       const { return Camera::active->worldToStageOffset(o); }
 
     // local basis vectors after all transforms
@@ -96,6 +97,24 @@ public:
     [[nodiscard]] double worldAlignOffsetX() { return -(align_x + 1) * 0.5 * worldWidth(); }
     [[nodiscard]] double worldAlignOffsetY() { return -(align_y + 1) * 0.5 * worldHeight(); }
 
+    [[nodiscard]] DVec2 worldToUVRatio(const DVec2& p) const
+    {
+        // p = origin + [a] * u + [b] * v
+        DVec2 origin = pos + 0.5 * ((-align_x - 1.0) * u + (-align_y - 1.0) * v);
+        DVec2 delta = p - origin;
+
+        // Make sure uv vectors span 2D area
+        double det = u.x * v.y - u.y * v.x;
+        if (det == 0) return  { 0.0, 0.0 };
+        //if (std::abs(det) < std::numeric_limits<double>::epsilon()) return { 0.0, 0.0 };
+
+        // solve for a,b
+        double inv_det = 1.0 / det;
+        double a = (delta.x * v.y - delta.y * v.x) * inv_det;
+        double b = (u.x * delta.y - u.y * delta.x) * inv_det;
+        return { a, b };
+    }
+
     void setWorldRect(double _x, double _y, double _w, double _h)
     {
         rotation = 0.0;
@@ -113,8 +132,12 @@ class Image
 
 protected:
 
-    int bmp_width = 0;
-    int bmp_height = 0;
+    union
+    {
+        struct { int bmp_width; int bmp_height; };
+        IVec2 bmp_size;
+    };
+
     int nano_img = 0;
     bool pending_resize = false;
 
@@ -127,6 +150,8 @@ public:
     //Image(NVGcontext* ctx, int w, int h) {
     //    create(w, h); 
     //}
+
+    Image() : bmp_size{ 0, 0 } {}
 
     [[nodiscard]] int width() const { return bmp_width; }
     [[nodiscard]] int height() const { return bmp_height; }
@@ -235,7 +260,24 @@ public:
 
 protected:
 
-    void draw(NVGcontext* vg, double x, double y, double w, double h)
+    void refreshData(NVGcontext* vg)
+    {
+        if (bmp_width <= 0 || bmp_height <= 0)
+            return;
+
+        if (pending_resize)
+        {
+            if (nano_img) nvgDeleteImage(vg, nano_img);
+            nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, NVG_IMAGE_NEAREST, pixels.data());
+            pending_resize = false;
+        }
+        else
+        {
+            nvgUpdateImage(vg, nano_img, pixels.data());
+        }
+    }
+
+    /*void draw(NVGcontext* vg, double x, double y, double w, double h)
     {
         if (bmp_width <= 0 || bmp_height <= 0)
             return;
@@ -297,7 +339,7 @@ protected:
         nvgFill(vg);
 
         nvgRestore(vg);
-    }
+    }*/
 };
 
 class CanvasImage : public Image, public CanvasObject
@@ -350,14 +392,9 @@ public:
 
     //[[nodiscard]] DQuad worldQuad(Camera* camera);
 
-    [[nodiscard]] IVec2 pixelPosFromWorld(DVec2 /*p*/)
+    [[nodiscard]] IVec2 pixelPosFromWorld(DVec2 p)
     {
-        return { 0, 0 };
-        //DVec2 tl = topLeft();
-        //DVec2 world_offset = p - tl;
-        //DVec2 rotated_offset = Math::rotateOffset(world_offset, -rotation);
-        //DVec2 fPos = rotated_offset / size * DVec2(bmp_width, bmp_height);
-        //return static_cast<IVec2>(fPos);
+        return static_cast<IVec2>(worldToUVRatio(p) / bmp_size);
     }
 
     template<typename T = double, typename Callback>

@@ -1,17 +1,14 @@
 #include "project.h"
 #include "main_window.h"
 
-VarTracker* VarTracker::singleton = nullptr;
-
-/// Scene
+/// =======================
+/// ======== Scene ========
+/// =======================
 
 void SceneBase::registerMount(Viewport* viewport)
 {
-    //options = viewport->options;
-    //camera = &viewport->camera;
-
     mounted_to_viewports.push_back(viewport);
-    ///qDebug() << "Mounted to Viewport: " << viewport->viewportIndex();
+    // Mounted to Viewport: viewport->viewportIndex()
 
     std::vector<SceneBase*>& all_scenes = viewport->layout->all_scenes;
 
@@ -28,7 +25,7 @@ void SceneBase::registerUnmount(Viewport* viewport)
     auto scene_it = std::find(all_scenes.begin(), all_scenes.end(), this);
     if (scene_it != all_scenes.end())
     {
-        ///qDebug() << "Erasing project scene from viewport: " << viewport->viewportIndex();
+        // Erasing project scene from viewport
         all_scenes.erase(scene_it);
     }
 
@@ -36,7 +33,7 @@ void SceneBase::registerUnmount(Viewport* viewport)
     auto viewport_it = std::find(mounted_to_viewports.begin(), mounted_to_viewports.end(), viewport);
     if (viewport_it != mounted_to_viewports.end())
     {
-        ///qDebug() << "Unmounting scene from viewport: " << viewport->viewportIndex();
+        // Unmounting scene from viewport
         mounted_to_viewports.erase(viewport_it);
     }
 }
@@ -100,7 +97,9 @@ double SceneBase::project_dt(int average_samples) const
     return ma.push(project->dt_projectProcess);
 }
 
-///  Viewport
+/// ==========================
+/// ======== Viewport ========
+/// ==========================
 
 Viewport::Viewport(Layout* layout, Canvas* canvas, int viewport_index, int grid_x, int grid_y) :
     layout(layout),
@@ -148,7 +147,7 @@ void Viewport::draw()
     // If TOP_LEFT, the world coordinate at top left remains fixed
     // If CENTER, world coordinate at middle of viewport remains fixed
 
-    translate(
+    /*translate(
         floor(camera.originPixelOffset().x + camera.panPixelOffset().x),
         floor(camera.originPixelOffset().y + camera.panPixelOffset().y)
     );
@@ -159,7 +158,9 @@ void Viewport::draw()
         floor(-camera.y * camera.zoomY())
     );
 
-    scale(camera.zoomX(), camera.zoomY());
+    scale(camera.zoomX(), camera.zoomY());*/
+
+    //camera.updateCameraMatrix();
 
     /// GL Transform/Projection
     /*{
@@ -211,75 +212,25 @@ void Viewport::draw()
     restore();
 }
 
-double roundAxisTickStep(double ideal_step)
-{
-    if (ideal_step <= 0)
-        return 0; // or handle error
-
-    // Determine the order of magnitude of 'ideal_step'
-    double exponent = floor(log10(ideal_step));
-    double factor = pow(10.0, exponent);
-
-    // Normalize ideal_step to the range [1, 10)
-    double base = ideal_step / factor;
-    double niceMultiplier;
-
-    // 0.5, 1
-
-    // Choose the largest candidate from {1, 2, 2.5, 5, 10} that is <= base.
-    if (base >= 5)
-        niceMultiplier = 5;
-    else
-        niceMultiplier = 1;
-
-    /*if (base >= 10.0)
-        niceMultiplier = 10.0;
-    else if (base >= 5.0)
-        niceMultiplier = 5.0;
-    else if (base >= 2.5)
-        niceMultiplier = 2.5;
-    else if (base >= 2.0)
-        niceMultiplier = 2.0;
-    else
-        niceMultiplier = 1.0;*/
-
-    return niceMultiplier * factor;
-}
-
-double roundAxisValue(double v, double step)
-{
-    return floor(v / step) * step;
-}
-
-double ceilAxisValue(double v, double step)
-{
-    return ceil(v / step) * step;
-}
-
-double getAngle(DVec2 a, DVec2 b)
-{
-    return (b - a).angle();
-}
-
 void Viewport::printTouchInfo()
 {
-    double pinch_zoom_factor = camera.touchDist() / camera.pan_down_touch_dist;
+    double pinch_zoom_factor = camera.touchDist() / camera.panDownTouchDist();
 
-    print() << "cam.position:               (" << camera.x << ",  " << camera.y << ")\n";
-    print() << "cam.pan:                     (" << camera.pan_x << ",  " << camera.pan_y << ")\n";
-    print() << "cam.rotation:              " << camera.rotation << "\n";
+    print() << "cam.position:               (" << camera.x() << ",  " << camera.y() << ")\n";
+    print() << "cam.pan:                     (" << camera.panX() << ",  " << camera.panY() << ")\n";
+    print() << "cam.rotation:              " << camera.rotation() << "\n";
     print() << "cam.zoom:                  (" << camera.zoomX() << ", " << camera.zoomY() << ")\n\n";
     print() << "---------------------------------------------------------------\n";
-    print() << "pan_down_touch_x           = " << camera.pan_down_touch_x << "\n";
-    print() << "pan_down_touch_y           = " << camera.pan_down_touch_y << "\n";
-    print() << "pan_down_touch_dist      = " << camera.pan_down_touch_dist << "\n";
-    print() << "pan_down_touch_angle   = " << camera.pan_down_touch_angle << "\n";
+    print() << "pan_down_touch_x           = " << camera.panDownTouchX() << "\n";
+    print() << "pan_down_touch_y           = " << camera.panDownTouchY() << "\n";
+    print() << "pan_down_touch_dist      = " << camera.panDownTouchDist() << "\n";
+    print() << "pan_down_touch_angle   = " << camera.panDownTouchAngle() << "\n";
     print() << "---------------------------------------------------------------\n";
-    print() << "pan_beg_cam_x                = " << camera.pan_beg_cam_x << "\n";
-    print() << "pan_beg_cam_y                = " << camera.pan_beg_cam_y << "\n";
-    print() << "pan_beg_cam_zoom_x    = " << camera.pan_beg_cam_zoom_x << "\n";
-    print() << "pan_beg_cam_zoom_y    = " << camera.pan_beg_cam_zoom_y << "\n";
-    print() << "pan_beg_cam_angle        = " << camera.pan_beg_cam_angle << "\n";
+    print() << "pan_beg_cam_x                = " << camera.panBegCamX() << "\n";
+    print() << "pan_beg_cam_y                = " << camera.panBegCamY() << "\n";
+    print() << "pan_beg_cam_zoom_x    = " << camera.panBegCamZoomX() << "\n";
+    print() << "pan_beg_cam_zoom_y    = " << camera.panBegCamZoomY() << "\n";
+    print() << "pan_beg_cam_angle        = " << camera.panBegCamAngle() << "\n";
     print() << "---------------------------------------------------------------\n";
     print() << "cam.touchAngle()        = " << camera.touchAngle() << "\n";
     print() << "cam.touchDist()         = " << camera.touchDist() << "\n";
@@ -288,220 +239,17 @@ void Viewport::printTouchInfo()
     print() << "---------------------------------------------------------------\n";
 
     int i = 0;
-    for (auto finger : camera.pressed_fingers)
+    for (auto finger : camera.pressedFingers())
     {
         print() << "Finger " << i << ": [id: " << finger.fingerId << "] - (" << finger.x << ", " << finger.y << ")\n";
         i++;
     }
 }
 
-void Viewport::drawWorldAxis(
-    double axis_opacity,
-    double grid_opacity,
-    double text_opacity)
-{
-    save();
 
-    // Fist, draw axis
-    DVec2 stage_origin = camera.toStage(0, 0);
-    DRect stage_rect = { 0, 0, width, height };
-
-    // World quad
-    DVec2 world_tl = camera.toWorld(0, 0);
-    DVec2 world_tr = camera.toWorld(width, 0);
-    DVec2 world_br = camera.toWorld(width, height);
-    DVec2 world_bl = camera.toWorld(0, height);
-
-    double world_w = world_br.x - world_tl.x;
-    double world_h = world_br.y - world_tl.y;
-
-    double stage_size = sqrt(width * width + height * height);
-    double world_size = sqrt(world_w * world_w + world_h * world_h);
-    double world_zoom = (world_size / stage_size);
-    double angle = camera.rotation;
-
-    // Get +positive Axis rays
-    DRay axis_rayX = { stage_origin, angle + 0 };
-    DRay axis_rayY = { stage_origin, angle + Math::HALF_PI };
-
-    // Get axis intersection with viewport rect
-    DVec2 negX_intersect, posX_intersect, negY_intersect, posY_intersect;
-    Math::rayRectIntersection(&negX_intersect, &posX_intersect, stage_rect, axis_rayX);
-    Math::rayRectIntersection(&negY_intersect, &posY_intersect, stage_rect, axis_rayY);
-
-    // Convert to world coordinates
-    DVec2 negX_intersect_world = camera.toWorld(negX_intersect);
-    DVec2 posX_intersect_world = camera.toWorld(posX_intersect);
-    DVec2 negY_intersect_world = camera.toWorld(negY_intersect);
-    DVec2 posY_intersect_world = camera.toWorld(posY_intersect);
-
-    // Draw with world coordinates, without line scaling
-    camera.setTransformFilters(true, false, false, false);
-
-    // Draw main axis lines
-    setStrokeStyle(255, 255, 255, static_cast<int>(255.0 * axis_opacity));
-    setLineWidth(1);
-
-    beginPath();
-    moveToSharp(negX_intersect_world.x, negX_intersect_world.y);
-    lineToSharp(posX_intersect_world.x, posX_intersect_world.y);
-    moveToSharp(negY_intersect_world.x, negY_intersect_world.y);
-    lineToSharp(posY_intersect_world.x, posY_intersect_world.y);
-    stroke();
-
-    double aspect_ratio = width / height;
-
-    // Draw axis ticks
-    camera.setTransformFilters(false);
-    double ideal_step_wx = ScaleSize(((width / aspect_ratio) / 7.0) / camera.zoomX());
-    double ideal_step_wy = ScaleSize((height / 7.0) / camera.zoomY());
-    double step_wx = roundAxisTickStep(ideal_step_wx);
-    double step_wy = roundAxisTickStep(ideal_step_wy);
-    /*double step, ideal_step;
-    if (step_wx < step_wy)
-    {
-        ideal_step = ideal_step_wx;
-        step = step_wy = step_wx;
-    }
-    else
-    {
-        ideal_step = ideal_step_wy;
-        step = step_wx = step_wy;
-    }*/
-
-    //double upperTickStep = 
-
-    //double prev_step = fmod(step, ideal_step *2.0);
-    //double next_step = roundAxisTickStep(prev_step * 5.0);
-    //double step_stretch = (ideal_step - prev_step) / (next_step - prev_step);
-    double big_step_wx = step_wx * 5.0;
-    double big_step_wy = step_wy * 5.0;
-
-
-
-
-    /*fillText("ideal_step: " + QString::number(ideal_step), 0, 0);
-    fillText("prev_step: " + QString::number(prev_step), 0, 20);
-    fillText("next_step: " + QString::number(next_step), 0, 40);
-    fillText("step_stretch: " + QString::number(step_stretch), 0, 60);*/
-
-    //double big_angle = 0;// step_stretch* M_PI * 2;
-    //double small_angle = (big_angle)+M_PI / 2;
-
-    double big_visibility = 1;// sin(big_angle) / 2 + 0.5;
-    //double small_visibility = 0;// sin(small_angle) / 2 + 0.5;
-
-    /*fillText("big_angle: " + QString::number((int)(big_angle*180.0/M_PI)), 0, 100);
-    fillText("big_visibility: " + QString::number(big_visibility), 0, 120);
-
-    fillText("small_angle: " + QString::number((int)(small_angle * 180.0 / M_PI)), 0, 160);
-    fillText("small_visibility: " + QString::number(small_visibility), 0, 180);*/
-
-    DVec2 x_perp_off = camera.toStageOffset(0, ScaleSize(6) * world_zoom);
-    DVec2 x_perp_norm = camera.toStageOffset(0, ScaleSize(1)).normalized();
-
-    DVec2 y_perp_off = camera.toStageOffset(ScaleSize(6) * world_zoom, 0);
-    DVec2 y_perp_norm = camera.toStageOffset(ScaleSize(1), 0).normalized();
-
-    setTextAlign(TextAlign::ALIGN_CENTER);
-    setTextBaseline(TextBaseline::BASELINE_MIDDLE);
-
-    ///QNanoFont font(QNanoFont::FontId::DEFAULT_FONT_NORMAL);
-    ///font.setPixelSize(12);
-    ///setFont(font);
-
-    double spacing = 8;
-
-    // Get world bounds, regardless of rotation
-    double world_minX = std::min({ world_tl.x, world_tr.x, world_br.x, world_bl.x });
-    double world_maxX = std::max({ world_tl.x, world_tr.x, world_br.x, world_bl.x });
-    double world_minY = std::min({ world_tl.y, world_tr.y, world_br.y, world_bl.y });
-    double world_maxY = std::max({ world_tl.y, world_tr.y, world_br.y, world_bl.y });
-
-    // Draw gridlines (big step)
-    if (grid_opacity > 0)
-    {
-
-        setFillStyle(255, 255, 255, static_cast<int>(big_visibility * 5.0));
-
-        bool offset = false;
-        DVec2 p1, p2;
-
-        for (double wy = ceilAxisValue(world_minY, big_step_wy); wy < world_maxY; wy += big_step_wy)
-        {
-            offset = !offset;
-
-            int64_t iy = static_cast<int64_t>(wy / big_step_wy);
-
-            DRay line_ray_y(camera.toStage(0, wy), angle);
-            if (!Math::rayRectIntersection(&p1, &p2, stage_rect, line_ray_y)) break;
-
-            for (double wx = ceilAxisValue(world_minX, big_step_wx); wx < world_maxX; wx += big_step_wx)
-            {
-                int64_t ix = static_cast<int64_t>(wx / big_step_wx);
-                //int64_t i = ix + (iy % 2 ? 1 : 0);
-
-                DRay line_ray_x(camera.toStage(wx, 0), angle + Math::HALF_PI);
-                if (!Math::rayRectIntersection(&p1, &p2, stage_rect, line_ray_x)) break;
-
-                if ((ix + iy) % 2 == 0)
-                    fillRect(wx, wy, big_step_wx, big_step_wy);
-            }
-
-        }
-    }
-
-    if (axis_opacity > 0 && text_opacity > 0)
-    {
-        setStrokeStyle(255, 255, 255, static_cast<int>(255.0 * axis_opacity));
-        setFillStyle(255, 255, 255, static_cast<int>(255.0 * text_opacity));
-        beginPath();
-
-        bool draw_text = (text_opacity > 0.01);
-
-        // Draw x-axis labels
-        for (double wx = ceilAxisValue(world_minX, step_wx); wx < world_maxX; wx += step_wx)
-        {
-            if (abs(wx) < 1e-9) continue;
-
-            DVec2 stage_pos = camera.toStage(wx, 0);
-            DVec2 txt_size = boundingBoxNumberScientific(wx).size();
-
-            double txt_dist = (abs(cos(angle)) * txt_size.y + abs(sin(angle)) * txt_size.x) * 0.5 + spacing;
-
-            DVec2 tick_anchor = stage_pos + x_perp_off + (x_perp_norm * txt_dist);
-
-            moveToSharp(stage_pos - x_perp_off);
-            lineToSharp(stage_pos + x_perp_off);
-            if (draw_text) fillNumberScientific(wx, tick_anchor);
-        }
-
-        // Draw y-axis labels
-        for (double wy = ceilAxisValue(world_minY, step_wy); wy < world_maxY; wy += step_wy)
-        {
-            if (abs(wy) < 1e-9) continue;
-
-            DVec2 stage_pos = camera.toStage(0, wy);
-            //DVec2 txt_size = measureText(txt);
-            DVec2 txt_size = boundingBoxNumberScientific(wy).size();
-
-            double txt_dist = (abs(cos(angle)) * txt_size.y + abs(sin(angle)) * txt_size.x) * 0.5 + spacing;
-
-            DVec2 tick_anchor = stage_pos + y_perp_off + (y_perp_norm * txt_dist);
-
-            moveToSharp(stage_pos - y_perp_off);
-            lineToSharp(stage_pos + y_perp_off);
-            if (draw_text) fillNumberScientific(wy, tick_anchor);
-        }
-
-        stroke();
-    }
-
-    restore();
-    camera.setTransformFilters(true);
-}
-
-/// Layout
+/// ========================
+/// ======== Layout ========
+/// ========================
 
 void SimSceneList::mountTo(Layout& viewports) 
 {
@@ -573,7 +321,9 @@ void Layout::resize(size_t viewport_count)
     // todo: Unmount remaining viewport sims
 }
 
-/// Project
+/// =========================
+/// ======== Project ========
+/// =========================
 
 void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
 {
@@ -618,19 +368,8 @@ void ProjectBase::_populateAllAttributes()
         bool showSceneUI = (scenes.size() == 1) || ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
         if (showSceneUI)
         {
-            //DebugPrint("_populateAllAttributes::markShadowValues");
-            ///scene->markShadowValues();
-
             // Allow Scene to populate inputs for section
             ImGui::PushID(section_id.c_str());
-            ///scene->populating_ui = true;
-
-
-            //if (ProjectWorker::instance()->shared_sync.processing_frame)
-            //{
-            //    DebugPrint("gui_populated_during_process = true");
-            //    ProjectWorker::instance()->shared_sync.gui_populated_during_process.store(true);
-            //}
 
             ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.6f, 0.3f, 0.3f, 1.0f));
@@ -639,12 +378,7 @@ void ProjectBase::_populateAllAttributes()
             scene->_sceneAttributes();
 
             ImGui::PopStyleColor(3);
-
-            ///scene->populating_ui = false;
             ImGui::PopID();
-
-            /// TODO: Do safely inside mutex? (new function call from worker)
-            //scene->updateSceneLiveBuffer();
         }
     }
 }
@@ -778,8 +512,8 @@ void ProjectBase::updateViewportRects()
     // Update viewport rects
     for (Viewport* viewport : viewports)
     {
-        viewport->x = viewport->viewport_grid_x * viewport_width;
-        viewport->y = viewport->viewport_grid_y * viewport_height;
+        viewport->pos_x = viewport->viewport_grid_x * viewport_width;
+        viewport->pos_y = viewport->viewport_grid_y * viewport_height;
         viewport->width = viewport_width - 1;
         viewport->height = viewport_height - 1;
         viewport->camera.viewport_w = viewport_width - 1;
@@ -804,8 +538,8 @@ void ProjectBase::_projectProcess()
         // Allow panning/zooming, even when paused
         for (Viewport* viewport : viewports)
         {
-            double viewport_mx = mouse.client_x - viewport->x;
-            double viewport_my = mouse.client_y - viewport->y;
+            double viewport_mx = mouse.client_x - viewport->pos_x;
+            double viewport_my = mouse.client_y - viewport->pos_y;
 
             Camera& cam = viewport->camera;
 
@@ -822,6 +556,9 @@ void ProjectBase::_projectProcess()
                 mouse.world_y = world_mouse.y;
                 viewport->camera.panZoomProcess();
             }
+
+            // Immediately update world -> stage transformation matrix
+            //cam.updateCameraMatrix();
         }
 
         if (!paused)
@@ -913,13 +650,13 @@ void ProjectBase::_projectDraw()
     // Draw each viewport
     for (Viewport* viewport : viewports)
     {
-        ctx->setClipRect(viewport->x, viewport->y, viewport->width, viewport->height);
+        ctx->setClipRect(viewport->pos_x, viewport->pos_y, viewport->width, viewport->height);
         ctx->save();
 
         /// ======== Set default viewport transform ========
 
         // Move to viewport position
-        ctx->translate(floor(viewport->x), floor(viewport->y));
+        ctx->translate(floor(viewport->pos_x), floor(viewport->pos_y));
 
         /// ======== Save default transform & Render ========
 
@@ -950,17 +687,17 @@ void ProjectBase::_projectDraw()
         // Draw vert line
         if (viewport->viewport_grid_x < viewports.cols - 1)
         {
-            double line_x = floor(viewport->x + viewport->width) + 0.5;
-            ctx->moveTo(line_x, viewport->y);
-            ctx->lineTo(line_x, viewport->y + viewport->height + 1);
+            double line_x = floor(viewport->pos_x + viewport->width) + 0.5;
+            ctx->moveTo(line_x, viewport->pos_y);
+            ctx->lineTo(line_x, viewport->pos_y + viewport->height + 1);
         }
 
         // Draw horiz line
         if (viewport->viewport_grid_y < viewports.rows - 1)
         {
-            double line_y = floor(viewport->y + viewport->height) + 0.5;
-            ctx->moveTo(viewport->x + viewport->width + 1, line_y);
-            ctx->lineTo(viewport->x, line_y);
+            double line_y = floor(viewport->pos_y + viewport->height) + 0.5;
+            ctx->moveTo(viewport->pos_x + viewport->width + 1, line_y);
+            ctx->lineTo(viewport->pos_x, line_y);
         }
 
         ctx->stroke();

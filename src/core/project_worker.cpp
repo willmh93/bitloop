@@ -79,8 +79,6 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 
 void ProjectWorker::worker_loop()
 {
-    DebugPrint("worker_loop started");
-
     bool shadow_changed = false;
 
     while (!shared_sync.quitting.load())
@@ -101,112 +99,52 @@ void ProjectWorker::worker_loop()
 
 
         /// ======== Do heavy work (while GUI thread redraws cached frame) ========
+        if (active_project) 
         {
-            // Preventing switching project entirely during a full worker frame
-            std::lock_guard<std::mutex> lock(shared_sync.working_mutex);
-
             /// ======== Update live values ========
-            // in case any inputs were changed since last .process()
-            shared_sync.processing_frame.store(true);
             {
                 //DebugPrint("----------------------------");
                 //DebugPrint("----- NEW WORKER FRAME -----");
 
-                // If projectProcess() didn't change cam_x/cam_y, how do you allow panning while rotating?
-                // the goal is to allow overriding what projectProcess did, but not if ImGui changed something.
-                // issue: shadow now contains live changes, so it will think a UI change occured even if it didn't?
-                {
-                    if (active_project)
-                        active_project->markLiveValues();
-
-                    ///DebugPrint("Polling Events");
-                    bool discard_events = shadow_changed;// active_project&& active_project->changedShadow();
-                    pollEvents(discard_events);
-
-                    // todo: if (live_changed) from before pollEvents?
-                    //if (!shadow_changed)
-
-                    if (active_project && active_project->changedLive())
-                        pushDataToShadow(); // only pushes updated cam_rot to shadow
-                }
-
-                /*if (shared_sync.gui_populated_during_process.load())
-                {
-                    // GUI shadow change must have occured during last worker frame,
-                    // meaning shadow still contains an unsynced change
-                    DebugPrint("Found unsynced change");
-                }*/
-
-                /// apply shadow data *changes* TO live buffer
-                //if (!shared_sync.gui_populated_during_process.load())
-                //{
-                    //DebugPrint("pullDataFromShadow()");
-                    pullDataFromShadow();
-
-                    
-
-                //}
-
-                //if (active_project && active_project->changedShadow())
-                //{
-                //    DebugPrint("DETECTED SHADOW CHANGE");
-                //}
-
-                
-                if (active_project)
+                // ======== Event polling ========
                 {
                     active_project->markLiveValues();
-                    //if (!shared_sync.gui_populated_during_process.load()) // I don't think this is doing anything
-                    ///    active_project->markShadowValues();
 
-                    //if (!shared_sync.gui_populated_during_process.load())
+                    // If shadow data changed (due to ImGui inputs), discard pending SDL events since ImGui
+                    // already processed those events internally and they shouldn't be treated as canvas input
+                    bool discard_event_batch = shadow_changed;
+                    pollEvents(discard_event_batch);
 
+                    // If handled SDL event changed live buffer, immediately push those changes to shadow buffer
+                    if (active_project->changedLive())
+                        pushDataToShadow();
+                }
+                
+                // ======== Update Live Buffer ========
+                pullDataFromShadow();
 
+                // ======== Mark buffer states prior to process ========
+                {
                     std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+                    active_project->markLiveValues();
                     active_project->markShadowValues();
                 }
 
-
-
-                // If worker frame completes without GUI overriding value, updating shadow
-                // at the end of *this* frame is allowed
-                //shared_sync.gui_populated_during_process.store(false);
-
-
-
-                //DebugPrint("projectProcess()");
-                if (active_project)
-                    active_project->_projectProcess(); // changes cam_rot
+                // ======== Process simulation (potentially heavy work) ========
+                active_project->_projectProcess();
 
                 
-
-                ///if (active_project)
-                ///    active_project->commitVariableChangeTracker();
-
-                // Then don't update shadow OR marked_shadow if the live variables
-
-
-
-                 // apply live data *changes* TO shadow buffer
-                //if (!shared_sync.gui_populated_during_process.load())
+                // ======== Update shadow buffer with *changed* live variables ========
                 {
-                    //DebugPrint("pushDataToShadow()");
-                    shadow_changed = active_project && active_project->changedShadow();
+                    shadow_changed = active_project->changedShadow();
                     if (!shadow_changed)
-                        pushDataToShadow(); // pushes ONLY the updated cam_rot to shadow
+                        pushDataToShadow();
                 }
-                ///else
-                ///{
-                ///    DebugPrint("pushDataToShadow() SKIPPED (GUI change means we still need that shadow update)");
-                ///}
-  
-
 
                 //DebugPrint("----- END WORKER FRAME -----");
                 //DebugPrint("----------------------------");
                 //DebugPrint("");
             }
-            shared_sync.processing_frame.store(false);
         }
 
         /// ======== Flag ready to draw ========
@@ -242,16 +180,7 @@ void ProjectWorker::pushDataToShadow()
         // While we update the shadow buffer, we should NOT 
         // permit ui updates (force a small stall)
         std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-
-        //if (shadow_lock.owns_lock())
-        {
-            if (active_project)
-            {
-                active_project->updateShadowBuffers();
-                //DebugPrint("pushDataToShadow::markShadowValues");
-                //active_project->markShadowValues();
-            }
-        }
+        active_project->updateShadowBuffers();
     }
 }
 
@@ -263,8 +192,7 @@ void ProjectWorker::pullDataFromShadow()
         std::lock_guard<std::mutex> live_buffer_lock(shared_sync.live_buffer_mutex);
         shared_sync.updating_live_buffer.store(true);
 
-        if (active_project)
-            active_project->updateLiveBuffers();
+        active_project->updateLiveBuffers();
 
         shared_sync.updating_live_buffer.store(false, std::memory_order_release);
 
@@ -286,9 +214,6 @@ void ProjectWorker::pollEvents(bool discardBatch)
     {
         for (SDL_Event& e : local)
         {
-            //if (e.type == SDL_MOUSEBUTTONUP)
-            //    continue;
-
             _onEvent(e);
         }
     }

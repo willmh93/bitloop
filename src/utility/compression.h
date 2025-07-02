@@ -5,7 +5,7 @@
 
 using ByteVec = std::vector<uint8_t>;
 
-namespace Encoding
+namespace Compression
 {
     // ===================== Base 64 encoding =======================
     static const char* base64_chars =

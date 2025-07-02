@@ -6,41 +6,23 @@
 #include <format>
 #include <thread>
 #include <atomic>
+
 #if defined (_WIN32)
-#define NOMINMAX
-#include <windows.h>
-#include <stacktrace>
+  #define NOMINMAX
+  #include <windows.h>
+  #include <stacktrace>
 #elif defined(__EMSCRIPTEN__)
-#include <emscripten/emscripten.h>
+  #include <emscripten/emscripten.h>
 #endif
+
+#include "platform_macros.h"
+
 
 #include "nlohmann_json.hpp"
 
+
 /// ======== Config ========
-
-/// ======== Debug Features ========
-#define DEBUG_FINITE_DOUBLE_CHECKS
-//#define FORCE_RELEASE_FINITE_DOUBLE_CHECKS
-//#define DEBUG_DISABLE_PRINT
-//#define DEBUG_INCLUDE_LOG_TABS
-
-/// ======== Platform Simulation ========
-#define DEBUG_SIMULATE_WEB_UI
-//#define DEBUG_SIMULATE_MOBILE
-//#define DEBUG_SIMULATE_DPR 2.625f
-
-
-/// ======== Timer filters ========
-
-#define TIMERS_ENABLED
-
-//-- Timer thresholds -- 
-constexpr double TIMER_ELAPSED_LIMIT = 1.0; // ms
-
-// -- Filters --
-constexpr bool THREAD_LOGGING  = false;
-constexpr bool THREAD_TIMING             = false;
-
+#include "config.h"
 
 
 struct Global
@@ -58,7 +40,6 @@ struct Global
 #pragma warning(error: 4100) // unreferenced formal parameter
 
 #define UNUSED(x) ((void)(x))
-
 
 // Disable debug flags for Release builds
 #ifdef NDEBUG
@@ -80,11 +61,6 @@ static size_t get_thread_index() {
     return thread_index;
 }
 
-//static size_t get_thread_index() {
-//    return std::hash<std::thread::id>{}(std::this_thread::get_id());
-//}
-
-
 #if defined(_WIN32)
 /// Windows
 #define DebugPrintString(txt) { const char* __buf = txt; OutputDebugStringA(__buf); ImDebugPrint(__buf); }
@@ -97,8 +73,7 @@ static size_t get_thread_index() {
             OutputDebugStringA("\n");                       \
             printf("%s\n", buf);                            \
         } while (0)
-            //if (ti > 0) snprintf(buf, sizeof(buf), "[G] "##fmt, ##__VA_ARGS__); 
-            //else        snprintf(buf, sizeof(buf), "[w] "##fmt, ##__VA_ARGS__); 
+
 #elif defined(__EMSCRIPTEN__)
 /// Webassembly
 #define DebugPrintString(txt) printf(txt)
@@ -172,6 +147,8 @@ void DashedDebugPrint(int width=0, const char* fmt=nullptr, Args... args)
 #define T0(name)     
 #define T1(name, ...)
 #endif
+
+// ======== DebugBreak ========
 
 #if defined(_MSC_VER)
 #define DebugBreak() __debugbreak()

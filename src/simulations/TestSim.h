@@ -46,12 +46,6 @@ struct Particle : public DVec2
 
 struct Test_Scene_Attributes : VarBuffer
 {
-    double speed;
-
-    DVec2 ball_pos = { 0, 0 };
-
-    std::vector<Particle> particles;
-
     bool transform_coordinates = true;
     bool scale_lines_text = true;
     bool scale_sizes = true;
@@ -62,12 +56,29 @@ struct Test_Scene_Attributes : VarBuffer
     double camera_rotation = 0;
     double zoom_x = 1;
     double zoom_y = 1;
+    double zoom_mult = 1;
 
+    void registerSynced() override
+    {
+        sync(transform_coordinates);
+        sync(scale_lines_text);
+        sync(scale_sizes);
+        sync(rotate_text);
+        sync(camera_x);
+        sync(camera_y);
+        sync(camera_rotation);
+        sync(zoom_x);
+        sync(zoom_y);
+        sync(zoom_mult);
+    }
     void populate() override;
 };
 
 struct Test_Scene : public Scene<Test_Scene_Attributes>
 {
+    DVec2 ball_pos = { 0, 0 };
+    std::vector<Particle> particles;
+
     // --- Custom Launch Config Example ---
     struct Config
     {

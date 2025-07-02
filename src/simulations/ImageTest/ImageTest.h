@@ -2,6 +2,8 @@
 #define TEST_H
 #include "project.h"
 
+//extern "C" void ImageTest_ForceLink();
+
 SIM_BEG(ImageTest)
 
 

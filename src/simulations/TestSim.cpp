@@ -43,10 +43,11 @@ void Test_Scene_Attributes::populate()
     ImGui::Checkbox("Rotate Text", &rotate_text); // updated in realtime
 
     ImGui::SliderDouble("Camera Rotatation", &camera_rotation, 0.0, pi * 2.0); // updated in realtime
-    ImGui::SliderDouble("Camera X", &camera_x, -500.0, 500.0); // updated in realtime
-    ImGui::SliderDouble("Camera Y", &camera_y, -500.0, 500.0); // updated in realtime
-    ImGui::SliderDouble("Zoom X",   &zoom_x, -2.0, 2.0); // updated in realtime
-    ImGui::SliderDouble("Zoom Y",   &zoom_y, -2.0, 2.0); // updated in realtime
+    ImGui::SliderDouble("Camera X",  &camera_x, -500.0, 500.0); // updated in realtime
+    ImGui::SliderDouble("Camera Y",  &camera_y, -500.0, 500.0); // updated in realtime
+    ImGui::SliderDouble("Zoom X",    &zoom_x, -5.0, 5.0); // updated in realtime
+    ImGui::SliderDouble("Zoom Y",    &zoom_y, -5.0, 5.0); // updated in realtime
+    ImGui::SliderDouble("Zoom Mult", &zoom_mult, 0.01, 100.0); // updated in realtime
 
     //static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
     //ImSpline::SplineEditor("X/Y Spline", &sync(spline), &vr);
@@ -79,6 +80,7 @@ void Test_Scene::sceneMounted(Viewport*)
     //    //camera->setOriginViewportAnchor(Anchor::CENTER);
     //    camera->setOriginViewportAnchor(Anchor::TOP_LEFT);
     //else
+    //camera->setOriginViewportAnchor(Anchor::TOP_LEFT);
     camera->setOriginViewportAnchor(Anchor::CENTER);
 
     //camera->focusWorldRect(0, 0, 300, 300);
@@ -129,7 +131,7 @@ void Test_Scene::sceneProcess()
         p.vy -= p.y * 0.0001;
     }
 
-    camera_rotation += 0.01;
+    //camera_rotation += 0.01;
 
     //static double a = 0.0;
     //spline[0].y = (float(sin(a) * 0.5 + 0.5));
@@ -153,11 +155,10 @@ void Test_Scene::viewportProcess(Viewport*, double)
     //}
     //else
     {
-        camera->x = camera_x;
-        camera->y = camera_y;
-        camera->setZoomX(zoom_x);
-        camera->setZoomY(zoom_y);
-        camera->rotation = camera_rotation;
+        camera->setPos(camera_x, camera_y);
+        camera->setZoomX(zoom_x * zoom_mult);
+        camera->setZoomY(zoom_y * zoom_mult);
+        camera->setRotation(camera_rotation);
     }
 
 
@@ -182,7 +183,7 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
 
     // Draw scene
     //ctx->scaleGraphics(scale_graphics);
-    ///ctx->drawWorldAxis();// 0.3, 0.04, 0);
+    ctx->drawWorldAxis();// 0.3, 0.04, 0);
     /*ctx->setLineWidth(10);
     ctx->beginPath();
     ctx->moveTo(0, 0);
@@ -202,13 +203,10 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
     //ctx->beginWorldTransform();
 
 
-
-    camera->setTransformFilters(
-        transform_coordinates,
-        scale_lines_text,
-        scale_sizes,
-        rotate_text
-    );
+    camera->worldCoordinates(transform_coordinates);
+    camera->scalingLines(scale_lines_text);
+    camera->scalingSizes(scale_sizes);
+    camera->rotatingText(rotate_text);
 
     ///obj.align = { -1, -1 };
     ///obj.setStageRect(100, 100, ctx->width - 200, ctx->height - 200);
@@ -228,17 +226,27 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
     ctx->beginPath();
     for (const Particle& p : particles)
     {
-        ctx->circle(p.x, p.y, 0.1);
+        ctx->circle(p.x, p.y, 0.5);
     }
     ctx->fill();
 
-    ctx->setFillStyle(255, 255, 255);
+    
+    /*ctx->setFillStyle(255, 255, 255);
+    ctx->setLineWidth(5);
+
+    DQuad q = static_cast<DQuad>(DRect(-50, -50, 50, 50));
+
+    
+
+    ctx->strokeQuad(q);
     ctx->strokeRect(-100, -100, 200, 200);
+    ctx->strokeEllipse(0, 0, 200, 200);
+    ctx->strokeEllipse(0, 0, 400, 100);
     //ctx->beginPath();
     //ctx->circle(100, 100, 5);
     //ctx->fill();
 
-    //camera->labelTransform();
+    //camera->worldHudTransform();
     //camera->setStageOffset(50, 0);
     ctx->beginPath();
     DVec2 p = DVec2(100, 100) + Offset(50, 50);
@@ -271,14 +279,14 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
     // Camera
     ctx->setFillStyle(255, 0, 0);
     ctx->beginPath();
-    ctx->circle(camera->x, camera->y, 5);
+    ctx->circle(camera->x(), camera->y(), 5);
     ctx->fill();
-    //
-    ctx->fillText("Camera", DVec2(camera->x, camera->y) + Offset(20, 20));
 
-    camera->stageTransform();
+    ctx->fillText("Camera", camera->pos() + Offset(20, 20));*/
 
-    /*std::stringstream txt;
+    /*camera->stageTransform();
+
+    std::stringstream txt;
     txt << "Size: ";
     int w, h;
     getDrawableSize(&w, &h);
@@ -302,7 +310,7 @@ void Test_Scene::viewportDraw(Viewport* ctx) const
     ctx->circle(ball_pos, 10);
     ctx->fill();*/
 
-    ///auto fingers = camera->pressed_fingers;
+    ///auto fingers = camera->fingers;
     ///for (auto& finger : fingers)
     ///{
     ///    ctx->print() << finger.fingerId << ": (" << finger.x << ", " << finger.y << ")\n";

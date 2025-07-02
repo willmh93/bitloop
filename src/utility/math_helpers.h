@@ -13,20 +13,32 @@ namespace Math
     constexpr double HALF_PI = std::numbers::pi / 2.0;
     constexpr double INV_TWO_PI = 1.0 / TWO_PI;
 
-    template<typename T> [[nodiscard]] inline bool isfinite(const T& v) { return std::isfinite(v); }
-    [[nodiscard]] inline bool isfinite(const DoubleDouble& v) {
+    template<typename T> [[nodiscard]] inline T roundDown(T v, T step) { return std::floor(v / step) * step; }
+    template<typename T> [[nodiscard]] inline T roundUp(T v, T step) { return std::ceil(v / step) * step; }
+    template<typename T> [[nodiscard]] inline bool divisible(T _big, T _small)
+    {
+        static_assert(std::is_arithmetic_v<T>, "divisible() only supports arithmetic types");
+        if constexpr (std::is_floating_point_v<T>)
+            return std::abs(std::fmod(_big, _small)) <= std::abs(_small) * (std::numeric_limits<T>::epsilon() * 10);
+        else if constexpr (std::is_integral_v<T>)
+            return _small != 0 && (_big % _small == 0);
+        return false;
+    }
+
+    template<typename T> 
+    [[nodiscard]] inline bool isfinite(const T& v) { return std::isfinite(v); }
+    [[nodiscard]] inline bool isfinite(const float128& v) {
         return std::isfinite(v.hi) && std::isfinite(v.lo);
     }
 
-    template<typename T> [[nodiscard]] inline bool isnan(const T& v) { return std::isnan(v); }
-    [[nodiscard]] inline bool isnan(const DoubleDouble& v) {
+    template<typename T> 
+    [[nodiscard]] inline bool isnan(const T& v) { return std::isnan(v); }
+    [[nodiscard]] inline bool isnan(const float128& v) {
         return std::isnan(v.hi) || std::isnan(v.lo);
     }
 
     template<typename T> [[nodiscard]] inline bool isinf(const T& v) { return std::isinf(v); }
-    [[nodiscard]] inline bool isinf(const DoubleDouble& v) {
-        return std::isinf(v.hi);
-    }
+    [[nodiscard]] inline bool isinf(const float128& v) { return std::isinf(v.hi); }
 
     [[nodiscard]] inline int countDecimals(double num)
     {
@@ -44,7 +56,7 @@ namespace Math
     {
         if (n == 0) return 1;
 
-        // Work in unsigned to avoid overflow on INT_MIN
+        // unsigned to avoid overflow on INT_MIN
         unsigned v = (n < 0)
             ? static_cast<unsigned>(-(static_cast<long long>(n)))
             : static_cast<unsigned>(n);
@@ -55,17 +67,10 @@ namespace Math
     template <typename Float>
     [[nodiscard]] int countWholeDigits(Float x)
     {
-        static_assert(std::is_floating_point_v<Float>,
-            "Float must be a floating-point type");
-
-        if (!std::isfinite(x))
-            return 0;
-
+        static_assert(std::is_floating_point_v<Float>, "Float must be a floating-point type");
+        if (!std::isfinite(x)) return 0;
         x = std::fabs(x);
-
-        if (x < 1)
-            return 1;
-
+        if (x < 1) return 1;
         return static_cast<int>(std::floor(std::log10(x))) + 1;
     }
 
@@ -95,11 +100,15 @@ namespace Math
     }
 
     template<typename T>
-    [[nodiscard]] inline T log1pLerp(T a, T lerp_factor)
+    [[nodiscard]] inline T linear_log_lerp(T a, T lerp_factor)
     {
-        //return a + (fast_log1p(a) - a) * lerp_factor;
+        return a + (log(a) - a) * lerp_factor;
+    }
+
+    template<typename T>
+    [[nodiscard]] inline T linear_log1p_lerp(T a, T lerp_factor)
+    {
         return a + (log(1 + a) - a) * lerp_factor;
-        //return a + (log1p(a) - a) * lerp_factor;
     }
 
     // Ratios (a->b,  0->1)
@@ -115,7 +124,7 @@ namespace Math
     template<typename T> [[nodiscard]] constexpr T absAvgPct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
 
     // Coordinate offset rotation
-    [[nodiscard]]inline DVec2 rotateOffset(double dx, double dy, double rotation)
+    [[nodiscard]] inline DVec2 rotateOffset(double dx, double dy, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -124,14 +133,14 @@ namespace Math
             (dy * _cos + dx * _sin)
         };
     }
-    [[nodiscard]]inline DVec2 rotateOffset(double dx, double dy, double _cos, double _sin)
+    [[nodiscard]] inline DVec2 rotateOffset(double dx, double dy, double _cos, double _sin)
     {
         return {
             (dx * _cos - dy * _sin),
             (dy * _cos + dx * _sin)
         };
     }
-    [[nodiscard]]inline DVec2 rotateOffset(const DVec2& offset, double rotation)
+    [[nodiscard]] inline DVec2 rotateOffset(const DVec2& offset, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -140,7 +149,7 @@ namespace Math
             (offset.y * _cos + offset.x * _sin)
         };
     }
-    [[nodiscard]]inline DVec2 rotateOffset(const DVec2& offset, double _cos, double _sin)
+    [[nodiscard]] inline DVec2 rotateOffset(const DVec2& offset, double _cos, double _sin)
     {
         return {
             (offset.x * _cos - offset.y * _sin),
@@ -148,7 +157,7 @@ namespace Math
         };
     }
 
-    [[nodiscard]]inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
+    [[nodiscard]] inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -157,14 +166,14 @@ namespace Math
             (dy * _cos - dx * _sin)
         };
     }
-    [[nodiscard]]inline DVec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
+    [[nodiscard]] inline DVec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
     {
         return {
             (dx * _cos + dy * _sin),
             (dy * _cos - dx * _sin)
         };
     }
-    [[nodiscard]]inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
+    [[nodiscard]] inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
     {
         double _cos = cos(rotation);
         double _sin = sin(rotation);
@@ -173,7 +182,7 @@ namespace Math
             (offset.y * _cos - offset.x * _sin)
         };
     }
-    [[nodiscard]]inline DVec2 reverseRotateOffset(const DVec2& offset, double _cos, double _sin)
+    [[nodiscard]] inline DVec2 reverseRotateOffset(const DVec2& offset, double _cos, double _sin)
     {
         return {
             (offset.x * _cos + offset.y * _sin),
