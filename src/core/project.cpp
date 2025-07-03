@@ -790,7 +790,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             // Add pressed finger
             FingerInfo info;
             info.ctx_owner = ctx_focused;
-            info.fingerId = e.tfinger.fingerId;
+            info.fingerId = e.tfinger.fingerID;
             info.x = pointer_event.x();
             info.y = pointer_event.y();
             pressed_fingers.push_back(info);
@@ -805,7 +805,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             for (size_t i = 0; i < pressed_fingers.size(); i++)
             {
                 FingerInfo& info = pressed_fingers[i];
-                if (info.fingerId == e.tfinger.fingerId)
+                if (info.fingerId == e.tfinger.fingerID)
                 {
                     ctx_owner = info.ctx_owner;
                     break;
@@ -821,7 +821,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             for (size_t i = 0; i < pressed_fingers.size(); i++)
             {
                 FingerInfo& info = pressed_fingers[i];
-                if (info.fingerId == e.tfinger.fingerId)
+                if (info.fingerId == e.tfinger.fingerID)
                 {
                     ctx_owner = info.ctx_owner;
                     break;
@@ -832,7 +832,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             for (size_t i = 0; i < pressed_fingers.size(); i++)
             {
                 FingerInfo& info = pressed_fingers[i];
-                if (info.fingerId == e.tfinger.fingerId)
+                if (info.fingerId == e.tfinger.fingerID)
                 {
                     pressed_fingers.erase(pressed_fingers.begin() + i);
                     break;

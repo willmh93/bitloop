@@ -15,12 +15,12 @@ std::string Event::toString()
     case SDL_EVENT_KEY_DOWN:    type = "SDL_KEYDOWN";          goto key_attribs;
     case SDL_EVENT_KEY_UP:      type = "SDL_KEYUP";            goto key_attribs;
         key_attribs:
-        sprintf(attribs, "{%s}", SDL_GetKeyName(sdl_event.key.keysym.sym));
+        sprintf(attribs, "{%s}", SDL_GetKeyName(sdl_event.key.key));
 
         break;
 
     case SDL_EVENT_MOUSE_MOTION:       type = "SDL_MOUSEMOTION";
-        sprintf(attribs, "{%d, %d}",
+        sprintf(attribs, "{%.1f, %.1f}",
             sdl_event.motion.x,
             sdl_event.motion.y); 
 
@@ -29,7 +29,7 @@ std::string Event::toString()
     case SDL_EVENT_MOUSE_BUTTON_DOWN:   type = "SDL_MOUSEBUTTONDOWN";  goto mouse_attribs;
     case SDL_EVENT_MOUSE_BUTTON_UP:     type = "SDL_MOUSEBUTTONUP";    goto mouse_attribs;
         mouse_attribs:
-        sprintf(attribs, "{%d, %d}", 
+        sprintf(attribs, "{%.1f, %.1f}", 
             sdl_event.button.x, 
             sdl_event.button.y); 
 
@@ -40,7 +40,7 @@ std::string Event::toString()
     case SDL_EVENT_FINGER_MOTION:      type = "SDL_FINGERMOTION";
         finger_attribs:
         sprintf(attribs, "{F_%lld, %d, %d}", 
-            sdl_event.tfinger.fingerId, 
+            sdl_event.tfinger.fingerID, 
             (int)(sdl_event.tfinger.x * (float)Platform()->fbo_width()),
             (int)(sdl_event.tfinger.y * (float)Platform()->fbo_height()));
 

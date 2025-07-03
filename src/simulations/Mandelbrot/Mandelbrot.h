@@ -1018,8 +1018,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
 
             // Avoid picking pixels from opposite side of the cardioid which would be sampled twice
             bool hide =
-                (polard_coord.x < M_PI && recalculated_orig_angle > M_PI * 1.1) ||
-                (polard_coord.x > M_PI && recalculated_orig_angle < M_PI * 0.9);
+                (polard_coord.x < Math::PI && recalculated_orig_angle > Math::PI * 1.1) ||
+                (polard_coord.x > Math::PI && recalculated_orig_angle < Math::PI * 0.9);
 
             if (hide)
             {

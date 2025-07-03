@@ -2,6 +2,8 @@
 
 /// SDL3
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_video.h>
+#include <SDL3/SDL_touch.h>
 
 /// emscripten
 #ifdef __EMSCRIPTEN__
@@ -28,7 +30,7 @@ class PlatformManager
     SDL_Window* window;
 
     //float _dpr = 1.0f;
-    float _dpi = 96.0f;
+    ///float _dpi = 96.0f;
 
     double css_w, css_h;
     int gl_w, gl_h;
@@ -37,7 +39,7 @@ class PlatformManager
 
     bool is_mobile_device = false;
 
-    void update_device_dpi();
+    ///void update_device_dpi();
 
 public:
 
@@ -67,7 +69,7 @@ public:
     [[nodiscard]] int window_height() { return win_h; }
 
     // Device Info
-    [[nodiscard]] float dpi() { return _dpi; }
+    ///[[nodiscard]] float dpi() { return _dpi; }
 
     #ifdef DEBUG_SIMULATE_DPR
     float dpr() { return DEBUG_SIMULATE_DPR; }
@@ -83,17 +85,17 @@ public:
     [[nodiscard]] bool is_mobile();
     [[nodiscard]] bool is_desktop_native();
     [[nodiscard]] bool is_desktop_browser();
-    [[nodiscard]] bool is_touch_device();
-    [[nodiscard]] float touch_accuracy();
+    //[[nodiscard]] bool is_touch_device();
+    ///[[nodiscard]] float touch_accuracy();
 
     // Scale
     [[nodiscard]] float font_scale();
     [[nodiscard]] float ui_scale_factor(float extra_mobile_mult=1.0f);
 
     // Window
-    [[nodiscard]] float window_width_inches();
-    [[nodiscard]] float window_height_inches();
-    [[nodiscard]] float window_size_inches();
+    ///[[nodiscard]] float window_width_inches();
+    ///[[nodiscard]] float window_height_inches();
+    ///[[nodiscard]] float window_size_inches();
 
     // Layout helpers
     [[nodiscard]] float line_height();

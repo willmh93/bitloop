@@ -14,10 +14,10 @@ void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments,
     ctx->setStrokeStyle(255, 0, 0);
     ctx->beginPath();
 
-    double angle_step = (2 * M_PI) / static_cast<double>(segments);
+    double angle_step = Math::TWO_PI / static_cast<double>(segments);
     bool first = true;
 
-    for (double angle = 0.0; angle < 2 * M_PI; angle += angle_step)
+    for (double angle = 0.0; angle < Math::TWO_PI; angle += angle_step)
     {
         double plot_x = 0.5 * cos(angle) - 0.25 * cos(angle * 2.0);
         double plot_y = 0.5 * sin(angle) - 0.25 * sin(angle * 2.0);
@@ -84,7 +84,7 @@ void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments,
         ctx->stroke();
 
         // Draw perpendicular arrow (to mouse)
-        double perp_angle = Math::wrapRadians2PI(ta - M_PI / 2.0);
+        double perp_angle = Math::wrapRadians2PI(ta - Math::HALF_PI);
         tx2 = tx1 + cos(perp_angle) * d;
         ty2 = ty1 + sin(perp_angle) * d;
 
@@ -110,11 +110,11 @@ void Cardioid_Scene_Vars::populate()
     //ImGui::SliderDouble("Angle", &interact_angle, 0, (2 * M_PI));
     ImGui::Checkbox("Flatten", &flatten);
     ImGui::Checkbox("Interactive", &interactive);
-    ImGui::SliderDouble("Rotate Speed", &interact_angle_step, 0, (2 * M_PI) / 100.0);
+    ImGui::SliderDouble("Rotate Speed", &interact_angle_step, 0, Math::TWO_PI / 100.0);
 
 
     ImGui::SliderDouble("Spin multiplier", &interact_spin_mult, 0.0, 1.0);
-    ImGui::SliderDouble("Angle", &interact_angle, 0.0, (2.0 * M_PI));
+    ImGui::SliderDouble("Angle", &interact_angle, 0.0, Math::TWO_PI);
     ImGui::SliderDouble("Distance", &interact_dist, 0.0, 1.0);
 
     //ImGui::Checkbox("show offset", &show_offset);
@@ -129,7 +129,7 @@ void Cardioid_Scene_Vars::populate()
 void Cardioid_Scene::sceneStart()
 {
     //cumulative_cardioid = computeCumulativeCardioid((2 * M_PI) / 72000.0);
-    cumulative_cardioid_lookup.create((2.0 * M_PI) / 3600.0, 0.01);
+    cumulative_cardioid_lookup.create(Math::TWO_PI / 3600.0, 0.01);
 
 }
 
@@ -160,7 +160,7 @@ void Cardioid_Scene::sceneProcess()
 
 double originalAngleFromPerpAngle(double perp_angle)
 {
-    return Math::wrapRadians2PI((perp_angle + M_PI / 2.0) / 1.5);
+    return Math::wrapRadians2PI((perp_angle + Math::HALF_PI) / 1.5);
 }
 
 void Cardioid_Scene::viewportProcess(Viewport*, double)
@@ -363,12 +363,12 @@ void Cardioid_Scene::fullPlot(Viewport* ctx, double scale, double ox) const
     double r1 = scale * 0.5;
     double r2 = r1 / 4.0;
 
-    double angle_step = (2 * M_PI) / 100.0;
+    double angle_step = Math::TWO_PI / 100.0;
 
     bool first = true;
-    for (double angle = 0.0; angle < 2 * M_PI; angle += angle_step)
+    for (double angle = 0.0; angle < Math::TWO_PI; angle += angle_step)
     {
-        //double straight_len = (angle / (2 * M_PI)) * 3.837;
+        //double straight_len = (angle / (Math::TWO_PI)) * 3.837;
 
         double angle2 = 2.0 * angle;
 
@@ -406,10 +406,10 @@ void Cardioid_Scene::fullPlotAlternative(Viewport* ctx, double scale, double ox)
     ctx->setLineWidth(4);
     ctx->setStrokeStyle(255, 0, 255);
 
-    double angle_step = (2 * M_PI) / 100.0;
+    double angle_step = Math::TWO_PI / 100.0;
 
     bool first = true;
-    for (double angle = 0.0; angle < 2 * M_PI; angle += angle_step)
+    for (double angle = 0.0; angle < Math::TWO_PI; angle += angle_step)
     {
         //double a = sin(angle * 0.5);
         double plot_x = cos(angle) * pow(sin(angle * 0.5), 2) + (ox + 0.25) * scale;
@@ -457,13 +457,13 @@ void Cardioid_Graph_Scene::viewportProcess(Viewport* ctx, double)
 
             if (d >= 0)
             {
-                double perp_angle = Math::wrapRadians(ta - M_PI / 2.0);
+                double perp_angle = Math::wrapRadians(ta - Math::HALF_PI);
 
                 double neg_angle = max(0.0, -perp_angle);
                 double pos_angle = max(0.0, perp_angle);
 
-                int neg_col = (int)((max(0.0, min(M_PI, neg_angle)) / M_PI) * 255.0);
-                int pos_col = (int)((max(0.0, min(M_PI, pos_angle)) / M_PI) * 255.0);
+                int neg_col = (int)((max(0.0, min(Math::PI, neg_angle)) / Math::PI) * 255.0);
+                int pos_col = (int)((max(0.0, min(Math::PI, pos_angle)) / Math::PI) * 255.0);
 
                 bmp.setPixel(x, y, neg_col, pos_col, 0, 255);
             }
@@ -528,7 +528,7 @@ void Cardioid_Graph_Scene::viewportDraw(Viewport* ctx) const
     ctx->drawWorldAxis();
     camera->worldHudTransform();
     
-    double angle_step = (2.0 * M_PI) / 720.0;
+    double angle_step = Math::TWO_PI / 720.0;
     bool first;
 
     /// Show unstable region bound
@@ -549,7 +549,7 @@ void Cardioid_Graph_Scene::viewportDraw(Viewport* ctx) const
     ctx->beginPath();
 
     first = true;
-    for (double angle = 0.0; angle < 2 * M_PI; angle += angle_step)
+    for (double angle = 0.0; angle < Math::TWO_PI; angle += angle_step)
     {
         double plot_x = 0.5 * cos(angle) - 0.25 * cos(angle * 2.0);
         double plot_y = 0.5 * sin(angle) - 0.25 * sin(angle * 2.0);

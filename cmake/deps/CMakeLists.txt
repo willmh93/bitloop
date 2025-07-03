@@ -29,11 +29,11 @@ if (NOT EMSCRIPTEN)
     FetchContent_MakeAvailable(SDL3)
 
     # Install SDL3 library targets
-    install(TARGETS SDL3-static EXPORT depsTargets)
+    install(TARGETS SDL3-static SDL3_Headers  EXPORT depsTargets)
 
     # Install SDL3 headers manually
     install(DIRECTORY ${SDL3_SOURCE_DIR}/include/
-            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SDL3)
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
     add_library(deps::SDL3-static ALIAS SDL3-static)
 else()
@@ -47,6 +47,22 @@ else()
 
     add_compile_options(-pthread -matomics -mbulk-memory)
     add_link_options(-pthread -sUSE_PTHREADS=1 -sALLOW_MEMORY_GROWTH=1)
+
+    # ---- Include paths --------------------------------------------------------
+    # 1) Real SDL headers that ship in the sysroot
+    target_include_directories(${target} PRIVATE
+        "$ENV{EMSDK}/upstream/emscripten/cache/sysroot/include"
+    )
+
+    # 2) Add one-line alias header so <SDL3/SDL.h> resolves
+    set(SDL3_ALIAS_DIR "${CMAKE_BINARY_DIR}/sdl3_alias/include/SDL3")
+    file(MAKE_DIRECTORY "${SDL3_ALIAS_DIR}")
+    file(WRITE "${SDL3_ALIAS_DIR}/SDL.h"
+        "#pragma once\n#include <SDL/SDL.h>\n")
+
+    target_include_directories(${target} PRIVATE
+        "${CMAKE_BINARY_DIR}/sdl3_alias/include"
+    )
 endif()
 
 

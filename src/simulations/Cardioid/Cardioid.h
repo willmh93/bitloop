@@ -25,7 +25,7 @@ inline double cardioidSquaredDistance(double angle, double mx, double my)
 inline double originalAngleBinarySearch(double mx, double my)
 {
     double left = 0.0;
-    double right = 2.0 * M_PI;
+    double right = 2.0 * Math::PI;
     const double eps = 0.02;// 1e-13;
 
     while (right - left > eps)
@@ -87,9 +87,9 @@ inline double originalAngleFromPoint(
 
         // Wrap angle
         if (theta < 0)
-            theta += 2.0 * M_PI;
-        else if (theta >= 2.0 * M_PI)
-            theta -= 2.0 * M_PI;
+            theta += 2.0 * Math::PI;
+        else if (theta >= 2.0 * Math::PI)
+            theta -= 2.0 * Math::PI;
 
         // If the step is sufficiently small, we consider we've converged
         if (fabs(step) < tolerance)
@@ -146,7 +146,7 @@ inline DVec2 fromPolarCoordinate(double angle, double dist)
 {
     //double angle = (perp_angle + M_PI / 2.0) / 1.5;
     double tangent_angle = 1.5 * angle;
-    double perp_angle = tangent_angle - M_PI / 2.0;
+    double perp_angle = tangent_angle - Math::PI / 2.0;
     double tx = 0.5 * cos(angle) - 0.25 * cos(angle * 2.0);
     double ty = 0.5 * sin(angle) - 0.25 * sin(angle * 2.0);
     double px = tx + cos(perp_angle) * dist;
@@ -222,7 +222,7 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
         double old_plot_x = 0.25;
         double old_plot_y = 0.0;
         double old_segment_angle = 0.0;
-        int steps = static_cast<int>(round((2.0 * M_PI) / angle_step));
+        int steps = static_cast<int>(round(Math::TWO_PI / angle_step));
         double delta_angle;
         double delta_dist;
         double angle = 0.0;
@@ -344,7 +344,7 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
         int i = nearestPoint(x, y, weight);
 
         const CardioidSegment& p = cardioid[i];
-        double angle = (i / (double)cardioid.size()) * (2 * M_PI);
+        double angle = (i / (double)cardioid.size()) * (Math::TWO_PI);
         double tangent_angle = p.angle;
 
         double dx = x - p.x;
@@ -371,11 +371,11 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
         const LerpedCardioid& b = at(cardioid_i1);
         double f_len = static_cast<double>(a.size());
 
-        double segment_i_ratio = angle / (2 * M_PI);
+        double segment_i_ratio = angle / Math::TWO_PI;
         int segment_i = static_cast<int>(segment_i_ratio * f_len);
 
         CardioidSegment ret = CardioidSegment::lerp(a[segment_i], b[segment_i], cardioid_lerp_ratio);
-        double perp_angle = ret.angle - M_PI / 2.0;
+        double perp_angle = ret.angle - Math::HALF_PI;
         
         return {
             ret.x + cos(perp_angle) * dist,
@@ -392,7 +392,7 @@ struct Cardioid_Scene_Vars : public VarBuffer
     bool   interactive = false;
     bool   animate = true;
     double ani_angle = 0.0;
-    double interact_angle_step = (2.0 * M_PI) / 720.0;
+    double interact_angle_step = Math::TWO_PI / 720.0;
     double interact_spin_mult = 1.0;
     double interact_angle = 0.0;
     double interact_dist = 0.0;

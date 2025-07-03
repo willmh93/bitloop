@@ -1,5 +1,5 @@
 #pragma once
-#include <SDL3/SDL.h>
+#include <SDL3/SDL3/SDL.h>
 #include <string>
 
 class ProjectBase;
@@ -76,12 +76,12 @@ public:
     [[nodiscard]] double wheelY() { return (double)sdl_event.wheel.y; }
 
     // Touch
-    [[nodiscard]] constexpr SDL_FingerID fingerID() { return sdl_event.tfinger.fingerId; }
+    [[nodiscard]] constexpr SDL_FingerID fingerID() { return sdl_event.tfinger.fingerID; }
     [[nodiscard]] double x();
     [[nodiscard]] double y();
 };
 
-typedef SDL_KeyCode KeyCode;
+typedef SDL_Keycode KeyCode;
 typedef SDL_Scancode ScanCode;
 
 class KeyEvent : public Event
@@ -89,8 +89,8 @@ class KeyEvent : public Event
 public:
     KeyEvent(Event& e) : Event(e.sdl_event) {}
 
-    [[nodiscard]] KeyCode keyCode()     { return static_cast<KeyCode>(sdl_event.key.keysym.sym); }
-    [[nodiscard]] ScanCode scanCode()   { return static_cast<ScanCode>(sdl_event.key.keysym.scancode); }
-    [[nodiscard]] const char* keyName() { return SDL_GetKeyName(sdl_event.key.keysym.sym); }
+    [[nodiscard]] KeyCode keyCode()     { return static_cast<KeyCode>(sdl_event.key.key); }
+    [[nodiscard]] ScanCode scanCode()   { return static_cast<ScanCode>(sdl_event.key.scancode); }
+    [[nodiscard]] const char* keyName() { return SDL_GetKeyName(keyCode()); }
 };
 

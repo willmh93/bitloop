@@ -728,7 +728,7 @@ void Mandelbrot_Scene::sceneStart()
 {
     // todo: Stop this getting called twice on startup
 
-    cardioid_lerper.create((2.0 * M_PI) / 5760.0, 0.005);
+    cardioid_lerper.create(Math::TWO_PI / 5760.0, 0.005);
 }
 
 void Mandelbrot_Scene::sceneMounted(Viewport* ctx)

@@ -421,7 +421,7 @@ public:
         double dx = b.x - a.x;
         double dy = b.y - a.y;
         double angle = atan2(dy, dx);
-        constexpr double tip_sharp_angle = 145.0 * M_PI / 180.0;
+        constexpr double tip_sharp_angle = 145.0 * Math::PI / 180.0;
         double arrow_size = line_width * 4 / _avgZoom();
 
         setLineCap(LineCap::CAP_ROUND);

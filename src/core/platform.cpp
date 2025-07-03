@@ -34,11 +34,12 @@ void PlatformManager::init()
 
 void PlatformManager::update()
 {
-    SDL_GL_GetDrawableSize(window, &gl_w, &gl_h);
+    //SDL_GL_GetDrawableSize(window, &gl_w, &gl_h); // SDL2
+    SDL_GetWindowSizeInPixels(window, &gl_w, &gl_h);
     SDL_GetWindowSize(window, &win_w, &win_h);
 
     //_dpr = (float)gl_w / (float)win_w;
-    update_device_dpi();
+    //update_device_dpi();
 }
 
 void PlatformManager::resized()
@@ -51,7 +52,8 @@ void PlatformManager::resized()
     SDL_SetWindowSize(window, fb_w, fb_h);
     emscripten_set_canvas_element_size("#canvas", fb_w, fb_h);
     #else
-    SDL_GL_GetDrawableSize(window, &fb_w, &fb_h);
+    //SDL_GL_GetDrawableSize(window, &fb_w, &fb_h);
+    SDL_GetWindowSizeInPixels(window, &fb_w, &fb_h); // SDL2
     #endif
 
     Platform()->update();
@@ -104,25 +106,31 @@ bool PlatformManager::device_orientation_changed(std::function<void(int, int)> o
     #endif
 }
 
-void PlatformManager::update_device_dpi()
-{
-    #ifdef __EMSCRIPTEN__
-    _dpi = EM_ASM_DOUBLE({
-        return window.devicePixelRatio * 96.0;
-    });
-    #else
-    float ddpi, hdpi, vdpi;
-    if (SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi) == 0)
-        _dpi = ddpi;
-    else
-        _dpi = 96.0f;
-    #endif
-}
+    //SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+///void PlatformManager::update_device_dpi()
+///{
+///    #ifdef __EMSCRIPTEN__
+///    _dpi = EM_ASM_DOUBLE({
+///        return window.devicePixelRatio * 96.0;
+///    });
+///    #else
+///    SDL_DisplayID display = SDL_GetDisplayForWindow(window); // your existing SDL_Window*
+///    if (SDL_GetDisplayDensity(display, &ddpi) == 0 && ddpi > 0.0f)
+///        _dpi = ddpi;
+///    else
+///        _dpi = 96.0f;
+///    ///float ddpi, hdpi, vdpi;
+///    ///if (SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi) == 0)
+///    ///    _dpi = ddpi;
+///    ///else
+///    ///    _dpi = 96.0f;
+///    #endif
+///}
 
-bool PlatformManager::is_touch_device()
-{
-    return SDL_GetNumTouchDevices() > 0;
-}
+//bool PlatformManager::is_touch_device()
+//{
+//    return false;// SDL_GetNumTouchpads() > 0;
+//}
 
 bool PlatformManager::is_mobile()
 {
@@ -151,13 +159,13 @@ bool PlatformManager::is_desktop_browser()
     #endif
 }
 
-float PlatformManager::touch_accuracy()
-{
-    // Measure size of a thumb relative to screen size
-    // 0 = poor accuracy (thumb on small screen)
-    // 1 = perfect accuracy (pointer)
-    return 1.0f - (1.0f / window_size_inches());
-}
+///float PlatformManager::touch_accuracy()
+///{
+///    // Measure size of a thumb relative to screen size
+///    // 0 = poor accuracy (thumb on small screen)
+///    // 1 = perfect accuracy (pointer)
+///    return 1.0f - (1.0f / window_size_inches());
+///}
 
 float PlatformManager::font_scale()
 {
@@ -172,21 +180,21 @@ float PlatformManager::ui_scale_factor(float extra_mobile_mult)
     return is_mobile() ? (2.0f * extra_mobile_mult) : 1.0f;
 }
 
-float PlatformManager::window_width_inches()
-{
-    return win_w / _dpi;
-}
-
-float PlatformManager::window_height_inches()
-{
-    return win_h / _dpi;
-}
-
-float PlatformManager::window_size_inches()
-{
-    float diag_px = std::sqrt((float)(win_w * win_w + win_h * win_h));
-    return diag_px / _dpi;
-}
+//float PlatformManager::window_width_inches()
+//{
+//    return win_w / _dpi;
+//}
+//
+//float PlatformManager::window_height_inches()
+//{
+//    return win_h / _dpi;
+//}
+//
+//float PlatformManager::window_size_inches()
+//{
+//    float diag_px = std::sqrt((float)(win_w * win_w + win_h * win_h));
+//    return diag_px / _dpi;
+//}
 
 float PlatformManager::line_height()
 {

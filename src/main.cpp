@@ -93,8 +93,19 @@ int main(int, char* [])
         });
         #endif
 
-        window = SDL_CreateWindow("bitloop", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, fb_w, fb_h,
-            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_ALLOW_HIGHDPI);
+        ///SDL_WindowProperties props = {
+        ///    .title = "bitloop",
+        ///    .x = SDL_WINDOWPOS_CENTERED,
+        ///    .y = SDL_WINDOWPOS_CENTERED,
+        ///    .width = fb_w,
+        ///    .height = fb_h,
+        ///    .flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIGH_PIXEL_DENSITY
+        ///};
+
+        window = SDL_CreateWindow("bitloop", fb_w, fb_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+
+        //window = SDL_CreateWindow("bitloop", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, fb_w, fb_h,
+        //    SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 
     }
 
@@ -156,7 +167,8 @@ int main(int, char* [])
             ImGui_ImplOpenGL3_Shutdown();
             ImGui_ImplSDL3_Shutdown();
             ImGui::DestroyContext();
-            SDL_GL_DeleteContext(gl_context);
+            ///SDL_GL_DeleteContext(gl_context);
+            SDL_GL_DestroyContext(gl_context);
             SDL_DestroyWindow(window);
             SDL_Quit();
         }
