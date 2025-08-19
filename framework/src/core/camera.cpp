@@ -504,16 +504,19 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
     }
 }
 
-void CameraViewController::populateUI()
+void CameraViewController::populateUI(DRect cam_area)
 {
-    int decimals = 1 + Math::countWholeDigits(cam_zoom);
+    int decimals = 1 + Math::countWholeDigits(cam_zoom*5);
     char format[16];
     snprintf(format, sizeof(format), "%%.%df", decimals);
 
+    //~ // we need the real camera zoom here to work out pan speed, not your local zoom multiplier,
+      // but you don't have access to the camera here... cache ref zoom or real zoom from "read(...)"?
+
     static double init_cam_x = cam_x;
     static double init_cam_y = cam_y;
-    ImGui::RevertableDragDouble("X", &cam_x, &init_cam_x, 1 / cam_zoom, -1000.0, 1000.0, format);
-    ImGui::RevertableDragDouble("Y", &cam_y, &init_cam_y, 1 / cam_zoom, -1000.0, 1000.0, format);
+    ImGui::RevertableDragDouble("X", &cam_x, &init_cam_x, 1 / cam_avg_zoom, cam_area.x1, cam_area.x2, format);
+    ImGui::RevertableDragDouble("Y", &cam_y, &init_cam_y, 1 / cam_avg_zoom, cam_area.y1, cam_area.y2, format);
 
     static double init_degrees = cam_degrees;
     if (ImGui::RevertableSliderDouble("Rotation", &cam_degrees, &init_degrees, 0.0, 360.0, "%.0f\xC2\xB0"))

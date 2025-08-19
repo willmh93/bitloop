@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <functional>
 #include <string>
 #include <sstream>
@@ -288,14 +288,14 @@ struct Rect
     union { struct { T x2, y2; }; Vec2<T> b; };
 
     Rect() : a(0, 0), b(0, 0) {}
-    constexpr Rect(T _x1, T _y1, T _x2, T _y2)           { set(_x1, _y1, _x2, _y2); }
+    constexpr Rect(T _x1, T _y1, T _x2, T _y2) { set(_x1, _y1, _x2, _y2); }
     constexpr Rect(const Vec2<T>& _a, const Vec2<T>& _b) { set(_a, _b); }
 
     constexpr operator Quad<T>() const { return Quad<T>(x1, y1, x2, y1, x2, y2, x1, y2); }
 
-    constexpr void set(const Rect& r)                      { a = r.a; b = r.b; }
+    constexpr void set(const Rect& r) { a = r.a; b = r.b; }
     constexpr void set(const Vec2<T>& A, const Vec2<T>& B) { a = A; b = B; }
-    constexpr void set(T _x1, T _y1, T _x2, T _y2)         { x1 = _x1; y1 = _y1; x2 = _x2; y2 = _y2; }
+    constexpr void set(T _x1, T _y1, T _x2, T _y2) { x1 = _x1; y1 = _y1; x2 = _x2; y2 = _y2; }
 
     [[nodiscard]] constexpr double  width() const { return x2 - x1; }
     [[nodiscard]] constexpr double  height() const { return y2 - y1; }
@@ -323,6 +323,9 @@ struct Rect
         if (r.x2 > x2) x2 = r.x2;
         if (r.y2 > y2) y2 = r.y2;
     }
+
+    //static constexpr Rect<T> full() { return Rect<T>(-std::numeric_limits<T>(), -std::numeric_limits<T>(), std::numeric_limits<T>(), std::numeric_limits<T>()); }
+    static constexpr Rect<T> infinite() { return Rect<T>(-bl_infinity<T>(), -bl_infinity<T>(), bl_infinity<T>(), bl_infinity<T>()); }
 };
 
 template<typename T> struct Quad;

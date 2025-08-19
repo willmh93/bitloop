@@ -25,11 +25,7 @@ struct TweenableMandelState
 
     /// ======== Saveable/Tweenable info ========
     bool show_axis = true;
-    double cam_x = -0.5;
-    double cam_y = 0.0;
-    double cam_rot = 0.0;
-    double cam_zoom = 1.0;
-    DVec2  cam_zoom_xy = DVec2(1, 1);
+    CameraViewController cam_view;
 
     bool dynamic_iter_lim = true;
     double quality = 0.5; // Used for UI (ignore during tween until complete)
@@ -65,11 +61,7 @@ struct TweenableMandelState
     bool operator ==(const TweenableMandelState& rhs) const
     {
         return (
-            cam_x == rhs.cam_x &&
-            cam_y == rhs.cam_y &&
-            cam_rot == rhs.cam_rot &&
-            cam_zoom == rhs.cam_zoom &&
-            cam_zoom_xy == rhs.cam_zoom_xy &&
+            cam_view == rhs.cam_view &&
             quality == rhs.quality &&
             smooth_iter_dist_ratio == rhs.smooth_iter_dist_ratio &&
             dynamic_iter_lim == rhs.dynamic_iter_lim &&
@@ -112,8 +104,6 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
     DAngledRect r2;
 
     double cardioid_lerp_amount = 1.0; // 1 - flatten
-
-    double cam_degrees = 0.0;
 
     bool show_period2_bulb = true;
     bool interactive_cardioid = false;
@@ -166,12 +156,7 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
         sync(r2);
 
         sync(show_axis);
-        sync(cam_x);
-        sync(cam_y);
-        sync(cam_degrees);
-        sync(cam_rot);
-        sync(cam_zoom);
-        sync(cam_zoom_xy);
+        sync(cam_view);
         sync(smooth_iter_dist_ratio);
         sync(flatten);
         sync(flatten_amount);
@@ -210,13 +195,13 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
     double toHeight(double zoom) const { return 1.0 / toNormalizedZoom(zoom); }
     double fromHeight(double height) const { return fromNormalizedZoom(1.0 / height); }
 
-    void setNormalizedZoom(double normalized_zoom) { cam_zoom = fromNormalizedZoom(normalized_zoom); }
-    double getNormalizedZoom() const { return toNormalizedZoom(cam_zoom); }
+    void setNormalizedZoom(double normalized_zoom) { cam_view.cam_zoom = fromNormalizedZoom(normalized_zoom); }
+    double getNormalizedZoom() const { return toNormalizedZoom(cam_view.cam_zoom); }
 
     DAngledRect getAngledRect(const TweenableMandelState& s) const
     {
-        DVec2 world_size = (s.ctx_stage_size / reference_zoom) / s.cam_zoom;
-        return DAngledRect(s.cam_x, s.cam_y, world_size.x, world_size.y, s.cam_rot);
+        DVec2 world_size = (s.ctx_stage_size / reference_zoom) / s.cam_view.cam_zoom;
+        return DAngledRect(s.cam_view.cam_x, s.cam_view.cam_y, world_size.x, world_size.y, s.cam_view.cam_radians);
     }
 
     void loadColorTemplate(
@@ -304,9 +289,9 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
         TweenableMandelState& a,
         TweenableMandelState& b)
     {
-        double dh = toHeight(b.cam_zoom) - toHeight(a.cam_zoom);
-        double dx = b.cam_x - a.cam_x;
-        double dy = b.cam_y - a.cam_y;
+        double dh = toHeight(b.cam_view.cam_zoom) - toHeight(a.cam_view.cam_zoom);
+        double dx = b.cam_view.cam_x - a.cam_view.cam_x;
+        double dy = b.cam_view.cam_y - a.cam_view.cam_y;
         double d = sqrt(dx*dx + dy*dy + dh*dy);
         return d;
     }
@@ -330,9 +315,9 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
 
         double encompassing_zoom = (state.ctx_world_size() / encompassing.size).average();
         double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
-        tween_lift = encompassing_height - std::max(toHeight(state.cam_zoom), toHeight(target.cam_zoom));
+        tween_lift = encompassing_height - std::max(toHeight(state.cam_view.cam_zoom), toHeight(target.cam_view.cam_zoom));
 
-        double max_lift = 1.0 - toHeight(target.cam_zoom);
+        double max_lift = 1.0 - toHeight(target.cam_view.cam_zoom);
         if (max_lift < 0) max_lift = 0;
         if (tween_lift > max_lift)
             tween_lift = max_lift;

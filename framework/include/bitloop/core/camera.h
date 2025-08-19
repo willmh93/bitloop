@@ -412,17 +412,9 @@ struct CameraViewController
     DVec2  old_cam_zoom_xy = DVec2(1, 1);
 
     double cam_degrees = 0.0;
+    double cam_avg_zoom = 1.0;
 
-    bool operator==(const CameraViewController& rhs) const
-    {
-        return cam_x == rhs.cam_x &&
-            cam_y == rhs.cam_y &&
-            cam_radians == rhs.cam_radians &&
-            cam_zoom == rhs.cam_zoom &&
-            cam_zoom_xy == rhs.cam_zoom_xy;
-    }
-
-    void populateUI();
+    void populateUI(DRect cam_area = DRect::infinite());
 
     void read(Camera* cam)
     {
@@ -430,6 +422,7 @@ struct CameraViewController
         cam_y = cam->y();
         cam_radians = cam->rotation();
         cam_zoom = (cam->getRelativeZoom().x / cam_zoom_xy.x);
+        cam_avg_zoom = cam->zoom().magnitude();
     }
 
     void apply(Camera* cam)
@@ -455,6 +448,40 @@ struct CameraViewController
         old_cam_y = cam_y;
         old_cam_zoom = cam_zoom;
         old_cam_zoom_xy = cam_zoom_xy;
+    }
+
+    CameraViewController& operator=(const CameraViewController& rhs)
+    {
+        cam_x = rhs.cam_x;
+        cam_y = rhs.cam_y;
+        cam_radians = rhs.cam_radians;
+        cam_zoom = rhs.cam_zoom;
+        cam_zoom_xy = rhs.cam_zoom_xy;
+
+        cam_degrees = rhs.cam_degrees;
+        cam_avg_zoom = rhs.cam_avg_zoom;
+        return *this;
+    }
+
+    bool operator==(const CameraViewController& rhs) const
+    {
+        return cam_x == rhs.cam_x &&
+            cam_y == rhs.cam_y &&
+            cam_radians == rhs.cam_radians &&
+            cam_zoom == rhs.cam_zoom &&
+            cam_zoom_xy == rhs.cam_zoom_xy;
+    }
+
+    static CameraViewController lerp(const CameraViewController& a, const CameraViewController& b, double f)
+    {
+        CameraViewController ret;
+        ret.cam_x = Math::lerp(a.cam_x, b.cam_x, f);
+        ret.cam_y = Math::lerp(a.cam_y, b.cam_y, f);
+        ret.cam_radians = Math::lerp(a.cam_radians, b.cam_radians, f);
+        ret.cam_zoom = Math::lerp(a.cam_zoom, b.cam_zoom, f);
+        ret.cam_zoom_xy = Math::lerp(a.cam_zoom_xy, b.cam_zoom_xy, f);
+        ret.cam_degrees = Math::toDegrees(ret.cam_radians);
+        return ret;
     }
 };
 

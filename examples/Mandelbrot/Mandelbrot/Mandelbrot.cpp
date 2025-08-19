@@ -54,9 +54,9 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Home"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -0.5;
-            dest.cam_y = 0.0;
-            dest.cam_zoom = 1.0;
+            dest.cam_view.cam_x = -0.5;
+            dest.cam_view.cam_y = 0.0;
+            dest.cam_view.cam_zoom = 1.0;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -81,9 +81,9 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Firework"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -1.766500164390;
-            dest.cam_y = -0.041755606186;
-            dest.cam_zoom = 11636977827.66;
+            dest.cam_view.cam_x = -1.766500164390;
+            dest.cam_view.cam_y = -0.041755606186;
+            dest.cam_view.cam_zoom = 11636977827.66;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -110,10 +110,10 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Tendrils"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -0.105807817548;
-            dest.cam_y = -0.926364255583;
-            dest.cam_rot = Math::PI / 2.0;
-            dest.cam_zoom = 56455846258.14;
+            dest.cam_view.cam_x = -0.105807817548;
+            dest.cam_view.cam_y = -0.926364255583;
+            dest.cam_view.cam_radians = Math::PI / 2.0;
+            dest.cam_view.cam_zoom = 56455846258.14;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -140,10 +140,10 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Julia Island"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -1.76877883;
-            dest.cam_y = -0.00173892;
-            dest.cam_rot = 0;
-            dest.cam_zoom = 3000000.0;
+            dest.cam_view.cam_x = -1.76877883;
+            dest.cam_view.cam_y = -0.00173892;
+            dest.cam_view.cam_radians = 0;
+            dest.cam_view.cam_zoom = 3000000.0;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -169,10 +169,10 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Spiral Spears"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -1.77169952;
-            dest.cam_y = 0.00508483;
-            dest.cam_rot = Math::toRadians(180.0);
-            dest.cam_zoom = 8650000;
+            dest.cam_view.cam_x = -1.77169952;
+            dest.cam_view.cam_y = 0.00508483;
+            dest.cam_view.cam_radians = Math::toRadians(180.0);
+            dest.cam_view.cam_zoom = 8650000;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -198,10 +198,10 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Whirlpool"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -0.75139;
-            dest.cam_y = 0.03001;
-            dest.cam_rot = 0.0;
-            dest.cam_zoom = 9000;
+            dest.cam_view.cam_x = -0.75139;
+            dest.cam_view.cam_y = 0.03001;
+            dest.cam_view.cam_radians = 0.0;
+            dest.cam_view.cam_zoom = 9000;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -228,10 +228,10 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Waves"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -0.14883;
-            dest.cam_y = 0.65170;
-            dest.cam_rot = 0.0;
-            dest.cam_zoom = 2924.93;
+            dest.cam_view.cam_x = -0.14883;
+            dest.cam_view.cam_y = 0.65170;
+            dest.cam_view.cam_radians = 0.0;
+            dest.cam_view.cam_zoom = 2924.93;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -258,10 +258,10 @@ void Mandelbrot_Data::populate()
         if (ImGui::Button("Baby Mandel"))
         {
             TweenableMandelState dest;
-            dest.cam_x = -0.413270;
-            dest.cam_y = 0.595879;
-            dest.cam_rot = Math::toRadians(150.0);
-            dest.cam_zoom = 12700;
+            dest.cam_view.cam_x = -0.413270;
+            dest.cam_view.cam_y = 0.595879;
+            dest.cam_view.cam_radians = Math::toRadians(150.0);
+            dest.cam_view.cam_zoom = 12700;
 
             // compute
             dest.dynamic_iter_lim = true;
@@ -303,7 +303,7 @@ void Mandelbrot_Data::populate()
         }
     }
 
-    int decimals = 1 + Math::countWholeDigits(cam_zoom);
+    /*int decimals = 1 + Math::countWholeDigits(cam_zoom);
     char format[16];
     snprintf(format, sizeof(format), "%%.%df", decimals);
 
@@ -326,6 +326,9 @@ void Mandelbrot_Data::populate()
 
     static DVec2 init_cam_zoom_xy = cam_zoom_xy;
     ImGui::RevertableSliderDouble2("Zoom X/Y", cam_zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2fx");
+    */
+
+    cam_view.populateUI({-5.0, -5.0, 5.0, 5.0});
 
     } // End Header
 
@@ -341,7 +344,7 @@ void Mandelbrot_Data::populate()
         }
         else
         {
-            quality = qualityFromIterLimit(iter_lim, cam_zoom);
+            quality = qualityFromIterLimit(iter_lim, cam_view.cam_zoom);
         }
     }
 
@@ -555,7 +558,7 @@ int Mandelbrot_Data::calculateIterLimit() const
 {
     int iters;
     if (dynamic_iter_lim)
-        iters = static_cast<int>(mandelbrotIterLimit(cam_zoom) * quality);
+        iters = static_cast<int>(mandelbrotIterLimit(cam_view.cam_zoom) * quality);
     else
     {
         iters = static_cast<int>(quality);
@@ -563,8 +566,8 @@ int Mandelbrot_Data::calculateIterLimit() const
         if (tweening)
         {
             // Cap manual iter_lim to avoid accidental high depth calculations on large cardioids
-            if (iters > mandelbrotIterLimit(cam_zoom))
-                iters = mandelbrotIterLimit(cam_zoom);
+            if (iters > mandelbrotIterLimit(cam_view.cam_zoom))
+                iters = mandelbrotIterLimit(cam_view.cam_zoom);
         }
     }
     return iters;
@@ -588,18 +591,18 @@ std::string TweenableMandelState::serialize()
 
     JSON::json info;
 
-    int decimals = 1 + Math::countWholeDigits(cam_zoom);
+    int decimals = 1 + Math::countWholeDigits(cam_view.cam_zoom);
 
     // Version >= 0
     info["f"] = flags; // Compression::base64_encode((const unsigned char*)&flags, sizeof(flags));
 
     // View
-    info["x"] = JSON::markCleanFloat(cam_x, decimals);
-    info["y"] = JSON::markCleanFloat(cam_y, decimals);
-    info["z"] = JSON::markCleanFloat(cam_zoom, 2); /// todo: If you increase to 128 bit precision, be careful
-    info["a"] = JSON::markCleanFloat(cam_zoom_xy.x, 3);
-    info["b"] = JSON::markCleanFloat(cam_zoom_xy.y, 3);
-    info["r"] = JSON::markCleanFloat(Math::toDegrees(cam_rot), 0);
+    info["x"] = JSON::markCleanFloat(cam_view.cam_x, decimals);
+    info["y"] = JSON::markCleanFloat(cam_view.cam_y, decimals);
+    info["z"] = JSON::markCleanFloat(cam_view.cam_zoom, 2); /// todo: If you increase to 128 bit precision, be careful
+    info["a"] = JSON::markCleanFloat(cam_view.cam_zoom_xy.x, 3);
+    info["b"] = JSON::markCleanFloat(cam_view.cam_zoom_xy.y, 3);
+    info["r"] = JSON::markCleanFloat(Math::toDegrees(cam_view.cam_radians), 0);
 
     // Quality
     info["q"] = JSON::markCleanFloat(quality, 3);
@@ -678,13 +681,13 @@ bool TweenableMandelState::deserialize(std::string txt)
         normalize_depth_range     = flags & MANDEL_NORMALIZE_DEPTH;
 
         // View
-        cam_x = info.value("x", 0.0);
-        cam_y = info.value("y", 0.0);
-        cam_zoom = info.value("z", 1.0);
-        cam_zoom_xy.x = info.value("a", 1.0);
-        cam_zoom_xy.y = info.value("b", 1.0);
+        cam_view.cam_x = info.value("x", 0.0);
+        cam_view.cam_y = info.value("y", 0.0);
+        cam_view.cam_zoom = info.value("z", 1.0);
+        cam_view.cam_zoom_xy.x = info.value("a", 1.0);
+        cam_view.cam_zoom_xy.y = info.value("b", 1.0);
         double cam_degrees = info.value("r", 0.0);
-        cam_rot = cam_degrees * Math::PI / 180.0;
+        cam_view.cam_radians = cam_degrees * Math::PI / 180.0;
 
         // Quality
         quality = info.value("q", quality);
@@ -737,9 +740,10 @@ void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
     camera->focusWorldRect(-2, -1.25, 1, 1.25);
     //camera->restrictRelativeZoomRange(0.5, 1e+300);
 
-    cam_x = camera->x();
-    cam_y = camera->y();
-    cam_zoom = (camera->getRelativeZoom().x / cam_zoom_xy.x);
+    //cam_view.cam_x = camera->x();
+    //cam_view.cam_y = camera->y();
+    //cam_view.cam_zoom = (camera->getRelativeZoom().x / cam_view.cam_zoom_xy.x);
+    cam_view.read(camera);
 
     reference_zoom = camera->getReferenceZoom();
     ctx_stage_size = ctx->size();
@@ -760,25 +764,20 @@ void Mandelbrot_Data::lerpState(
     // Calculate true 'b' iter_lim for tweening 
     // (using destination zoom, not current zoom)
     double dst_iter_lim = b.dynamic_iter_lim ?
-        (mandelbrotIterLimit(b.cam_zoom) * b.quality) :
+        (mandelbrotIterLimit(b.cam_view.cam_zoom) * b.quality) :
         b.quality;
 
     
     double lift_weight = (double)tween_zoom_lift_spline((float)f);
     double lift_height = tween_lift * lift_weight;
 
-    double a_height = toHeight(a.cam_zoom);
-    double b_height = toHeight(b.cam_zoom);
+    double a_height = toHeight(a.cam_view.cam_zoom);
+    double b_height = toHeight(b.cam_view.cam_zoom);
 
     double dst_height = Math::lerp(a_height, b_height, f) + lift_height;
 
-    // Basic View
-    dst.cam_x          = Math::lerp(a.cam_x,          b.cam_x, pos_f);
-    dst.cam_y          = Math::lerp(a.cam_y,          b.cam_y, pos_f);
-    dst.cam_rot        = Math::lerp(a.cam_rot,        b.cam_rot, pos_f);
-    dst.cam_zoom_xy    = Math::lerp(a.cam_zoom_xy,    b.cam_zoom_xy, pos_f);
-    //
-    dst.cam_zoom = fromHeight(dst_height);
+    dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
+    dst.cam_view.cam_zoom = fromHeight(dst_height);
     //
     
     // Quality
@@ -891,7 +890,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                 flatten_amount = 0.0;
 
             camera->focusWorldRect(-2, -1, 2, 1);
-            cam_zoom = camera->getRelativeZoom().x;
+            cam_view.cam_zoom = camera->getRelativeZoom().x;
         }
 
         if (Changed(flatten_amount))
@@ -910,12 +909,13 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                 r = Math::lerp(c, d, Math::lerpFactor(flatten_amount, 0.7, 1.0));
 
             camera->focusWorldRect(r, false);
-            cam_zoom = camera->getRelativeZoom().x;
+            cam_view.cam_zoom = camera->getRelativeZoom().x;
         }
     }
 
     // ======== Camera View ========
-    {
+    cam_view.apply(camera);
+    /*{
         cam_degrees = cam_rot * 180.0 / Math::PI;
 
         if (Changed(cam_rot)) camera->setRotation(cam_rot);
@@ -931,7 +931,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         {
             cam_zoom = (camera->getRelativeZoom().x / cam_zoom_xy.x);
         }
-    }
+    }*/
 
 
     // Ensure size divisble by 9 for perfect result forwarding from: [9x9] to [3x3] to [1x1]
@@ -1044,8 +1044,8 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                 MAX_DOUBLE_ZOOM = 2e10;
             }
 
-            bool b32 = (cam_zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
-            bool b64 = (cam_zoom < MAX_DOUBLE_ZOOM);
+            bool b32 = (cam_view.cam_zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
+            bool b64 = (cam_view.cam_zoom < MAX_DOUBLE_ZOOM);
 
 
             if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
@@ -1135,7 +1135,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         {
             if (dynamic_color_cycle_limit)
             {
-                double assumed_iter_lim = mandelbrotIterLimit(cam_zoom) * 0.5;
+                double assumed_iter_lim = mandelbrotIterLimit(cam_view.cam_zoom) * 0.5;
 
                 /// "cycle_iter_value" represents ratio of iter_lim
                 double color_cycle_iters = (cycle_iter_value * (assumed_iter_lim - (normalize_depth_range ? active_field->min_depth : 0)));
@@ -1458,12 +1458,11 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
 void Mandelbrot_Scene::onEvent(Event e)
 {
     if (e.ctx_owner())
+    {
+        // Handle camera navigation for viewport that captured the event
         e.ctx_owner()->camera.handleWorldNavigation(e, true);
-   
-    cam_x = camera->x();
-    cam_y = camera->y();
-    cam_rot = camera->rotation();
-    cam_zoom = (camera->getRelativeZoom().x / cam_zoom_xy.x);
+        cam_view.read(&e.ctx_owner()->camera);
+    }
 }
 
 SIM_END(Mandelbrot)
