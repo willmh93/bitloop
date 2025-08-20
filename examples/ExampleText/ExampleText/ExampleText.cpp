@@ -1,30 +1,30 @@
-#include "{SIM_NAME}.h"
+#include "ExampleText.h"
 
-SIM_BEG({SIM_NAME})
+SIM_BEG(ExampleText)
 
 using namespace BL;
 
 /// ─────────────────────── Project ───────────────────────
 
-void {SIM_NAME}_Project_Data::populateUI()
+void ExampleText_Project_Data::populateUI()
 {
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
 }
 
-void {SIM_NAME}_Project::projectPrepare(Layout& layout)
+void ExampleText_Project::projectPrepare(Layout& layout)
 {
     /// Create multiple instance of a single Scene, mount to separate viewports
-    layout << create<{SIM_NAME}_Scene>(viewport_count);
+    layout << create<ExampleText_Scene>(viewport_count);
 
     /// Or create a single Scene instance and view on multiple Viewports
-    //auto* scene = create<{SIM_NAME}_Scene>();
+    //auto* scene = create<ExampleText_Scene>();
     //for (int i = 0; i < viewport_count; ++i)
     //    layout << scene;
 }
 
 /// ─────────────────────── Scene ───────────────────────
 
-void {SIM_NAME}_Scene_Data::populateUI()
+void ExampleText_Scene_Data::populateUI()
 {
     if (ImGui::Section("View", true))
     {
@@ -36,12 +36,12 @@ void {SIM_NAME}_Scene_Data::populateUI()
     //ImGui::SliderDouble("value", &value, 0.0, 1.0);
 }
 
-void {SIM_NAME}_Scene::sceneStart()
+void ExampleText_Scene::sceneStart()
 {
     // Initialize scene
 }
 
-void {SIM_NAME}_Scene::sceneMounted(Viewport*)
+void ExampleText_Scene::sceneMounted(Viewport*)
 {
     // Initialize viewport
     camera->setOriginViewportAnchor(Anchor::CENTER);
@@ -51,33 +51,33 @@ void {SIM_NAME}_Scene::sceneMounted(Viewport*)
     cam_view.read(camera);
 }
 
-void {SIM_NAME}_Scene::sceneDestroy()
+void ExampleText_Scene::sceneDestroy()
 {
     // Destroy scene (dynamically allocated resources, etc.)
 }
 
-void {SIM_NAME}_Scene::sceneProcess()
+void ExampleText_Scene::sceneProcess()
 {
     // Apply updates from imgui to camera view
-    cam_view.apply(camera);
+    cam_view.apply(camera); 
 
     // Process scene update
 }
 
-void {SIM_NAME}_Scene::viewportProcess(
+void ExampleText_Scene::viewportProcess(
     [[maybe_unused]] Viewport* ctx,
     [[maybe_unused]] double dt)
 {
     // Process viewport update
 }
 
-void {SIM_NAME}_Scene::viewportDraw(Viewport* ctx) const
+void ExampleText_Scene::viewportDraw(Viewport* ctx) const
 {
     // Draw Scene on this viewport (don't update simulation state here)
     ctx->drawWorldAxis();
 }
 
-void {SIM_NAME}_Scene::onEvent(Event e)
+void ExampleText_Scene::onEvent(Event e)
 {
     if (e.ctx_owner())
     {
@@ -89,11 +89,11 @@ void {SIM_NAME}_Scene::onEvent(Event e)
     }
 }
 
-//void {SIM_NAME}_Scene::onPointerDown(PointerEvent e) {{}}
-//void {SIM_NAME}_Scene::onPointerUp(PointerEvent e) {{}}
-//void {SIM_NAME}_Scene::onPointerMove(PointerEvent e) {{}}
-//void {SIM_NAME}_Scene::onWheel(PointerEvent e) {{}}
-//void {SIM_NAME}_Scene::onKeyDown(KeyEvent e) {{}}
-//void {SIM_NAME}_Scene::onKeyUp(KeyEvent e) {{}}
+//void ExampleText_Scene::onPointerDown(PointerEvent e) {{}}
+//void ExampleText_Scene::onPointerUp(PointerEvent e) {{}}
+//void ExampleText_Scene::onPointerMove(PointerEvent e) {{}}
+//void ExampleText_Scene::onWheel(PointerEvent e) {{}}
+//void ExampleText_Scene::onKeyDown(KeyEvent e) {{}}
+//void ExampleText_Scene::onKeyUp(KeyEvent e) {{}}
 
-SIM_END({SIM_NAME})
+SIM_END(ExampleText)

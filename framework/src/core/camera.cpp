@@ -90,7 +90,7 @@ void Camera::setOriginViewportAnchor(Anchor anchor)
     }
 }
 
-DVec2 Camera::originPixelOffset()
+DVec2 Camera::originPixelOffset() const
 {
     double viewport_cx = (viewport->w / 2.0);
     double viewport_cy = (viewport->h / 2.0);
@@ -101,7 +101,7 @@ DVec2 Camera::originPixelOffset()
     );
 }
 
-DVec2 Camera::getViewportFocusedWorldSize()
+DVec2 Camera::getViewportFocusedWorldSize() const
 {
     // You want to know how big the viewport is (in world size) at the reference zoom
     DVec2 ctx_size = viewport->viewportRect().size();
@@ -241,7 +241,7 @@ void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
 void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 {
     //BL::print("[DRAG] Cam Pos: (%.3f, %.3f) Zoom: (%.3f, %.3f) Angle: %.3f",
-    //    (double)cam_x, (double)cam_y, (double)zoom_x, (double)zoom_y, cam_rotation);
+    //    (double)x, (double)y, (double)zoom_x, (double)zoom_y, cam_rotation);
 
     saveCameraTransform();
     worldTransform();
@@ -320,7 +320,6 @@ void Camera::panZoomProcess()
         panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
     }
 }
-
 
 void Camera::panEnd()
 {
@@ -506,32 +505,29 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
 
 void CameraViewController::populateUI(DRect cam_area)
 {
-    int decimals = 1 + Math::countWholeDigits(cam_zoom*5);
+    int decimals = 1 + Math::countWholeDigits(zoom*5);
     char format[16];
     snprintf(format, sizeof(format), "%%.%df", decimals);
 
-    //~ // we need the real camera zoom here to work out pan speed, not your local zoom multiplier,
-      // but you don't have access to the camera here... cache ref zoom or real zoom from "read(...)"?
+    static double init_cam_x = x;
+    static double init_cam_y = y;
+    ImGui::RevertableDragDouble("X", &x, &init_cam_x, 1 / avg_real_zoom, cam_area.x1, cam_area.x2, format);
+    ImGui::RevertableDragDouble("Y", &y, &init_cam_y, 1 / avg_real_zoom, cam_area.y1, cam_area.y2, format);
 
-    static double init_cam_x = cam_x;
-    static double init_cam_y = cam_y;
-    ImGui::RevertableDragDouble("X", &cam_x, &init_cam_x, 1 / cam_avg_zoom, cam_area.x1, cam_area.x2, format);
-    ImGui::RevertableDragDouble("Y", &cam_y, &init_cam_y, 1 / cam_avg_zoom, cam_area.y1, cam_area.y2, format);
-
-    static double init_degrees = cam_degrees;
-    if (ImGui::RevertableSliderDouble("Rotation", &cam_degrees, &init_degrees, 0.0, 360.0, "%.0f\xC2\xB0"))
+    static double init_degrees = angle_degrees;
+    if (ImGui::RevertableSliderDouble("Rotation", &angle_degrees, &init_degrees, 0.0, 360.0, "%.0f\xC2\xB0"))
     {
-        cam_radians = cam_degrees * Math::PI / 180.0;
+        angle = angle_degrees * Math::PI / 180.0;
     }
 
     // 1e16 = double limit before preicions loss
-    static double zoom_speed = cam_zoom / 100.0;
+    static double zoom_speed = zoom / 100.0;
     static double init_cam_zoom = 1.0;
-    if (ImGui::RevertableDragDouble("Zoom", &cam_zoom, &init_cam_zoom, zoom_speed, 0.1, 1e16, "%.2f"))
-        zoom_speed = cam_zoom / 100.0;
+    if (ImGui::RevertableDragDouble("Zoom", &zoom, &init_cam_zoom, zoom_speed, 0.1, 1e16, "%.2f"))
+        zoom_speed = zoom / 100.0;
 
-    static DVec2 init_cam_zoom_xy = cam_zoom_xy;
-    ImGui::RevertableSliderDouble2("Zoom X/Y", cam_zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2fx");
+    static DVec2 init_cam_zoom_xy = zoom_xy;
+    ImGui::RevertableSliderDouble2("Zoom X/Y", zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2fx");
 }
 
 BL_END_NS

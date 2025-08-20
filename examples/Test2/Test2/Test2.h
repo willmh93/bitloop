@@ -42,7 +42,7 @@ struct Test2_Scene_Attributes : VarBuffer
         sync(zoom_y);
         sync(zoom_mult);
     }
-    void populate() override;
+    void populateUI() override;
 };
 
 struct Test2_Scene : public Scene<Test2_Scene_Attributes>
@@ -87,7 +87,7 @@ struct Test2_Project_Vars : public VarBuffer
 {
     int viewport_count = 1;
 
-    void populate();
+    void populateUI();
     void registerSynced()
     {
         sync(viewport_count);

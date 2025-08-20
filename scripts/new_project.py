@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 PLACEHOLDER_IN_FILE = "{SIM_NAME}"
-TEXT_EXTENSIONS = {".cpp", ".h"}
+TEXT_EXTENSIONS = {".cpp", ".h", ".txt", ".json"}
 RENAME_TARGETS = {"SIM_NAME.cpp", "SIM_NAME.h"}
 RENAME_FOLDER_TARGET = "SIM_NAME"
 

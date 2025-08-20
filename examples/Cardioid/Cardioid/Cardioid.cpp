@@ -105,7 +105,7 @@ void Cardioid_Project::projectPrepare(Layout& layout)
 
 /// Scene ///
 
-void Cardioid_Scene_Vars::populate()
+void Cardioid_Scene_Vars::populateUI()
 {
     //ImGui::SliderDouble("Angle", &interact_angle, 0, (2 * M_PI));
     ImGui::Checkbox("Flatten", &flatten);

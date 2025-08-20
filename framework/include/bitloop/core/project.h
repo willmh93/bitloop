@@ -47,8 +47,7 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
                              //   };\
                              //   inline _SimCppInvoker _trigger_static_init;
 
-#define SIM_DECLARE(ns)      extern "C" void ns##_ForceLink() {}\
-                             namespace ns {//\
+#define SIM_DECLARE(ns)      namespace ns {//\
                              //    AutoRegisterProject<ns##_Project> register_##ns();\
                              //    void cpp_func() { /*BL::print(#ns##" linked");*/ }
                                  
@@ -251,7 +250,7 @@ protected:
 
     virtual void _sceneAttributes() override 
     {
-        DoubleBuffer<VarBufferType>::shadow_attributes.populate();
+        DoubleBuffer<VarBufferType>::shadow_attributes.populateUI();
     }
 
 private:
@@ -769,7 +768,7 @@ protected:
 
     virtual void _projectAttributes() override
     {
-        DoubleBuffer<VarBufferType>::shadow_attributes.populate();
+        DoubleBuffer<VarBufferType>::shadow_attributes.populateUI();
     }
 
     void updateLiveBuffers() override

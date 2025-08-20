@@ -72,7 +72,7 @@ namespace ImGui
             memcpy(item.first, item.second.initial, item.second.size);
     }
 
-    bool SceneSection(const char* name, float header_spacing=5.0f, float body_margin_top=2.0f, bool open_by_default=false);
+    bool Section(const char* name, bool open_by_default = false, float header_spacing=5.0f, float body_margin_top=2.0f);
 
     bool ResetBtn(const char* id);
     bool InlResetBtn(const char* id);

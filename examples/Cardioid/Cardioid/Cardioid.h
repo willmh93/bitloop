@@ -411,7 +411,7 @@ struct Cardioid_Scene_Vars : public VarBuffer
         sync(interact_angle);
         sync(interact_dist);
     }
-    void populate();
+    void populateUI();
 };
 
 struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>

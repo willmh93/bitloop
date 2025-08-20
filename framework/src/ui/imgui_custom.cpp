@@ -118,7 +118,7 @@ std::ostream& operator<<(std::ostream& os, const ImGradient& gradient)
 
 namespace ImGui
 {
-    bool SceneSection(const char* name, float header_spacing, float body_margin_top, bool open_by_default)
+    bool Section(const char* name, bool open_by_default, float header_spacing, float body_margin_top)
     {
         ImGui::Dummy(BL::ScaleSize(0.0f, header_spacing));
         bool ret = ImGui::CollapsingHeader(name, open_by_default ? ImGuiTreeNodeFlags_DefaultOpen : 0);

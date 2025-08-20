@@ -1,11 +1,11 @@
 #pragma once
 #include <project.h>
 
-SIM_BEG({SIM_NAME})
+SIM_BEG(ExampleText)
 
 using namespace BL;
 
-struct {SIM_NAME}_Scene_Data : VarBuffer
+struct ExampleText_Scene_Data : VarBuffer
 {
     CameraViewController cam_view;
     //double speed = 0.0;
@@ -19,14 +19,14 @@ struct {SIM_NAME}_Scene_Data : VarBuffer
     void populateUI() override;
 };
 
-struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene_Data >
+struct ExampleText_Scene : public Scene<ExampleText_Scene_Data >
 {
     /// ─────── Provide default Scene launch config ─────── 
     struct Config {
         // double gravity = 9.8;
     };
 
-    {SIM_NAME}_Scene(Config& info [[maybe_unused]] )
+    ExampleText_Scene(Config& info [[maybe_unused]] )
         // : gravity(info.gravity)
     {}
 
@@ -60,7 +60,7 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene_Data >
     // void customMethod();
 };
 
-struct {SIM_NAME}_Project_Data : public VarBuffer
+struct ExampleText_Project_Data : public VarBuffer
 {
     int viewport_count = 1;
 
@@ -71,15 +71,15 @@ struct {SIM_NAME}_Project_Data : public VarBuffer
     }
 };
 
-struct {SIM_NAME}_Project : public Project<{SIM_NAME}_Project_Data>
+struct ExampleText_Project : public Project<ExampleText_Project_Data>
 {
     static ProjectInfo info()
     {
         // Categorize your project
-        return ProjectInfo({ "New Projects", "{SIM_NAME}" });
+        return ProjectInfo({ "Tests", "Draw Text" });
     }
 
     void projectPrepare(Layout& layout) override;
 };
 
-SIM_END({SIM_NAME})
+SIM_END(ExampleText)

@@ -162,22 +162,26 @@ public:
     void skewX(double angle)                                 { nvgSkewX(vg, (float)(angle)); }
     void skewY(double angle)                                 { nvgSkewY(vg, (float)(angle)); }
     void setClipRect(double x, double y, double w, double h) { nvgScissor(vg, (float)(x), (float)(y), (float)(w), (float)(h)); }
-    void resetClipping() { nvgResetScissor(vg); }
+    void resetClipping()                                     { nvgResetScissor(vg); }
 
     // ======== Styles ========
 
-    void setStrokeStyle(const Color& color)                  { nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
     void setFillStyle(const Color& color)                    { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
     void setFillStyle(const float(&color)[3])                { nvgFillColor(vg, {color[0], color[1], color[2], 1.0f}); }
     void setFillStyle(const float(&color)[4])                { nvgFillColor(vg, {color[0], color[1], color[2], color[3]}); }
     void setFillStyle(int r, int g, int b, int a = 255)      { nvgFillColor(vg, nvgRGBA(r, g, b, a)); }
+    
+    void setStrokeStyle(const Color& color)                  { nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
+    void setStrokeStyle(const float(&color)[3])              { nvgStrokeColor(vg, {color[0], color[1], color[2], 1.0f}); }
+    void setStrokeStyle(const float(&color)[4])              { nvgStrokeColor(vg, {color[0], color[1], color[2], color[3]}); }
     void setStrokeStyle(int r, int g, int b, int a = 255)    { nvgStrokeColor(vg, nvgRGBA(r, g, b, a)); }
+    
     void setLineWidth(double w)                              { nvgStrokeWidth(vg, (float)(w)); }
     void setLineCap(LineCap cap)                             { nvgLineCap(vg, (int)cap); }
     void setLineJoin(LineJoin join)                          { nvgLineJoin(vg, (int)join); }
-
-    // ======== Paths ========
-
+                                                             
+    // ======== Paths ========                               
+                                                             
     void beginPath()                                         { nvgBeginPath(vg); }
     void moveTo(double x, double y)                          { nvgMoveTo(vg, (float)(x), (float)(y)); }
     void lineTo(double x, double y)                          { nvgLineTo(vg, (float)(x), (float)(y)); }
@@ -303,28 +307,33 @@ public:
 
 class Painter : private SimplePainter
 {
-    double _avgZoom() {
+    friend class Camera;
+    friend class Viewport;
+
+    double _avgZoom() const {
         return (fabs(camera.zoomX()) + fabs(camera.zoomY())) * 0.5;
     }
+
     DVec2 align_full(DVec2 p)              { return DVec2{ floor(p.x), floor(p.y) }; }
     DVec2 align_full(double px, double py) { return DVec2{ floor(px),  floor(py) }; }
     DVec2 align_half(DVec2 p)              { return DVec2{ floor(p.x) + 0.5, floor(p.y) + 0.5 }; }
     DVec2 align_half(double px, double py) { return DVec2{ floor(px)  + 0.5, floor(py)  + 0.5 }; }
 
-public:
-
-    mutable Camera camera;
     glm::mat3 default_viewport_transform;
     double line_width = 1;
 
+public:
+
+    mutable Camera camera;
+
     // ======== Position/Size wrappers (applies only enabled camera transforms) ========
 
-    DVec2 PT(double x, double y)       { return camera.transform_coordinates ? camera.toStage(x, y) : DVec2{ x, y }; }
-    DVec2 PT(DVec2 p)                  { return camera.transform_coordinates ? camera.toStage(p.x, p.y) : p; }
-    DQuad QUAD(DQuad q)                { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
-    DVec2 SIZE(double w, double h)     { return camera.scale_sizes ? DVec2{w*camera.zoomX(), h*camera.zoomY()} : DVec2{w, h}; }
-    DVec2 SIZE(DVec2 s)                { return camera.scale_sizes ? DVec2{s.x*camera.zoomX(), s.y*camera.zoomY()} : s; }
-    double SIZE(double radius)         { return camera.scale_sizes ? (radius * _avgZoom()) : radius; }
+    DVec2 PT(double x, double y)      const { return camera.transform_coordinates ? camera.toStage(x, y) : DVec2{ x, y }; }
+    DVec2 PT(DVec2 p)                 const { return camera.transform_coordinates ? camera.toStage(p.x, p.y) : p; }
+    DQuad QUAD(DQuad q)               const { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
+    DVec2 SIZE(double w, double h)    const { return camera.scale_sizes ? DVec2{w*camera.zoomX(), h* camera.zoomY()} : DVec2{w, h}; }
+    DVec2 SIZE(DVec2 s)               const { return camera.scale_sizes ? DVec2{s.x*camera.zoomX(), s.y*camera.zoomY()} : s; }
+    double SIZE(double radius)        const { return camera.scale_sizes ? (radius*_avgZoom()) : radius; }
 
     void ROTATE(double r)              { if (/*camera.transform_coordinates &&*/ r != 0.0) rotate(r); }
     void TRANSLATE(double x, double y) { translate(PT(x, y)); }

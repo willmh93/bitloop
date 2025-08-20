@@ -14,7 +14,7 @@ using namespace BL;
 #include "shading.h"
 
 
-struct TweenableMandelState
+struct MandelState
 {
     // The final world quad should be predictable using
     // only the state info & stage size.
@@ -58,7 +58,7 @@ struct TweenableMandelState
     bool flatten = false;
     double flatten_amount = 0.0;
 
-    bool operator ==(const TweenableMandelState& rhs) const
+    bool operator ==(const MandelState& rhs) const
     {
         return (
             cam_view == rhs.cam_view &&
@@ -85,16 +85,16 @@ struct TweenableMandelState
     bool deserialize(std::string txt);
 };
 
-std::ostream& operator<<(std::ostream& os, const TweenableMandelState&);
+std::ostream& operator<<(std::ostream& os, const MandelState&);
 
-struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
+struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 {
     char config_buf[1024] = "";
     char pos_tween_buf[1024] = "";
     char zoom_tween_buf[1024] = "";
 
-    TweenableMandelState state_a;
-    TweenableMandelState state_b;
+    MandelState state_a;
+    MandelState state_b;
     bool tweening = false;
     double tween_progress = 0.0; // 0..1
     double tween_lift = 0.0;
@@ -185,7 +185,7 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
     }
 
     void initData() override;
-    void populate() override;
+    void populateUI() override;
 
     int calculateIterLimit() const;
 
@@ -195,17 +195,17 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
     double toHeight(double zoom) const { return 1.0 / toNormalizedZoom(zoom); }
     double fromHeight(double height) const { return fromNormalizedZoom(1.0 / height); }
 
-    void setNormalizedZoom(double normalized_zoom) { cam_view.cam_zoom = fromNormalizedZoom(normalized_zoom); }
-    double getNormalizedZoom() const { return toNormalizedZoom(cam_view.cam_zoom); }
+    void setNormalizedZoom(double normalized_zoom) { cam_view.zoom = fromNormalizedZoom(normalized_zoom); }
+    double getNormalizedZoom() const { return toNormalizedZoom(cam_view.zoom); }
 
-    DAngledRect getAngledRect(const TweenableMandelState& s) const
+    DAngledRect getAngledRect(const MandelState& s) const
     {
-        DVec2 world_size = (s.ctx_stage_size / reference_zoom) / s.cam_view.cam_zoom;
-        return DAngledRect(s.cam_view.cam_x, s.cam_view.cam_y, world_size.x, world_size.y, s.cam_view.cam_radians);
+        DVec2 world_size = (s.ctx_stage_size / reference_zoom) / s.cam_view.zoom;
+        return DAngledRect(s.cam_view.x, s.cam_view.y, world_size.x, world_size.y, s.cam_view.angle);
     }
 
     void loadColorTemplate(
-        TweenableMandelState& state,
+        MandelState& state,
         ColorGradientTemplate type,
         float hue_threshold = 0.3f,
         float sat_threshold = 0.3f,
@@ -279,30 +279,30 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
 
     // Tweening
     void lerpState(
-        TweenableMandelState& dst,
-        TweenableMandelState& a,
-        TweenableMandelState& b,
+        MandelState& dst,
+        MandelState& a,
+        MandelState& b,
         double f,
         bool complete);
 
     double tweenDistance(
-        TweenableMandelState& a,
-        TweenableMandelState& b)
+        MandelState& a,
+        MandelState& b)
     {
-        double dh = toHeight(b.cam_view.cam_zoom) - toHeight(a.cam_view.cam_zoom);
-        double dx = b.cam_view.cam_x - a.cam_view.cam_x;
-        double dy = b.cam_view.cam_y - a.cam_view.cam_y;
+        double dh = toHeight(b.cam_view.zoom) - toHeight(a.cam_view.zoom);
+        double dx = b.cam_view.x - a.cam_view.x;
+        double dy = b.cam_view.y - a.cam_view.y;
         double d = sqrt(dx*dx + dy*dy + dh*dy);
         return d;
     }
 
-    void startTween(TweenableMandelState& target)
+    void startTween(MandelState& target)
     {
         // Switch to raw iter_lim for tween (and switch to quality mode on finish)
         dynamic_iter_lim = false;
         quality = iter_lim;
 
-        TweenableMandelState& state = *this;
+        MandelState& state = *this;
 
         target.reference_zoom = reference_zoom;
         target.ctx_stage_size = ctx_stage_size;
@@ -315,9 +315,9 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
 
         double encompassing_zoom = (state.ctx_world_size() / encompassing.size).average();
         double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
-        tween_lift = encompassing_height - std::max(toHeight(state.cam_view.cam_zoom), toHeight(target.cam_view.cam_zoom));
+        tween_lift = encompassing_height - std::max(toHeight(state.cam_view.zoom), toHeight(target.cam_view.zoom));
 
-        double max_lift = 1.0 - toHeight(target.cam_view.cam_zoom);
+        double max_lift = 1.0 - toHeight(target.cam_view.zoom);
         if (max_lift < 0) max_lift = 0;
         if (tween_lift > max_lift)
             tween_lift = max_lift;
@@ -344,7 +344,7 @@ struct Mandelbrot_Data : public VarBuffer, public TweenableMandelState
 
 };
 
-struct Mandelbrot_Scene : public Scene<Mandelbrot_Data>
+struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 {
     // --- Custom Launch Config ---
     struct Config {};

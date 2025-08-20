@@ -3,7 +3,7 @@
 template<typename T>
 concept VarBufferConcept = requires(T t, const T & rhs)
 {
-    { t.populate() } -> std::same_as<void>;
+    { t.populateUI() } -> std::same_as<void>;
 };
 
 struct BaseVariable
@@ -176,7 +176,7 @@ struct VarBuffer
 
     virtual void registerSynced() {};
     virtual void initData() {}
-    virtual void populate() {}
+    virtual void populateUI() {}
 };
 
 template<typename T>

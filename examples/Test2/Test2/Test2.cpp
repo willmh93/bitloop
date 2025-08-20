@@ -10,7 +10,7 @@ SIM_DECLARE(Test2)
 /// ======== Project ========
 /// =========================
 
-void Test2_Project_Vars::populate()
+void Test2_Project_Vars::populateUI()
 {
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
 }
@@ -36,7 +36,7 @@ void Test2_Project::projectPrepare(Layout& layout)
    
 }*/
 
-void Test2_Scene_Attributes::populate()
+void Test2_Scene_Attributes::populateUI()
 {
     ImGui::Checkbox("Transform coordinates", &transform_coordinates); // updated in realtime
     ImGui::Checkbox("Scale Lines & Text", &scale_lines); // updated in realtime

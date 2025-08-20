@@ -144,7 +144,7 @@ int bitloop_main(int, char* [])
         #ifdef __EMSCRIPTEN__
         emscripten_get_canvas_element_size("#canvas", &fb_w, &fb_h);
 
-        // needed?
+        //// needed?
         //EM_ASM({
         //    const cv = Module['canvas'];
         //    cv.setAttribute('tabindex', '0');
@@ -208,6 +208,8 @@ int bitloop_main(int, char* [])
         MainWindow::instance()->init();
         ProjectWorker::instance()->startWorker();
     }
+
+    //SDL_SetClipboardText("BOOOOOO!!!");
 
     // ======== Start main gui loop ========
     {

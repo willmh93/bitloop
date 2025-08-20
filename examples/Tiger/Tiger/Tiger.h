@@ -23,36 +23,45 @@ struct Tiger_Scene_Data : VarBuffer
 
         sync(cam_view);
     }
-    void populate() override;
+    void populateUI() override;
 };
 
 struct Tiger_Scene : public Scene<Tiger_Scene_Data>
 {
-    // --- Custom Launch Config Example ---
-    struct Config {};
-    Tiger_Scene(Config&) {}
+    /// ─────── Provide default Scene launch config ─────── 
+    struct Config { 
+        // double speed = 10;
+    };
+    Tiger_Scene(Config& info [[maybe_unused]])
+        // : speed(info.speed)  /// Initialize variables below from config
+    {}
 
-    // Scene management
+    /// ─────── Scene variables ─────── 
+    // double speed;
+
+    /// ─────── Scene methods ─────── 
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
     void sceneDestroy() override;
-
-    // --- Simulation processing ---
     void sceneProcess() override;
 
-    // Viewport handling
+    /// ─────── Viewport methods ─────── 
     void viewportProcess(Viewport* ctx, double dt) override;
     void viewportDraw(Viewport* ctx) const override;
 
-    // Input
+    /// ─────── Input handling ─────── 
     void onEvent(Event e) override;
+
+    /// ─────── Your custom methods ─────── 
+
+
 };
 
 struct Tiger_Project_Data : public VarBuffer
 {
     int viewport_count = 1;
 
-    void populate();
+    void populateUI();
     void registerSynced()
     {
         sync(viewport_count);
@@ -63,7 +72,7 @@ struct Tiger_Project : public Project<Tiger_Project_Data>
 {
     static ProjectInfo info()
     {
-        return ProjectInfo({ "Tests", "Vector Graphics", "Tiger" });
+        return ProjectInfo({ "Tests", "Draw Tiger (vector graphics)" });
     }
 
     void projectPrepare(Layout& layout) override;

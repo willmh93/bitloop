@@ -1,15 +1,13 @@
 #include "Tiger.h"
 #include "draw_tiger.h"
 
-SIM_DECLARE(Tiger)
+SIM_BEG(Tiger)
 
 using namespace BL;
 
-/// =========================
-/// ======== Project ========
-/// =========================
+/// ─────────────────────── Project ───────────────────────
 
-void Tiger_Project_Data::populate()
+void Tiger_Project_Data::populateUI()
 {
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
 }
@@ -19,20 +17,18 @@ void Tiger_Project::projectPrepare(Layout& layout)
     layout << create<Tiger_Scene>(viewport_count);
 }
 
-/// =======================
-/// ======== Scene ========
-/// =======================
+/// ─────────────────────── Scene ───────────────────────
 
-
-void Tiger_Scene_Data::populate()
+void Tiger_Scene_Data::populateUI()
 {
     ImGui::Checkbox("Transform coordinates", &transform_coordinates);
     ImGui::Checkbox("Scale Lines & Text", &scale_lines);
     ImGui::Checkbox("Scale Sizes", &scale_sizes);
     ImGui::Checkbox("Rotate Text", &rotate_text);
 
-    if (ImGui::SceneSection("View", 0.0f, 2.0f, true)) 
+    if (ImGui::Section("View", true)) 
     {
+        // imgui camera controls
         cam_view.populateUI();
     }
 }
@@ -58,8 +54,8 @@ void Tiger_Scene::sceneProcess()
 
 void Tiger_Scene::viewportProcess(Viewport*, double)
 {
-    // ======== Camera View ========
-    cam_view.apply(camera); // Apply any camera view settings from imgui
+    // Apply updates from imgui to camera view
+    cam_view.apply(camera);
 }
 
 void Tiger_Scene::viewportDraw(Viewport* ctx) const
@@ -80,7 +76,8 @@ void Tiger_Scene::onEvent(Event e)
         // Handle camera navigation for viewport that captured the event
         e.ctx_owner()->camera.handleWorldNavigation(e, true);
 
-        cam_view.read(&e.ctx_owner()->camera);
+        // Update camera view after handling navigation
+        cam_view.read(e.ctx_owner()->camera);
     }
 }
 
