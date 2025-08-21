@@ -31,7 +31,14 @@ void ExampleText_Scene_Data::populateUI()
         // imgui camera controls
         cam_view.populateUI();
     }
-
+    if (ImGui::Section("Options", true))
+    {
+        ImGui::Checkbox("Transform coordinates", &transform_coordinates);
+        ImGui::Checkbox("Scale Lines", &scale_lines);
+        ImGui::Checkbox("Scale Sizes", &scale_sizes);
+        ImGui::Checkbox("Scale Text",  &scale_text);
+        ImGui::Checkbox("Rotate Text", &rotate_text);
+    }
     //ImGui::Checkbox("option", &option);
     //ImGui::SliderDouble("value", &value, 0.0, 1.0);
 }
@@ -39,6 +46,25 @@ void ExampleText_Scene_Data::populateUI()
 void ExampleText_Scene::sceneStart()
 {
     // Initialize scene
+    fonts.push_back(NanoFont::create("/data/fonts/NK57 Monospace Sc Bk.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Baileys Car.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Barbatrick.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Baveuse 3d.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Dacquoise.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Deftone Stylus.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Degrassi.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Deluxe Ducks.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Die Nasty.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Iomanoid.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Jandles.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Metal Lord.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Paint Boy.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Waker.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Robokoz.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Zeroes One.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Lunasol Aurora.otf"));
+    fonts.push_back(NanoFont::create("/data/fonts/Street Cred.otf"));
+
 }
 
 void ExampleText_Scene::sceneMounted(Viewport*)
@@ -75,6 +101,24 @@ void ExampleText_Scene::viewportDraw(Viewport* ctx) const
 {
     // Draw Scene on this viewport (don't update simulation state here)
     ctx->drawWorldAxis();
+
+    camera->worldCoordinates(transform_coordinates);
+    camera->scalingLines(scale_lines);
+    camera->scalingSizes(scale_sizes);
+    camera->scalingText(scale_text);
+    camera->rotatingText(rotate_text);
+
+    double font_size = 32;
+
+    ctx->setFontSize(font_size);
+    ctx->setFillStyle(255, 255, 255);
+    for (size_t i = 0; i < fonts.size(); i++)
+    {
+        double y = (double)i * font_size + 20;
+        ctx->setFont(fonts[i]);
+        ctx->fillText("The quick brown fox jumps over the lazy dog", 20, y);
+
+    }
 }
 
 void ExampleText_Scene::onEvent(Event e)

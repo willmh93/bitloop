@@ -22,7 +22,7 @@ void Tiger_Project::projectPrepare(Layout& layout)
 void Tiger_Scene_Data::populateUI()
 {
     ImGui::Checkbox("Transform coordinates", &transform_coordinates);
-    ImGui::Checkbox("Scale Lines & Text", &scale_lines);
+    ImGui::Checkbox("Scale Lines", &scale_lines);
     ImGui::Checkbox("Scale Sizes", &scale_sizes);
     ImGui::Checkbox("Rotate Text", &rotate_text);
 

@@ -12,7 +12,7 @@ struct {SIM_NAME}_Scene_Data : VarBuffer
 
     void registerSynced() override
     {
-        /// ─────── auto-synced between worker/GUI thread ───────
+        /// synced between worker/GUI thread
         sync(cam_view);
         //sync(speed);
     }
@@ -21,31 +21,29 @@ struct {SIM_NAME}_Scene_Data : VarBuffer
 
 struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene_Data >
 {
-    /// ─────── Provide default Scene launch config ─────── 
+    /// ─────── Provide default Scene launch config ───────
     struct Config {
         // double gravity = 9.8;
     };
 
-    {SIM_NAME}_Scene(Config& info [[maybe_unused]] )
+    {SIM_NAME}_Scene(Config& info [[maybe_unused]])
         // : gravity(info.gravity)
     {}
 
-    /// ─────── Scene variables ─────── 
+    /// ─────── Scene variables ───────
     // double gravity;
 
     /// ─────── Scene methods ───────
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
     void sceneDestroy() override;
-
-    // --- Simulation processing ---
     void sceneProcess() override;
 
-    /// ─────── Viewport methods ─────── 
+    /// ─────── Viewport methods ───────
     void viewportProcess(Viewport* ctx, double dt) override;
     void viewportDraw(Viewport* ctx) const override;
 
-    /// ─────── Input handling ─────── 
+    /// ─────── Input handling ───────
     void onEvent(Event e) override; // All event types
 
     /// Filters for specific input events

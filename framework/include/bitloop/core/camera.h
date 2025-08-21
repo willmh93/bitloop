@@ -112,6 +112,7 @@ protected:
     bool transform_coordinates = true;
     bool scale_lines = true;
     bool scale_sizes = true;
+    bool scale_text  = true;
     bool rotate_text = true;
 
 private:
@@ -119,6 +120,7 @@ private:
     bool saved_transform_coordinates = transform_coordinates;
     bool saved_scale_lines = scale_lines;
     bool saved_scale_sizes = scale_sizes;
+    bool saved_scale_text  = scale_text;
     bool saved_rotate_text = rotate_text;
 
     std::vector<FingerInfo> fingers;
@@ -171,9 +173,10 @@ public:
     void worldHudTransform();
 
     void worldCoordinates(bool b) { transform_coordinates = b; }
-    void scalingLines(bool b) { scale_lines = b; }
-    void scalingSizes(bool b) { scale_sizes = b; }
-    void rotatingText(bool b) { rotate_text = b; }
+    void scalingLines(bool b)     { scale_lines = b; }
+    void scalingSizes(bool b)     { scale_sizes = b; }
+    void scalingText(bool b)      { scale_text  = b; }
+    void rotatingText(bool b)     { rotate_text = b; }
 
     void saveCameraTransform();
     void restoreCameraTransform();

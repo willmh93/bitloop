@@ -41,7 +41,11 @@
     },
     {
       "name": "ninja-release-win-static",
-      "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/ninja-release-win-static",
       "cacheVariables": {
@@ -55,7 +59,11 @@
     },
     {
       "name": "vs2022",
-      "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/vs2022",
       "cacheVariables": {
@@ -102,6 +110,21 @@
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
+        "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
+        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
+        "CMAKE_SUPPRESS_REGENERATION": "ON"
+      }
+    },
+    {
+      "name": "wasm32-release-min-size",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/wasm32-release-minsize",
+      "cacheVariables": {
+        "BUILD_FLAVOR": "wasm32-release-minsize",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",

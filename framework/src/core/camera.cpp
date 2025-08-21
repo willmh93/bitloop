@@ -28,6 +28,7 @@ void Camera::worldTransform()
     transform_coordinates = true;
     scale_lines = true;
     scale_sizes = true;
+    scale_text  = true;
     rotate_text = true;
     viewport->setLineWidth(viewport->line_width);
 }
@@ -37,6 +38,7 @@ void Camera::stageTransform()
     transform_coordinates = false;
     scale_lines = false;
     scale_sizes = false;// true; // Make sure zoom doesn't affect circle/shape sizes
+    scale_text  = false;
     rotate_text = false;
     viewport->setLineWidth(viewport->line_width);
 }
@@ -46,6 +48,7 @@ void Camera::worldHudTransform()
     transform_coordinates = true;
     scale_lines = false;
     scale_sizes = false; //scale_sizes = true; // leave unchanged
+    scale_text  = false;
     rotate_text = false;
     viewport->setLineWidth(viewport->line_width);
 }
@@ -55,6 +58,7 @@ void Camera::saveCameraTransform()
     saved_transform_coordinates = transform_coordinates;
     saved_scale_lines = scale_lines;
     saved_scale_sizes = scale_sizes;
+    saved_scale_text  = scale_text;
     saved_rotate_text = rotate_text;
 }
 
@@ -63,6 +67,7 @@ void Camera::restoreCameraTransform()
     transform_coordinates = saved_transform_coordinates;
     scale_lines = saved_scale_lines;
     scale_sizes = saved_scale_sizes;
+    scale_text  = saved_scale_text;
     rotate_text = saved_rotate_text;
     viewport->setLineWidth(viewport->line_width);
 }
@@ -78,15 +83,15 @@ void Camera::setOriginViewportAnchor(Anchor anchor)
 {
     switch (anchor)
     {
-    case Anchor::TOP_LEFT:     setOriginViewportAnchor(0.0, 0.0);  break;
-    case Anchor::TOP:          setOriginViewportAnchor(0.5, 0.0);  break;
-    case Anchor::TOP_RIGHT:    setOriginViewportAnchor(1.0, 0.0);  break;
-    case Anchor::LEFT:         setOriginViewportAnchor(0.0, 0.5);  break;
-    case Anchor::CENTER:       setOriginViewportAnchor(0.5, 0.5);  break;
-    case Anchor::RIGHT:        setOriginViewportAnchor(1.0, 0.5);  break;
-    case Anchor::BOTTOM_LEFT:  setOriginViewportAnchor(0.0, 1.0);  break;
-    case Anchor::BOTTOM:       setOriginViewportAnchor(0.5, 1.0);  break;
-    case Anchor::BOTTOM_RIGHT: setOriginViewportAnchor(1.0, 1.0);  break;
+        case Anchor::TOP_LEFT:     setOriginViewportAnchor(0.0, 0.0);  break;
+        case Anchor::TOP:          setOriginViewportAnchor(0.5, 0.0);  break;
+        case Anchor::TOP_RIGHT:    setOriginViewportAnchor(1.0, 0.0);  break;
+        case Anchor::LEFT:         setOriginViewportAnchor(0.0, 0.5);  break;
+        case Anchor::CENTER:       setOriginViewportAnchor(0.5, 0.5);  break;
+        case Anchor::RIGHT:        setOriginViewportAnchor(1.0, 0.5);  break;
+        case Anchor::BOTTOM_LEFT:  setOriginViewportAnchor(0.0, 1.0);  break;
+        case Anchor::BOTTOM:       setOriginViewportAnchor(0.5, 1.0);  break;
+        case Anchor::BOTTOM_RIGHT: setOriginViewportAnchor(1.0, 1.0);  break;
     }
 }
 

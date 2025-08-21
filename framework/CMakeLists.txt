@@ -130,6 +130,14 @@ target_link_libraries(bitloop
     glm::glm
 )
 
+if (NOT EMSCRIPTEN)
+    find_package(FFMPEG REQUIRED COMPONENTS avcodec avformat avutil swscale)
+    target_link_libraries(bitloop
+        PUBLIC
+        ${FFMPEG_LIBRARIES}
+)
+endif()
+
 add_library(bitloop::bitloop ALIAS bitloop)
 
 # ──────── Install static libs ────────

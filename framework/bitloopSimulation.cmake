@@ -36,7 +36,7 @@ function(apply_common_settings _TARGET)
 			"-sFULL_ES3=1"
 			"-sALLOW_MEMORY_GROWTH=1"
 			"-sUSE_PTHREADS=1"
-			"-sPTHREAD_POOL_SIZE=32"
+			"-sPTHREAD_POOL_SIZE=0"
 		)
 	endif()
 endfunction()

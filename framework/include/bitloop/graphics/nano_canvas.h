@@ -17,59 +17,59 @@ class Viewport;
 
 enum struct PathWinding
 {
-    WINDING_CCW = NVGwinding::NVG_CCW,
-    WINDING_CW = NVGwinding::NVG_CW
+    WINDING_CCW  = NVGwinding::NVG_CCW,
+    WINDING_CW   = NVGwinding::NVG_CW
 };
 enum struct LineCap
 {
-    CAP_BUTT = NVGlineCap::NVG_BUTT,
-    CAP_ROUND = NVGlineCap::NVG_ROUND,
-    CAP_SQUARE = NVGlineCap::NVG_SQUARE,
+    CAP_BUTT     = NVGlineCap::NVG_BUTT,
+    CAP_ROUND    = NVGlineCap::NVG_ROUND,
+    CAP_SQUARE   = NVGlineCap::NVG_SQUARE,
 };
 enum struct LineJoin
 {
-    JOIN_BEVEL = NVGlineCap::NVG_BEVEL,
-    JOIN_MITER = NVGlineCap::NVG_MITER
+    JOIN_BEVEL   = NVGlineCap::NVG_BEVEL,
+    JOIN_MITER   = NVGlineCap::NVG_MITER
 };
 enum struct TextAlign
 {
-    ALIGN_LEFT = NVGalign::NVG_ALIGN_LEFT,
-    ALIGN_CENTER = NVGalign::NVG_ALIGN_CENTER,
-    ALIGN_RIGHT = NVGalign::NVG_ALIGN_RIGHT
+    ALIGN_LEFT    = NVGalign::NVG_ALIGN_LEFT,
+    ALIGN_CENTER  = NVGalign::NVG_ALIGN_CENTER,
+    ALIGN_RIGHT   = NVGalign::NVG_ALIGN_RIGHT
 };
 enum struct TextBaseline
 {
-    BASELINE_TOP = NVGalign::NVG_ALIGN_TOP,
-    BASELINE_MIDDLE = NVGalign::NVG_ALIGN_MIDDLE,
-    BASELINE_BOTTOM = NVGalign::NVG_ALIGN_BOTTOM
+    BASELINE_TOP     = NVGalign::NVG_ALIGN_TOP,
+    BASELINE_MIDDLE  = NVGalign::NVG_ALIGN_MIDDLE,
+    BASELINE_BOTTOM  = NVGalign::NVG_ALIGN_BOTTOM
 };
 enum struct CompositeOperation
 {
-    COMPOSITE_SOURCE_OVER = NVGcompositeOperation::NVG_SOURCE_OVER,
-    COMPOSITE_SOURCE_IN = NVGcompositeOperation::NVG_SOURCE_IN,
-    COMPOSITE_SOURCE_OUT = NVGcompositeOperation::NVG_SOURCE_OUT,
-    COMPOSITE_ATOP = NVGcompositeOperation::NVG_ATOP,
-    COMPOSITE_DESTINATION_OVER = NVGcompositeOperation::NVG_DESTINATION_OVER,
-    COMPOSITE_DESTINATION_IN = NVGcompositeOperation::NVG_DESTINATION_IN,
-    COMPOSITE_DESTINATION_OUT = NVGcompositeOperation::NVG_DESTINATION_OUT,
-    COMPOSITE_DESTINATION_ATOP = NVGcompositeOperation::NVG_DESTINATION_ATOP,
-    COMPOSITE_LIGHTER = NVGcompositeOperation::NVG_LIGHTER,
-    COMPOSITE_COPY = NVGcompositeOperation::NVG_COPY,
-    COMPOSITE_XOR = NVGcompositeOperation::NVG_XOR
+    COMPOSITE_SOURCE_OVER       = NVGcompositeOperation::NVG_SOURCE_OVER,
+    COMPOSITE_SOURCE_IN         = NVGcompositeOperation::NVG_SOURCE_IN,
+    COMPOSITE_SOURCE_OUT        = NVGcompositeOperation::NVG_SOURCE_OUT,
+    COMPOSITE_ATOP              = NVGcompositeOperation::NVG_ATOP,
+    COMPOSITE_DESTINATION_OVER  = NVGcompositeOperation::NVG_DESTINATION_OVER,
+    COMPOSITE_DESTINATION_IN    = NVGcompositeOperation::NVG_DESTINATION_IN,
+    COMPOSITE_DESTINATION_OUT   = NVGcompositeOperation::NVG_DESTINATION_OUT,
+    COMPOSITE_DESTINATION_ATOP  = NVGcompositeOperation::NVG_DESTINATION_ATOP,
+    COMPOSITE_LIGHTER           = NVGcompositeOperation::NVG_LIGHTER,
+    COMPOSITE_COPY              = NVGcompositeOperation::NVG_COPY,
+    COMPOSITE_XOR               = NVGcompositeOperation::NVG_XOR
 };
 enum struct BlendFactor
 {
-    BLEND_ZERO = NVGblendFactor::NVG_ZERO,
-    BLEND_ONE = NVGblendFactor::NVG_ONE,
-    BLEND_SRC_COLOR = NVGblendFactor::NVG_SRC_COLOR,
-    BLEND_ONE_MINUS_SRC_COLOR = NVGblendFactor::NVG_ONE_MINUS_SRC_COLOR,
-    BLEND_DST_COLOR = NVGblendFactor::NVG_DST_COLOR,
-    BLEND_ONE_MINUS_DST_COLOR = NVGblendFactor::NVG_ONE_MINUS_DST_COLOR,
-    BLEND_SRC_ALPHA = NVGblendFactor::NVG_SRC_ALPHA,
-    BLEND_ONE_MINUS_SRC_ALPHA = NVGblendFactor::NVG_ONE_MINUS_SRC_ALPHA,
-    BLEND_DST_ALPHA = NVGblendFactor::NVG_DST_ALPHA,
-    BLEND_ONE_MINUS_DST_ALPHA = NVGblendFactor::NVG_ONE_MINUS_DST_ALPHA,
-    BLEND_SRC_ALPHA_SATURATE = NVGblendFactor::NVG_SRC_ALPHA_SATURATE
+    BLEND_ZERO                  = NVGblendFactor::NVG_ZERO,
+    BLEND_ONE                   = NVGblendFactor::NVG_ONE,
+    BLEND_SRC_COLOR             = NVGblendFactor::NVG_SRC_COLOR,
+    BLEND_ONE_MINUS_SRC_COLOR   = NVGblendFactor::NVG_ONE_MINUS_SRC_COLOR,
+    BLEND_DST_COLOR             = NVGblendFactor::NVG_DST_COLOR,
+    BLEND_ONE_MINUS_DST_COLOR   = NVGblendFactor::NVG_ONE_MINUS_DST_COLOR,
+    BLEND_SRC_ALPHA             = NVGblendFactor::NVG_SRC_ALPHA,
+    BLEND_ONE_MINUS_SRC_ALPHA   = NVGblendFactor::NVG_ONE_MINUS_SRC_ALPHA,
+    BLEND_DST_ALPHA             = NVGblendFactor::NVG_DST_ALPHA,
+    BLEND_ONE_MINUS_DST_ALPHA   = NVGblendFactor::NVG_ONE_MINUS_DST_ALPHA,
+    BLEND_SRC_ALPHA_SATURATE    = NVGblendFactor::NVG_SRC_ALPHA_SATURATE
 };
 
 class NanoFont
@@ -92,7 +92,7 @@ public:
 
     NanoFont(const char* virtual_path)
     {
-        BL::print("NanoFont() called");
+        //BL::print("NanoFont() called");
         path = Platform()->path(virtual_path);
     }
 
@@ -125,6 +125,7 @@ protected:
     std::shared_ptr<NanoFont> active_font;
     
     double global_scale = 1.0;
+    double font_size = 16.0;
 
 public:
 
@@ -548,65 +549,23 @@ public:
 
     void fillText(std::string_view txt, double px, double py)
     {
-        DVec2 p = PT(px, py);
-        SimplePainter::fillText(txt, p.x, p.y);
+        //DVec2 p = PT(px, py);
 
-        /*if (camera.transform_coordinates)
-        {
-            if (camera.scale_lines)
-            {
-                if (camera.rotate_text)
-                {
-                    // No change
-                    SimplePainter::fillText(txt, px, py);
-                }
-                else
-                {
-                    glm::mat3 cur_transform = currentTransform();
-                    resetTransform();
-                    transform(default_viewport_transform);
+        //if (camera.scale_text)
+        //    SimplePainter::setFontSize(SIZE(font_size));
+        //else
+        //    SimplePainter::setFontSize(font_size);
 
-                    translate(camera.toStage(px, py));
-                    scale(camera.zoomX(), camera.zoomY());
-                    SimplePainter::fillText(txt, 0, 0);
+        LocalTransform t(this);
+        TRANSLATE(px, py);
 
-                    resetTransform();
-                    transform(cur_transform);
-                }
-            }
-            else
-            {
-                glm::mat3 cur_transform = currentTransform();
-                resetTransform();
-                transform(default_viewport_transform);
+        if (camera.rotate_text)
+            ROTATE(camera.rotation());
 
-                translate(camera.toStage(px, py));
-                if (camera.rotate_text) 
-                    rotate(camera.rotation);
-                SimplePainter::fillText(txt, 0, 0);
+        if (camera.scale_text)
+            scale(camera.zoomX(), camera.zoomY());
 
-                resetTransform();
-                transform(cur_transform);
-            }
-        }
-        else
-        {
-            glm::mat3 cur_transform = currentTransform();
-            resetTransform();
-            transform(default_viewport_transform);
-
-            if (camera.scale_lines)
-            {
-                SimplePainter::fillText(txt, px, py);
-            }
-            else
-            {
-                SimplePainter::fillText(txt, px, py);
-            }
-
-            resetTransform();
-            transform(cur_transform);
-        }*/
+        SimplePainter::fillText(txt, px, py);
     }
 
     void fillText(std::string_view txt, const DVec2& p) {

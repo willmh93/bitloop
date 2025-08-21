@@ -7,6 +7,15 @@
 #include "nano_canvas.h"
 #include "project.h"
 
+//#ifndef __EMSCRIPTEN__
+//extern "C" {
+//    #include <libavcodec/avcodec.h>
+//    #include <libavformat/avformat.h>
+//    #include <libswscale/swscale.h>
+//    #include <libavutil/avutil.h>
+//}
+//#endif
+
 namespace BL {
 
 struct ToolbarButtonState 

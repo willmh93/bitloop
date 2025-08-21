@@ -8,13 +8,23 @@ using namespace BL;
 struct ExampleText_Scene_Data : VarBuffer
 {
     CameraViewController cam_view;
-    //double speed = 0.0;
+    
+    bool transform_coordinates = true;
+    bool scale_lines = true;
+    bool scale_sizes = true;
+    bool scale_text  = true;
+    bool rotate_text = true;
 
     void registerSynced() override
     {
-        /// ─────── auto-synced between worker/GUI thread ───────
+        // auto-synced between worker/GUI thread
         sync(cam_view);
-        //sync(speed);
+
+        sync(transform_coordinates);
+        sync(scale_lines);
+        sync(scale_sizes);
+        sync(scale_text);
+        sync(rotate_text);
     }
     void populateUI() override;
 };
@@ -22,23 +32,16 @@ struct ExampleText_Scene_Data : VarBuffer
 struct ExampleText_Scene : public Scene<ExampleText_Scene_Data >
 {
     /// ─────── Provide default Scene launch config ─────── 
-    struct Config {
-        // double gravity = 9.8;
-    };
+    struct Config {};
+    ExampleText_Scene(Config& info [[maybe_unused]]) {}
 
-    ExampleText_Scene(Config& info [[maybe_unused]] )
-        // : gravity(info.gravity)
-    {}
-
-    /// ─────── Scene variables ─────── 
-    // double gravity;
+    /// ─────── Scene variables ───────
+    std::vector<std::shared_ptr<NanoFont>> fonts;
 
     /// ─────── Scene methods ───────
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;
     void sceneDestroy() override;
-
-    // --- Simulation processing ---
     void sceneProcess() override;
 
     /// ─────── Viewport methods ─────── 
