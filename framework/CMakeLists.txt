@@ -140,15 +140,12 @@ install(TARGETS bitloop
 
 # ──────── Install public headers ────────
 install(DIRECTORY
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/" # trailing slash important to avoid nesting another "include/"
     DESTINATION include
     FILES_MATCHING
       PATTERN "*.h"
       PATTERN "*.hpp"
 )
-
-# support inclusion by:  #include <bitloop.h>
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/bitloop.h" DESTINATION share)
 
 # ──────── Export CMake config file for find_package() ────────
 install(EXPORT bitloopTargets
