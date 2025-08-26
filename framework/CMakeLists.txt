@@ -147,6 +147,9 @@ install(DIRECTORY
       PATTERN "*.hpp"
 )
 
+# support inclusion by:  #include <bitloop.h>
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/bitloop.h" DESTINATION share)
+
 # ──────── Export CMake config file for find_package() ────────
 install(EXPORT bitloopTargets
     NAMESPACE bitloop::
