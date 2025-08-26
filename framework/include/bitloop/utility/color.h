@@ -1,4 +1,5 @@
-#include "types.h"
+#pragma once
+#include <bitloop/core/types.h>
 
 BL_BEGIN_NS
 

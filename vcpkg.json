@@ -2,9 +2,18 @@
   "name": "bitloop",
   "version-string": "0.9.20",
   "dependencies": [
-    {"name": "vcpkg-tool-ninja", "host": true, "platform": "windows"},
-    "sdl3",
-    "freetype",
+    { "name": "vcpkg-tool-ninja", "host": true, "platform": "windows" },
+    { "name": "catch2" },
+    { "name": "freetype" },
+    { "name": "sdl3" },
+    { "name": "glad" },
+    { "name": "glm" },
+    { "name": "concurrentqueue" },
+    { "name": "nanovg" },
+    { "name": "nanosvg" },
+    { "name": "nlohmann-json" },
+    { "name": "brotli" },
+    { "name": "bshoshany-thread-pool" },
     {
       "name": "imgui",
       "features": [
@@ -14,7 +23,6 @@
         "opengl3-binding"
       ]
     },
-    "glm",
     {
       "name": "ffmpeg",
       "platform": "!wasm32",

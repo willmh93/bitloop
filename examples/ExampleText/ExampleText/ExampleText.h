@@ -1,7 +1,7 @@
 #pragma once
-#include <project.h>
+#include <bitloop.h>
 
-SIM_BEG(ExampleText)
+SIM_BEG;
 
 using namespace BL;
 
@@ -85,4 +85,4 @@ struct ExampleText_Project : public Project<ExampleText_Project_Data>
     void projectPrepare(Layout& layout) override;
 };
 
-SIM_END(ExampleText)
+SIM_END;

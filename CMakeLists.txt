@@ -6,3 +6,9 @@ project(bitloop-superbuild LANGUAGES CXX)
 
 add_subdirectory(framework)
 add_subdirectory(examples)
+
+option(BITLOOP_BUILD_TESTS "Build tests" ON)
+#if(BITLOOP_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+#endif()

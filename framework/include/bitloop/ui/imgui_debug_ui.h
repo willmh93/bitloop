@@ -2,7 +2,7 @@
 
 #include <imgui.h>
 #include <SDL3/SDL.h>
-#include "platform.h"
+#include <bitloop/core/platform.h>
 
 inline void dpiDebugInfo()
 {

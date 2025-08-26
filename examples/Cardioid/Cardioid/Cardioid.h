@@ -1,12 +1,11 @@
 #pragma once
-#include "project.h"
+#include <bitloop.h>
 #include <complex>
 
-SIM_BEG(Cardioid)
+SIM_BEG;
 
 using namespace BL;
 
-// Expose
 
 void plot(const SceneBase* scene, Viewport* ctx, bool interactive, int segments = 720, double ox=0);
 
@@ -475,4 +474,4 @@ struct Cardioid_Project : public BasicProject
     void projectPrepare(Layout& layout) override;
 };
 
-SIM_END(Cardioid)
+SIM_END;

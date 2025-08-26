@@ -1,7 +1,7 @@
 #include <cmath>
-#include "camera.h"
-#include "project.h"
-#include "platform.h"
+#include <core/camera.h>
+#include <core/project.h>
+#include <core/platform.h>
 
 BL_BEGIN_NS
 
@@ -213,8 +213,8 @@ void Camera::restrictRelativeZoomRange(double min, double max)
 
 void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
 {
-    BL::print("[DOWN] Cam Pos: (%.3f, %.3f) Zoom: (%.3f, %.3f) Angle: %.3f",
-        (double)cam_x, (double)cam_y, (double)zoom_x, (double)zoom_y, cam_rotation);
+    //BL::print("[DOWN] Cam Pos: (%.3f, %.3f) Zoom: (%.3f, %.3f) Angle: %.3f",
+    //    (double)cam_x, (double)cam_y, (double)zoom_x, (double)zoom_y, cam_rotation);
 
     saveCameraTransform();
     worldTransform();
@@ -263,7 +263,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 
 
             DVec2 world_offset = stageToWorldOffset(dx, dy);
-            BL::print("(dx,dy) = (%.3f, %.3f)", world_offset.x, world_offset.y);
+            //BL::print("(dx,dy) = (%.3f, %.3f)", world_offset.x, world_offset.y);
             //BL::print() << "(dx,dy) = (" << BL::dp(3) << world_offset.x << ", " << world_offset.)y
 
             setPos(
@@ -284,7 +284,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             {
                 double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
                 setRotation(pan_beg_cam_angle + delta_rotation);
-                BL::print() << "Setting rotation: " << BL::dp(3) << (double)cam_rotation;
+                //BL::print() << "Setting rotation: " << BL::dp(3) << (double)cam_rotation;
 
                 // todo: In order to lock camera during pan, you may need to manually
                 //       send an event mimicking a mouse move in order to trigger pollEvents

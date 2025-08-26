@@ -4,8 +4,8 @@
 #define NANOVG_GL3_IMPLEMENTATION
 #endif
 
-#include "nano_canvas.h"
-#include "project.h"
+#include <graphics/nano_canvas.h>
+#include <core/project.h>
 
 BL_BEGIN_NS
 

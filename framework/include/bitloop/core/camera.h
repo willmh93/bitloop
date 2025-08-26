@@ -1,7 +1,7 @@
 #pragma once
 #include "types.h"
 #include "debug.h"
-#include "bitloop/utility/math_helpers.h"
+#include <bitloop/utility/math_util.h>
 
 BL_BEGIN_NS
 

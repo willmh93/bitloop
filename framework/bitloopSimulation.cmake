@@ -3,7 +3,11 @@
 set(BITLOOP_MAIN_SOURCE		"${CMAKE_CURRENT_LIST_DIR}/src/bitloop_main.cpp"	CACHE INTERNAL "")
 set(BITLOOP_COMMON			"${CMAKE_CURRENT_LIST_DIR}/common"					CACHE INTERNAL "")
 set(BITLOOP_BUILD_DIR		"${CMAKE_CURRENT_BINARY_DIR}"						CACHE INTERNAL "")
-set(AUTOGEN_SIM_INCLUDES	"${BITLOOP_BUILD_DIR}/bitloop_simulations.h"		CACHE INTERNAL "")
+
+# Auto-generated include folder
+set(BITLOOP_AUTOGEN_DIR		"${CMAKE_CURRENT_BINARY_DIR}/include_autogen" CACHE INTERNAL "")
+file(MAKE_DIRECTORY			"${BITLOOP_AUTOGEN_DIR}")
+set(AUTOGEN_SIM_INCLUDES	"${BITLOOP_AUTOGEN_DIR}/bitloop_simulations.h" CACHE INTERNAL "")
 
 set(BITLOOP_PROJECT_NAMES ""		CACHE INTERNAL "Ordered included projected")
 set(BITLOOP_DATA_DEPENDENCIES ""	CACHE INTERNAL "Ordered list of dependency data directories")
@@ -12,7 +16,7 @@ set_property(DIRECTORY PROPERTY BITLOOP_DEPENDENCY_DIRS "")
 
 # Begin auto-generated header file
 file(WRITE "${AUTOGEN_SIM_INCLUDES}" "// Auto‑generated simulation includes\n")
-file(WRITE "${AUTOGEN_SIM_INCLUDES}" "#include <bitloop/core/project.h>\n\n")
+file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#include <bitloop/core/project.h>\n\n")
 
 function(apply_common_settings _TARGET)
 	target_compile_features(${_TARGET} PUBLIC cxx_std_23)
@@ -31,12 +35,15 @@ function(apply_common_settings _TARGET)
 		)
 
 		target_link_options(${_TARGET} PRIVATE
+			"-pthread"
 			"-sUSE_SDL=3"
 			"-sUSE_WEBGL2=1"
 			"-sFULL_ES3=1"
 			"-sALLOW_MEMORY_GROWTH=1"
 			"-sUSE_PTHREADS=1"
-			"-sPTHREAD_POOL_SIZE=0"
+			"-sPTHREAD_POOL_SIZE=32"
+			"-sPTHREADS_DEBUG=1"
+			"-sEXPORTED_RUNTIME_METHODS=[ccall,UTF8ToString,stringToUTF8,lengthBytesUTF8]"
 		)
 	endif()
 endfunction()
@@ -105,7 +112,10 @@ macro(bitloop_new_project sim_name)
 
 		set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" PROPERTY VS_STARTUP_PROJECT "${_TARGET}")
 		add_executable(${_TARGET} ${SIM_SOURCES})
+
 		apply_root_exe_name(${_TARGET})
+
+		 target_include_directories(${_TARGET} PRIVATE "$<BUILD_INTERFACE:${BITLOOP_AUTOGEN_DIR}>")
 
 	else()
 		# nested (library)
@@ -116,19 +126,30 @@ macro(bitloop_new_project sim_name)
 		add_library(${sim_name}::${sim_name} ALIAS ${sim_name}) # Export an alias so consumers can link as sim::sim
 	endif()
 
-	target_include_directories(${_TARGET} PUBLIC
-      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-      "$<BUILD_INTERFACE:${BITLOOP_BUILD_DIR}>"
-	)
+
 	target_link_libraries(${_TARGET} PRIVATE bitloop::bitloop)
 
 
 	# Append #include to the auto-generated header
 	if (SIM_SOURCES_PROVIDED)
-		file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#include <${sim_name}/${sim_name}.h>\n")
+        file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#pragma push_macro(\"SIM_NAME\")\n")
+        file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#undef SIM_NAME\n")
+        file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#define SIM_NAME ${sim_name}\n")
+        file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#include <${sim_name}/${sim_name}.h>\n")
+        file(APPEND "${AUTOGEN_SIM_INCLUDES}" "using ${sim_name}::${sim_name}_Project;\n")
+        file(APPEND "${AUTOGEN_SIM_INCLUDES}" "#pragma pop_macro(\"SIM_NAME\")\n\n")
+        
+        set(_shim "${CMAKE_CURRENT_BINARY_DIR}/.bl_ns_this_project.h")
+        file(WRITE "${_shim}" "#pragma once\n#define SIM_NAME ${sim_name}\n")
+        
+        if (MSVC)
+          target_compile_options(${_TARGET} PRIVATE "/FI${_shim}")
+        else()
+          target_compile_options(${_TARGET} PRIVATE "-include" "${_shim}")
+        endif()
+
 	ENDIF()
 
-	#if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 	if (CMAKE_CURRENT_SOURCE_DIR STREQUAL BL_ROOT_PROJECT)
 		msg(STATUS "")
 		msg(STATUS "────────── Project Tree ──────────")
@@ -153,6 +174,56 @@ macro(bitloop_new_project sim_name)
 			list(APPEND _project_names ${sim_name})
 		endif()
 		set_property(GLOBAL PROPERTY BITLOOP_PROJECT_NAMES ${_project_names})
+
+
+		# ---- Include Tree (include wrappers that define project namespace macros) ----
+
+		file(GLOB_RECURSE _pub_headers
+		  "${CMAKE_CURRENT_SOURCE_DIR}/${sim_name}/*.h"
+		  "${CMAKE_CURRENT_SOURCE_DIR}/${sim_name}/*.hpp"
+		)
+
+		# Project include wrapper root
+		set(_wrap_root "${CMAKE_CURRENT_BINARY_DIR}/include")
+		set(_wrap_ns_root "${_wrap_root}/${sim_name}")
+		file(MAKE_DIRECTORY "${_wrap_ns_root}")
+
+
+		# Generate one wrapper per public header
+		foreach(_hdr IN LISTS _pub_headers)
+		  # path relative to project root
+		  file(RELATIVE_PATH _rel "${CMAKE_CURRENT_SOURCE_DIR}" "${_hdr}")
+		  get_filename_component(_rel_dir "${_rel}" DIRECTORY)
+		  file(MAKE_DIRECTORY "${_wrap_root}/${_rel_dir}")
+
+		  # Absolute path to the real header (prevents wrapper->wrapper recursion)
+		  set(_real_hdr "${_hdr}")
+
+		  file(RELATIVE_PATH rel_path "${_wrap_root}/${_rel}" "${_hdr}")
+		  file(TO_CMAKE_PATH "${_hdr}" _hdr_for_line)
+
+		  set(INCLUDE_HEADER_PATH "${_wrap_root}/${_rel}")
+		  file(WRITE  ${INCLUDE_HEADER_PATH} "// Auto wrapper for ${_rel}\n")
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#pragma once\n")
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#pragma push_macro(\"SIM_NAME\")\n")
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#undef SIM_NAME\n")
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#define SIM_NAME ${sim_name}\n")
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#include <bitloop/core/project.h>\n")
+		  file(APPEND "${INCLUDE_HEADER_PATH}" "#line 1 \"${_hdr_for_line}\"\n") # Add #line BEFORE including the real header
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${rel_path}\"\n")
+		  file(APPEND ${INCLUDE_HEADER_PATH} "#pragma pop_macro(\"SIM_NAME\")\n")
+		endforeach()
+
+
+		 # Expose wrapper include tree publicly; keep real headers private
+         target_include_directories(${_TARGET}
+             PUBLIC
+                 $<BUILD_INTERFACE:${_wrap_root}>
+                 #$<BUILD_INTERFACE:${BITLOOP_BUILD_DIR}>   # to make bitloop_simulations.h visible
+                 $<INSTALL_INTERFACE:include>
+             PRIVATE
+                 ${CMAKE_CURRENT_SOURCE_DIR}
+         )
 	endif()
 
 	# Add target /data (if provided)
@@ -177,6 +248,7 @@ macro(bitloop_new_project sim_name)
 		endforeach()
 
 		file(APPEND "${AUTOGEN_SIM_INCLUDES}" "}\n")
+
 
 		msg(STATUS "")
 		msg(STATUS "──────── Merged Data Tree ────────")
@@ -231,10 +303,6 @@ function(_bitloop_add_dependency _TARGET _SIM_DIR)
 		add_subdirectory(${_SIM_DIR} "${CMAKE_BINARY_DIR}/${sim_name}_build")
 	endif()
 
-	target_include_directories(${_TARGET} PRIVATE
-        "$<BUILD_INTERFACE:${_SIM_DIR}>"
-        "$<BUILD_INTERFACE:${BITLOOP_BUILD_DIR}>"
-    )
 
 	# Link dependency into our target
 	target_link_libraries(${_TARGET} PUBLIC ${sim_name}::${sim_name})

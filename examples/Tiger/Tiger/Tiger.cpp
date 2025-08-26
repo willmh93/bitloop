@@ -1,7 +1,7 @@
 #include "Tiger.h"
 #include "draw_tiger.h"
 
-SIM_BEG(Tiger)
+SIM_BEG;
 
 using namespace BL;
 
@@ -81,4 +81,4 @@ void Tiger_Scene::onEvent(Event e)
     }
 }
 
-SIM_END(Tiger)
+SIM_END;

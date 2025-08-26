@@ -13,4 +13,3 @@ bitloop_add_dependency(../Cardioid)
 
 # 2. Create new project
 bitloop_new_project(Mandelbrot  ${SIM_SOURCES})
-

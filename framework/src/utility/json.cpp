@@ -1,5 +1,5 @@
-#include "nlohmann_json.hpp"
-#include "debug.h"
+#include "nlohmann/json.hpp"
+#include <bitloop/core/debug.h>
 
 
 

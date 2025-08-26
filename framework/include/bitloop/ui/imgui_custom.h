@@ -10,7 +10,7 @@ constexpr double pi = std::numbers::pi;
 //#define IMGUI_ENABLE_FREETYPE
 #define IMGUI_DEFINE_MATH_OPERATORS
 
-#include "platform.h"
+#include <bitloop/core/project.h>
 
 #include "imgui_internal.h"
 #include "imgui_freetype.h"

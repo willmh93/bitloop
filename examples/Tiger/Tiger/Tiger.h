@@ -1,7 +1,7 @@
 #pragma once
-#include <project.h>
+#include <bitloop.h>
 
-SIM_BEG(Tiger)
+SIM_BEG;
 
 using namespace BL;
 
@@ -78,4 +78,4 @@ struct Tiger_Project : public Project<Tiger_Project_Data>
     void projectPrepare(Layout& layout) override;
 };
 
-SIM_END(Tiger)
+SIM_END;

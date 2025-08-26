@@ -36,30 +36,32 @@ namespace Thread
     using moodycamel::ConcurrentQueue;
     using moodycamel::BlockingConcurrentQueue;
 
-    [[nodiscard]] static BS::thread_pool<BS::tp::none>& pool()
-    {
-        static BS::thread_pool pool;
-        return pool;
-    }
-
     [[nodiscard]] inline unsigned int idealThreadCount()
     {
         // 1. Try the standard C++ hint
         unsigned int n = std::thread::hardware_concurrency();
-        if (n) return n;
+        if (n) return (n-1);
 
         // 2. PlatformManager-specific fall-backs
         #if defined(__EMSCRIPTEN__)
             return static_cast<unsigned int>(emscripten_num_logical_cores());
         #elif defined(_WIN32)
             DWORD w = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
-            return w ? static_cast<unsigned int>(w) : 1;
+            n = w ? static_cast<unsigned int>(w) : 1;
         #elif defined(_SC_NPROCESSORS_ONLN)
             long p = sysconf(_SC_NPROCESSORS_ONLN);
-            return p > 0 ? static_cast<unsigned int>(p) : 1;
+            n = p > 0 ? static_cast<unsigned int>(p) : 1;
         #else
-            return 1;           // last-ditch fall-back
+            n = 1;           // last-ditch fall-back
         #endif
+            
+        return (n > 1) ? (n - 1) : 1;
+    }
+
+    [[nodiscard]] static BS::thread_pool<BS::tp::none>& pool()
+    {
+        static BS::thread_pool pool(Thread::idealThreadCount());
+        return pool;
     }
 
     template<typename sizeT>

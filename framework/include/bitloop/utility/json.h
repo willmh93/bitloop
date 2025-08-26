@@ -1,7 +1,9 @@
-#include "platform_macros.h"
+#pragma once
+#include <bitloop/core/platform_macros.h>
 
 BL_PUSH_PRECISE
-#include "nlohmann_json.hpp"
+//#include "nlohmann_json.hpp"
+#include "nlohmann/json.hpp"
 BL_POP_PRECISE
 #include <regex>
 
@@ -11,7 +13,7 @@ namespace JSON
 
     template<typename T>
     std::string markCleanFloat(T value, int max_decimals = 6, T precision = 0.0f) {
-        return "CLEANFLOAT(" + Helpers::floatToCleanString<T>(value, max_decimals, precision) + ")";
+        return "CLEANFLOAT(" + TextUtil::floatToCleanString<T>(value, max_decimals, precision) + ")";
     }
 
 

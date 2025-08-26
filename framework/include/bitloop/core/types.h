@@ -6,8 +6,7 @@
 #include <cmath>
 #include <limits>
 
-//#include "float128.h"
-#include "bitloop/utility/float128.h"
+#include <bitloop/utility/flt128.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_UNRESTRICTED_GENTYPE

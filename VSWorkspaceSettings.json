@@ -1,10 +1,14 @@
 {
   "ExcludedItems": [
     "vcpkg/",
+    "vcpkg-ports/",
     "bitloop.bat",
     "bitloop.sh",
     "LICENSE",
     "README.md",
-    ".unversioned"
+    ".unversioned",
+    ".gitattributes",
+    ".editorconfig",
+    "framework/external/imgui/examples/"
   ]
 }

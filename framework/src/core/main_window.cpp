@@ -1,6 +1,6 @@
-#include "platform.h"
-#include "main_window.h"
-#include "project_worker.h"
+#include <bitloop/core/platform.h>
+#include <bitloop/core/main_window.h>
+#include <bitloop/core/project_worker.h>
 
 BL_BEGIN_NS
 
@@ -129,12 +129,14 @@ void MainWindow::initFonts()
     
     float base_pt = 16.0f;
     std::string font_path = Platform()->path("/data/fonts/DroidSans.ttf");
+    std::string font_path_mono = Platform()->path("/data/fonts/UbuntuMono.ttf");
     ImFontConfig config;
     config.OversampleH = 3;
     config.OversampleV = 3;
     
     io.Fonts->Clear();
-    io.Fonts->AddFontFromFileTTF(font_path.c_str(), base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
+    main_font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
+    mono_font = io.Fonts->AddFontFromFileTTF(font_path_mono.c_str(), base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
     io.Fonts->Build();
 }
 
@@ -154,7 +156,7 @@ void MainWindow::populateProjectUI()
     ImGui::EndPaddedRegion();
 }
 
-bool MainWindow::isEditingUI()
+bool MainWindow::isInteractingWithUI()
 {
     ImGuiID active_id = ImGui::GetActiveID();
 
@@ -167,7 +169,8 @@ bool MainWindow::isEditingUI()
         return false;
 
     static ImGuiID viewport_id = ImHashStr("Viewport");
-    return (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
+    return (old_active_id != ImGui::FindWindowByID(viewport_id)->MoveId) ||
+           (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
 }
 
 /// ======== Toolbar ========
@@ -393,8 +396,9 @@ bool MainWindow::manageDockingLayout()
 
         ImGui::DockBuilderDockWindow("Projects",    dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Active",      dock_sidebar);  // dock to sidebar
-        ImGui::DockBuilderDockWindow("Debug Log",   dock_sidebar);  // dock to sidebar
-        ImGui::DockBuilderDockWindow("Project Log", dock_sidebar);  // dock to sidebar
+        //ImGui::DockBuilderDockWindow("Debug Log",   dock_sidebar);  // dock to sidebar
+        //ImGui::DockBuilderDockWindow("Project Log", dock_sidebar);  // dock to sidebar
+        ImGui::DockBuilderDockWindow("Debug",       dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Viewport",    dock_main_id);  // dock to window
 
         ImGui::DockBuilderFinish(dockspace_id);
@@ -563,7 +567,19 @@ void MainWindow::populateViewport()
             ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
             ImVec2(1.0f, 0.0f)    // UV bottom-right);
         );
+
+        //viewport_rect.Min = ImVec2(0, 0);
+        //viewport_rect.Max = size;
+        viewport_hovered = ImGui::IsWindowHovered();
     }
+    ImGui::End();
+}
+
+
+void threadsDebugInfo()
+{
+    ImGui::Begin("Threads Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Text("BSL Threads: %d", (int)Thread::pool().get_thread_count());
     ImGui::End();
 }
 
@@ -603,17 +619,28 @@ void MainWindow::populateUI()
 
     populateViewport();
 
-    #ifdef DEBUG_INCLUDE_LOG_TABS
-    if (ImGui::Begin("Project Log", nullptr, window_flags))
+    #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
+    ImGui::Begin("Debug"); // Begin Debug Window
     {
-        project_log.draw();
+        if (ImGui::BeginTabBar("DebugTabs"))
+        {
+
+            if (ImGui::BeginTabItem("Project Log"))
+            {
+                project_log.draw();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Global Log"))
+            {
+                debug_log.draw();
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
     }
-    ImGui::End();
-    if (ImGui::Begin("Debug Log", nullptr, window_flags))
-    {
-        debug_log.draw();
-    }
-    ImGui::End();
+    ImGui::End(); // End Debug Window
     #endif
 
     ImGui::PopStyleVar();
@@ -624,11 +651,26 @@ void MainWindow::populateUI()
     /// Debugging
     {
         // Debug Log
-        //project_log.log("%d", rand());
-        //project_log.Draw();
+        //project_log.draw();
 
         // Debug DPI
         //dpiDebugInfo();
+
+        //threadsDebugInfo();
+
+        /*ImGuiID active_id = ImGui::GetActiveID();
+
+        ImGui::Begin("Viewport Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Text("Viewport hovered: %d", viewport_hovered ?1:0);
+        ImGui::Text("Editing UI: %d", isInteractingWithUI()?1:0);
+        ImGui::Text("active_id: %d", active_id);
+        //ImGui::Text("Viewport: {%.0f, %.0f, %.0f, %.0f}",
+        //    viewport_rect.Min.x,
+        //    viewport_rect.Min.y,
+        //    viewport_rect.Max.x,
+        //    viewport_rect.Max.y
+        //);
+        ImGui::End();*/
     }
 }
 

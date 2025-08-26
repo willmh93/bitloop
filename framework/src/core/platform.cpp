@@ -1,5 +1,5 @@
-﻿#include "platform.h"
-#include "imgui_custom.h"
+#include <bitloop/core/project.h>
+#include <bitloop/ui/imgui_custom.h>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN

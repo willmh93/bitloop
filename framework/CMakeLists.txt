@@ -15,7 +15,7 @@ set(BL_INC "${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop")
 set(BL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
-    "${BL_INC}/bitloop.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop.h"
     "${BL_SRC}/bitloop.cpp"
     "${BL_INC}/core/*.h"
     "${BL_SRC}/core/*.cpp"
@@ -36,26 +36,9 @@ file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
     "${BL_INC}/graphics/*.h"
 )
 
-file(GLOB EXTERNAL_HEADERS CONFIGURE_DEPENDS
-    "${BL_INC}/3rd_party/*.hpp"
-    "${BL_INC}/3rd_party/*.h"
-    "${BL_INC}/3rd_party/nanosvg/*.h"
-    "${BL_INC}/3rd_party/glad/*.h"
-    "${BL_INC}/3rd_party/glad/KHR/*.h"
-    "${BL_INC}/3rd_party/nanovg/*.h"
-    "${BL_INC}/3rd_party/concurrentqueue/*.h"
-)
-
-file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
-    "${BL_SRC}/3rd_party/*.cpp"
-    "${BL_SRC}/3rd_party/*.c"
-    "${BL_SRC}/3rd_party/glad/*.c"
-    "${BL_SRC}/3rd_party/nanovg/*.c"
-)
-
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #source_group("CMakeLists (main)"    FILES ${CMAKE_SOURCE_DIR}/CMakeLists.txt)
-source_group("3rd party"            FILES ${EXTERNAL_HEADERS} ${EXTERNAL_SOURCES})
+#source_group("3rd party"            FILES ${EXTERNAL_HEADERS} ${EXTERNAL_SOURCES})
 source_group("Core"                 FILES ${CORE_SOURCES})
 source_group("Utility"              FILES ${UTILITY_SOURCES})
 source_group("Graphics"             FILES ${GRAPHICS_SOURCES})
@@ -75,70 +58,77 @@ set(ALL_SRC_FILES
     ${UTILITY_SOURCES}
     ${UI_SOURCES}
     ${GRAPHICS_SOURCES}
-    ${EXTERNAL_HEADERS}
-    ${EXTERNAL_SOURCES}
+    #${EXTERNAL_HEADERS}
+    #${EXTERNAL_SOURCES}
 )
-
 
 add_library(bitloop STATIC ${ALL_SRC_FILES})
 apply_common_settings(bitloop)
 
 target_include_directories(bitloop
   PUBLIC
+    # Consumers (and your tests) see only the root, so they must use <bitloop/...>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/ui>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/core>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/utility>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/graphics>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/nanovg>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
-
     $<INSTALL_INTERFACE:include>
-    $<INSTALL_INTERFACE:include/bitloop>
-    $<INSTALL_INTERFACE:include/bitloop/core>
-    $<INSTALL_INTERFACE:include/bitloop/utility>
-    $<INSTALL_INTERFACE:include/bitloop/ui>
-    $<INSTALL_INTERFACE:include/bitloop/graphics>
-    $<INSTALL_INTERFACE:include/bitloop/3rd_party>
-    $<INSTALL_INTERFACE:include/bitloop/3rd_party/nanovg>
-    $<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
-
   PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop>
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/utility
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/graphics
 )
 
 # ──────────────────────────────────────────────────────────────────
 # ─────────────────────────  Dependencies  ─────────────────────────
 # ──────────────────────────────────────────────────────────────────
 
-find_package(imgui CONFIG REQUIRED)
 find_package(Freetype CONFIG REQUIRED)
-find_package(glm CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+find_package(nanovg CONFIG REQUIRED)
+find_package(NanoSVG CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(unofficial-brotli CONFIG REQUIRED)
+find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
 
 target_link_libraries(bitloop
   PUBLIC
     Freetype::Freetype
     imgui::imgui
     SDL3::SDL3
+    glad::glad
     glm::glm
+    unofficial::concurrentqueue::concurrentqueue
+    nanovg::nanovg
+    NanoSVG::nanosvg
+    NanoSVG::nanosvgrast
+    nlohmann_json::nlohmann_json
+    unofficial::brotli::brotlidec
+    unofficial::brotli::brotlienc
+)
+target_include_directories(bitloop PRIVATE
+    ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
 if (NOT EMSCRIPTEN)
     find_package(FFMPEG REQUIRED COMPONENTS avcodec avformat avutil swscale)
     target_link_libraries(bitloop
         PUBLIC
-        ${FFMPEG_LIBRARIES}
-)
+        ${FFMPEG_LIBRARIES})
 endif()
 
+
+# # Link platform GL like most projects do (vcpkg leaves this to the consumer)
+# if (WIN32 AND NOT EMSCRIPTEN)
+#   target_link_libraries(bitloop PUBLIC opengl32)
+# elseif (NOT EMSCRIPTEN)
+#   find_package(OpenGL REQUIRED)
+#   target_link_libraries(bitloop PUBLIC OpenGL::GL)
+# endif()
+
+
 add_library(bitloop::bitloop ALIAS bitloop)
+
 
 # ──────── Install static libs ────────
 install(TARGETS bitloop
@@ -171,11 +161,22 @@ install(FILES
 )
 
 # ──────── Install common ────────
-install(DIRECTORY
-    "${CMAKE_CURRENT_SOURCE_DIR}/common"
-    DESTINATION share/bitloop
-)
-
+if (EMSCRIPTEN)
+    install(DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}/common"
+        DESTINATION share/bitloop
+        PATTERN "README.md" EXCLUDE
+    )
+else()
+    # Non-emscripten
+    install(DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}/common"
+        DESTINATION share/bitloop
+        PATTERN "README.md" EXCLUDE
+        PATTERN "static/" EXCLUDE
+        PATTERN "static/*" EXCLUDE
+    )
+endif()
 # ──────── Install simulation cmake helpers ────────
 install(FILES
    "${CMAKE_CURRENT_SOURCE_DIR}/bitloopSimulation.cmake"

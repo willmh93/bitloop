@@ -1,9 +1,9 @@
-#include "Mandelbrot.h"
-#include "compression.h"
-#include "constexpr_dispatch.h"
-#include "platform.h"
+#include <bitloop.h>
 
-SIM_DECLARE(Mandelbrot)
+#include "Mandelbrot.h"
+#include "examples.h"
+
+SIM_BEG;
 
 inline int mandelbrotIterLimit(double zoom)
 {
@@ -19,23 +19,19 @@ inline double qualityFromIterLimit(int iter_lim, double zoom_x)
     return static_cast<double>(iter_lim) / base;    // <= true quality by < 1/base
 }
 
-///-------------///
-///   Project   ///
-///-------------///
+/// ─────────────────────── Project ───────────────────────
 
 void Mandelbrot_Project::projectPrepare(Layout& layout)
 {
-    Mandelbrot_Scene::Config config1;
-    create<Mandelbrot_Scene>(config1)->mountTo(layout);
+    Mandelbrot_Scene::Config config;
+    create<Mandelbrot_Scene>(config)->mountTo(layout);
 }
 
-///-----------///
-///   Scene   ///
-///-----------///
+/// ─────────────────────── Scene ───────────────────────
 
 void Mandelbrot_Scene_Data::initData()
 {
-    loadColorTemplate(*this, GRADIENT_CLASSIC);
+    loadGradientPreset(GradientPreset::CLASSIC);
 }
 
 void Mandelbrot_Scene_Data::populateUI()
@@ -43,249 +39,107 @@ void Mandelbrot_Scene_Data::populateUI()
     bool is_tweening = tweening;
     if (is_tweening)
         ImGui::BeginDisabled();
+
+    //if (Platform()->is_desktop_native())
+    {
+        if (ImGui::Section("Saving & Loading", true))
+        {
+            static bool show_save_dialog = false, show_load_dialog = false;
+            if (ImGui::Button("Save"))
+            {
+                show_save_dialog = true;
+                strcpy(config_buf_name, "Unnamed");
+                updateConfigBuffer();
+                ImGui::OpenPopup("Save Data"); // open on this frame
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Load"))
+            {
+                show_load_dialog = true;
+                strcpy(config_buf, "");
+                ImGui::OpenPopup("Load Data"); // open on this frame
+            }
+
+            // Save Dialog
+            ImGui::SetNextWindowSize(ScaleSize(350, 300), ImGuiCond_FirstUseEver);
+            if (ImGui::BeginPopupModal("Save Data", &show_save_dialog))
+            {
+                ImVec2 avail = ImGui::GetContentRegionAvail();
+                avail.y -= ImGui::GetFrameHeightWithSpacing() * 2; // leave room for buttons/input
+
+                ImGui::AlignTextToFramePadding();
+                ImGui::Text("Name:");
+                ImGui::SameLine();
+                if (ImGui::InputText("###mandel_name", config_buf_name, 28))
+                    updateConfigBuffer();
+
+                ImGui::PushFont(MainWindow::instance()->monoFont());
+                ImGui::InputTextMultiline("###Config", config_buf, 1024, avail, ImGuiInputTextFlags_ReadOnly);
+                ImGui::PopFont();
+
+                if (ImGui::Button("Copy to Clipboard"))
+                    ImGui::SetClipboardText(config_buf);
+
+                ImGui::SameLine();
+                if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+
+            // Load Dialog
+            ImGui::SetNextWindowSize(ScaleSize(350, 300), ImGuiCond_FirstUseEver);
+            if (ImGui::BeginPopupModal("Load Data", &show_load_dialog))
+            {
+                ImVec2 avail = ImGui::GetContentRegionAvail();
+                avail.y -= ImGui::GetFrameHeightWithSpacing(); // leave room for buttons
+
+                ImGui::PushFont(MainWindow::instance()->monoFont());
+                ImGui::InputTextMultiline("###Config", config_buf, 1024, avail, ImGuiInputTextFlags_AlwaysOverwrite);
+                ImGui::PopFont();
+
+                if (ImGui::Button("Load"))
+                {
+                    loadConfigBuffer();
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+        }
+    }
     
     if (ImGui::Section("Examples", true, 0.0f, 2.0f))
     {
-        if (ImGui::Button("Home"))
+        ImGuiStyle& style = ImGui::GetStyle();
+        float avail_full = ImGui::GetContentRegionAvail().x;
+        float min_btn_w = ScaleSize(110.0f);
+        int   cols = (int)((avail_full + style.ItemSpacing.x) / (min_btn_w + style.ItemSpacing.x));
+        cols = cols < 1 ? 1 : cols;
+
+        if (ImGui::BeginTable("preset_grid", cols, ImGuiTableFlags_SizingStretchProp))
         {
-            MandelState dest;
-            dest.cam_view.x = -0.5;
-            dest.cam_view.y = 0.0;
-            dest.cam_view.zoom = 1.0;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.5;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.5f;
-            dest.log1p_weight = 0.0;
-
-            loadColorTemplate(dest, GRADIENT_CLASSIC);
-
-            // animation
-            dest.show_color_animation_options = false;
-            dest.gradient_shift_step = 0;
-            dest.hue_shift_step = 0;
-
-            startTween(dest);
-        }
-
-        if (ImGui::Button("Firework"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -1.766500164390;
-            dest.cam_view.y = -0.041755606186;
-            dest.cam_view.zoom = 11636977827.66;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.25;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.65 / 100.0;
-            dest.log1p_weight = 1.0;
-
-            loadColorTemplate(dest, GRADIENT_CLASSIC);
-
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.0015;
-            dest.hue_shift_step = 0.62;
-
-            startTween(dest);
-        }
-
-       
-        ImGui::SameLine();
-        if (ImGui::Button("Tendrils"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -0.105807817548;
-            dest.cam_view.y = -0.926364255583;
-            dest.cam_view.angle = Math::PI / 2.0;
-            dest.cam_view.zoom = 56455846258.14;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.6;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.2 / 100.0;
-            dest.log1p_weight = 1.0;
-
-            loadColorTemplate(dest, GRADIENT_SINUSOIDAL_RAINBOW_CYCLE);
-            dest.hue_shift = 0.0;
-            
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.0044;
-            dest.hue_shift_step = 0.002;
-
-            startTween(dest);
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Julia Island"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -1.76877883;
-            dest.cam_view.y = -0.00173892;
-            dest.cam_view.angle = 0;
-            dest.cam_view.zoom = 3000000.0;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.25;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.1 / 100.0;
-            dest.log1p_weight = 1.0;
-
-            loadColorTemplate(dest, GRADIENT_SINUSOIDAL_RAINBOW_CYCLE);
-            dest.hue_shift = 0.0;
-
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.0025;
-            dest.hue_shift_step = 0.5;
-
-            startTween(dest);
-        }
-
-        if (ImGui::Button("Spiral Spears"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -1.77169952;
-            dest.cam_view.y = 0.00508483;
-            dest.cam_view.angle = Math::toRadians(180.0);
-            dest.cam_view.zoom = 8650000;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.1;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.0488 / 100.0;
-            dest.log1p_weight = 1.0;
-
-            loadColorTemplate(dest, GRADIENT_WAVES);
-
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.003;
-            dest.hue_shift_step = 0.5;
-
-            startTween(dest);
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Whirlpool"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -0.75139;
-            dest.cam_view.y = 0.03001;
-            dest.cam_view.angle = 0.0;
-            dest.cam_view.zoom = 9000;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.75;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.25 / 100.0;
-            dest.log1p_weight = 0.94f;
-
-            loadColorTemplate(dest, GRADIENT_SINUSOIDAL_RAINBOW_CYCLE);
-            dest.hue_shift = 0.0;
-
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.004;
-            dest.hue_shift_step = 0.0;
-
-            startTween(dest);
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Waves"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -0.14883;
-            dest.cam_view.y = 0.65170;
-            dest.cam_view.angle = 0.0;
-            dest.cam_view.zoom = 2924.93;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.5;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.025 / 100.0;
-            dest.log1p_weight = 0.99f;
-
-            loadColorTemplate(dest, GRADIENT_WAVES);
-            dest.hue_shift = 0.0;
-
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.003;
-            dest.hue_shift_step = 0.0;
-
-            startTween(dest);
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Baby Mandel"))
-        {
-            MandelState dest;
-            dest.cam_view.x = -0.413270;
-            dest.cam_view.y = 0.595879;
-            dest.cam_view.angle = Math::toRadians(150.0);
-            dest.cam_view.zoom = 12700;
-
-            // compute
-            dest.dynamic_iter_lim = true;
-            dest.quality = 0.8;
-
-            // color cycle
-            dest.dynamic_color_cycle_limit = true;
-            dest.normalize_depth_range = true;
-            dest.cycle_iter_value = 0.1155 / 100.0;
-            dest.log1p_weight = 1.0;
-
-            loadColorTemplate(dest, GRADIENT_SINUSOIDAL_RAINBOW_CYCLE);
-            dest.hue_shift = 0.0;
-
-            // animation
-            dest.show_color_animation_options = true;
-            dest.gradient_shift_step = 0.004;
-            dest.hue_shift_step = 0.0;
-
-            startTween(dest);
+            for (int i = 0; i < (int)mandel_presets.size(); ++i)
+            {
+                const auto& preset = mandel_presets[i];
+                ImGui::TableNextColumn();
+                ImGui::PushID(i);
+                if (ImGui::Button(preset.name.c_str()))
+                {
+                    MandelState dest;
+                    dest.deserialize(preset.data);
+                    startTween(dest);
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
         }
     }
-
 
     /// --------------------------------------------------------------
     if (ImGui::Section("View", true, 5.0f, 2.0f))
     {
         ImGui::Checkbox("Show Axis", &show_axis);
-
         if (!flatten && !Platform()->is_mobile())
         {
             ImGui::SameLine();
@@ -293,9 +147,7 @@ void Mandelbrot_Scene_Data::populateUI()
             ImGui::SameLine();
             ImGui::Checkbox("Interactive Cardioid", &interactive_cardioid);
         }
-
         cam_view.populateUI({-5.0, -5.0, 5.0, 5.0});
-
     }
 
     /// --------------------------------------------------------------
@@ -422,9 +274,9 @@ void Mandelbrot_Scene_Data::populateUI()
         /// ----------------------------------------
         ImGui::SeparatorText("Gradient Picker");
 
-        if (ImGui::Combo("###ColorTemplate", &active_color_template, ColorGradientNames, GRADIENT_TEMPLATE_COUNT))
+        if (ImGui::Combo("###ColorTemplate", &active_color_template, ColorGradientNames, (int)GradientPreset::COUNT))
         {
-            loadColorTemplate(*this, (ColorGradientTemplate)active_color_template);
+            loadGradientPreset((GradientPreset)active_color_template);
             colors_updated = true;
         }
 
@@ -472,25 +324,6 @@ void Mandelbrot_Scene_Data::populateUI()
     } // End Header
     */
     
-    //if (Platform()->is_desktop_native())
-    {
-        if (ImGui::Section("Saving & Loading")) 
-        {
-            if (ImGui::Button("Copy to Clipboard"))
-            {
-                ImGui::SetClipboardText(config_buf);
-            }
-            if (ImGui::InputTextMultiline("###Config", config_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput))
-            {
-                loadConfigBuffer();
-            }
-            else
-            {
-                updateConfigBuffer();
-            }
-        }
-    }
-
     if (is_tweening)
         ImGui::EndDisabled();
 
@@ -523,142 +356,18 @@ int Mandelbrot_Scene_Data::calculateIterLimit() const
     }
 }
 
-#define COMPRESS_CONFIG
 
-std::string MandelState::serialize()
+
+
+void Mandelbrot_Scene_Data::loadTemplate(std::string_view data)
 {
-    uint32_t flags = 0;
-    uint32_t version = 0;
-
-    if (dynamic_iter_lim)           flags |= MANDEL_DYNAMIC_ITERS;
-    if (show_axis)                  flags |= MANDEL_SHOW_AXIS;
-    if (flatten)                    flags |= MANDEL_FLATTEN;
-    if (dynamic_color_cycle_limit)  flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
-    if (normalize_depth_range)      flags |= MANDEL_NORMALIZE_DEPTH;
-
-    flags |= ((uint32_t)smoothing_type << MANDEL_SMOOTH_BITSHIFT);
-    flags |= (version << MANDEL_VERSION_BITSHIFT);
-
-    JSON::json info;
-    int decimals = 1 + Math::countWholeDigits(cam_view.zoom);
-
-    // Version >= 0
-    info["f"] = flags; // Compression::base64_encode((const unsigned char*)&flags, sizeof(flags));
-
-    // View
-    info["x"] = JSON::markCleanFloat(cam_view.x, decimals);
-    info["y"] = JSON::markCleanFloat(cam_view.y, decimals);
-    info["z"] = JSON::markCleanFloat(cam_view.zoom, 2); /// todo: If you increase to 128 bit precision, be careful
-    info["a"] = JSON::markCleanFloat(cam_view.zoom_xy.x, 3);
-    info["b"] = JSON::markCleanFloat(cam_view.zoom_xy.y, 3);
-    info["r"] = JSON::markCleanFloat(Math::toDegrees(cam_view.angle), 0);
-
-    // Quality
-    info["q"] = JSON::markCleanFloat(quality, 3);
-
-    // Color cycle
-    info["i"] = JSON::markCleanFloat(cycle_iter_value);
-    info["l"] = JSON::markCleanFloat(log1p_weight);
-
-    // Shift
-    info["g"] = JSON::markCleanFloat(gradient_shift);
-    info["h"] = JSON::markCleanFloat(hue_shift);
-
-    // Shift increment
-    info["G"] = JSON::markCleanFloat(gradient_shift_step);
-    info["H"] = JSON::markCleanFloat(hue_shift_step);
-
-    // Gradient
-    info["p"] = gradient.serialize();
-
-    //info["A"] = x_spline.serialize(SplineSerializationMode::COMPRESS_SHORTEST);
-    //info["B"] = y_spline.serialize(SplineSerializationMode::COMPRESS_SHORTEST);
-
-    #ifdef COMPRESS_CONFIG
-        std::string json = JSON::unquoteCleanFloats(info.dump());
-        std::string compressed_txt = Compression::base64_compress(json);
-
-        std::string ret;
-        ret +=   "========= Mandelbrot =========\n";
-        ret += Helpers::wrapString(compressed_txt, 30);
-        ret += "\n==============================\n";
-
-        return ret;
-    #else
-        std::string json = JSON::unquoteCleanFloats(info.dump());
-        return json;
-    #endif
-}
-
-bool MandelState::deserialize(std::string txt)
-{
-    size_t i0 = txt.find_first_of('\n') + 1;
-    size_t i1 = txt.find_last_of('=');
-    i1 = txt.find_last_of('\n', i1);
-    txt = txt.substr(i0, i1 - i0);
-
-    std::string uncompressed;
-    #ifdef COMPRESS_CONFIG
-        uncompressed = Compression::base64_decompress(Helpers::unwrapString(txt));
-    #else
-        uncompressed = txt;
-    #endif
-
-    nlohmann::json info = nlohmann::json::parse(uncompressed, nullptr, false);
-    if (info.is_discarded()) 
-        return false; // Failed to parse
-
-    uint32_t flags = info.value("f", 0ul);
-    uint32_t version = (flags & MANDEL_VERSION_MASK) >> MANDEL_VERSION_BITSHIFT;
-
-    if (version >= 0)
-    {
-        smoothing_type = ((flags & MANDEL_SMOOTH_MASK) >> MANDEL_SMOOTH_BITSHIFT);
-
-        dynamic_iter_lim          = flags & MANDEL_DYNAMIC_ITERS;
-        show_axis                 = flags & MANDEL_SHOW_AXIS;
-        flatten                   = flags & MANDEL_FLATTEN;
-        dynamic_color_cycle_limit = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
-        normalize_depth_range     = flags & MANDEL_NORMALIZE_DEPTH;
-
-        // View
-        cam_view.x = info.value("x", 0.0);
-        cam_view.y = info.value("y", 0.0);
-        cam_view.zoom = info.value("z", 1.0);
-        cam_view.zoom_xy.x = info.value("a", 1.0);
-        cam_view.zoom_xy.y = info.value("b", 1.0);
-        double angle_degrees = info.value("r", 0.0);
-        cam_view.angle = angle_degrees * Math::PI / 180.0;
-
-        // Quality
-        quality = info.value("q", quality);
-
-        // Color cycle
-        cycle_iter_value = info.value("i", cycle_iter_value);
-        log1p_weight = info.value("l", log1p_weight);
-
-        // Shift
-        gradient_shift = info.value("g", 0.0);
-        hue_shift = info.value("h", 0.0);
-
-        // Shift increment
-        gradient_shift_step = info.value("G", gradient_shift_step);
-        hue_shift_step = info.value("H", hue_shift_step);
-
-        // Gradient
-        if (info.contains("p"))
-            gradient.deserialize(info.value("p", ""));
-
-        //if (info.contains("A")) x_spline.deserialize(info["A"].get<std::string>());
-        //if (info.contains("B")) y_spline.deserialize(info["B"].get<std::string>());
-    }
-
-    return true;
+    strcpy(config_buf, data.data());
+    loadConfigBuffer();
 }
 
 void Mandelbrot_Scene_Data::updateConfigBuffer()
 {
-    strcpy(config_buf, serialize().c_str());
+    strcpy(config_buf, serialize(config_buf_name).c_str());
 }
 
 void Mandelbrot_Scene_Data::loadConfigBuffer()
@@ -1123,4 +832,4 @@ void Mandelbrot_Scene::onEvent(Event e)
     }
 }
 
-SIM_END(Mandelbrot)
+SIM_END;

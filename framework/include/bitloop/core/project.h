@@ -3,16 +3,17 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <sstream>
 #include <functional>
 #include <type_traits>
 #include <random>
 
-#include "bitloop/utility/helpers.h"
-#include "bitloop/utility/json.h"
-#include "bitloop/utility/change_tracker.h"
-#include "bitloop/graphics/nano_canvas.h"
-#include "bitloop/ui/imgui_custom.h"
+#include <bitloop/utility/text_util.h>
+#include <bitloop/utility/json.h>
+#include <bitloop/utility/change_tracker.h>
+#include <bitloop/graphics/nano_canvas.h>
+#include <bitloop/ui/imgui_custom.h>
 
 #include "platform.h"
 #include "types.h"
@@ -20,7 +21,6 @@
 #include "camera.h"
 #include "project_worker.h"
 #include "var_buffer.h"
-#include "bitloop/bitloop.h"
 
 using std::max;
 using std::min;
@@ -40,18 +40,14 @@ std::vector<std::string> VectorizeArgs(Ts&&... args) { return { std::forward<Ts>
     freopen_s(&f, "CONOUT$", "w", stderr);
 }*/
 
-#define SIM_BEG(ns)          namespace ns {\
-                             //   void cpp_func();\
-                             //   struct _SimCppInvoker {\
-                             //       _SimCppInvoker() { cpp_func(); }\
-                             //   };\
-                             //   inline _SimCppInvoker _trigger_static_init;
-
-#define SIM_DECLARE(ns)      namespace ns {//\
-                             //    AutoRegisterProject<ns##_Project> register_##ns();\
-                             //    void cpp_func() { /*BL::print(#ns##" linked");*/ }
-                                 
-#define SIM_END(ns)          } using ns::ns##_Project;
+#ifdef SIM_BEG
+#undef SIM_BEG
+#endif
+#ifdef SIM_END
+#undef SIM_END
+#endif
+#define SIM_BEG          namespace SIM_NAME {
+#define SIM_END          }
                              
 BL_BEGIN_NS
 

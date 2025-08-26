@@ -10,4 +10,3 @@ file(GLOB SIM_SOURCES CONFIGURE_DEPENDS "Tiger/*.cpp" "Tiger/*.h")
 
 # 2. Create new project
 bitloop_new_project(Tiger  ${SIM_SOURCES})
-

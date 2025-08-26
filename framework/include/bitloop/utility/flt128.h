@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 ///#ifdef _MSC_VER
 ///#pragma float_control(precise, off)
 ///#endif
@@ -9,7 +9,8 @@
 #include <iomanip>
 #include <sstream>
 #include <type_traits>
-#include "platform_macros.h"
+
+#include <bitloop/core/platform_macros.h>
 
 ///
 

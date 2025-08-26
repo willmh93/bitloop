@@ -6,7 +6,7 @@
 //  - Modified for my own use
 
 
-#include "imgui_gradient_edit.h"
+#include <bitloop/ui/imgui_gradient_edit.h>
 #include <cstdint>
 
 static const float GRADIENT_BAR_WIDGET_HEIGHT = 25;

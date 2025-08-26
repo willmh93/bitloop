@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bitloop/core/project.h>
+#include <bitloop.h>
 SIM_BEG(Test1)
 
 using namespace BL;

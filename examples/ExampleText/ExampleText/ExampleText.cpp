@@ -1,7 +1,6 @@
 #include "ExampleText.h"
 
-SIM_BEG(ExampleText)
-
+SIM_BEG;
 using namespace BL;
 
 /// ─────────────────────── Project ───────────────────────
@@ -140,4 +139,4 @@ void ExampleText_Scene::onEvent(Event e)
 //void ExampleText_Scene::onKeyDown(KeyEvent e) {{}}
 //void ExampleText_Scene::onKeyUp(KeyEvent e) {{}}
 
-SIM_END(ExampleText)
+SIM_END;

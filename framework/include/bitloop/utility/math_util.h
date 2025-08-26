@@ -1,9 +1,11 @@
-﻿#pragma once
-#include "types.h"
+#pragma once
+#include <math.h>
 #include <numbers>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+
+#include <bitloop/core/types.h>
 
 BL_BEGIN_NS
 

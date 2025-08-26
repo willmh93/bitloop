@@ -4,6 +4,8 @@
 
 #include "shading.h"
 
+SIM_BEG;
+
 inline int mandelbrot_depth(double x0, double y0, int iter_lim)
 {
     double x = 0.0, y = 0.0, xx = 0.0, yy = 0.0;
@@ -23,9 +25,8 @@ inline int mandelbrot_depth(double x0, double y0, int iter_lim)
 
 namespace detail
 {
-    /* ---------------------------------------------------------------- */
-    /*      Complex helpers                                             */
-    /* ---------------------------------------------------------------- */
+    // Complex helpers
+
     template<class T> struct cplx { T x, y; };
 
     template<class T>
@@ -101,7 +102,9 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
 }
 
 template<class T, MandelSmoothing S>
-FAST_INLINE void mandel_kernel(const T& x0, const T& y0,
+FAST_INLINE void mandel_kernel(
+    const T& x0,
+    const T& y0,
     int iter_lim,
     double& depth, double& dist)
 {
@@ -199,3 +202,5 @@ inline double mandelbrot_spline_iter(double x0, double y0, int iter_lim, ImSplin
     else
         return iter;
 }
+
+SIM_END;

@@ -2,14 +2,14 @@
 
 #include <memory>
 
-#include "platform.h"
+#include <bitloop/core/platform.h>
 
-#include "nanovg/nanovg.h"
-#include "nanovg/nanovg_gl.h"
+#include "nanovg.h"
+#include "nanovg_gl.h"
 
-#include "nano_bitmap.h"
-#include "camera.h"
-#include "debug.h"
+#include <bitloop/core/debug.h>
+#include <bitloop/core/camera.h>
+#include <bitloop/graphics/nano_bitmap.h>
 
 BL_BEGIN_NS
 

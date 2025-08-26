@@ -1,5 +1,5 @@
-#include "project.h"
-#include "main_window.h"
+#include <core/project.h>
+#include <core/main_window.h>
 
 BL_BEGIN_NS
 
@@ -783,6 +783,11 @@ void ProjectBase::_onEvent(SDL_Event& e)
     }
     else
     {
+        //if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
+        //{
+        //    blBreak();
+        //}
+
         switch (e.type)
         {
             case SDL_EVENT_MOUSE_BUTTON_DOWN:

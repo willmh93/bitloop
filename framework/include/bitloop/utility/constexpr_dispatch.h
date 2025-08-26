@@ -1,8 +1,7 @@
 #include <array>
 #include <tuple>
-#include <typeindex>
-#include <memory>
-#include <variant>
+#include <type_traits>
+#include <utility>
 
 ///------------------------------------------------///
 /// constexpr typed bool/enum function dispatcher  ///

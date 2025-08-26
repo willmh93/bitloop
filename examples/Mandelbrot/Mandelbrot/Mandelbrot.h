@@ -1,94 +1,21 @@
 #pragma once
-#include "project.h"
-#include "Cardioid/Cardioid.h"
-#include <math.h>
+#include <bitloop.h>
 #include <cmath>
 
+#include "Cardioid/Cardioid.h"
 
-SIM_BEG(Mandelbrot)
-
-using namespace BL;
-
+#include "mandel_state.h"
 #include "types.h"
 #include "kernel.h"
 #include "shading.h"
 
+SIM_BEG;
 
-struct MandelState
-{
-    // The final world quad should be predictable using
-    // only the state info & stage size.
-    DVec2 reference_zoom, ctx_stage_size;
-    DVec2 ctx_world_size() const {
-        return ctx_stage_size / reference_zoom;
-    }
-
-    /// ======== Saveable/Tweenable info ========
-    bool show_axis = true;
-    CameraViewController cam_view;
-
-    bool dynamic_iter_lim = true;
-    double quality = 0.5; // Used for UI (ignore during tween until complete)
-    double smooth_iter_dist_ratio = 0.0;
-
-    bool dynamic_color_cycle_limit = true;
-    bool normalize_depth_range = true;
-    double log1p_weight = 0.0;
-    
-    double cycle_iter_value = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
-    double cycle_dist_value = 0.5f;
-    
-    double gradient_shift = 0.0;
-    double hue_shift = 0.0;
-
-    double gradient_shift_step = 0.0078;
-    double hue_shift_step = 0.136;
-
-    int active_color_template = GRADIENT_CLASSIC;
-    int smoothing_type = (int)MandelSmoothing::ITER;
-
-    // Gradient
-    //ImGradient current_gradient;
-    ImGradient gradient;
-
-    // animate
-    bool show_color_animation_options = false;
-
-    // Flattening
-    bool flatten = false;
-    double flatten_amount = 0.0;
-
-    bool operator ==(const MandelState& rhs) const
-    {
-        return (
-            cam_view == rhs.cam_view &&
-            quality == rhs.quality &&
-            smooth_iter_dist_ratio == rhs.smooth_iter_dist_ratio &&
-            dynamic_iter_lim == rhs.dynamic_iter_lim &&
-            normalize_depth_range == rhs.normalize_depth_range &&
-            log1p_weight == rhs.log1p_weight &&
-            cycle_iter_value == rhs.cycle_iter_value &&
-            cycle_dist_value == rhs.cycle_dist_value &&
-            gradient_shift == rhs.gradient_shift &&
-            hue_shift == rhs.hue_shift &&
-            gradient_shift_step == rhs.gradient_shift_step &&
-            hue_shift_step == rhs.hue_shift_step &&
-            smoothing_type == rhs.smoothing_type &&
-            gradient == rhs.gradient &&
-            show_color_animation_options == rhs.show_color_animation_options &&
-            flatten == rhs.flatten &&
-            flatten_amount == rhs.flatten_amount
-        );
-    }
-
-    std::string serialize();
-    bool deserialize(std::string txt);
-};
-
-std::ostream& operator<<(std::ostream& os, const MandelState&);
+using namespace BL;
 
 struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 {
+    char config_buf_name[32] = "Mandelbrot";
     char config_buf[1024] = "";
     char pos_tween_buf[1024] = "";
     char zoom_tween_buf[1024] = "";
@@ -132,7 +59,7 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
     );
 
     ImSpline::Spline tween_color_cycle = ImSpline::Spline(100,
-        { { 0.072f, 0.0f }, { 0.5f,0.0f }, { 0.845f,0.0f }, { 0.75f,1.0f }, { 1.0f,1.0f }, { 1.25f,1.0f } }
+        { {0.072f, 0.0f}, {0.5f,0.0f}, {0.845f,0.0f}, {0.75f,1.0f}, {1.0f,1.0f}, {1.25f,1.0f} }
     );
 
     void registerSynced() override
@@ -191,90 +118,17 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 
     double toNormalizedZoom(double zoom) const { return log(zoom) + 1.0; }
     double fromNormalizedZoom(double normalized_zoom) const { return exp(normalized_zoom - 1.0); }
+    // void setNormalizedZoom(double normalized_zoom) { cam_view.zoom = fromNormalizedZoom(normalized_zoom); }
+    // double getNormalizedZoom() const { return toNormalizedZoom(cam_view.zoom); }
 
     double toHeight(double zoom) const { return 1.0 / toNormalizedZoom(zoom); }
     double fromHeight(double height) const { return fromNormalizedZoom(1.0 / height); }
 
-    void setNormalizedZoom(double normalized_zoom) { cam_view.zoom = fromNormalizedZoom(normalized_zoom); }
-    double getNormalizedZoom() const { return toNormalizedZoom(cam_view.zoom); }
 
     DAngledRect getAngledRect(const MandelState& s) const
     {
         DVec2 world_size = (s.ctx_stage_size / reference_zoom) / s.cam_view.zoom;
         return DAngledRect(s.cam_view.x, s.cam_view.y, world_size.x, world_size.y, s.cam_view.angle);
-    }
-
-    void loadColorTemplate(
-        MandelState& state,
-        ColorGradientTemplate type,
-        float hue_threshold = 0.3f,
-        float sat_threshold = 0.3f,
-        float val_threshold = 0.3f)
-    {
-        ImGradient& grad = state.gradient;
-        grad.getMarks().clear();
-
-        state.active_color_template = type;
-
-        switch (type)
-        {
-        case GRADIENT_CLASSIC:
-        {
-            grad.addMark(0.0f, ImColor(0, 0, 0));
-            grad.addMark(0.2f, ImColor(39, 39, 214));
-            grad.addMark(0.4f, ImColor(0, 143, 255));
-            grad.addMark(0.6f, ImColor(255, 255, 68));
-            grad.addMark(0.8f, ImColor(255, 30, 0));
-        }
-        break;
-
-        case GRADIENT_WAVES:
-        {
-            grad.addMark(0.0f, ImColor(0, 0, 0));
-            grad.addMark(0.3f, ImColor(73, 54, 254));
-            grad.addMark(0.47f,  ImColor(242, 22, 116));
-            grad.addMark(0.53f, ImColor(255, 56, 41));
-            grad.addMark(0.62f ,ImColor(208, 171, 1));
-            grad.addMark(0.62001f, ImColor(0, 0, 0));
-            //grad.addMark(0.655f, ImColor(0, 0, 0));
-        }
-        break;
-
-        default:
-        {
-            uint8_t last_r, last_g, last_b;
-            colorGradientTemplate(type, 0.0f, last_r, last_g, last_b);
-            grad.addMark(0.0f, ImColor(last_r, last_g, last_b));
-
-            float last_h, last_s, last_v;
-            Color::RGBtoHSV(last_r, last_g, last_b, last_h, last_s, last_v);
-
-            for (float x = 0.0f; x < 1.0f; x += 0.01f)
-            {
-                uint8_t r, g, b;
-                float h, s, v;
-
-                colorGradientTemplate(type, x, r, g, b);
-                Color::RGBtoHSV(r, g, b, h, s, v);
-
-                float h_ratio = Math::absAvgRatio(last_h, h);
-                float s_ratio = Math::absAvgRatio(last_s, s);
-                float v_ratio = Math::absAvgRatio(last_v, v);
-
-                //float avg_ratio = Math::avg(h_ratio, s_ratio, v_ratio);
-                if (h_ratio > hue_threshold ||
-                    s_ratio > sat_threshold ||
-                    v_ratio > val_threshold)
-                {
-                    grad.addMark(x, ImColor(r, g, b));
-                    last_h = h;
-                    last_s = s;
-                    last_v = v;
-                }
-            }
-        }
-        break;
-        }
     }
 
     // Tweening
@@ -338,10 +192,10 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
     //std::string serializeConfig();
     //bool deserializeConfig(std::string txt);
     
+
+    void loadTemplate(std::string_view data);
     void updateConfigBuffer();
     void loadConfigBuffer();
-
-
 };
 
 struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
@@ -525,7 +379,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             field_pixel.depth = depth;
             field_pixel.dist = dist;
  
-        }, (int)(1.5f*(float)Thread::idealThreadCount()), timeout);
+        }, 8, timeout);
 
         if (frame_complete)
         {
@@ -730,4 +584,4 @@ struct Mandelbrot_Project : public BasicProject
     void projectPrepare(Layout& layout) override;
 };
 
-SIM_END(Mandelbrot)
+SIM_END;

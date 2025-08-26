@@ -1,6 +1,6 @@
-#include "event.h"
-#include "platform.h"
-#include "project.h"
+#include <core/event.h>
+#include <core/platform.h>
+#include <core/project.h>
 
 BL_BEGIN_NS
 

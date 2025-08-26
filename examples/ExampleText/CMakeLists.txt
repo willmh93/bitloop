@@ -10,4 +10,3 @@ file(GLOB SIM_SOURCES CONFIGURE_DEPENDS "ExampleText/*.cpp" "ExampleText/*.h")
 
 # 2. Create new project
 bitloop_new_project(ExampleText ${SIM_SOURCES})
-

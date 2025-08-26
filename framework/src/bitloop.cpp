@@ -62,48 +62,73 @@
 
 #include <memory>
 
-#include "platform.h"
+#include <bitloop/core/project.h>
 
 #ifdef __EMSCRIPTEN__
 #define SDL_MAIN_HANDLED
 #include <GLES3/gl3.h>
+#include <bitloop/emscripten_browser_clipboard.h>
 #else
 #include "glad/glad.h"
 #endif
 
 /// ImGui
-#include "bitloop/ui/imgui_custom.h"
+#include <bitloop/ui/imgui_custom.h>
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 
 /// Project files
-#include "project_worker.h"
-#include "main_window.h"
-#include "shared_sync.h"
+#include <bitloop/core/project_worker.h>
+#include <bitloop/core/main_window.h>
+#include <bitloop/shared_sync.h>
 
 using namespace BL;
 
 SDL_Window* window = nullptr;
 SharedSync shared_sync;
+bool simulated_imgui_paste = false;
 //std::unordered_map<size_t, size_t> thread_map;
 
 
 void gui_loop()
 {
     // ======== Poll SDL events ========
+    ImGuiIO& io = ImGui::GetIO();
+
     SDL_Event e;
     while (SDL_PollEvent(&e))
     {
         ImGui_ImplSDL3_ProcessEvent(&e);
 
+        //bool imguiWantsMouse = io.WantCaptureMouse;
+        bool imguiWantsKeyboard = io.WantCaptureKeyboard;
+
         switch (e.type)
         {
-            case SDL_EVENT_QUIT: shared_sync.quit(); break;
+            case SDL_EVENT_QUIT:
+                shared_sync.quit(); break;
+
             case SDL_EVENT_WINDOW_RESIZED:
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                 Platform()->resized();
                 break;
-            default: ProjectWorker::instance()->queueEvent(e); break;
+
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+            case SDL_EVENT_MOUSE_MOTION:
+            case SDL_EVENT_MOUSE_WHEEL:
+                if (MainWindow::instance()->viewportHovered())
+                    ProjectWorker::instance()->queueEvent(e);
+                break;
+
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP:
+            case SDL_EVENT_TEXT_INPUT:
+                if (!imguiWantsKeyboard)
+                    ProjectWorker::instance()->queueEvent(e); break;
+
+            default:
+                ProjectWorker::instance()->queueEvent(e); break;
         }
     }
 
@@ -125,6 +150,56 @@ void gui_loop()
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window);
+
+    // Release simulated paste keys
+    if (simulated_imgui_paste) {
+        simulated_imgui_paste = false;
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_ModCtrl, false);
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_V, false);
+    }
+}
+
+#ifdef __EMSCRIPTEN__
+std::string content;  // this stores the content for our internal clipboard
+bool simulatedImguiPaste = false;
+
+char const* get_content_for_imgui(ImGuiContext*)
+{
+    /// Callback for imgui, to return clipboard content
+    BL::print() << "ImGui requested clipboard content, returning " << content.c_str();
+    return content.c_str();
+}
+
+void set_content_from_imgui(ImGuiContext*, char const* text)
+{
+    /// Callback for imgui, to set clipboard content
+    content = text;
+    BL::print() << "ImGui setting clipboard content to " << content.c_str();
+    emscripten_browser_clipboard::copy(content);  // send clipboard data to the browser
+}
+void clipboard_paste_callback(std::string&& paste_data, void* callback_data)
+{
+    BL::print() << "Copied clipboard data: " << paste_data.c_str();
+    content = std::move(paste_data);
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_ModCtrl, true);
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_V, true);
+    ///simulatedImguiPaste = true;
+}
+#endif
+
+static void BL_ImplSDL3_SetClipboardText(ImGuiContext*, const char* text)
+{
+    BL::print() << "Setting clipboard: " << text;
+    SDL_SetClipboardText(text);
+    BL::print() << "Error code: " << SDL_GetError();
+}
+
+static const char* BL_ImplSDL3_GetClipboardText(ImGuiContext*)
+{
+    BL::print() << "Getting clipboard: " << SDL_GetClipboardText();
+    auto ret = SDL_GetClipboardText();
+    BL::print() << "Error code: " << SDL_GetError();
+    return ret;
 }
 
 int bitloop_main(int, char* [])
@@ -143,14 +218,6 @@ int bitloop_main(int, char* [])
 
         #ifdef __EMSCRIPTEN__
         emscripten_get_canvas_element_size("#canvas", &fb_w, &fb_h);
-
-        //// needed?
-        //EM_ASM({
-        //    const cv = Module['canvas'];
-        //    cv.setAttribute('tabindex', '0');
-        //    cv.setAttribute('contenteditable', 'true');
-        //    cv.addEventListener('mousedown', () => cv.focus());
-        //});
         #endif
 
         BL::print() << "Creating window...\n";
@@ -200,6 +267,24 @@ int bitloop_main(int, char* [])
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
+
+        #ifdef __EMSCRIPTEN__
+        emscripten_browser_clipboard::paste(clipboard_paste_callback);
+
+        ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+        platform_io.Platform_GetClipboardTextFn = get_content_for_imgui;
+        platform_io.Platform_SetClipboardTextFn = set_content_from_imgui;
+
+        EM_ASM({
+            console.log(Module);
+            window.addEventListener('keydown', function(event)
+            {
+                if (event.ctrlKey && event.key == 'v')
+                    event.stopImmediatePropagation();
+            }, true);
+        });
+        #endif
+
         ImGui_ImplOpenGL3_Init();
     }
 
@@ -209,7 +294,6 @@ int bitloop_main(int, char* [])
         ProjectWorker::instance()->startWorker();
     }
 
-    //SDL_SetClipboardText("BOOOOOO!!!");
 
     // ======== Start main gui loop ========
     {

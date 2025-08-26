@@ -1,8 +1,11 @@
 #pragma once
+#include <bitloop.h>
 
 #include <math.h>
 #include <cmath>
 #include <vector>
+
+SIM_BEG;
 
 enum MandelFlag : uint32_t
 {
@@ -76,3 +79,5 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
         return data() + i;
     }
 };
+
+SIM_END;

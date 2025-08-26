@@ -41,7 +41,6 @@ class ProjectWorker
     static ProjectWorker* singleton;
 
 
-    std::vector<SDL_Event> input_event_queue;
     std::mutex event_queue_mutex;
 
     std::thread worker_thread;
@@ -67,6 +66,7 @@ protected:
     void populateAttributes();
 
 public:
+    std::vector<SDL_Event> input_event_queue;
 
     [[nodiscard]] static ProjectWorker* instance() {
         return singleton;

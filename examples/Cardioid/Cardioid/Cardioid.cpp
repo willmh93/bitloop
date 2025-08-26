@@ -1,7 +1,7 @@
 #include "Cardioid.h"
 //#include "imgui_spline.h"
 
-SIM_DECLARE(Cardioid)
+SIM_BEG;
 
 // Exported
 void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments, double ox)
@@ -569,4 +569,4 @@ void Cardioid_Graph_Scene::viewportDraw(Viewport* ctx) const
 }
 
 
-SIM_END(Cardioid)
+SIM_END;

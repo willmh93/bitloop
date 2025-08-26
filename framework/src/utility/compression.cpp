@@ -1,251 +1,216 @@
-#include "compression.h"
-#include <unordered_map>
+#include <bitloop/utility/compression.h>
+
+#include <brotli/encode.h>
+#include <brotli/decode.h>
+#include <stdexcept>
+#include <vector>
+#include <cctype>
+
+namespace
+{
+    constexpr char lookup[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+
+    inline unsigned char b64_value(unsigned char c)
+    {
+        if (c >= 'A' && c <= 'Z') return static_cast<unsigned char>(c - 'A');
+        if (c >= 'a' && c <= 'z') return static_cast<unsigned char>(26 + (c - 'a'));
+        if (c >= '0' && c <= '9') return static_cast<unsigned char>(52 + (c - '0'));
+        if (c == '+') return 62;
+        if (c == '/') return 63;
+        return 0xFF; // invalid
+    }
+}
+
 
 namespace Compression {
 
-std::string base64_encode(const uint8_t* data, size_t len)
-{
-    std::string encoded;
-    encoded.reserve(((len + 2) / 3) * 4);
-
-    size_t i = 0;
-    while (i < len)
+    // ========== Base64 encode ==========
+    std::string b64_encode(std::string_view bytes)
     {
-        // how many bytes are left in this block?
-        size_t remain = len - i;
+        const unsigned char* src = reinterpret_cast<const unsigned char*>(bytes.data());
+        size_t len = bytes.size();
+        if (len == 0) return {};
 
-        unsigned char a = data[i++];
-        unsigned char b = (remain > 1) ? data[i++] : 0;
-        unsigned char c = (remain > 2) ? data[i++] : 0;
+        size_t out_len = ((len + 2) / 3) * 4;
+        std::string out(out_len, '=');
 
-        uint32_t triple = (a << 16) | (b << 8) | c;
-
-        encoded.push_back(base64_chars[(triple >> 18) & 0x3F]);
-        encoded.push_back(base64_chars[(triple >> 12) & 0x3F]);
-
-        encoded.push_back((remain > 1)
-            ? base64_chars[(triple >> 6) & 0x3F]
-            : '=');
-
-        encoded.push_back((remain > 2)
-            ? base64_chars[triple & 0x3F]
-            : '=');
-    }
-    return encoded;
-}
-
-ByteVec base64_decode(const std::string& encoded)
-{
-    size_t len = encoded.size();
-    if (len % 4 != 0)
-        throw std::runtime_error("Invalid Base64 string length");
-
-    // Determine the number of padding characters.
-    size_t padding = 0;
-    if (len) {
-        if (encoded[len - 1] == '=') padding++;
-        if (encoded[len - 2] == '=') padding++;
-    }
-
-    std::vector<unsigned char> decoded;
-    decoded.reserve((len / 4) * 3 - padding);
-
-    // Process every 4 characters as a block.
-    for (size_t i = 0; i < len; i += 4) {
-        unsigned int sextet_a = (encoded[i] == '=') ? 0 : indexOf(encoded[i]);
-        unsigned int sextet_b = (encoded[i + 1] == '=') ? 0 : indexOf(encoded[i + 1]);
-        unsigned int sextet_c = (encoded[i + 2] == '=') ? 0 : indexOf(encoded[i + 2]);
-        unsigned int sextet_d = (encoded[i + 3] == '=') ? 0 : indexOf(encoded[i + 3]);
-
-        // Pack the 4 sextets into a 24-bit integer.
-        unsigned int triple = (sextet_a << 18) | (sextet_b << 12) | (sextet_c << 6) | sextet_d;
-
-        // Extract the original bytes from the 24-bit number.
-        decoded.push_back((triple >> 16) & 0xFF);
-        if (encoded[i + 2] != '=')
-            decoded.push_back((triple >> 8) & 0xFF);
-        if (encoded[i + 3] != '=')
-            decoded.push_back(triple & 0xFF);
-    }
-
-    return decoded;
-}
-
-
-inline void Bitstream::openBytes(uint8_t* bytes, size_t _size)
-{
-    data.resize(_size);
-    memcpy(data.data(), bytes, _size);
-}
-
-inline void Bitstream::write(size_t ind, size_t bits, int dat, bool print)
-{
-    size_t orig_ind = ind;
-    ind += bits - 1;
-    size_t max_len = (ind / 8) + 1;
-    if (max_len > this->data.size())
-        this->data.resize(max_len);
-
-    // update the byte for each right-most bit consumed from dat
-    while (dat) {
-        data[ind / 8] = chbit(data[ind / 8], ind % 8, dat & 1);
-        dat /= 2;
-        ind--;
-    }
-}
-
-inline int Bitstream::read(size_t ind, size_t bits, bool print)
-{
-    int dat = 0;
-    size_t end_ind = ind + bits;
-    size_t num_bits = this->getBitCount();
-    if (end_ind > num_bits)
-        end_ind = num_bits;
-
-    for (size_t i = ind; i < end_ind; i++) {
-        dat = dat * 2 + getbit(data[i / 8], i % 8);
-    }
-    return dat;
-}
-
-/*inline void Bitstream::print_bits(size_t bitIndex, size_t bitCount)
-{
-    size_t first_bit = bitIndex;
-    size_t last_bit = bitIndex + bitCount;
-
-    for (size_t i = first_bit; i < last_bit; i++)
-        std::cout << read(i, 1) ? '1' : '0';
-
-    std::cout << ' ';
-}
-
-inline void Bitstream::print(size_t grouping)
-{
-    size_t first_bit = 0;
-    size_t last_bit = this->getBitCount();
-
-    for (size_t i = first_bit; i < last_bit; i++)
-    {
-        std::cout << read(i, 1) ? '1' : '0';
-        if ((i + 1) % grouping == 0)
-            std::cout << ' ';
-    }
-
-    std::cout << ' ';
-}*/
-
-void compressBitstream(const std::string& _uncompressed, Bitstream& result)
-{
-    std::string uncompressed = _uncompressed;
-    std::unordered_map<std::string, int> dictionary;
-    std::string w, wc;
-    for (int i = 0; i < 256; i++)
-        dictionary[std::string(1, i)] = i;
-
-    size_t len = uncompressed.length();
-    const char* str = uncompressed.c_str();
-    int dictSize = 256;
-    size_t dictBitLen = 9;
-    size_t bi = 0;
-    size_t i;
-    char c;
-
-    for (i = 0; i < len; i++)
-    {
-        c = str[i];
-        wc = w + c;
-        if (dictionary.count(wc))
-            w = wc;
-        else
-        {
-            result.write(bi, dictBitLen, dictionary[w], true);
-            bi += dictBitLen;
-
-            // Add wc to the dictionary.
-            dictionary[wc] = dictSize++;
-            dictBitLen = (size_t)ceil(log2(dictSize));
-            w = std::string(1, c);
+        size_t si = 0, oi = 0;
+        while (si + 3 <= len) {
+            uint32_t v = (uint32_t(src[si]) << 16) | (uint32_t(src[si + 1]) << 8) | uint32_t(src[si + 2]);
+            out[oi++] = lookup[(v >> 18) & 63];
+            out[oi++] = lookup[(v >> 12) & 63];
+            out[oi++] = lookup[(v >> 6) & 63];
+            out[oi++] = lookup[v & 63];
+            si += 3;
         }
+
+        size_t rem = len - si;
+        if (rem == 1) {
+            uint32_t v = uint32_t(src[si]) << 16;
+            out[oi++] = lookup[(v >> 18) & 63];
+            out[oi++] = lookup[(v >> 12) & 63];
+            // '=' padding already present in out
+        }
+        else if (rem == 2) {
+            uint32_t v = (uint32_t(src[si]) << 16) | (uint32_t(src[si + 1]) << 8);
+            out[oi++] = lookup[(v >> 18) & 63];
+            out[oi++] = lookup[(v >> 12) & 63];
+            out[oi++] = lookup[(v >> 6) & 63];
+            // last '=' already present
+        }
+        return out;
     }
 
-    // Output the code for w.
-    if (!w.empty())
-        result.write(bi, dictBitLen, dictionary[w], true);
-}
-
-void compressBitstream(const ByteVec& input, Bitstream& out)
-{
-    // reinterpret the bytes as a string with the SAME length
-    const std::string s(reinterpret_cast<const char*>(input.data()),
-        input.size());
-    compressBitstream(s, out);                       // reuse your original function
-}
-
-std::string decompressBitstream(Bitstream& data)
-{
-    /* --- build initial dictionary --------------------------------------- */
-    int    dictSize = 256;
-    size_t dictBitLen = 9;
-    std::unordered_map<int, std::string> dictionary;
-    for (int i = 0; i < 256; ++i)
-        dictionary[i] = std::string(1, static_cast<char>(i));
-
-    /* --- read first code ------------------------------------------------- */
-    size_t bi = 0;
-    const size_t end = data.getBitCount();
-    if (end < dictBitLen)
-        return {};                          // empty stream
-
-    int firstCode = data.read(bi, dictBitLen);
-    bi += dictBitLen;
-
-    std::string w = dictionary[firstCode];
-    std::string result = w;
-
-    /* --- main loop ------------------------------------------------------- */
-    while (bi + dictBitLen <= end)          // <= enough bits for one more code
+    // ========== Base64 decode ==========
+    std::string b64_decode(std::string_view b64)
     {
-        int k = data.read(bi, dictBitLen);
-        bi += dictBitLen;
+        // Remove ASCII whitespace
+        std::string clean;
+        clean.reserve(b64.size());
+        for (unsigned char c : std::string(b64)) {
+            if (c == ' ' || c == '\n' || c == '\r' || c == '\t') continue;
+            clean.push_back(char(c));
+        }
+        if (clean.empty()) return {};
 
-        std::string entry;
-        if (dictionary.count(k))
-            entry = dictionary[k];
-        else if (k == dictSize)
-            entry = w + w[0];
-        else
-            throw std::runtime_error("Bad LZW code");
+        // Auto-pad to multiple of 4
+        while (clean.size() % 4 != 0) clean.push_back('=');
 
-        result += entry;
-        dictionary[dictSize++] = w + entry[0];
-        dictBitLen = static_cast<size_t>(std::ceil(std::log2(dictSize)));
+        // Compute padding count
+        size_t pad = 0;
+        if (!clean.empty() && clean.back() == '=') {
+            pad++;
+            if (clean.size() >= 2 && clean[clean.size() - 2] == '=')
+                pad++;
+        }
 
-        w = std::move(entry);
+        // Allocate output
+        size_t out_len = (clean.size() / 4) * 3 - pad;
+        std::string out(out_len, '\0');
+
+        size_t oi = 0;
+        for (size_t i = 0; i < clean.size(); i += 4)
+        {
+            unsigned char c0 = clean[i + 0];
+            unsigned char c1 = clean[i + 1];
+            unsigned char c2 = clean[i + 2];
+            unsigned char c3 = clean[i + 3];
+
+            if (c0 == '=' || c1 == '=') throw std::runtime_error("base64 decode: invalid early padding");
+
+            unsigned char v0 = b64_value(c0);
+            unsigned char v1 = b64_value(c1);
+            if (v0 == 0xFF || v1 == 0xFF) throw std::runtime_error("base64 decode: invalid character");
+
+            unsigned char v2 = (c2 == '=') ? 0 : b64_value(c2);
+            unsigned char v3 = (c3 == '=') ? 0 : b64_value(c3);
+            if ((c2 != '=' && v2 == 0xFF) || (c3 != '=' && v3 == 0xFF))
+                throw std::runtime_error("base64 decode: invalid character");
+
+            uint32_t v = (uint32_t(v0) << 18) | (uint32_t(v1) << 12) | (uint32_t(v2) << 6) | uint32_t(v3);
+
+            out[oi++] = char((v >> 16) & 0xFF);
+            if (c2 != '=') {
+                if (oi >= out_len) break;
+                out[oi++] = char((v >> 8) & 0xFF);
+            }
+            if (c3 != '=') {
+                if (oi >= out_len) break;
+                out[oi++] = char(v & 0xFF);
+            }
+        }
+        return out;
     }
-    return result;
-}
 
-ByteVec decompressBitstreamBytes(Bitstream& in)
-{
-    std::string s = decompressBitstream(in);
-    return ByteVec(s.begin(), s.end());
-}
+    // ========== Brotli + Base64 ==========
+    std::string brotli_b64_compress(std::string_view input, int quality, int window)
+    {
+        const uint8_t* in = reinterpret_cast<const uint8_t*>(input.data());
+        size_t in_len = input.size();
 
-std::string base64_compress(const std::string& txt)
-{
-    Compression::Bitstream compressed;
-    Compression::compressBitstream(txt, compressed);
-    std::string base64_txt = Compression::base64_encode(compressed.getData(), compressed.getSize());
-    return base64_txt;
-}
+        size_t cap = BrotliEncoderMaxCompressedSize(in_len);
+        if (cap == 0) cap = in_len + 512; // tiny inputs
+        std::string buf(cap, '\0');
+        size_t out_size = cap;
 
-std::string base64_decompress(const std::string& base64_txt)
-{
-    ByteVec data = Compression::base64_decode(base64_txt);
-    Compression::Bitstream compressed;
-    compressed.openBytes(data.data(), data.size());
-    return Compression::decompressBitstream(compressed);
-}
+        BROTLI_BOOL ok = BrotliEncoderCompress(
+            quality, window, BROTLI_MODE_GENERIC,
+            in_len, in, &out_size,
+            reinterpret_cast<uint8_t*>(&buf[0])
+        );
+        if (!ok) throw std::runtime_error("brotli compress failed");
+        buf.resize(out_size);
 
+        return b64_encode(buf);
+    }
 
-} // End NS Compression
+    // ----- Brotli + hex wrappers -----
+
+    std::string brotli_ascii_compress(const std::string& input, int quality, int window)
+    {
+        size_t cap = BrotliEncoderMaxCompressedSize(input.size());
+        if (cap == 0) cap = input.size() + 512; // fallback for very small inputs
+
+        std::string comp(cap, '\0');
+        size_t out_size = cap;
+
+        BROTLI_BOOL ok = BrotliEncoderCompress(
+            quality,                               // 0..11
+            window,                                // 10..24
+            BROTLI_MODE_GENERIC,
+            input.size(),
+            reinterpret_cast<const uint8_t*>(input.data()),
+            &out_size,
+            reinterpret_cast<uint8_t*>(&comp[0])
+        );
+        if (!ok) throw std::runtime_error("brotli compress failed");
+        comp.resize(out_size);
+
+        return b64_encode(comp);
+    }
+
+    std::string brotli_ascii_decompress(const std::string& ascii)
+    {
+        std::string comp = b64_decode(ascii);
+
+        // Only grow on demand
+        std::string out(std::max<size_t>(comp.size() * 3 + 1024, 1024), '\0');
+
+        BrotliDecoderState* st = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!st) throw std::runtime_error("brotli state alloc failed");
+
+        const uint8_t* next_in = reinterpret_cast<const uint8_t*>(comp.data());
+        size_t avail_in = comp.size();
+
+        uint8_t* next_out = reinterpret_cast<uint8_t*>(&out[0]);
+        size_t avail_out = out.size();
+
+        while (true)
+        {
+            BrotliDecoderResult r = BrotliDecoderDecompressStream(
+                st, &avail_in, &next_in, &avail_out, &next_out, nullptr);
+
+            if (r == BROTLI_DECODER_RESULT_SUCCESS) break;
+            if (r == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
+            {
+                size_t used = static_cast<size_t>(next_out - reinterpret_cast<uint8_t*>(&out[0]));
+                out.resize(out.size() * 2);
+                next_out = reinterpret_cast<uint8_t*>(&out[0]) + used;
+                avail_out = out.size() - used;
+                continue;
+            }
+
+            BrotliDecoderDestroyInstance(st);
+            throw std::runtime_error("brotli decompress failed");
+        }
+
+        size_t produced = static_cast<size_t>(next_out - reinterpret_cast<uint8_t*>(&out[0]));
+        out.resize(produced);
+        BrotliDecoderDestroyInstance(st);
+        return out;
+    }
+
+} // namespace Compression

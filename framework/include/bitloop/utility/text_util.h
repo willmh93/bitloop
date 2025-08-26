@@ -1,9 +1,11 @@
 #pragma once
-#include "debug.h"
+#include <bitloop/core/debug.h>
 #include <iomanip>
+#include <string>
+#include <string_view>
 #include <sstream>
 
-namespace Helpers
+namespace TextUtil
 {
     template<typename T>
     std::string floatToCleanString(T value, int max_decimal_places, T precision, bool minimize=true)
@@ -37,19 +39,27 @@ namespace Helpers
 
             // Remove the leading '0' for values between -1 and 1
             // (e.g. 0.7351 -> .7351)
-            if (!str.empty())
-            {
-                bool negative = (str[0] == '-');
-                std::size_t first = negative ? 1 : 0;
-                if (first + 1 < str.size() && str[first] == '0' && str[first + 1] == '.')
-                    str.erase(first, 1);
-            }
+            ///if (!str.empty())
+            ///{
+            ///    bool negative = (str[0] == '-');
+            ///    std::size_t first = negative ? 1 : 0;
+            ///    if (first + 1 < str.size() && str[first] == '0' && str[first + 1] == '.')
+            ///        str.erase(first, 1);
+            ///}
         }
 
         return str;
     }
 
     // Wrapping/Unwrapping strings with '\n' at given length
-    std::string wrapString(const std::string& input, size_t width);
-    std::string unwrapString(const std::string& input);
+    std::string wrapString(std::string_view input, size_t width);
+    std::string unwrapString(std::string_view input);
+
+    std::string indent(std::string_view text, int count = 1, std::string_view indent_unit = "    ", bool indent_empty = false);
+    std::string indent_cols(std::string_view text, int cols, bool indent_empty = false);
+
+    std::string dedent(std::string_view text, int tab_width = 4);
+    std::string dedent_max(std::string_view text);
+
+    std::string_view trim_view(std::string_view text);
 }

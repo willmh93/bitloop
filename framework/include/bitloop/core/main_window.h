@@ -1,22 +1,21 @@
 #pragma once
 
 #include <vector>
-#include "threads.h"
+#include <bitloop/core/threads.h>
+#include <bitloop/core/project.h>
+#include <bitloop/ui/imgui_custom.h>
+#include <bitloop/graphics/nano_canvas.h>
 
-#include "imgui_custom.h"
-#include "nano_canvas.h"
-#include "project.h"
+#ifndef __EMSCRIPTEN__
+extern "C" {
+    #include <libavcodec/avcodec.h>
+    #include <libavformat/avformat.h>
+    #include <libswscale/swscale.h>
+    #include <libavutil/avutil.h>
+}
+#endif
 
-//#ifndef __EMSCRIPTEN__
-//extern "C" {
-//    #include <libavcodec/avcodec.h>
-//    #include <libavformat/avformat.h>
-//    #include <libswscale/swscale.h>
-//    #include <libavutil/avutil.h>
-//}
-//#endif
-
-namespace BL {
+BL_BEGIN_NS;
 
 struct ToolbarButtonState 
 {
@@ -32,12 +31,18 @@ class MainWindow
 {
     static MainWindow* singleton;
 
+    ImFont* main_font = nullptr;
+    ImFont* mono_font = nullptr;
+
     bool initialized = false;
     bool done_first_focus = false;
     bool update_docking_layout = false;
     bool vertical_layout = false;
 
     bool need_draw = false;
+
+    //ImRect viewport_rect;
+    bool viewport_hovered = false;
 
     ToolbarButtonState play = { ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
     ToolbarButtonState stop = { ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
@@ -72,8 +77,13 @@ public:
     void initStyles();
     void initFonts();
 
+    ImFont* mainFont() { return main_font; }
+    ImFont* monoFont() { return mono_font; }
+
     /// Determine whether *any* ImGui input is likely being altered
-    bool isEditingUI();
+    bool isInteractingWithUI();
+    //ImRect viewportRect() { return viewport_rect; }
+    bool viewportHovered() { return viewport_hovered; }
 
     /// Toolbar
     void drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color);
@@ -95,5 +105,4 @@ public:
     void populateUI();
 };
 
-} // end namespace BL
-
+BL_END_NS;

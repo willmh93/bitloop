@@ -8,6 +8,7 @@ endif()
 bitloop_add_dependency(Mandelbrot)
 bitloop_add_dependency(Tiger)
 bitloop_add_dependency(ExampleText)
+
 #bitloop_add_dependency(Test1)
 #bitloop_add_dependency(Test2)
 

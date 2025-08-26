@@ -1,4 +1,4 @@
-#include <bitloop/bitloop.h>
+#include <bitloop.h>
 #include "bitloop_simulations.h"
 
 int main(int argc, char* argv[])

@@ -7,13 +7,13 @@
 #include "glad/glad.h"
 #endif
 
-#include "nanovg/nanovg.h"
+#include "nanovg.h"
 #include <vector>
 
-#include "bitloop/utility/math_helpers.h"
-#include "bitloop/utility/color.h"
-#include "threads.h"
-#include "camera.h"
+#include <bitloop/utility/math_util.h>
+#include <bitloop/utility/color.h>
+#include <bitloop/core/threads.h>
+#include <bitloop/core/camera.h>
 
 BL_BEGIN_NS
 
