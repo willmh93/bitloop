@@ -53,7 +53,7 @@ def run_bootstrap():
         "autoconf", "automake", "autoconf-archive", "libltdl-dev",
         "libx11-dev", "libxft-dev", "libxext-dev",
         "libwayland-dev", "libxkbcommon-dev", "libegl1-mesa-dev", "wayland-protocols", "libdecor-0-dev",
-        "libibus-1.0-dev"
+        "libibus-1.0-dev", "nasm"
     ]
     try:
         subprocess.run(["sudo", "apt-get", "update"], check=True)

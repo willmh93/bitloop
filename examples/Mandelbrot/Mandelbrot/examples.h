@@ -1,12 +1,12 @@
 #pragma once
 #include <map>
-
-#include <bitloop/utility/text_util.h>
+#include <bitloop.h>
 
 struct MandelPreset
 {
     std::string name;
     std::string data;
+
     MandelPreset(const char* _data)
     {
         data = _data;

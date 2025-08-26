@@ -1,15 +1,12 @@
 #pragma once
 #include <bitloop.h>
-
 #include "shading.h"
 
-using namespace BL;
-
 SIM_BEG;
+using namespace BL;
 
 constexpr bool COMPRESS_CONFIG = true;
 
-    
 struct MandelState
 {
     // The final world quad should be predictable using

@@ -1,7 +1,7 @@
 #pragma once
-#include <project.h>
+#include <bitloop.h>
 
-SIM_BEG({SIM_NAME})
+SIM_BEG;
 
 using namespace BL;
 
@@ -21,7 +21,7 @@ struct {SIM_NAME}_Scene_Data : VarBuffer
 
 struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene_Data >
 {
-    /// ─────── Provide default Scene launch config ───────
+    /// ─────── Provide default launch config ───────
     struct Config {
         // double gravity = 9.8;
     };
@@ -46,13 +46,12 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene_Data >
     /// ─────── Input handling ───────
     void onEvent(Event e) override; // All event types
 
-    /// Filters for specific input events
-    //void onPointerDown(PointerEvent e) override;
-    //void onPointerUp(PointerEvent e) override;
-    //void onPointerMove(PointerEvent e) override;
-    //void onWheel(PointerEvent e) override;
-    //void onKeyDown(KeyEvent e) override;
-    //void onKeyUp(KeyEvent e) override;
+    // void onPointerDown(PointerEvent e) override;
+    // void onPointerUp(PointerEvent e) override;
+    // void onPointerMove(PointerEvent e) override;
+    // void onWheel(PointerEvent e) override;
+    // void onKeyDown(KeyEvent e) override;
+    // void onKeyUp(KeyEvent e) override;
 
     /// ─────── Your custom methods ───────
     // void customMethod();
@@ -80,4 +79,4 @@ struct {SIM_NAME}_Project : public Project<{SIM_NAME}_Project_Data>
     void projectPrepare(Layout& layout) override;
 };
 
-SIM_END({SIM_NAME})
+SIM_END;

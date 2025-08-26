@@ -9,8 +9,8 @@ from pathlib import Path
 script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir))
 
-from new_project   import create_project
-from bootstrap     import run_bootstrap
+from instantiate_template import instantiate_template
+from bootstrap            import run_bootstrap
 
 def main():
     parser = argparse.ArgumentParser(prog="bitloop")
@@ -29,6 +29,8 @@ def main():
     # bitloop new [...] parser
     new_sub = new_parser.add_subparsers(dest="entity", required=True)
     new_sub.add_parser("project", help="scaffold a new project")
+    new_sub.add_parser("header", help="add a header (.h)")
+    new_sub.add_parser("class", help="add a class (.h  + .cpp) ")
 
 
     args = parser.parse_args()
@@ -52,10 +54,21 @@ def main():
         sys.exit(rc)
         return
 
-    if args.command == "new" and getattr(args, "entity", None) == "project":
-        bitloop_root = script_dir.parent
-        create_project(bitloop_root=bitloop_root)
-        return
+    if args.command == "new":
+        new_type = getattr(args, "entity", None)
+        if new_type == "project":
+            bitloop_root = script_dir.parent
+            instantiate_template(bitloop_root=bitloop_root, type="project")
+            return
+        elif new_type == "header":
+            bitloop_root = script_dir.parent
+            instantiate_template(bitloop_root=bitloop_root, type="header")
+            return
+        elif new_type == "class":
+            bitloop_root = script_dir.parent
+            instantiate_template(bitloop_root=bitloop_root, type="class")
+            return
+
 
 if __name__ == "__main__":
     main()

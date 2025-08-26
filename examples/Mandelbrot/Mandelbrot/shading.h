@@ -4,9 +4,10 @@
 #include "types.h"
 #include "mandel_state.h"
 
-using namespace BL;
 
 SIM_BEG;
+
+using namespace BL;
 
 enum class MandelSmoothing
 {

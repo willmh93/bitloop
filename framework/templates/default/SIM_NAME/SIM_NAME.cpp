@@ -1,6 +1,6 @@
 #include "{SIM_NAME}.h"
 
-SIM_BEG({SIM_NAME})
+SIM_BEG;
 
 using namespace BL;
 
@@ -96,4 +96,4 @@ void {SIM_NAME}_Scene::onEvent(Event e)
 //void {SIM_NAME}_Scene::onKeyDown(KeyEvent e) {{}}
 //void {SIM_NAME}_Scene::onKeyUp(KeyEvent e) {{}}
 
-SIM_END({SIM_NAME})
+SIM_END;
