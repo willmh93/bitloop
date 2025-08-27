@@ -105,8 +105,8 @@ void ProjectWorker::worker_loop()
         {
             /// ======== Update live values ========
             {
-                //BL::print() << "----------------------------";
-                //BL::print() << "----- NEW WORKER FRAME -----";
+                //blPrint() << "----------------------------";
+                //blPrint() << "----- NEW WORKER FRAME -----";
 
                 // ======== Event polling ========
                 {
@@ -143,9 +143,9 @@ void ProjectWorker::worker_loop()
                         pushDataToShadow();
                 }
 
-                //BL::print() << "----- END WORKER FRAME -----";
-                //BL::print() << "----------------------------";
-                //BL::print() << "";
+                //blPrint() << "----- END WORKER FRAME -----";
+                //blPrint() << "----------------------------";
+                //blPrint() << "";
             }
         }
 

@@ -16,9 +16,9 @@ using namespace BL;
 struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 {
     char config_buf_name[32] = "Mandelbrot";
-    char config_buf[1024] = "";
-    char pos_tween_buf[1024] = "";
-    char zoom_tween_buf[1024] = "";
+    std::string config_buf = "hi";
+    //char pos_tween_buf[1024] = "";
+    //char zoom_tween_buf[1024] = "";
 
     MandelState state_a;
     MandelState state_b;
@@ -268,7 +268,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
     void shadeBitmap()
     {
-        //BL::print("Shading compute phase: %d", active_field->compute_phase);
+        //blPrint("Shading compute phase: %d", active_field->compute_phase);
         active_bmp->forEachPixel([&, this](int x, int y)
         {
             EscapeFieldPixel& field_pixel = active_field->at(x, y);

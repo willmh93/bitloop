@@ -92,7 +92,7 @@ public:
 
     NanoFont(const char* virtual_path)
     {
-        //BL::print("NanoFont() called");
+        //blPrint("NanoFont() called");
         path = Platform()->path(virtual_path);
     }
 

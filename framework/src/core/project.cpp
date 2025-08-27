@@ -282,7 +282,7 @@ void Layout::resize(size_t viewport_count)
 
 void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
 {
-    BL::print() << "Project::configure";
+    blPrint() << "Project::configure";
 
     sim_uid = _sim_uid;
     canvas = _canvas;

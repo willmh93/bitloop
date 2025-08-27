@@ -3,6 +3,11 @@
 #include "Mandelbrot.h"
 #include "examples.h"
 
+#ifdef __EMSCRIPTEN__
+#include <bitloop/emscripten_browser_clipboard.h>
+#endif
+#include <imgui_stdlib.h>
+
 SIM_BEG;
 
 inline int mandelbrotIterLimit(double zoom)
@@ -34,11 +39,29 @@ void Mandelbrot_Scene_Data::initData()
     loadGradientPreset(GradientPreset::CLASSIC);
 }
 
+
+//static void on_paste(std::string&& text, void* user)
+//{
+//    blPrint() << "Button Pasted: " << text;
+//    blPrint() << "user: " << (uint64_t)user;
+//    
+//
+//    std::string* target = static_cast<std::string*>(user);
+//    blPrint() << "buf: " << (*target);
+//
+//    //*target = text;
+//    //*target = std::move(text);
+//
+//    ImGui::OpenPopup("Load Data"); // open on this frame
+//}
+
 void Mandelbrot_Scene_Data::populateUI()
 {
     bool is_tweening = tweening;
     if (is_tweening)
         ImGui::BeginDisabled();
+
+    //ImGui::InputTextMultiline("###Config", &config_buf);
 
     //if (Platform()->is_desktop_native())
     {
@@ -52,12 +75,45 @@ void Mandelbrot_Scene_Data::populateUI()
                 updateConfigBuffer();
                 ImGui::OpenPopup("Save Data"); // open on this frame
             }
+
+            #ifdef __EMSCRIPTEN__
+            static bool opening_popup = false;
+            #endif
+
             ImGui::SameLine();
             if (ImGui::Button("Load"))
             {
+                //show_load_dialog = true;
+
+                // Attempt to load immediately from the clipboard (if valid save data)
+                //emscripten_browser_clipboard::paste_now(&on_paste, &config_buf);
+
+                #ifdef __EMSCRIPTEN__
+                emscripten_browser_clipboard::paste_now([&](std::string&& buf)
+                {
+                    config_buf = buf;
+                    blPrint() << "config_buf: " << config_buf;
+
+                    opening_popup = true;
+                });
+                #else
                 show_load_dialog = true;
-                strcpy(config_buf, "");
-                ImGui::OpenPopup("Load Data"); // open on this frame
+                ImGui::OpenPopup("Load Data");
+                #endif
+            }
+
+            #ifdef __EMSCRIPTEN__
+            if (opening_popup)
+            {
+                opening_popup = false;
+                show_load_dialog = true;
+                ImGui::OpenPopup("Load Data");
+            }
+            #endif
+
+            ImGui::SameLine();
+            if (ImGui::Button("Share"))
+            {
             }
 
             // Save Dialog
@@ -74,11 +130,11 @@ void Mandelbrot_Scene_Data::populateUI()
                     updateConfigBuffer();
 
                 ImGui::PushFont(MainWindow::instance()->monoFont());
-                ImGui::InputTextMultiline("###Config", config_buf, 1024, avail, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_ReadOnly);
                 ImGui::PopFont();
 
                 if (ImGui::Button("Copy to Clipboard"))
-                    ImGui::SetClipboardText(config_buf);
+                    ImGui::SetClipboardText(config_buf.c_str());
 
                 ImGui::SameLine();
                 if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
@@ -93,8 +149,22 @@ void Mandelbrot_Scene_Data::populateUI()
                 avail.y -= ImGui::GetFrameHeightWithSpacing(); // leave room for buttons
 
                 ImGui::PushFont(MainWindow::instance()->monoFont());
-                ImGui::InputTextMultiline("###Config", config_buf, 1024, avail, ImGuiInputTextFlags_AlwaysOverwrite);
+                //blPrint() << "InputTextMultiline @ config_buf: " << config_buf;
+                ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_AlwaysOverwrite);
                 ImGui::PopFont();
+
+                if (ImGui::Button("Paste"))
+                {
+                    #ifdef __EMSCRIPTEN__
+                    emscripten_browser_clipboard::paste_now([&](std::string&& buf) {
+                        config_buf = buf;
+                    });
+                    #endif
+                }
+
+                ImGui::SameLine();
+                ImGui::Dummy(ImVec2(10.0f, 0.0f));
+                ImGui::SameLine();
 
                 if (ImGui::Button("Load"))
                 {
@@ -361,13 +431,13 @@ int Mandelbrot_Scene_Data::calculateIterLimit() const
 
 void Mandelbrot_Scene_Data::loadTemplate(std::string_view data)
 {
-    strcpy(config_buf, data.data());
+    config_buf = data.data();
     loadConfigBuffer();
 }
 
 void Mandelbrot_Scene_Data::updateConfigBuffer()
 {
-    strcpy(config_buf, serialize(config_buf_name).c_str());
+    config_buf = serialize(config_buf_name);
 }
 
 void Mandelbrot_Scene_Data::loadConfigBuffer()
@@ -676,7 +746,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         // Has pending_field finished computing? Set as active field and use for future color updates
         if (finished_compute)
         {
-            //BL::print("Finished computing phase: %d. Setting as active", pending_field->compute_phase);
+            //blPrint("Finished computing phase: %d. Setting as active", pending_field->compute_phase);
             active_bmp = pending_bmp;
             active_field = pending_field;
         }
@@ -701,7 +771,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                     double dt = std::chrono::duration<double, std::milli>(elapsed).count();
                     double dt_avg = timer_ma.push(dt);
 
-                    BL::print() << "Compute timer: " << BL::to_fixed(4) << dt_avg;
+                    blPrint() << "Compute timer: " << BL::to_fixed(4) << dt_avg;
                     break;
             }
 

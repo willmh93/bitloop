@@ -17,6 +17,7 @@ namespace Math
     constexpr double HALF_PI = std::numbers::pi / 2.0;
     constexpr double INV_TWO_PI = 1.0 / TWO_PI;
 
+
     template<typename T> [[nodiscard]] inline T roundDown(T v, T step) { return std::floor(v / step) * step; }
     template<typename T> [[nodiscard]] inline T roundUp(T v, T step) { return std::ceil(v / step) * step; }
     template<typename T> [[nodiscard]] inline bool divisible(T _big, T _small)

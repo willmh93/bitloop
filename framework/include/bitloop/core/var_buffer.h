@@ -130,7 +130,7 @@ struct VariableEntry
 
     //void print()
     //{
-    //    BL::print() << "Shadow: " << shadow_ptr->toString() 
+    //    blPrint() << "Shadow: " << shadow_ptr->toString() 
     //                << "  Live: " << live_ptr->toString();
     //}
 };

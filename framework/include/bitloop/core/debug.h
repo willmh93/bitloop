@@ -76,7 +76,7 @@ struct FloatState {
     int precision;
 };
 
-// Persist across BL::print() calls on the same thread
+// Persist across blPrint() calls on the same thread
 inline thread_local FloatState g_state{
     std::chars_format::general,
     std::numeric_limits<double>::max_digits10
@@ -222,9 +222,11 @@ inline DebugStream& operator<<(DebugStream& s, General) {
     return s;
 }
 
+BL_END_NS
+
 // factory
-[[nodiscard]] inline DebugStream print() { return DebugStream{}; }
-inline void print(const char* fmt, ...)
+[[nodiscard]] inline BL::DebugStream blPrint() { return BL::DebugStream{}; }
+inline void blPrint(const char* fmt, ...)
 {
     const size_t small_size = 1024;
     char small_buf[small_size]{};
@@ -241,7 +243,7 @@ inline void print(const char* fmt, ...)
         #ifdef WIN32
         OutputDebugStringA(small_buf);
         #endif
-        ImDebugPrint(small_buf);
+        BL::ImDebugPrint(small_buf);
         std::cout << small_buf;
         return;
     }
@@ -273,17 +275,15 @@ inline void print(const char* fmt, ...)
     #ifdef WIN32
     OutputDebugStringA(buf.c_str());
     #endif
-    ImDebugPrint(buf.c_str());
+    BL::ImDebugPrint(buf.c_str());
     std::cout << buf.c_str();
 }
-
-BL_END_NS
 
 #ifdef TIMERS_ENABLED
 #define T0(name)      auto _timer_##name = std::chrono::steady_clock::now();
 #define T1(name, ...) auto waited_##name = std::chrono::steady_clock::now() - _timer_##name;\
                       double dt_##name = std::chrono::duration<double, std::milli>(waited_##name).count();\
-                      if (dt_##name >= TIMER_ELAPSED_LIMIT) { BL::print("Timer (%s): %.4f", #name, dt_##name); }
+                      if (dt_##name >= TIMER_ELAPSED_LIMIT) { blPrint("Timer (%s): %.4f", #name, dt_##name); }
 #else
 #define T0(name)     
 #define T1(name, ...)

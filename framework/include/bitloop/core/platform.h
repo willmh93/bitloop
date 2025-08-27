@@ -56,7 +56,7 @@ public:
     {
         singleton = this;
         window = _window;
-        init();
+        //init();
     }
 
     void init();
@@ -76,9 +76,9 @@ public:
     ///[[nodiscard]] float dpi() { return _dpi; }
 
     #ifdef DEBUG_SIMULATE_DPR
-    float dpr() { return DEBUG_SIMULATE_DPR; }
+    [[nodiscard]] float dpr() { return DEBUG_SIMULATE_DPR; }
     #else
-    float dpr() { return (float)gl_w / (float)win_w; }
+    [[nodiscard]] float dpr() { return (float)gl_w / (float)win_w; }
     #endif
 
     [[nodiscard]] bool device_vertical();

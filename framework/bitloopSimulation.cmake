@@ -115,7 +115,7 @@ macro(bitloop_new_project sim_name)
 
 		apply_root_exe_name(${_TARGET})
 
-		 target_include_directories(${_TARGET} PRIVATE "$<BUILD_INTERFACE:${BITLOOP_AUTOGEN_DIR}>")
+		target_include_directories(${_TARGET} PRIVATE "$<BUILD_INTERFACE:${BITLOOP_AUTOGEN_DIR}>")
 
 	else()
 		# nested (library)

@@ -541,7 +541,7 @@ void MainWindow::populateViewport()
 
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
 
-                //BL::print() << "projectDraw()";
+                //blPrint() << "projectDraw()";
                 ProjectWorker::instance()->draw();
                 canvas.end();
 

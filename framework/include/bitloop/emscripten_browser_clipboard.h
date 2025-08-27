@@ -20,6 +20,8 @@ namespace emscripten_browser_clipboard {
 using paste_handler = void(*)(std::string&&, void*);
 using copy_handler = char const*(*)(void*);
 
+using paste_callback = void(*)(std::string&&);
+
 inline void paste(paste_handler callback, void *callback_data = nullptr);
 inline void copy(copy_handler callback, void *callback_data = nullptr);
 inline void copy(std::string const &content);
@@ -53,12 +55,52 @@ EM_JS_INLINE(void, copy_async_js, (char const *content_ptr), {
   navigator.clipboard.writeText(UTF8ToString(content_ptr));
 });
 
+EM_JS_INLINE(void, paste_async_js, (paste_handler callback, void* callback_data),
+{
+    function send(text) {
+        Module["ccall"]('emscripten_browser_clipboard_detail_paste_return', 'number', ['string','number','number'],[text, callback, callback_data]);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(send);
+    }
+});
+
 } // namespace detail
 
 inline void paste(paste_handler callback, void *callback_data) {
   /// C++ wrapper for javascript paste call
   detail::paste_js(callback, callback_data);
 }
+
+inline void paste_now(paste_handler callback, void* callback_data) {
+    detail::paste_async_js(callback, callback_data);
+}
+
+static void on_paste(std::string&& text, void* user)
+{
+    paste_callback *cb = static_cast<paste_callback*>(user);
+    (*cb)(std::move(text));
+}
+
+namespace detail
+{
+    static void invoke_and_delete(std::string&& text, void* fn_ptr)
+    {
+        auto* fn = static_cast< std::function<void(std::string)>* >(fn_ptr);
+        (*fn)(std::move(text));
+        delete fn; // one-shot
+    }
+}
+
+template<class F>
+inline void paste_now(F&& callback)
+{
+    using Fn = std::function<void(std::string)>;
+    auto* heap_fn = new Fn(std::forward<F>(callback));
+    detail::paste_async_js(&detail::invoke_and_delete, heap_fn);
+}
+
 
 inline void copy(copy_handler callback, void *callback_data) {
   /// C++ wrapper for javascript copy call

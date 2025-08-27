@@ -318,7 +318,7 @@ public:
     template<typename T>
     T* mountScene(T* _sim)
     {
-        BL::print() << "Mounting existing scene to Viewport: " << viewport_index;
+        blPrint() << "Mounting existing scene to Viewport: " << viewport_index;
         scene = _sim;
         scene->registerMount(this);
         return _sim;

@@ -44,6 +44,16 @@ int _is_mobile_device()
 void PlatformManager::init()
 {
     is_mobile_device = _is_mobile_device();
+
+    #ifdef __EMSCRIPTEN__
+    EM_ASM({
+        window.addEventListener('keydown', function(event)
+        {
+            if (event.ctrlKey && event.key == 'v')
+                event.stopImmediatePropagation();
+        }, true);
+    });
+    #endif
 }
 
 void PlatformManager::update()

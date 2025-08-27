@@ -151,56 +151,40 @@ void gui_loop()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window);
 
+    #ifdef __EMSCRIPTEN__
     // Release simulated paste keys
     if (simulated_imgui_paste) {
         simulated_imgui_paste = false;
         ImGui::GetIO().AddKeyEvent(ImGuiKey_ModCtrl, false);
         ImGui::GetIO().AddKeyEvent(ImGuiKey_V, false);
     }
+    #endif
 }
 
 #ifdef __EMSCRIPTEN__
-std::string content;  // this stores the content for our internal clipboard
+std::string clipboard_content;  // this stores the content for our internal clipboard
 bool simulatedImguiPaste = false;
 
 char const* get_content_for_imgui(ImGuiContext*)
 {
     /// Callback for imgui, to return clipboard content
-    BL::print() << "ImGui requested clipboard content, returning " << content.c_str();
-    return content.c_str();
+    return clipboard_content.c_str();
 }
 
 void set_content_from_imgui(ImGuiContext*, char const* text)
 {
     /// Callback for imgui, to set clipboard content
-    content = text;
-    BL::print() << "ImGui setting clipboard content to " << content.c_str();
-    emscripten_browser_clipboard::copy(content);  // send clipboard data to the browser
+    clipboard_content = text;
+    emscripten_browser_clipboard::copy(clipboard_content);  // send clipboard data to the browser
 }
 void clipboard_paste_callback(std::string&& paste_data, void* callback_data)
 {
-    BL::print() << "Copied clipboard data: " << paste_data.c_str();
-    content = std::move(paste_data);
+    clipboard_content = std::move(paste_data);
     ImGui::GetIO().AddKeyEvent(ImGuiKey_ModCtrl, true);
     ImGui::GetIO().AddKeyEvent(ImGuiKey_V, true);
-    ///simulatedImguiPaste = true;
+    simulated_imgui_paste = true;
 }
 #endif
-
-static void BL_ImplSDL3_SetClipboardText(ImGuiContext*, const char* text)
-{
-    BL::print() << "Setting clipboard: " << text;
-    SDL_SetClipboardText(text);
-    BL::print() << "Error code: " << SDL_GetError();
-}
-
-static const char* BL_ImplSDL3_GetClipboardText(ImGuiContext*)
-{
-    BL::print() << "Getting clipboard: " << SDL_GetClipboardText();
-    auto ret = SDL_GetClipboardText();
-    BL::print() << "Error code: " << SDL_GetError();
-    return ret;
-}
 
 int bitloop_main(int, char* [])
 {
@@ -220,7 +204,7 @@ int bitloop_main(int, char* [])
         emscripten_get_canvas_element_size("#canvas", &fb_w, &fb_h);
         #endif
 
-        BL::print() << "Creating window...\n";
+        blPrint() << "Creating window...\n";
 
         const char *window_name = 
             #ifdef BL_DEBUG
@@ -233,7 +217,7 @@ int bitloop_main(int, char* [])
         window = SDL_CreateWindow(window_name, fb_w, fb_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 
         if (!window) {
-            BL::print() << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
+            blPrint() << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
             return 1;
         }
     }
@@ -248,7 +232,7 @@ int bitloop_main(int, char* [])
 
         #ifndef __EMSCRIPTEN__
         if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
-            BL::print() << "Failed to initialize GLAD\n";
+            blPrint() << "Failed to initialize GLAD\n";
             return 1;
         }
 
@@ -267,6 +251,7 @@ int bitloop_main(int, char* [])
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
+        ImGui_ImplOpenGL3_Init();
 
         #ifdef __EMSCRIPTEN__
         emscripten_browser_clipboard::paste(clipboard_paste_callback);
@@ -274,22 +259,12 @@ int bitloop_main(int, char* [])
         ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
         platform_io.Platform_GetClipboardTextFn = get_content_for_imgui;
         platform_io.Platform_SetClipboardTextFn = set_content_from_imgui;
-
-        EM_ASM({
-            console.log(Module);
-            window.addEventListener('keydown', function(event)
-            {
-                if (event.ctrlKey && event.key == 'v')
-                    event.stopImmediatePropagation();
-            }, true);
-        });
         #endif
-
-        ImGui_ImplOpenGL3_Init();
     }
 
     // ======== Init window & start worker thread ========
     {
+        Platform()->init();
         MainWindow::instance()->init();
         ProjectWorker::instance()->startWorker();
     }
