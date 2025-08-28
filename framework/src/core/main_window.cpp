@@ -263,6 +263,9 @@ void MainWindow::populateToolbar()
 
 void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i, int depth)
 {
+    //if (!node.visible)
+    //    return;
+
     ImGui::PushID(i++);
     if (node.project_info)
     {
@@ -291,6 +294,9 @@ void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i,
 
 void MainWindow::populateProjectTree(bool expand_vertical)
 {
+    if (ProjectBase::projectInfoList().size() <= 1)
+        return;
+
     ImVec2 frameSize = ImVec2(0.0f, expand_vertical ? 0 : 170.0f); // Let height auto-expand
     ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
     //ImVec4 dim_bg = bg * 0.9f;
@@ -444,10 +450,10 @@ void MainWindow::populateCollapsedLayout()
     // Collapse layout
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(8.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(6.0f, 6.0f));
         ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
-        populateToolbar();
-        ImGui::Dummy(ScaleSize(0, 6));
+        //populateToolbar();
+        //ImGui::Dummy(ScaleSize(0, 3));
 
         populateProjectTree(true);
 
@@ -484,10 +490,10 @@ void MainWindow::populateExpandedLayout()
     // Show both windows
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(6, 6));
         ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
-        populateToolbar();
-        ImGui::Dummy(ImVec2(0, 6));
+        //populateToolbar();
+        //ImGui::Dummy(ImVec2(0, 3));
 
         populateProjectTree(false);
         populateProjectUI(); // Always call (in case sim does any unusual setup here)
@@ -598,6 +604,10 @@ void MainWindow::populateUI()
     }
 
     bool collapse_layout = vertical_layout || Platform()->max_char_rows() < 40.0f;
+
+    if (ProjectBase::projectInfoList().size() <= 1)
+        collapse_layout = false;
+
     if (collapse_layout)
         populateCollapsedLayout();
     else

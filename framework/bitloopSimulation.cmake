@@ -9,8 +9,10 @@ file(MAKE_DIRECTORY			"${BITLOOP_AUTOGEN_DIR}")
 set(AUTOGEN_SIM_INCLUDES	"${BITLOOP_AUTOGEN_DIR}/bitloop_simulations.h" CACHE INTERNAL "")
 
 set(BITLOOP_PROJECT_NAMES		""		CACHE INTERNAL "Ordered included projected")
+set(BITLOOP_PROJECT_VISIBILITY	""		CACHE INTERNAL "Ordered included projected visibility")
 set(BITLOOP_DATA_DEPENDENCIES	""		CACHE INTERNAL "Ordered list of dependency data directories")
 
+set_property(DIRECTORY PROPERTY BITLOOP_LOCAL_PROJECTS "")
 set_property(DIRECTORY PROPERTY BITLOOP_DEPENDENCY_DIRS "")
 set_property(DIRECTORY PROPERTY BITLOOP_ROOT_TARGET "")
 set_property(DIRECTORY PROPERTY BITLOOP_ROOT_SOURCES "")
@@ -96,6 +98,29 @@ function(_apply_root_exe_name target)
   set_target_properties(${target} PROPERTIES OUTPUT_NAME "app")
 endfunction()
 
+function(_bitloop_set_visibility name value)
+	get_property(_is_set GLOBAL PROPERTY "BITLOOP_PROJECT_VISIBILITY_${name}" SET)
+	if (_is_set)
+		# Parent must have already set visibility (which takes priority)
+		return()
+	endif()
+	message(STATUS "Setting ${name} visibility: " ${value})
+	set_property(GLOBAL PROPERTY "BITLOOP_PROJECT_VISIBILITY_${name}" "${value}")
+endfunction()
+
+function(_bitloop_get_project_visibility name out_var)
+	# Is the property set?
+	get_property(_is_set GLOBAL PROPERTY "BITLOOP_PROJECT_VISIBILITY_${name}" SET)
+	if (_is_set)
+		get_property(_v GLOBAL PROPERTY "BITLOOP_PROJECT_VISIBILITY_${name}")
+	else()
+		set(_v ON)  # default
+	endif()
+	set(${out_var} "${_v}" PARENT_SCOPE)
+endfunction()
+
+
+
 function(_bitloop_new_project sim_name)
 	#message(STATUS "${CMAKE_CURRENT_SOURCE_DIR} -> Adding project [${sim_name}]")
 
@@ -174,7 +199,7 @@ function(_bitloop_new_project sim_name)
 		if (NOT sim_name IN_LIST _project_names)
 			list(APPEND _project_names ${sim_name})
 		endif()
-		set_property(GLOBAL PROPERTY BITLOOP_PROJECT_NAMES ${_project_names})
+		set_property(GLOBAL								  PROPERTY BITLOOP_PROJECT_NAMES	${_project_names})
 	endif()
 
 	# If root project, start printing project tree digram
@@ -269,12 +294,12 @@ endfunction()
 
 function(_finalize_project_tree)
 
-	#message(STATUS "")
-	#message(STATUS "──────── Finalizing ────────")
-	#get_property(_global_projects GLOBAL PROPERTY BITLOOP_PROJECT_NAMES)
-	#foreach(project_name IN LISTS _global_projects)
-	#	msg(STATUS "<<<${project_name}>>>")
-	#endforeach()
+	message(STATUS "")
+	message(STATUS "──────── Finalizing ────────")
+	get_property(_global_projects GLOBAL PROPERTY BITLOOP_PROJECT_NAMES)
+	foreach(project_name IN LISTS _global_projects)
+		msg(STATUS "<<<${project_name}>>>")
+	endforeach()
 
 	##################################
 	#####  add project factories #####
@@ -282,10 +307,24 @@ function(_finalize_project_tree)
 	file(APPEND "${AUTOGEN_SIM_INCLUDES}" "\nvoid initialize_simulations() {\n")
 	file(APPEND "${AUTOGEN_SIM_INCLUDES}" "    using namespace BL;\n")
 
+
 	get_property(_project_names GLOBAL PROPERTY BITLOOP_PROJECT_NAMES)
 	foreach(project_name IN LISTS _project_names)
-		file(APPEND "${AUTOGEN_SIM_INCLUDES}"
-			"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>() );\n")
+		_bitloop_get_project_visibility(${project_name} project_visible)
+		message(STATUS "Getting ${project_name} visibility: " ${project_visible})
+		
+		# Convert ON/OFF -> true/false for C++
+		#if (project_visible)
+		#	set(_visible_cpp true)
+		#else()
+		#	set(_visible_cpp false)
+		#endif()
+		
+		if (project_visible)
+			file(APPEND "${AUTOGEN_SIM_INCLUDES}"
+			"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>());\n")
+			#"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>(), ${_visible_cpp} );\n")
+		endif()
 	endforeach()
 	file(APPEND "${AUTOGEN_SIM_INCLUDES}" "}\n")
 
@@ -349,6 +388,13 @@ macro(bitloop_add_dependency DEP_PATH)
 	get_property(_list DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_DEPENDENCY_DIRS)
 	list(APPEND _list ${_SIM_DIR})
 	set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_DEPENDENCY_DIRS "${_list}")
+
+	get_filename_component(sim_name "${DEP_PATH}" NAME)
+	get_property(_local_projects DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_LOCAL_PROJECTS)
+	if (NOT sim_name IN_LIST _project_names)
+		list(APPEND _local_projects ${sim_name})
+	endif()
+	set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}  PROPERTY BITLOOP_LOCAL_PROJECTS  ${_local_projects})
 endmacro()
 
 # Queues root project to be added when bitloop_finalize() gets called
@@ -358,6 +404,13 @@ macro(bitloop_new_project ROOT_TARGET)
 
 	set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_ROOT_TARGET  "${ROOT_TARGET}")
 	set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_ROOT_SOURCES "${_args}")
+
+
+	get_property(_local_projects DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_LOCAL_PROJECTS)
+	if (NOT ROOT_TARGET IN_LIST _project_names)
+		list(APPEND _local_projects ${ROOT_TARGET})
+	endif()
+	set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}  PROPERTY BITLOOP_LOCAL_PROJECTS  ${_local_projects})
 endmacro()
 
 # Processes the queued root project / dependencies
@@ -370,6 +423,27 @@ macro(bitloop_finalize)
 		
 	_bitloop_new_project(${_root_target} ${_root_sources})
 endmacro()
+
+macro(bitloop_hide _TARGET)
+	_bitloop_set_visibility(${_TARGET} OFF)
+endmacro()
+
+macro(bitloop_show _TARGET)
+	_bitloop_set_visibility(${_TARGET} ON)
+endmacro()
+
+#macro(bitloop_show_only_tree _TARGET)
+#	
+#	message(STATUS "Showing ONLY: ${_TARGET}")
+#	get_property(_local_projects DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BITLOOP_LOCAL_PROJECTS)
+#
+#	foreach(project_name IN LISTS _local_projects)
+#		message(STATUS "Hiding: ${project_name}")
+#		bitloop_hide(${project_name})
+#	endforeach()
+#
+#	bitloop_show(${_TARGET})
+#endmacro()
 
 
 # ──────────────────────────────────────────────────────────

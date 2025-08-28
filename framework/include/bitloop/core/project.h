@@ -412,9 +412,8 @@ struct ProjectInfoNode
     std::shared_ptr<ProjectInfo> project_info = nullptr;
     std::vector<ProjectInfoNode> children;
     std::string name;
-    bool open = true;
 
-    ProjectInfoNode(std::string node_name) : name(node_name) {}
+    ProjectInfoNode(std::string node_name, bool hide_node=false) : name(node_name) {}
     ProjectInfoNode(std::shared_ptr<ProjectInfo> project)
     {
         project_info = project;
@@ -573,19 +572,9 @@ public:
         return project_info;
     }
 
-    //static void addProjectFactoryInfo(const std::vector<std::string>& tree_path, const ProjectCreatorFunc& func)
     static void addProjectFactoryInfo(std::shared_ptr<ProjectInfo> project_info)
     {
-        //static int factory_sim_index = 0;
-        //
         std::vector<std::shared_ptr<ProjectInfo>>& project_list = projectInfoList();
-        //
-        //auto project_info = std::make_shared<ProjectInfo>(ProjectInfo(
-        //    tree_path,
-        //    func,
-        //    factory_sim_index++,
-        //    ProjectInfo::INACTIVE
-        //));
 
         project_list.push_back(project_info);
 
