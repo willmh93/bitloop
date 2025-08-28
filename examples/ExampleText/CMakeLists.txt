@@ -6,7 +6,14 @@ if (NOT TARGET bitloop::bitloop)
   find_package(bitloop CONFIG REQUIRED)
 endif()
 
-file(GLOB SIM_SOURCES CONFIGURE_DEPENDS "ExampleText/*.cpp" "ExampleText/*.h")
+# Gather source files for this project
+file(GLOB SIM_SOURCES CONFIGURE_DEPENDS
+	"ExampleText/*.cpp"
+	"ExampleText/*.h"
+)
 
-# 2. Create new project
+# Create new project and set dependencies
+# (in the order you want them to appear in the UI)
 bitloop_new_project(ExampleText ${SIM_SOURCES})
+
+bitloop_finalize()

@@ -626,12 +626,6 @@ public:
                 }
             }
         }
-
-        std::sort(project_list.begin(), project_list.end(),
-            [](auto a, auto b)
-        { 
-            return a->path < b->path; 
-        });
     }
 
     [[nodiscard]] std::shared_ptr<ProjectInfo> getProjectInfo()

@@ -63,7 +63,7 @@ set(ALL_SRC_FILES
 )
 
 add_library(bitloop STATIC ${ALL_SRC_FILES})
-apply_common_settings(bitloop)
+_apply_common_settings(bitloop)
 
 target_include_directories(bitloop
   PUBLIC
