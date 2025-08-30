@@ -6,6 +6,9 @@
 
 SIM_BEG;
 
+constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
+const double INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0);
+
 inline int mandelbrot_depth(double x0, double y0, int iter_lim)
 {
     double x = 0.0, y = 0.0, xx = 0.0, yy = 0.0;
@@ -21,6 +24,40 @@ inline int mandelbrot_depth(double x0, double y0, int iter_lim)
     }
 
     return iter;
+}
+
+inline double mandelbrot_dist(double x0, double y0, int iter_lim)
+{
+    double x = 0.0, y = 0.0;        // z
+    double dx = 1.0, dy = 0.0;        // dz/dc
+
+    for (int i = 0; i < iter_lim; ++i)
+    {
+        double r2 = x * x + y * y;
+        if (r2 > 512.0)
+        {
+            double r = std::sqrt(r2);                     // |z|
+            double dz = std::sqrt(dx * dx + dy * dy);      // |dz|
+            if (dz == 0.0) return 0.0;
+            return r * std::log(r) / dz;                   // distance
+        }
+
+        // save current z for the derivative update
+        double xold = x;
+        double yold = y;
+
+        // z_{n+1} = z_n^2 + c
+        x = xold * xold - yold * yold + x0;
+        y = 2.0 * xold * yold + y0;
+
+        // dz_{n+1} = 2 z_n dz_n + 1   (uses xold,yold)
+        double dx_new = 2.0 * (xold * dx - yold * dy) + 1.0;
+        double dy_new = 2.0 * (xold * dy + yold * dx);
+
+        dx = dx_new;
+        dy = dy_new;
+    }
+    return INSIDE_MANDELBROT_SET;                         // inside set
 }
 
 namespace detail
@@ -63,8 +100,7 @@ namespace detail
 
 
 
-constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
-const double INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0);
+
 
 template<MandelSmoothing Smooth_Iter>
 constexpr double escape_radius()
@@ -101,6 +137,8 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
     return false;
 }
 
+//dist = mandelbrot_dist((double)x0, (double)y0, iter_lim);
+
 template<class T, MandelSmoothing S>
 FAST_INLINE void mandel_kernel(
     const T& x0,
@@ -111,63 +149,64 @@ FAST_INLINE void mandel_kernel(
     if (interiorCheck(x0, y0))
     {
         depth = INSIDE_MANDELBROT_SET_SKIPPED;
+        if constexpr (((int)S & (int)MandelSmoothing::DIST) != 0)
+            dist = INSIDE_MANDELBROT_SET;
         return;
     }
 
     using detail::cplx;
     constexpr bool NEED_DIST = (bool)((int)S & (int)MandelSmoothing::DIST);
     constexpr bool NEED_ITER = (bool)((int)S & (int)MandelSmoothing::ITER);
-
-    constexpr T escape_radius_squared = T(escape_radius<S>());
-    constexpr T zero = T(0);
-    constexpr T one = T(1);
-    constexpr T two = T(2);
-    constexpr T eps = std::numeric_limits<T>::epsilon();
+    constexpr T escape_r2 = T(escape_radius<S>());
+    constexpr T zero = T(0), one = T(1), two = T(2);
 
     cplx<T> z{ zero, zero };
     cplx<T> c{ x0, y0 };
     cplx<T> dz{ one, zero };
-
     int iter = 0;
-    T xx, yy, r2;
+    T r2;
 
-    while (iter < iter_lim)
+    while (true)
     {
-        detail::step(z, c);                             // z = z² + c
+        r2 = detail::mag2(z);
+        if (r2 > escape_r2 || iter >= iter_lim) break;
+
         if constexpr (NEED_DIST)
-            detail::step_d(z, dz);                      // dz = 2 z dz + 1
+            detail::step_d(z, dz);
 
-        xx = z.x * z.x;
-        yy = z.y * z.y;
-        r2 = xx + yy;
-        if (r2 > escape_radius_squared) break;
-
+        detail::step(z, c);
         ++iter;
     }
 
+    const bool escaped = (r2 > escape_r2) && (iter < iter_lim);
     if constexpr (NEED_DIST)
     {
-        //T r2 = xx + yy;
-        T r = sqrt(r2);
-        T dz_abs = sqrt(detail::mag2(dz));
-        T d = (dz_abs == zero) ? zero : r * log(r) / dz_abs;
-        if (d < eps) d = eps;
-        dist = static_cast<double>(d);
+        if (escaped)
+        {
+            const T r = sqrt(r2);
+            const T dz_abs = sqrt(detail::mag2(dz));
+            dist = (dz_abs == zero) ? 0.0 : (double)(r * log(r) / dz_abs);
+        }
+        else
+        {
+            dist = INSIDE_MANDELBROT_SET;
+        }
     }
 
-    if (iter == iter_lim)
-    {
+    if (!escaped) {
         depth = INSIDE_MANDELBROT_SET;
+        return;
     }
-    else if constexpr (NEED_ITER)
+
+    if constexpr (NEED_ITER)
     {
         T t = log2(r2) / two;
         T s = log2(t);
-        depth = static_cast<double>(iter + (one - s)) - mandelbrot_smoothing_offset<S>();
+        depth = (double)(iter + (one - s)) - mandelbrot_smoothing_offset<S>();
     }
     else
     {
-        depth = static_cast<double>(iter);
+        depth = (double)iter;
     }
 }
 

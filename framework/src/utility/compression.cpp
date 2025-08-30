@@ -8,18 +8,34 @@
 
 namespace
 {
+    //constexpr char lookup[] =
+    //    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    //    "abcdefghijklmnopqrstuvwxyz"
+    //    "0123456789+/";
+
     constexpr char lookup[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
-        "0123456789+/";
+        "0123456789-_";
+
+
+    //inline unsigned char b64_value(unsigned char c)
+    //{
+    //    if (c >= 'A' && c <= 'Z') return static_cast<unsigned char>(c - 'A');
+    //    if (c >= 'a' && c <= 'z') return static_cast<unsigned char>(26 + (c - 'a'));
+    //    if (c >= '0' && c <= '9') return static_cast<unsigned char>(52 + (c - '0'));
+    //    if (c == '+') return 62;
+    //    if (c == '/') return 63;
+    //    return 0xFF; // invalid
+    //}
 
     inline unsigned char b64_value(unsigned char c)
     {
         if (c >= 'A' && c <= 'Z') return static_cast<unsigned char>(c - 'A');
         if (c >= 'a' && c <= 'z') return static_cast<unsigned char>(26 + (c - 'a'));
         if (c >= '0' && c <= '9') return static_cast<unsigned char>(52 + (c - '0'));
-        if (c == '+') return 62;
-        if (c == '/') return 63;
+        if (c == '-') return 62;
+        if (c == '_') return 63;
         return 0xFF; // invalid
     }
 }

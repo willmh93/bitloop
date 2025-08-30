@@ -238,4 +238,127 @@ std::string PlatformManager::path(std::string_view virtual_path)
     return p.string();
 }
 
+#ifdef __EMSCRIPTEN__
+char* PlatformManager::url_get_base() {
+    return (char*)MAIN_THREAD_EM_ASM_PTR({
+      const u = new URL(location.href);
+      let path = u.pathname;
+      if (path.endsWith('index.html')) path = path.slice(0, -'index.html'.length);
+      if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+      const s = u.origin + path;
+      const n = lengthBytesUTF8(s) + 1;
+      const p = _malloc(n);
+      stringToUTF8(s, p, n);
+      return p;
+    });
+}
+
+int PlatformManager::url_has(const char* k)
+{
+    return MAIN_THREAD_EM_ASM_INT({
+      const key = UTF8ToString($0);
+      const u = new URL(location.href);
+      if (u.searchParams.has(key)) return 1;
+      if (u.hash && u.hash.length > 1) {
+        const h = new URLSearchParams(u.hash.substring(1));
+        if (h.has(key)) return 1;
+      }
+      return 0;
+    }, k);
+}
+
+// Gets a number param; returns fallback if missing/NaN
+double PlatformManager::url_get_number(const char* k, double fallback)
+{
+    return MAIN_THREAD_EM_ASM_DOUBLE({
+      const key = UTF8ToString($0);
+      const fb = $1;
+      const u = new URL(location.href);
+      let v = u.searchParams.get(key);
+      if (v === null && u.hash && u.hash.length > 1) {
+        v = new URLSearchParams(u.hash.substring(1)).get(key);
+      }
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fb;
+    }, k, fallback);
+}
+
+// Gets a string param; returns newly-allocated C string (caller free()), or 0 if missing
+char* PlatformManager::url_get_string(const char* k)
+{
+    return (char*)MAIN_THREAD_EM_ASM_PTR({
+      const key = UTF8ToString($0);
+      const u = new URL(location.href);
+      let v = u.searchParams.get(key);
+      if (v === null && u.hash && u.hash.length > 1) {
+        v = new URLSearchParams(u.hash.substring(1)).get(key);
+      }
+      if (v === null) return 0;
+      const len = lengthBytesUTF8(v) + 1;
+      const p = _malloc(len);
+      stringToUTF8(v, p, len);
+      return p;
+    }, k);
+}
+
+
+// Set a string param in ?query (use_hash=0) or #hash (use_hash=1).
+// replace=1 uses history.replaceState (good for live updates).
+inline void PlatformManager::url_set_string(const char* key, const char* value, int use_hash, int replace)
+{
+  MAIN_THREAD_EM_ASM({
+    const key = UTF8ToString($0);
+    const val = UTF8ToString($1);
+    const useHash = $2|0;
+    const doReplace = $3|0;
+
+    const u = new URL(location.href);
+    const base = u.origin + u.pathname;
+
+    const qs = u.searchParams;                     // ?query
+    const hs = new URLSearchParams(u.hash ? u.hash.slice(1) : ""); // #hash
+
+    if (useHash) hs.set(key, val); else qs.set(key, val);
+
+    const q = qs.toString();
+    const h = hs.toString();
+    const newUrl = base + (q ? "?" + q : "") + (h ? "#" + h : "");
+    if (doReplace) history.replaceState(null, "", newUrl);
+    else           history.pushState(null, "", newUrl);
+  }, key, value, use_hash, replace);
+}
+
+void PlatformManager::url_set_number(const char* key, double value,
+    int use_hash = 0, int replace = 1) {
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.17g", value);
+    url_set_string(key, buf, use_hash, replace);
+}
+
+// Remove a param
+void PlatformManager::url_unset(const char* key, int use_hash = 0, int replace = 1)
+{
+    MAIN_THREAD_EM_ASM({
+      const key = UTF8ToString($0);
+      const useHash = $1 | 0;
+      const doReplace = $2 | 0;
+
+      const u = new URL(location.href);
+      const base = u.origin + u.pathname;
+
+      const qs = u.searchParams;
+      const hs = new URLSearchParams(u.hash ? u.hash.slice(1) : "");
+
+      if (useHash) hs.delete(key); else qs.delete(key);
+
+      const q = qs.toString();
+      const h = hs.toString();
+      const newUrl = base + (q ? "?" + q : "") + (h ? "#" + h : "");
+      if (doReplace) history.replaceState(null, "", newUrl);
+      else           history.pushState(null, "", newUrl);
+    }, key, use_hash, replace);
+}
+
+#endif
+
 BL_END_NS

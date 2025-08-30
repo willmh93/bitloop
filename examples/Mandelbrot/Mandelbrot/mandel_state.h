@@ -33,6 +33,7 @@ struct MandelState
 
     double cycle_iter_value             = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
     double cycle_dist_value             = 0.5f;
+    bool   invert_dist                  = false;
 
     double gradient_shift               = 0.0;
     double hue_shift                    = 0.0;
@@ -41,7 +42,7 @@ struct MandelState
     double hue_shift_step               = 0.136;
 
     int active_color_template           = (int)GradientPreset::CLASSIC;
-    int smoothing_type                  = (int)MandelSmoothing::ITER;
+    int smoothing_type                  = (int)MandelSmoothing::MIX;
 
     ImGradient gradient;
 

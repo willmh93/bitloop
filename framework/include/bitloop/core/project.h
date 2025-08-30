@@ -413,7 +413,7 @@ struct ProjectInfoNode
     std::vector<ProjectInfoNode> children;
     std::string name;
 
-    ProjectInfoNode(std::string node_name, bool hide_node=false) : name(node_name) {}
+    ProjectInfoNode(std::string node_name) : name(node_name) {}
     ProjectInfoNode(std::shared_ptr<ProjectInfo> project)
     {
         project_info = project;

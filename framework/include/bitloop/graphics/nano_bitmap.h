@@ -382,7 +382,7 @@ public:
 
     [[nodiscard]] IVec2 pixelPosFromWorld(DVec2 p)
     {
-        return static_cast<IVec2>(worldToUVRatio(p) / bmp_size);
+        return static_cast<IVec2>(worldToUVRatio(p) * bmp_size);
     }
 
     template<typename T = double, typename Callback>
@@ -652,21 +652,21 @@ public:
         );
     }
 
-    template<typename Callback>
-    void forEachWorldPixel(
-        Camera* camera,
-        Callback&& callback,
-        int thread_count = Thread::idealThreadCount())
-    {
-        int row = 0;
-        forEachWorldPixel(
-            camera, 
-            row,
-            callback,
-            thread_count,
-            0
-        );
-    }
+    //template<typename Callback>
+    //void forEachWorldPixel(
+    //    Camera* camera,
+    //    Callback&& callback,
+    //    int thread_count = Thread::idealThreadCount())
+    //{
+    //    int row = 0;
+    //    forEachWorldPixel(
+    //        camera, 
+    //        row,
+    //        callback,
+    //        thread_count,
+    //        0
+    //    );
+    //}
 };
 
 BL_END_NS

@@ -40,9 +40,8 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
 
     double min_depth = 0.0;
     double max_depth = 0.0;
-
-    double min_dist = 0.0;
-    double max_dist = 0.0;
+    //double min_dist = 0.0;
+    //double max_dist = 0.0;
 
     int w = 0, h = 0;
 
@@ -50,6 +49,7 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
 
     void setAllDepth(double value)
     {
+        blPrint() << "resetField(-1) - compute_phase: " << compute_phase;
         for (int i = 0; i < size(); i++)
             std::vector<EscapeFieldPixel>::at(i) = { value, value };
     }

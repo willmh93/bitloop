@@ -102,6 +102,17 @@ public:
 
     // File system helpers
     [[nodiscard]] std::string path(std::string_view virtual_path);
+
+    // URL helpers
+    #ifdef __EMSCRIPTEN__
+    char*   url_get_base();
+    int     url_has(const char* k);
+    double  url_get_number(const char* k, double fallback);
+    char*   url_get_string(const char* k);
+    void    url_set_string(const char* key, const char* value, int use_hash = 0, int replace = 1);
+    void    url_set_number(const char* key, double value, int use_hash = 0, int replace = 1);
+    void    url_unset(const char* key, int use_hash = 0, int replace = 1);
+    #endif
 };
 
 [[nodiscard]] constexpr PlatformManager* Platform()

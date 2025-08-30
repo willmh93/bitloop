@@ -400,13 +400,18 @@ bool MainWindow::manageDockingLayout()
             &dock_main_id
         );
 
+        if (ImGuiDockNode* n = ImGui::DockBuilderGetNode(dock_sidebar))
+            n->LocalFlags |= ImGuiDockNodeFlags_AutoHideTabBar;
+        //if (ImGuiDockNode* n = ImGui::DockBuilderGetNode(dock_main_id))
+        //    n->LocalFlags |= ImGuiDockNodeFlags_AutoHideTabBar;
+
         ImGui::DockBuilderDockWindow("Projects",    dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Active",      dock_sidebar);  // dock to sidebar
         //ImGui::DockBuilderDockWindow("Debug Log",   dock_sidebar);  // dock to sidebar
         //ImGui::DockBuilderDockWindow("Project Log", dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Debug",       dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Viewport",    dock_main_id);  // dock to window
-
+        
         ImGui::DockBuilderFinish(dockspace_id);
     }
     return true;
@@ -436,13 +441,22 @@ void ScrollWhenDraggingOnVoid(const ImVec2& delta)
     ImGuiID id = window->GetID("##scrolldraggingoverlay");
     ImGui::KeepAliveID(id);
 
+    static float vy = 0.0;
+    static float scroll_amount = 0.0;
+
+    
 
     if (g.HoveredId == 0) // If nothing hovered so far in the frame (not same as IsAnyItemHovered()!)
         ImGui::ButtonBehavior(window->Rect(), id, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
-    if (held && delta.x != 0.0f)
-        ImGui::SetScrollX(window, window->Scroll.x + delta.x);
-    if (held && delta.y != 0.0f)
-        ImGui::SetScrollY(window, window->Scroll.y + delta.y);
+    //if (held && delta.x != 0.0f)
+    //    ImGui::SetScrollX(window, window->Scroll.x + delta.x);
+
+    if (held) vy = delta.y;
+    scroll_amount = vy;
+    vy *= 0.93f;
+
+    if (/*held && */scroll_amount != 0.0f)
+        ImGui::SetScrollY(window, window->Scroll.y + scroll_amount);
 }
 
 void MainWindow::populateCollapsedLayout()

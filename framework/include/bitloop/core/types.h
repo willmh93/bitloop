@@ -200,14 +200,8 @@ struct Triangle
         double area = (p2->x - p1->x) * (p3->y - p1->y) - (p2->y - p1->y) * (p3->x - p1->x);
 
         // Store points in CCW order
-        if (area < 0)
-        {
-            a = p1; b = p3; c = p2;
-        }
-        else
-        {
-            a = p1; b = p2; c = p3;
-        }
+        if (area < 0) { a = p1; b = p3; c = p2; }
+        else          { a = p1; b = p2; c = p3; }
     }
 
     [[nodiscard]] bool containsVertex(VecT* p) const {
@@ -446,7 +440,7 @@ struct Quad
         Pt _data[4];
     };
 
-    Quad() {}
+    Quad() : a(0, 0), b(0, 0), c(0, 0), d(0, 0) {}
     constexpr Quad(T ax, T ay, T bx, T by, T cx, T cy, T dx, T dy) : a(ax,ay), b(bx, by), c(cx, cy), d(dx, dy) {}
     constexpr Quad(const Pt& A, const Pt& B, const Pt& C, const Pt& D) : a(A), b(B), c(C), d(D) {}
     constexpr Quad(const Rect<T>& r)              { set(r.cx(), r.cy(), r.width(), r.height(), 0); }
@@ -475,6 +469,21 @@ struct Quad
 
     [[nodiscard]] constexpr bool operator ==(const Quad& rhs) { return (a == rhs.a && b == rhs.b && c == rhs.c && d == rhs.d); }
     [[nodiscard]] constexpr bool operator !=(const Quad& rhs) { return (a != rhs.a || b != rhs.b || c != rhs.c || d != rhs.d); }
+
+    [[nodiscard]] Vec2<T> center() const { return (a + b + c + d) / T(4); }
+    [[nodiscard]] T area() const
+    {
+        // shoelace formula
+        return std::abs((a.x * b.y + b.x * c.y + c.x * d.y + d.x * a.y) - (a.y * b.x + b.y * c.x + c.y * d.x + d.y * a.x)) / 2;
+    }
+    [[nodiscard]] Rect<T> boundingRect() const
+    {
+        T min_x = std::min({ a.x, b.x, c.x, d.x });
+        T max_x = std::max({ a.x, b.x, c.x, d.x });
+        T min_y = std::min({ a.y, b.y, c.y, d.y });
+        T max_y = std::max({ a.y, b.y, c.y, d.y });
+        return Rect<T>(min_x, min_y, max_x, max_y);
+    }
 
     //[[nodiscard]] AngledRect<T> toAngledRect() const;
 };

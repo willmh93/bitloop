@@ -12,8 +12,9 @@ file(GLOB SIM_SOURCES CONFIGURE_DEPENDS
 )
 
 
-# This SHOULD prioritize Mandelbrot
 bitloop_new_project(Mandelbrot  ${SIM_SOURCES})
-bitloop_add_dependency("../Cardioid")
+bitloop_add_dependency(Mandelbrot  "../Cardioid")
+
+bitloop_hide(Cardioid)
 
 bitloop_finalize()

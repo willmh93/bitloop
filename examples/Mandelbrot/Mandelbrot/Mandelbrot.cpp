@@ -63,121 +63,148 @@ void Mandelbrot_Scene_Data::populateUI()
 
     //ImGui::InputTextMultiline("###Config", &config_buf);
 
-    //if (Platform()->is_desktop_native())
+    if (ImGui::Section("Saving & Loading", true, 0))
     {
-        if (ImGui::Section("Saving & Loading", true))
+        static bool show_save_dialog = false;
+        static bool show_load_dialog = false;
+        static bool show_share_dialog = false;
+
+        if (ImGui::Button("Save"))
         {
-            static bool show_save_dialog = false, show_load_dialog = false;
-            if (ImGui::Button("Save"))
-            {
-                show_save_dialog = true;
-                strcpy(config_buf_name, "Unnamed");
-                updateConfigBuffer();
-                ImGui::OpenPopup("Save Data"); // open on this frame
-            }
+            show_save_dialog = true;
+            strcpy(config_buf_name, "");
+            updateConfigBuffer();
+            ImGui::OpenPopup("Save Data"); // open on this frame
+        }
+
+        #ifdef __EMSCRIPTEN__
+        static bool opening_popup = false;
+        #endif
+
+        ImGui::SameLine();
+        if (ImGui::Button("Load"))
+        {
+            //show_load_dialog = true;
+
+            // Attempt to load immediately from the clipboard (if valid save data)
+            //emscripten_browser_clipboard::paste_now(&on_paste, &config_buf);
 
             #ifdef __EMSCRIPTEN__
-            static bool opening_popup = false;
+            emscripten_browser_clipboard::paste_now([&](std::string&& buf)
+            {
+                config_buf = buf;
+                blPrint() << "config_buf: " << config_buf;
+
+                opening_popup = true;
+            });
+            #else
+            show_load_dialog = true;
+            ImGui::OpenPopup("Load Data");
             #endif
+        }
+
+        #ifdef __EMSCRIPTEN__
+        if (opening_popup)
+        {
+            opening_popup = false;
+            show_load_dialog = true;
+            ImGui::OpenPopup("Load Data");
+        }
+        #endif
+
+        static std::string url;
+        ImGui::SameLine();
+        if (ImGui::Button("Share"))
+        {
+            show_share_dialog = true;
+            #ifdef __EMSCRIPTEN__
+            url = Platform()->url_get_base();
+            #endif
+            ImGui::OpenPopup("Share URL");
+
+            //double cx;
+            //if (url_has("cx")) cx = url_get_number("cx", cx);
+            //blPrint() << "cx: " << cx;
+        }
+
+        // Save Dialog
+        ImGui::SetNextWindowSize(ScaleSize(350, 300), ImGuiCond_FirstUseEver);
+        if (ImGui::BeginPopupModal("Save Data", &show_save_dialog))
+        {
+            ImVec2 avail = ImGui::GetContentRegionAvail();
+            avail.y -= ImGui::GetFrameHeightWithSpacing() * 2; // leave room for buttons/input
+
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Name:");
+            ImGui::SameLine();
+            if (ImGui::InputText("###mandel_name", config_buf_name, 28))
+                updateConfigBuffer();
+
+            ImGui::PushFont(MainWindow::instance()->monoFont());
+            ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_ReadOnly);
+            ImGui::PopFont();
+
+            if (ImGui::Button("Copy to Clipboard"))
+                ImGui::SetClipboardText(config_buf.c_str());
 
             ImGui::SameLine();
-            if (ImGui::Button("Load"))
+            if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+
+        // Load Dialog
+        ImGui::SetNextWindowSize(ScaleSize(350, 300), ImGuiCond_FirstUseEver);
+        if (ImGui::BeginPopupModal("Load Data", &show_load_dialog))
+        {
+            ImVec2 avail = ImGui::GetContentRegionAvail();
+            avail.y -= ImGui::GetFrameHeightWithSpacing(); // leave room for buttons
+
+            ImGui::PushFont(MainWindow::instance()->monoFont());
+            //blPrint() << "InputTextMultiline @ config_buf: " << config_buf;
+            ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_AlwaysOverwrite);
+            ImGui::PopFont();
+
+            if (ImGui::Button("Paste"))
             {
-                //show_load_dialog = true;
-
-                // Attempt to load immediately from the clipboard (if valid save data)
-                //emscripten_browser_clipboard::paste_now(&on_paste, &config_buf);
-
                 #ifdef __EMSCRIPTEN__
-                emscripten_browser_clipboard::paste_now([&](std::string&& buf)
-                {
+                emscripten_browser_clipboard::paste_now([&](std::string&& buf) {
                     config_buf = buf;
-                    blPrint() << "config_buf: " << config_buf;
-
-                    opening_popup = true;
                 });
-                #else
-                show_load_dialog = true;
-                ImGui::OpenPopup("Load Data");
                 #endif
             }
 
-            #ifdef __EMSCRIPTEN__
-            if (opening_popup)
+            ImGui::SameLine();
+            ImGui::Dummy(ImVec2(10.0f, 0.0f));
+            ImGui::SameLine();
+
+            if (ImGui::Button("Load"))
             {
-                opening_popup = false;
-                show_load_dialog = true;
-                ImGui::OpenPopup("Load Data");
+                loadConfigBuffer();
+                ImGui::CloseCurrentPopup();
             }
-            #endif
 
             ImGui::SameLine();
-            if (ImGui::Button("Share"))
-            {
-            }
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
 
-            // Save Dialog
-            ImGui::SetNextWindowSize(ScaleSize(350, 300), ImGuiCond_FirstUseEver);
-            if (ImGui::BeginPopupModal("Save Data", &show_save_dialog))
-            {
-                ImVec2 avail = ImGui::GetContentRegionAvail();
-                avail.y -= ImGui::GetFrameHeightWithSpacing() * 2; // leave room for buttons/input
-
-                ImGui::AlignTextToFramePadding();
-                ImGui::Text("Name:");
-                ImGui::SameLine();
-                if (ImGui::InputText("###mandel_name", config_buf_name, 28))
-                    updateConfigBuffer();
-
-                ImGui::PushFont(MainWindow::instance()->monoFont());
-                ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_ReadOnly);
-                ImGui::PopFont();
-
-                if (ImGui::Button("Copy to Clipboard"))
-                    ImGui::SetClipboardText(config_buf.c_str());
-
-                ImGui::SameLine();
-                if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
-                ImGui::EndPopup();
-            }
-
-            // Load Dialog
-            ImGui::SetNextWindowSize(ScaleSize(350, 300), ImGuiCond_FirstUseEver);
-            if (ImGui::BeginPopupModal("Load Data", &show_load_dialog))
-            {
-                ImVec2 avail = ImGui::GetContentRegionAvail();
-                avail.y -= ImGui::GetFrameHeightWithSpacing(); // leave room for buttons
-
-                ImGui::PushFont(MainWindow::instance()->monoFont());
-                //blPrint() << "InputTextMultiline @ config_buf: " << config_buf;
-                ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_AlwaysOverwrite);
-                ImGui::PopFont();
-
-                if (ImGui::Button("Paste"))
-                {
-                    #ifdef __EMSCRIPTEN__
-                    emscripten_browser_clipboard::paste_now([&](std::string&& buf) {
-                        config_buf = buf;
-                    });
-                    #endif
-                }
-
-                ImGui::SameLine();
-                ImGui::Dummy(ImVec2(10.0f, 0.0f));
-                ImGui::SameLine();
-
-                if (ImGui::Button("Load"))
-                {
-                    loadConfigBuffer();
-                    ImGui::CloseCurrentPopup();
-                }
-
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-                ImGui::EndPopup();
-            }
+        // Share Dialog
+        ImGui::SetNextWindowSize(ScaleSize(350, 120), ImGuiCond_FirstUseEver);
+        if (ImGui::BeginPopupModal("Share URL", &show_share_dialog))
+        {
+            ImVec2 avail = ImGui::GetContentRegionAvail();
+            avail.y -= ImGui::GetFrameHeightWithSpacing() * 1; // leave room for buttons/input
+            ImGui::PushFont(MainWindow::instance()->monoFont());
+            ImGui::InputTextMultiline("###url", &url, avail, ImGuiInputTextFlags_ReadOnly);
+            ImGui::PopFont();
+            if (ImGui::Button("Copy to Clipboard"))
+                ImGui::SetClipboardText(url.c_str());
+            ImGui::SameLine();
+            if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
         }
     }
+    
     
     if (ImGui::Section("Examples", true, 0.0f, 2.0f))
     {
@@ -207,6 +234,7 @@ void Mandelbrot_Scene_Data::populateUI()
     }
 
     /// --------------------------------------------------------------
+    static bool show_view_by_default = !Platform()->is_mobile(); // Expect navigate by touch for mobile
     if (ImGui::Section("View", true, 5.0f, 2.0f))
     {
         ImGui::Checkbox("Show Axis", &show_axis);
@@ -221,7 +249,7 @@ void Mandelbrot_Scene_Data::populateUI()
     }
 
     /// --------------------------------------------------------------
-    if (ImGui::Section("Quality", true, 5.0f, 2.0f))
+    if (ImGui::Section("Quality", false, 5.0f, 2.0f))
     {
         if (ImGui::Checkbox("Dynamic Iteration Limit", &dynamic_iter_lim))
         {
@@ -249,15 +277,27 @@ void Mandelbrot_Scene_Data::populateUI()
         else
             ImGui::DragDouble("Max Iterations", &quality, 1000.0, 1.0, 1000000.0, "%.0f", ImGuiSliderFlags_Logarithmic);
 
-        ImGui::SeparatorText("Smoothing");
-        ImGui::SliderDouble("Iter/Dist Mix", &smooth_iter_dist_ratio, 0.0, 1.0, "%.2f");
 
     } // End Header
 
     /// --------------------------------------------------------------
     if (ImGui::Section("Colour Cycle", true, 5.0f, 2.0f))
     {
-        ImGui::SeparatorText("Iteration"); 
+        ImGui::SliderDouble("Iter/Dist Mix", &smooth_iter_dist_ratio, 0.0, 1.0, "%.2f");
+
+        int iter_pct = (int)((1.0 - smooth_iter_dist_ratio) * 100.0);
+        int dist_pct = (int)(smooth_iter_dist_ratio * 100.0);
+        bool disable_iter_options = (iter_pct == 0);
+        bool disable_dist_options = (dist_pct == 0);
+
+        char iter_header[32];
+        char dist_header[32];
+        sprintf_s(iter_header, "Iteration  (%d%% Weight)", iter_pct);
+        sprintf_s(dist_header, "Distance  (%d%% Weight)", dist_pct);
+
+        if (disable_iter_options) ImGui::BeginDisabled();
+        ImGui::Dummy(ScaleSize(0, 6));
+        ImGui::SeparatorText(iter_header);
         if (ImGui::Checkbox("Dynamic", &dynamic_color_cycle_limit))
         {
             if (dynamic_color_cycle_limit)
@@ -277,12 +317,12 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             double cycle_pct = cycle_iter_value * 100.0;
             ImGui::SliderDouble("% Iterations", &cycle_pct, 0.001, 100.0, "%.4f%%",
-                (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) | 
+                (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
                 ImGuiSliderFlags_AlwaysClamp);
             cycle_iter_value = cycle_pct / 100.0;
 
             raw_cycle_iters = calculateIterLimit() * cycle_iter_value;
-        
+
         }
         else
         {
@@ -305,11 +345,19 @@ void Mandelbrot_Scene_Data::populateUI()
         ///    double log_cycle_iters = Math::linear_log1p_lerp(raw_cycle_iters, log1p_weight);
         ///    ImGui::Text("log_cycle_iters = %.1f", log_cycle_iters);
         ///}
+        if (disable_iter_options) ImGui::EndDisabled();
 
-        ImGui::SeparatorText("Distance");
+        if (disable_dist_options) ImGui::BeginDisabled();
+        ImGui::Dummy(ScaleSize(0, 6));
+        ImGui::SeparatorText(dist_header);
+        ImGui::Checkbox("Invert", &invert_dist);
         ImGui::SliderDouble("Dist", &cycle_dist_value, 0.001, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic);
+        if (disable_dist_options) ImGui::EndDisabled();
+    }
 
-        ImGui::SeparatorText("Gradient transforms");
+    if (ImGui::Section("Color Offset + Animation", true, 5.0f, 2.0f))
+    {
+        //ImGui::SeparatorText("Color Offset + Animation");
 
         ImGui::Checkbox("Animate", &show_color_animation_options);
 
@@ -339,10 +387,11 @@ void Mandelbrot_Scene_Data::populateUI()
             ImGui::PopID();
             ImGui::Unindent();
         }
-
-
+    }
+    if (ImGui::Section("Gradient Picker", false, 5.0f, 2.0f))
+    {
         /// ----------------------------------------
-        ImGui::SeparatorText("Gradient Picker");
+        //ImGui::SeparatorText("Gradient Picker");
 
         if (ImGui::Combo("###ColorTemplate", &active_color_template, ColorGradientNames, (int)GradientPreset::COUNT))
         {
@@ -450,6 +499,8 @@ void Mandelbrot_Scene::sceneStart()
     // todo: Stop this getting called twice on startup
 
     cardioid_lerper.create(Math::TWO_PI / 5760.0, 0.005);
+
+    
 }
 
 void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
@@ -630,7 +681,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     //else
     //    smoothing_type = (int)MandelSmoothing::MIX;
 
-    if (Changed(smooth_iter_dist_ratio))
+    if (Changed(smooth_iter_dist_ratio, invert_dist))
         colors_updated = true;
 
     // Does depth field need recalculating?
@@ -646,12 +697,16 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         y_spline.hash()
     );
 
+    bool __reset_field = false;
+
     // Presented Mandelbrot *actually* changed? Restart on 9x9 bmp (phase 0)
     if (mandel_changed)
     {
         bmp_9x9.clear(0, 255, 0, 255);
         bmp_3x3.clear(0, 255, 0, 255);
         bmp_1x1.clear(0, 255, 0, 255);
+
+        __reset_field = true;
 
         computing_phase = 0;
         current_row = 0;
@@ -725,12 +780,12 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                 MAX_DOUBLE_ZOOM = 2e10;
             }
 
-            bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
+            //bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
             bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
 
 
-            if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
-            else if (b64) finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten);
+            /*if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
+            else */if (b64) finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten);
             else          finished_compute = table_invoke<flt128>(build_table(mandelbrot, [&]), smoothing, flatten);
         }
         //else
@@ -784,8 +839,15 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     if (finished_compute || colors_updated)
     {
-        if (Changed(log1p_weight, normalize_depth_range, smooth_iter_dist_ratio))
-            refreshFieldDepthNormalized();
+        if (Changed(log1p_weight, normalize_depth_range, smooth_iter_dist_ratio, invert_dist))
+        {
+            //if (__reset_field && !finished_compute)
+            //{
+            //    DebugBreak();
+            //}
+            if (frame_complete)
+                refreshFieldDepthNormalized();
+        }
 
         // ======== Update Color Cycle iterations ========
         {
@@ -824,6 +886,27 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     first_frame = false;
 }
 
+template<class T>
+T de_cap_from_view(const T cx, const T cy, const T half_w, const T half_h, const T escape_r)
+{
+    // farthest |c| among the 4 corners
+    const T x0 = cx - half_w, x1 = cx + half_w;
+    const T y0 = cy - half_h, y1 = cy + half_h;
+
+    auto hyp = [](T x, T y) { return std::sqrt(x * x + y * y); };
+    T rmax = std::max(
+                 std::max(hyp(x0, y0), hyp(x0, y1)),
+                 std::max(hyp(x1, y0), hyp(x1, y1))
+    );
+
+    // ensure at least escape radius (so the cap doesn't collapse when centered near the set)
+    T r_eff = rmax;
+
+    // far-field cap ~ r log r; add a small headroom factor to avoid clipping
+    const T headroom = T(1.2); // tweak 1.05..1.5 if needed
+    return headroom * r_eff * std::log(r_eff); // natural log
+}
+
 void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
 {
     // Draw active phase bitmap
@@ -852,11 +935,11 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
         }
     }
 
-    /*if (active_field && active_bmp)
+    if (active_field && active_bmp)
     {
-        ctx->print() << "\nDepth Max: " << active_field->max_depth;
-        ctx->print() << "\nDist Min: " << active_field->min_dist;
-        ctx->print() << "\nDist Max: " << active_field->max_dist;
+        //ctx->print() << "\nactive_field->max_depth: " << active_field->max_depth;
+        ///ctx->print() << "\nactive_field->min_dist: " << active_field->min_dist;
+        ///ctx->print() << "\nactive_field->max_dist: " << active_field->max_dist;
 
         int px = (int)mouse->stage_x;
         int py = (int)mouse->stage_y;
@@ -867,23 +950,71 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
         
             if (p)
             {
-                double depth = p->depth;
-                double dist = p->dist;
+                double raw_depth = p->depth;
+                double raw_dist = p->dist;
 
-                double lower_depth_bound = normalize_depth_range ? pending_field->min_depth : 0;
+                double dist = log(raw_dist);
 
-                double normalized_depth = Math::lerpFactor(depth, lower_depth_bound, (double)iter_lim);
-                double normalized_dist = Math::lerpFactor(dist, pending_field->min_dist, pending_field->max_dist);
+                ///double dist_factor = Math::lerpFactor(dist, active_field->min_dist, active_field->max_dist);
+
+                ctx->print() << "\nraw_dist: " << raw_dist << "\n";
+                ctx->print() << "log_dist: " << dist << "\n";
+                ///ctx->print() << "dist_factor: " << dist_factor << "\n\n";
+
+                double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.5, 0 }).magnitude();
+                double stable_max_raw_dist = active_bmp->worldSize().magnitude() / 2.0;
+
+                double stable_min_dist = log(stable_min_raw_dist);
+                double stable_max_dist = log(stable_max_raw_dist);
+
+                ctx->print() << "stable_min_raw_dist: " << stable_min_raw_dist << "\n";
+                ctx->print() << "stable_max_raw_dist: " << stable_max_raw_dist << "\n\n";
+
+                ctx->print() << "min_possible_dist: " << stable_min_dist << "\n";
+                ctx->print() << "max_possible_dist: " << stable_max_dist << "\n\n";
+
+                ctx->print() << "Stabilized factor: " << Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
+
+                /*double lower_depth_bound = normalize_depth_range ? pending_field->min_depth : 0;
+
+                double normalized_depth = Math::lerpFactor(raw_depth, lower_depth_bound, (double)iter_lim);
+                double normalized_dist = Math::lerpFactor(raw_dist, pending_field->min_dist, pending_field->max_dist);
 
                 ctx->print() << std::setprecision(18);
                 ctx->print() << "\n\nnormalized_depth: " << normalized_depth;
                 ctx->print() << "\nnormalized_dist: " << normalized_dist;
 
-                ctx->print() << "\n\nraw_iters: " << depth;
-                ctx->print() << "\nraw_dist: " << dist;
+                ctx->print() << "\n\nraw_iters: " << raw_depth;
+                ctx->print() << "\nraw_dist: " << raw_dist << "\n";
+
+                double single_pixel_raw_dist = camera->stageToWorldOffset(DVec2{ 0.001, 0 }).magnitude();
+                double min_possible_dist = log(single_pixel_raw_dist);
+
+                double max_possible_raw_dist = ctx->worldSize().magnitude();
+                double max_possible_dist = log(max_possible_raw_dist);
+                //double max_possible_dist = de_cap_from_view(
+                //    camera->x(),
+                //    camera->y(),
+                //    ctx->worldSize().x / 2,
+                //    ctx->worldSize().y,
+                //    sqrt(escape_radius<MandelSmoothing::DIST>())
+                //);
+
+                ctx->print() << "\nlog_dist: " << log(raw_dist) << "\n";
+
+                //ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
+                ctx->print() << "single_pixel_raw_dist: " << single_pixel_raw_dist << "\n";
+                ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
+
+                ctx->print() << "min_possible_dist: " << min_possible_dist << "\n\n";
+                ctx->print() << "max_possible_dist: " << max_possible_dist << "\n\n";
+
+                double stable_normalized_dist = Math::lerpFactor(log(raw_dist), pending_field->min_dist, max_possible_dist);
+                ctx->print() << "stable_normalized_dist: " << stable_normalized_dist << "\n";*/
+
             }
         }
-    }*/
+    }
 
     ctx->setFillStyle(0, 0, 0);
     ctx->setFontSize(16);

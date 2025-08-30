@@ -8,16 +8,20 @@ endif()
 # Add examples target executable
 bitloop_new_project(examples)
 
-# You can't optionally prioritize
-# Mandelbrot in "Mandelbrot"
-# without also Prioritizing
-# Mandelbrot here
-bitloop_add_dependency(Mandelbrot)
-bitloop_add_dependency(Tiger)
-bitloop_add_dependency(ExampleText)
+bitloop_add_dependency(examples "./Mandelbrot")
+bitloop_add_dependency(examples "./Tiger")
+bitloop_add_dependency(examples "./ExampleText")
 
-#bitloop_add_dependency(Test1)
-#bitloop_add_dependency(Test2)
+#bitloop_hide(Cardioid)
+#bitloop_show(Cardioid)
+
+#bitloop_show_only(Mandelbrot)
+bitloop_hide(Tiger)
+bitloop_hide(ExampleText)
+
 
 
 bitloop_finalize()
+
+#bitloop_add_dependency(Test1)
+#bitloop_add_dependency(Test2)

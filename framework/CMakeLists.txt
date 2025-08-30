@@ -65,6 +65,8 @@ set(ALL_SRC_FILES
 add_library(bitloop STATIC ${ALL_SRC_FILES})
 _apply_common_settings(bitloop)
 
+#target_precompile_headers(bitloop PUBLIC <bitloop.h>)
+
 target_include_directories(bitloop
   PUBLIC
     # Consumers (and your tests) see only the root, so they must use <bitloop/...>
