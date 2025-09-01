@@ -506,10 +506,10 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             //double log_depth = -log(std::max(normalized_depth,0.0000000001));
             //double final_depth = Math::lerp(log_depth, normalized_depth, cycle_iter_log1p_weight);
             //
-            if (isnan(final_dist))
-            {
-                DebugBreak();
-            }
+            ///if (isnan(final_dist))
+            ///{
+            ///    blBreak();
+            ///}
             //double normalized_dist = -log(dist);
 
             double floor_depth = cycle_iter_normalize_depth ? pending_field->min_depth : 0;

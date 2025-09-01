@@ -5,7 +5,7 @@
 #include "tween.h"
 
 #ifdef __EMSCRIPTEN__
-#include <bitloop/emscripten_browser_clipboard.h>
+#include <bitloop/platform/emscripten_browser_clipboard.h>
 #endif
 #include <imgui_stdlib.h>
 
@@ -283,8 +283,8 @@ void Mandelbrot_Scene_Data::populateUI()
 
         char iter_header[32];
         char dist_header[32];
-        sprintf_s(iter_header, "Iteration  -  %d%% Weight", iter_pct);
-        sprintf_s(dist_header, "Distance  -  %d%% Weight", dist_pct);
+        sprintf(iter_header, "Iteration  -  %d%% Weight", iter_pct);
+        sprintf(dist_header, "Distance  -  %d%% Weight", dist_pct);
 
         //ImGui::Dummy(ScaleSize(0, 6));
         //ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, Platform()->line_height());

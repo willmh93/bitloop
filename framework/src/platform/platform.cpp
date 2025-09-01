@@ -328,15 +328,14 @@ inline void PlatformManager::url_set_string(const char* key, const char* value, 
   }, key, value, use_hash, replace);
 }
 
-void PlatformManager::url_set_number(const char* key, double value,
-    int use_hash = 0, int replace = 1) {
+void PlatformManager::url_set_number(const char* key, double value, int use_hash, int replace) {
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.17g", value);
     url_set_string(key, buf, use_hash, replace);
 }
 
 // Remove a param
-void PlatformManager::url_unset(const char* key, int use_hash = 0, int replace = 1)
+void PlatformManager::url_unset(const char* key, int use_hash, int replace)
 {
     MAIN_THREAD_EM_ASM({
       const key = UTF8ToString($0);

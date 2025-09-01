@@ -6,7 +6,6 @@
     { "name": "catch2" },
     { "name": "freetype" },
     { "name": "sdl3" },
-    { "name": "glad" },
     { "name": "glm" },
     { "name": "concurrentqueue" },
     { "name": "nanovg" },

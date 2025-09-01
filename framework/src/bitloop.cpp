@@ -67,7 +67,7 @@
 #ifdef __EMSCRIPTEN__
 #define SDL_MAIN_HANDLED
 #include <GLES3/gl3.h>
-#include <bitloop/emscripten_browser_clipboard.h>
+#include <bitloop/platform/emscripten_browser_clipboard.h>
 #else
 #include "glad/glad.h"
 #endif

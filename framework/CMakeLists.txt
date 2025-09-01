@@ -41,6 +41,23 @@ file(GLOB NANOVGX_SOURCES CONFIGURE_DEPENDS
     "${BL_INC}/nanovgx/*.h"
 )
 
+file(GLOB EXTERNAL_HEADERS CONFIGURE_DEPENDS
+    "${BL_INC}/3rd_party/*.hpp"
+    "${BL_INC}/3rd_party/*.h"
+    "${BL_INC}/3rd_party/nanosvg/*.h"
+    "${BL_INC}/3rd_party/glad/*.h"
+    "${BL_INC}/3rd_party/glad/KHR/*.h"
+    "${BL_INC}/3rd_party/nanovg/*.h"
+    "${BL_INC}/3rd_party/concurrentqueue/*.h"
+)
+
+file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
+    "${BL_SRC}/3rd_party/*.cpp"
+    "${BL_SRC}/3rd_party/*.c"
+    "${BL_SRC}/3rd_party/glad/*.c"
+    "${BL_SRC}/3rd_party/nanovg/*.c"
+)
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #source_group("CMakeLists (main)"    FILES ${CMAKE_SOURCE_DIR}/CMakeLists.txt)
 #source_group("3rd party"            FILES ${EXTERNAL_HEADERS} ${EXTERNAL_SOURCES})
@@ -65,8 +82,9 @@ set(ALL_SRC_FILES
     ${UTILITY_SOURCES}
     ${IMGUIX_SOURCES}
     ${NANOVGX_SOURCES}
-    #${EXTERNAL_HEADERS}
-    #${EXTERNAL_SOURCES}
+
+    ${EXTERNAL_HEADERS}
+    ${EXTERNAL_SOURCES}
 )
 
 add_library(bitloop STATIC ${ALL_SRC_FILES})
@@ -79,9 +97,14 @@ target_include_directories(bitloop
     # Consumers (and your tests) see only the root, so they must use <bitloop/...>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
   PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop>
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+
+    $<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
 )
 
 # ──────────────────────────────────────────────────────────────────
@@ -91,7 +114,7 @@ target_include_directories(bitloop
 find_package(Freetype CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
-find_package(glad CONFIG REQUIRED)
+#find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 find_package(nanovg CONFIG REQUIRED)
@@ -105,7 +128,7 @@ target_link_libraries(bitloop
     Freetype::Freetype
     imgui::imgui
     SDL3::SDL3
-    glad::glad
+    #glad::glad
     glm::glm
     unofficial::concurrentqueue::concurrentqueue
     nanovg::nanovg
