@@ -2,6 +2,7 @@
 
 #include "Mandelbrot.h"
 #include "examples.h"
+#include "tween.h"
 
 #ifdef __EMSCRIPTEN__
 #include <bitloop/emscripten_browser_clipboard.h>
@@ -10,19 +11,7 @@
 
 SIM_BEG;
 
-inline int mandelbrotIterLimit(double zoom)
-{
-    const double l = std::log10(zoom * 400.0);
-    int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - 1841.0);
-    return (100 + (std::max(0, iters)))*3;
-}
 
-inline double qualityFromIterLimit(int iter_lim, double zoom_x)
-{
-    const int base = mandelbrotIterLimit(zoom_x);   // always >= 100
-    if (base == 0) return 0.0;                      // defensive, though impossible here
-    return static_cast<double>(iter_lim) / base;    // <= true quality by < 1/base
-}
 
 /// ─────────────────────── Project ───────────────────────
 
@@ -227,7 +216,7 @@ void Mandelbrot_Scene_Data::populateUI()
                 {
                     MandelState dest;
                     dest.deserialize(preset.data);
-                    startTween(dest);
+                    startTween(*this, dest);
                 }
                 ImGui::PopID();
             }
@@ -537,68 +526,7 @@ void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
 }
 
 
-void Mandelbrot_Scene_Data::lerpState(
-    MandelState& dst, 
-    MandelState& a, 
-    MandelState& b, 
-    double f, bool complete)
-{
-    float pos_f = tween_pos_spline((float)f);
 
-    // === Calculate true 'b' iter_lim for tweening  (using destination zoom, not current zoom) ===
-    double dst_iter_lim = b.dynamic_iter_lim ?
-        (mandelbrotIterLimit(b.cam_view.zoom) * b.quality) :
-        b.quality;
-
-    // === Lerp Camera View and normalized zoom from "height" ===
-    double lift_weight = (double)tween_zoom_lift_spline((float)f);
-    double lift_height = tween_lift * lift_weight;
-    double a_height = toHeight(a.cam_view.zoom);
-    double b_height = toHeight(b.cam_view.zoom);
-
-    double dst_height = Math::lerp(a_height, b_height, f) + lift_height;
-    dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
-    dst.cam_view.zoom = fromHeight(dst_height);
-    
-    // === Quality ===
-    dst.quality = Math::lerp(a.quality, dst_iter_lim, pos_f);
-
-    // === Color Cycle ===
-    float color_cycle_f = tween_color_cycle((float)f);
-    dst.cycle_iter_value = Math::lerp(a.cycle_iter_value, b.cycle_iter_value, color_cycle_f);
-    dst.cycle_iter_log1p_weight     = Math::lerp(a.cycle_iter_log1p_weight, b.cycle_iter_log1p_weight, color_cycle_f);
-
-    // === Lerp Gradient/Hue Shift===
-    dst.gradient_shift = Math::lerp(a.gradient_shift, b.gradient_shift, pos_f);
-    dst.hue_shift      = Math::lerp(a.hue_shift,      b.hue_shift, pos_f);
-    
-    // === Lerp animation speed for Gradient/Hue Shift ===
-    dst.gradient_shift_step = Math::lerp(a.gradient_shift_step,  b.gradient_shift_step, pos_f);
-    dst.hue_shift_step      = Math::lerp(a.hue_shift_step,       b.hue_shift_step, pos_f);
-    
-    // === Lerp Color Gradient ===
-    ImGradient::lerp(gradient, a.gradient, b.gradient, (float)f);
-
-    if (complete)
-    {
-        dst.dynamic_iter_lim = b.dynamic_iter_lim;
-        dst.quality = b.quality;
-
-        dst.cycle_iter_dynamic_limit = b.cycle_iter_dynamic_limit;
-        dst.cycle_iter_value = b.cycle_iter_value;
-
-        dst.show_color_animation_options = b.show_color_animation_options;
-    }
-
-    // === Lerp quality ===
-    //dst->iter_lim = Math::lerp(state_a.iter_lim, state_b.iter_lim, f);
-    
-    // === Lerp Cardioid Flattening Factor ===
-    //dst->cardioid_lerp_amount = Math::lerp(state_a.cardioid_lerp_amount, state_b.cardioid_lerp_amount, f);
-
-    // Spline Data
-    //memcpy(dst->x_spline_point, Math::lerp(state_a.x_spline_points, state_b.x_spline_points, f));
-}
 
 void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 {

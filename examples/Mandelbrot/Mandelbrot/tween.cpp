@@ -1,0 +1,146 @@
+#include "Mandelbrot.h"
+
+SIM_BEG;
+
+double toNormalizedZoom(double zoom)
+{
+    return log(zoom) + 1.0;
+}
+double fromNormalizedZoom(double normalized_zoom)
+{
+    return exp(normalized_zoom - 1.0);
+}
+
+/*
+void setNormalizedZoom(double normalized_zoom)
+{
+    cam_view.zoom = fromNormalizedZoom(normalized_zoom);
+}
+double getNormalizedZoom() {
+    return toNormalizedZoom(cam_view.zoom);
+}
+*/
+
+double toHeight(double zoom)
+{
+    return 1.0 / toNormalizedZoom(zoom);
+}
+double fromHeight(double height)
+{
+    return fromNormalizedZoom(1.0 / height);
+}
+
+double tweenDistance(
+    MandelState& a,
+    MandelState& b)
+{
+    double dh = toHeight(b.cam_view.zoom) - toHeight(a.cam_view.zoom);
+    double dx = b.cam_view.x - a.cam_view.x;
+    double dy = b.cam_view.y - a.cam_view.y;
+    double d = sqrt(dx * dx + dy * dy + dh * dh);
+    return d;
+}
+
+void startTween(Mandelbrot_Scene_Data &scene_data, MandelState& target)
+{
+    // Switch to raw iter_lim for tween (and switch to quality mode on finish)
+    scene_data.dynamic_iter_lim = false;
+    scene_data.quality = scene_data.iter_lim;
+
+    MandelState& this_state = scene_data;
+
+    target.reference_zoom = scene_data.reference_zoom;
+    target.ctx_stage_size = scene_data.ctx_stage_size;
+
+    scene_data.r1 = scene_data.getAngledRect(this_state);
+    scene_data.r2 = scene_data.getAngledRect(target);
+
+    DAngledRect encompassing;
+    encompassing.fitTo(scene_data.r1, scene_data.r2, scene_data.r1.aspectRatio());
+
+    double encompassing_zoom = (this_state.ctx_world_size() / encompassing.size).average();
+    double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
+    scene_data.tween_lift = encompassing_height - std::max(toHeight(this_state.cam_view.zoom), toHeight(target.cam_view.zoom));
+
+    double max_lift = 1.0 - toHeight(target.cam_view.zoom);
+    if (max_lift < 0) max_lift = 0;
+    if (scene_data.tween_lift > max_lift)
+        scene_data.tween_lift = max_lift;
+
+    // Now, set start/end tween states
+    scene_data.state_a = this_state;
+    scene_data.state_b = target;
+
+    // Begin tween
+    scene_data.tween_progress = 0.0;
+    scene_data.tweening = true;
+    scene_data.tween_duration = pow(tweenDistance(scene_data.state_a, scene_data.state_b), 0.5);
+}
+
+void lerpState(
+    Mandelbrot_Scene_Data& scene_data,
+    MandelState& a,
+    MandelState& b,
+    double f,
+    bool complete)
+{
+    MandelState& dst = scene_data;
+
+    float pos_f = scene_data.tween_pos_spline((float)f);
+
+    // === Calculate true 'b' iter_lim for tweening  (using destination zoom, not current zoom) ===
+    double dst_iter_lim = b.dynamic_iter_lim ?
+        (mandelbrotIterLimit(b.cam_view.zoom) * b.quality) :
+        b.quality;
+
+    // === Lerp Camera View and normalized zoom from "height" ===
+    double lift_weight = (double)scene_data.tween_zoom_lift_spline((float)f);
+    double lift_height = scene_data.tween_lift * lift_weight;
+    double a_height = toHeight(a.cam_view.zoom);
+    double b_height = toHeight(b.cam_view.zoom);
+
+    double dst_height = Math::lerp(a_height, b_height, f) + lift_height;
+    dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
+    dst.cam_view.zoom = fromHeight(dst_height);
+
+    // === Quality ===
+    dst.quality = Math::lerp(a.quality, dst_iter_lim, pos_f);
+
+    // === Color Cycle ===
+    float color_cycle_f = scene_data.tween_color_cycle((float)f);
+    dst.cycle_iter_value = Math::lerp(a.cycle_iter_value, b.cycle_iter_value, color_cycle_f);
+    dst.cycle_iter_log1p_weight = Math::lerp(a.cycle_iter_log1p_weight, b.cycle_iter_log1p_weight, color_cycle_f);
+
+    // === Lerp Gradient/Hue Shift===
+    dst.gradient_shift = Math::lerp(a.gradient_shift, b.gradient_shift, pos_f);
+    dst.hue_shift = Math::lerp(a.hue_shift, b.hue_shift, pos_f);
+
+    // === Lerp animation speed for Gradient/Hue Shift ===
+    dst.gradient_shift_step = Math::lerp(a.gradient_shift_step, b.gradient_shift_step, pos_f);
+    dst.hue_shift_step = Math::lerp(a.hue_shift_step, b.hue_shift_step, pos_f);
+
+    // === Lerp Color Gradient ===
+    ImGradient::lerp(scene_data.gradient, a.gradient, b.gradient, (float)f);
+
+    if (complete)
+    {
+        dst.dynamic_iter_lim = b.dynamic_iter_lim;
+        dst.quality = b.quality;
+
+        dst.cycle_iter_dynamic_limit = b.cycle_iter_dynamic_limit;
+        dst.cycle_iter_value = b.cycle_iter_value;
+
+        dst.show_color_animation_options = b.show_color_animation_options;
+    }
+
+    // === Lerp quality ===
+    //dst->iter_lim = Math::lerp(state_a.iter_lim, state_b.iter_lim, f);
+
+    // === Lerp Cardioid Flattening Factor ===
+    //dst->cardioid_lerp_amount = Math::lerp(state_a.cardioid_lerp_amount, state_b.cardioid_lerp_amount, f);
+
+    // Spline Data
+    //memcpy(dst->x_spline_point, Math::lerp(state_a.x_spline_points, state_b.x_spline_points, f));
+}
+
+SIM_END;

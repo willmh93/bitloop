@@ -2,7 +2,7 @@
 #include <bitloop.h>
 
 #include "types.h"
-#include "mandel_state.h"
+#include "state.h"
 
 
 SIM_BEG;

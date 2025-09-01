@@ -4,7 +4,7 @@
 
 #include "Cardioid/Cardioid.h"
 
-#include "mandel_state.h"
+#include "state.h"
 #include "types.h"
 #include "kernel.h"
 #include "shading.h"
@@ -12,6 +12,30 @@
 SIM_BEG;
 
 using namespace BL;
+
+inline int mandelbrotIterLimit(double zoom)
+{
+    const double l = std::log10(zoom * 400.0);
+    int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - 1841.0);
+    return (100 + (std::max(0, iters))) * 3;
+}
+
+inline double qualityFromIterLimit(int iter_lim, double zoom_x)
+{
+    const int base = mandelbrotIterLimit(zoom_x);   // always >= 100
+    if (base == 0) return 0.0;                      // defensive, though impossible here
+    return static_cast<double>(iter_lim) / base;    // <= true quality by < 1/base
+}
+
+/*
+    Multiple layers of inheritance explained:
+
+    Here, we inherit from MandelState so that the Scene itself has a "live" state it can use,
+    and since it's part of the VarBuffer system, we can sync variables for UI control.
+
+    Additionally, we can set up a start/end tween state, and lerp between them, saving
+    the result into the inherited MandelState state.
+*/
 
 struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 {
@@ -22,6 +46,7 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 
     MandelState state_a;
     MandelState state_b;
+
     bool tweening = false;
     double tween_progress = 0.0; // 0..1
     double tween_lift = 0.0;
@@ -119,13 +144,7 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 
     int calculateIterLimit() const;
 
-    double toNormalizedZoom(double zoom) const { return log(zoom) + 1.0; }
-    double fromNormalizedZoom(double normalized_zoom) const { return exp(normalized_zoom - 1.0); }
-    // void setNormalizedZoom(double normalized_zoom) { cam_view.zoom = fromNormalizedZoom(normalized_zoom); }
-    // double getNormalizedZoom() const { return toNormalizedZoom(cam_view.zoom); }
-
-    double toHeight(double zoom) const { return 1.0 / toNormalizedZoom(zoom); }
-    double fromHeight(double height) const { return fromNormalizedZoom(1.0 / height); }
+    
 
 
     DAngledRect getAngledRect(const MandelState& s) const
@@ -135,59 +154,14 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
     }
 
     // Tweening
-    void lerpState(
-        MandelState& dst,
-        MandelState& a,
-        MandelState& b,
-        double f,
-        bool complete);
+    //void lerpState(
+    //    MandelState& dst,
+    //    MandelState& a,
+    //    MandelState& b,
+    //    double f,
+    //    bool complete);
 
-    double tweenDistance(
-        MandelState& a,
-        MandelState& b)
-    {
-        double dh = toHeight(b.cam_view.zoom) - toHeight(a.cam_view.zoom);
-        double dx = b.cam_view.x - a.cam_view.x;
-        double dy = b.cam_view.y - a.cam_view.y;
-        double d = sqrt(dx*dx + dy*dy + dh*dy);
-        return d;
-    }
-
-    void startTween(MandelState& target)
-    {
-        // Switch to raw iter_lim for tween (and switch to quality mode on finish)
-        dynamic_iter_lim = false;
-        quality = iter_lim;
-
-        MandelState& this_state = *this;
-
-        target.reference_zoom = reference_zoom;
-        target.ctx_stage_size = ctx_stage_size;
-
-        r1 = getAngledRect(this_state);
-        r2 = getAngledRect(target);
-
-        DAngledRect encompassing;
-        encompassing.fitTo(r1, r2, r1.aspectRatio());
-
-        double encompassing_zoom = (this_state.ctx_world_size() / encompassing.size).average();
-        double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
-        tween_lift = encompassing_height - std::max(toHeight(this_state.cam_view.zoom), toHeight(target.cam_view.zoom));
-
-        double max_lift = 1.0 - toHeight(target.cam_view.zoom);
-        if (max_lift < 0) max_lift = 0;
-        if (tween_lift > max_lift)
-            tween_lift = max_lift;
-
-        // Now, set start/end tween states
-        state_a = this_state;
-        state_b = target;
-
-        // Begin tween
-        tween_progress = 0.0;
-        tweening = true;
-        tween_duration = pow(tweenDistance(state_a, state_b), 0.5);
-    }
+    
 
     void loadTemplate(std::string_view data);
     void updateConfigBuffer();
