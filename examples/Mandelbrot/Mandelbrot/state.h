@@ -45,7 +45,7 @@ struct MandelState
 
     int smoothing_type                  = (int)MandelSmoothing::ITER;
 
-    ImGradient gradient;
+    ImGradient gradient; // todo: NOT efficient to store entire gradient here
 
     // animate
     bool show_color_animation_options   = false;

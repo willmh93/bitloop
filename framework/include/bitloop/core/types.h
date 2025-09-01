@@ -131,6 +131,123 @@ template<typename T> inline Vec2<T> operator+(const Vec2<T>& v, T s) { return v 
 template<typename T> inline Vec2<T> operator-(T s, const Vec2<T>& v) { return v - s; }
 template<typename T> inline Vec2<T> operator-(const Vec2<T>& v, T s) { return v - s; }
 
+
+template<typename T>
+struct Segment
+{
+    using Pt = Vec2<T>;
+    union {
+        struct { Pt a, b; };
+        Pt _data[2];
+    };
+
+    // constructors
+    Segment() = default;
+    constexpr Segment(T ax, T ay, T bx, T by) : a(ax, ay), b(bx, by) {}
+    constexpr Segment(const Pt& A, const Pt& B) : a(A), b(B) {}
+
+    // conversions
+    template<typename T2> constexpr operator Segment<T2>() const {
+        return Segment<T2>(static_cast<Vec2<T2>>(a), static_cast<Vec2<T2>>(b));
+    }
+
+    // access
+    [[nodiscard]] constexpr const Pt& operator[](int i) const { return _data[i]; }
+    [[nodiscard]] constexpr Pt& operator[](int i) { return _data[i]; }
+    [[nodiscard]] constexpr Pt(&asArray())[2] { return _data; }
+
+    // equality
+    [[nodiscard]] constexpr bool operator==(const Segment& rhs) const { return a == rhs.a && b == rhs.b; }
+    [[nodiscard]] constexpr bool operator!=(const Segment& rhs) const { return !(*this == rhs); }
+
+    // basic geometry
+    [[nodiscard]] constexpr Pt   vec()       const { return b - a; }
+    [[nodiscard]] constexpr T    lengthSq()  const { Pt v = vec(); return v.x * v.x + v.y * v.y; }
+    [[nodiscard]] constexpr T    length()    const { return sqrt(lengthSq()); }
+    [[nodiscard]] constexpr Pt   midpoint()  const { return (a + b) * T(0.5); }
+    [[nodiscard]] static constexpr T cross(const Pt& u, const Pt& v) { return u.x * v.y - u.y * v.x; }
+
+    // point at parameter t in [0,1]
+    [[nodiscard]] constexpr Pt pointAt(T t) const { return a + (b - a) * t; }
+
+    // closest parameter on the segment to point p (clamped to [0,1])
+    [[nodiscard]] constexpr T closestParam(const Pt& p) const {
+        Pt ab = b - a;
+        T d2 = ab.x * ab.x + ab.y * ab.y;
+        if (d2 == T(0)) return T(0);
+        T t = (p - a).dot(ab) / d2;
+        if (t < T(0)) t = T(0);
+        else if (t > T(1)) t = T(1);
+        return t;
+    }
+
+    // closest point on the segment to p
+    [[nodiscard]] constexpr Pt closestPoint(const Pt& p) const { return pointAt(closestParam(p)); }
+
+    // squared distance from p to the segment
+    [[nodiscard]] constexpr T distSqToPoint(const Pt& p) const {
+        Pt q = closestPoint(p);
+        Pt d = p - q;
+        return d.x * d.x + d.y * d.y;
+    }
+
+    // distance from p to the segment
+    [[nodiscard]] constexpr T distToPoint(const Pt& p) const { return sqrt(distSqToPoint(p)); }
+
+    // does the segment contain point p (collinear and within endpoints)?
+    // eps == 0 means exact; pass a small eps for floats (e.g. 1e-6)
+    [[nodiscard]] constexpr bool containsPoint(const Pt& p, T eps = T(0)) const {
+        Pt ap = p - a, ab = b - a;
+        T c = cross(ab, ap);
+        if (c > eps || c < -eps) return false; // not collinear
+        // check projection within [0, |ab|^2]
+        T d2 = ab.x * ab.x + ab.y * ab.y;
+        if (d2 == T(0)) return (p == a);
+        T t = (ap.x * ab.x + ap.y * ab.y);
+        return (t >= -eps) && (t <= d2 + eps);
+    }
+
+    // proper segment/segment intersection (returns true if they touch anywhere).
+    // Optionally returns parameters t (on this) and u (on other) in [0,1].
+    [[nodiscard]] constexpr bool intersects(const Segment& s, T* out_t = nullptr, T* out_u = nullptr) const {
+        Pt r = b - a;
+        Pt q = s.a;
+        Pt svec = s.b - s.a;
+        Pt pq = q - a;
+
+        T rxs = cross(r, svec);
+        T pqxr = cross(pq, r);
+
+        if (rxs == T(0)) {
+            // parallel
+            if (pqxr != T(0)) return false; // parallel, non-collinear
+            // collinear: check overlap via projections
+            T r2 = r.x * r.x + r.y * r.y;
+            T t0 = ((q - a).dot(r)) / (r2 == T(0) ? T(1) : r2);
+            T t1 = ((s.b - a).dot(r)) / (r2 == T(0) ? T(1) : r2);
+            if (t0 > t1) { T tmp = t0; t0 = t1; t1 = tmp; }
+            bool overlap = !(t1 < T(0) || t0 > T(1));
+            if (overlap) {
+                if (out_t) *out_t = std::max(T(0), t0);
+                if (out_u) *out_u = T(0); // arbitrary for collinear; caller can compute if needed
+            }
+            return overlap;
+        }
+        else {
+            // general case
+            T t = cross(pq, svec) / rxs;
+            T u = cross(pq, r) / rxs;
+            if (t >= T(0) && t <= T(1) && u >= T(0) && u <= T(1)) {
+                if (out_t) *out_t = t;
+                if (out_u) *out_u = u;
+                return true;
+            }
+            return false;
+        }
+    }
+};
+
+
 template<typename T>
 struct Vec4
 {
@@ -447,6 +564,16 @@ struct Quad
     constexpr Quad(const AngledRect<T>& r)        { set(r.cx, r.cy, r.w, r.h, r.angle); }
     constexpr Quad(T cx, T cy, T w, T h, T angle) { set(cx, cy, w, h, angle); }
 
+    constexpr Segment<T> ab() const { return Segment<T>(a, b); }
+    constexpr Segment<T> bc() const { return Segment<T>(b, c); }
+    constexpr Segment<T> cd() const { return Segment<T>(c, d); }
+    constexpr Segment<T> da() const { return Segment<T>(d, a); }
+
+    constexpr T minX() const { return std::min({ a.x, b.x, c.x, d.x }); }
+    constexpr T maxX() const { return std::max({ a.x, b.x, c.x, d.x }); }
+    constexpr T minY() const { return std::min({ a.y, b.y, c.y, d.y }); }
+    constexpr T maxY() const { return std::max({ a.y, b.y, c.y, d.y }); }
+
     template<typename T2>
     [[nodiscard]] constexpr operator Quad<T2>()
     {
@@ -485,20 +612,60 @@ struct Quad
         return Rect<T>(min_x, min_y, max_x, max_y);
     }
 
-    //[[nodiscard]] AngledRect<T> toAngledRect() const;
-};
+    static constexpr T cross(const Pt& u, const Pt& v) {
+        return u.x * v.y - u.y * v.x;
+    }
 
+    static constexpr T cross_at(const Pt& o, const Pt& u, const Pt& v) {
+        // cross( u - o, v - o )
+        return (u.x - o.x) * (v.y - o.y) - (u.y - o.y) * (v.x - o.x);
+    }
+
+    [[nodiscard]] constexpr bool contains(T x, T y) const noexcept {
+        const Pt p{ x, y };
+        const T s0 = cross_at(a, b, p);
+        const T s1 = cross_at(b, c, p);
+        const T s2 = cross_at(c, d, p);
+        const T s3 = cross_at(d, a, p);
+
+        // Inside if all have the same sign (allowing on-edge as inside).
+        const bool all_nonneg = (s0 >= T(0)) & (s1 >= T(0)) & (s2 >= T(0)) & (s3 >= T(0));
+        const bool all_nonpos = (s0 <= T(0)) & (s1 <= T(0)) & (s2 <= T(0)) & (s3 <= T(0));
+        return all_nonneg || all_nonpos;
+    }
+
+    [[nodiscard]] constexpr bool contains(const Pt& p) const noexcept { return contains(p.x, p.y); }
+
+    [[nodiscard]] constexpr bool intersects(const Segment<T>& seg) const noexcept
+    {
+        if (ab().intersects(seg)) return true;
+        if (bc().intersects(seg)) return true;
+        if (cd().intersects(seg)) return true;
+        if (da().intersects(seg)) return true;
+        return false;
+    }
+};
+    //[[nodiscard]] AngledRect<T> toAngledRect() const;
+
+typedef Vec2<int>           IVec2;
 typedef Vec2<float>         FVec2;
 typedef Vec2<double>        DVec2;
-typedef Vec2<flt128>      DDVec2;
-typedef Vec2<int>           IVec2;
+typedef Vec2<flt128>        DDVec2;
+
+typedef Segment<int>        ISegment;
+typedef Segment<float>      FSegment;
+typedef Segment<double>     DSegment;
+
 typedef Vec4<float>         FVec4;
+
+typedef Rect<int>           IRect;
 typedef Rect<float>         FRect;
 typedef Rect<double>        DRect;
-typedef Rect<int>           IRect;
+
+typedef Quad<int>           IQuad;
 typedef Quad<float>         FQuad;
 typedef Quad<double>        DQuad;
-typedef Quad<int>           IQuad;
+
 typedef Ray<float>          FRay;
 typedef Ray<double>         DRay;
 

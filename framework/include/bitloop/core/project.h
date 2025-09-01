@@ -301,18 +301,22 @@ public:
 
     void draw();
 
-    [[nodiscard]] int viewportIndex() { return viewport_index; }
-    [[nodiscard]] int viewportGridX() { return viewport_grid_x; }
-    [[nodiscard]] int viewportGridY() { return viewport_grid_y; }
+    [[nodiscard]] int viewportIndex() const { return viewport_index; }
+    [[nodiscard]] int viewportGridX() const { return viewport_grid_x; }
+    [[nodiscard]] int viewportGridY() const { return viewport_grid_y; }
 
-    [[nodiscard]] double posX() { return x; }
-    [[nodiscard]] double posY() { return y; }
-    [[nodiscard]] double width() { return w; }
-    [[nodiscard]] double height() { return h; }
-    [[nodiscard]] DVec2 size() { return DVec2(w, h); }
-    [[nodiscard]] DRect viewportRect() { return DRect(x, y, x + w, y + h); }
-    [[nodiscard]] DQuad worldQuad() { return camera.toWorldQuad(0, 0, w, h); }
-    [[nodiscard]] DVec2 worldSize() { return camera.stageToWorldOffset(w, h); }
+    [[nodiscard]] double posX() const { return x; }
+    [[nodiscard]] double posY() const { return y; }
+    [[nodiscard]] double width() const { return w; }
+    [[nodiscard]] double height() const { return h; }
+    [[nodiscard]] DVec2 size() const { return DVec2(w, h); }
+    [[nodiscard]] DRect viewportRect() const { return DRect(x, y, x + w, y + h); }
+    [[nodiscard]] DVec2 worldSize() const { return camera.stageToWorldOffset(w, h); }
+    [[nodiscard]] DQuad worldQuad() const {
+        DRect r = DRect(DVec2(0.0,0.0), size());
+        return camera.toWorldQuad(r);
+    }
+
     //[[nodiscard]] DAngledRect worldRect() { return camera.toWorldRect(DAngledRect(width/2, height/2, width, height, 0.0)); }
 
     template<typename T>

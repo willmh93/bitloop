@@ -334,15 +334,15 @@ public:
     [[nodiscard]] DVec2 originWorldOffset() const;
     [[nodiscard]] DVec2 panPixelOffset() const;
 
-    [[nodiscard]] DVec2 toStage(double sx, double sy)  const { return static_cast<DVec2>(    m64 * glm::dvec3(sx, sy, 1)); }
-    [[nodiscard]] DVec2 toWorld(double wx, double wy)  const { return static_cast<DVec2>(inv_m64 * glm::dvec3(wx, wy, 1.0)); }
-    [[nodiscard]] DVec2 toWorld(DVec2 p)               const { return static_cast<DVec2>(    m64 * glm::dvec3(p.x, p.y, 1)); }
-    [[nodiscard]] DVec2 toStage(DVec2 p)               const { return static_cast<DVec2>(inv_m64 * glm::dvec3(p.x, p.y, 1.0)); }
+    [[nodiscard]] DVec2 toStage(double wx, double wy)  const { return static_cast<DVec2>(    m64 * glm::dvec3(wx, wy, 1)); }
+    [[nodiscard]] DVec2 toWorld(double sx, double sy)  const { return static_cast<DVec2>(inv_m64 * glm::dvec3(sx, sy, 1.0)); }
+    [[nodiscard]] DVec2 toStage(DVec2 p)               const { return static_cast<DVec2>(    m64 * glm::dvec3(p.x, p.y, 1.0)); }
+    [[nodiscard]] DVec2 toWorld(DVec2 p)               const { return static_cast<DVec2>(inv_m64 * glm::dvec3(p.x, p.y, 1)); }
 
-    [[nodiscard]] DDVec2 toStage(flt128 sx, flt128 sy) const { return static_cast<DDVec2>(    m128 * glm::ddvec3(sx, sy, 1)); }
-    [[nodiscard]] DDVec2 toWorld(flt128 wx, flt128 wy) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(wx, wy, 1.0)); }
-    [[nodiscard]] DDVec2 toWorld(DDVec2 p)             const { return static_cast<DDVec2>(    m128 * glm::ddvec3(p.x, p.y, 1)); }
-    [[nodiscard]] DDVec2 toStage(DDVec2 p)             const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(p.x, p.y, 1.0)); }
+    [[nodiscard]] DDVec2 toStage(flt128 wx, flt128 wy) const { return static_cast<DDVec2>(    m128 * glm::ddvec3(wx, wy, 1)); }
+    [[nodiscard]] DDVec2 toWorld(flt128 sx, flt128 sy) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(sx, sy, 1.0)); }
+    [[nodiscard]] DDVec2 toStage(DDVec2 p)             const { return static_cast<DDVec2>(    m128 * glm::ddvec3(p.x, p.y, 1.0)); }
+    [[nodiscard]] DDVec2 toWorld(DDVec2 p)             const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(p.x, p.y, 1)); }
 
     [[nodiscard]] DRect toWorldRect(const DRect& r) const;
     [[nodiscard]] DRect toWorldRect(double x1, double y1, double x2, double y2) const;

@@ -246,6 +246,16 @@ public:
             pixels[i + 3] << 24;
     }
 
+    [[nodiscard]] uint32_t* getU32PtrSafe(int x, int y)
+    {
+        if ((unsigned)x >= (unsigned)bmp_width ||
+            (unsigned)y >= (unsigned)bmp_height)
+        {
+            return nullptr;
+        }
+        return colors + (y * bmp_width + x);
+    }
+
 protected:
 
     void refreshData(NVGcontext* vg)

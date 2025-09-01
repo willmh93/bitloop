@@ -201,7 +201,7 @@ void Mandelbrot_Scene_Data::populateUI()
     {
         ImGuiStyle& style = ImGui::GetStyle();
         float avail_full = ImGui::GetContentRegionAvail().x;
-        float min_btn_w = ScaleSize(110.0f);
+        float min_btn_w = ScaleSize(100.0f);
         int   cols = (int)((avail_full + style.ItemSpacing.x) / (min_btn_w + style.ItemSpacing.x));
         cols = cols < 1 ? 1 : cols;
 
@@ -744,12 +744,17 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                 MAX_DOUBLE_ZOOM = 2e10;
             }
 
+            //const DQuad wq = camera->toWorldQuad({ 0, 0, ctx->width(), ctx->height() });
+
+            DQuad quad = ctx->worldQuad();
+            bool x_axis_visible = quad.intersects({ {quad.minX(), 0}, {quad.maxX(), 0} });
+
             //bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
             //bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
 
 
             /*if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
-            else if (b64)*/ finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten);
+            else if (b64)*/ finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten, x_axis_visible);
             //else          finished_compute = table_invoke<flt128>(build_table(mandelbrot, [&]), smoothing, flatten);
         }
         //else
@@ -956,6 +961,11 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
         ctx->print() << "Smoothing: ITER";
     else if (smoothing_type == (int)MandelSmoothing::DIST)
         ctx->print() << "Smoothing: DIST";
+
+
+    //DQuad quad = ctx->worldQuad();
+    //bool x_axis_visible = quad.intersects({ {quad.minX(), 0}, {quad.maxX(), 0}});
+    //ctx->print() << "\nx_axis_visible: " << (x_axis_visible ? "true" : "false");
 
     if (display_intro)
     {

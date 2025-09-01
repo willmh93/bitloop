@@ -31,10 +31,11 @@ inline double qualityFromIterLimit(int iter_lim, double zoom_x)
     Multiple layers of inheritance explained:
 
     Here, we inherit from MandelState so that the Scene itself has a "live" state it can use,
-    and since it's part of the VarBuffer system, we can sync variables for UI control.
+    and since it's part of the VarBuffer system, a separate copy is also made for the UI which only
+    gets synced with the live state at the end of each frame.
 
-    Additionally, we can set up a start/end tween state, and lerp between them, saving
-    the result into the inherited MandelState state.
+    Additionally, we set up a 'start' / 'end' tween state, and lerp between them, saving
+    the result into the inherited "live" MandelState state.
 */
 
 struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
@@ -284,7 +285,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
     template<
         typename T,
         MandelSmoothing Smooth_Iter,
-        bool flatten
+        bool flatten,
+        bool Axis_Visible
     >
     bool mandelbrot()
     {
@@ -296,15 +298,40 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
         default: timeout = 16; break;
         }
 
-        blPrint() << "Computing field: " << computing_phase;
+        //DQuad world_quad = pending_bmp->worldQuad();
+        unsigned w = pending_bmp->width();
+        unsigned h = pending_bmp->height();
+
+        //blPrint() << "Computing field: " << computing_phase;
         frame_complete = pending_bmp->forEachWorldPixel<T>(
             current_row, [&](int x, int y, T wx, T wy)
         {
-            // Result already calculated in previous phase? (forwarded to active_bmp)
             EscapeFieldPixel& field_pixel = pending_field->at(x, y);
+
+            // Pixel already calculated/forwarded from previous phase? Return early
             double depth = field_pixel.depth;
             if (depth >= 0)
-                return;
+                return; 
+
+            // Do we already have this result mirrored from across the X-axis?
+            if constexpr (Axis_Visible)
+            {
+                // Possibly not thread-safe since another task could be writing to mirrored pixel.
+                // However, in practice this seems to work fine
+                IVec2 mirrored_pixel_pos = pending_bmp->pixelPosFromWorld(DVec2{ wx, -wy });
+
+                if ((unsigned)mirrored_pixel_pos.x < w && (unsigned)mirrored_pixel_pos.y < h)
+                {
+                    EscapeFieldPixel& mirrored_pixel = pending_field->at(mirrored_pixel_pos.x, mirrored_pixel_pos.y);
+                    if (mirrored_pixel.depth >= 0)
+                    {
+                        // Yes
+                        field_pixel.depth = mirrored_pixel.depth;
+                        field_pixel.dist = mirrored_pixel.dist;
+                        return;
+                    }
+                }
+            }
 
             double dist;
 
@@ -353,18 +380,13 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
             field_pixel.depth = depth;
             field_pixel.dist = dist;
+
+            
  
         }, 8, timeout);
 
         if (frame_complete)
-        {
-            blPrint() << "Computed field (DONE): " << computing_phase;
             refreshFieldDepthNormalized();
-        }
-        else
-        {
-            blPrint() << "Computed field (UNFINISHED): " << computing_phase;
-        }
 
         return frame_complete;
     };
