@@ -104,6 +104,7 @@ target_include_directories(bitloop
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop>
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 
+    $<INSTALL_INTERFACE:include/bitloop/3rd_party>
     $<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
 )
 

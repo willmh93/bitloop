@@ -1,11 +1,11 @@
 # Purpose: pick a vcpkg location early, then chain-load the real vcpkg toolchain
 
 # prioritize BITLOOP_ROOT for a single souce of truth (if installed)
-if (DEFINED ENV{BITLOOP_ROOT} AND EXISTS "$ENV{BITLOOP_ROOT}/vcpkg/scripts/buildsystems/vcpkg.cmake")
-  set(_vcpkg_dir "$ENV{BITLOOP_ROOT}/vcpkg")
-  message(STATUS "vcpkg toolchain detected at: ${_vcpkg_dir}")
-elseif (DEFINED ENV{VCPKG_ROOT} AND EXISTS "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+if (DEFINED ENV{VCPKG_ROOT} AND EXISTS "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
   set(_vcpkg_dir "$ENV{VCPKG_ROOT}")
+  message(STATUS "vcpkg toolchain detected at: ${_vcpkg_dir}")
+elseif (DEFINED ENV{BITLOOP_ROOT} AND EXISTS "$ENV{BITLOOP_ROOT}/vcpkg/scripts/buildsystems/vcpkg.cmake")
+  set(_vcpkg_dir "$ENV{BITLOOP_ROOT}/vcpkg")
   message(STATUS "vcpkg toolchain detected at: ${_vcpkg_dir}")
 else()
   message(FATAL_ERROR
