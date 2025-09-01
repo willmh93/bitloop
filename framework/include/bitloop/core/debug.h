@@ -26,7 +26,7 @@
   #include <emscripten/emscripten.h>
 #endif
 
-#include "platform_macros.h"
+#include <bitloop/platform/platform_macros.h>
 
 
 /// ======== Config ========

@@ -26,8 +26,8 @@
 
 #include <functional>
 
-#include "debug.h"
-#include "types.h"
+#include <bitloop/core/debug.h>
+#include <bitloop/core/types.h>
 #include "platform_macros.h"
 
 BL_BEGIN_NS

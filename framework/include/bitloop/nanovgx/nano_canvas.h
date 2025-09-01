@@ -2,14 +2,14 @@
 
 #include <memory>
 
-#include <bitloop/core/platform.h>
+#include <bitloop/platform/platform.h>
 
 #include "nanovg.h"
 #include "nanovg_gl.h"
 
 #include <bitloop/core/debug.h>
 #include <bitloop/core/camera.h>
-#include <bitloop/graphics/nano_bitmap.h>
+#include <bitloop/nanovgx/nano_bitmap.h>
 
 BL_BEGIN_NS
 
@@ -413,12 +413,7 @@ public:
 
     // ======== Shapes ========
 
-    template<typename T> void strokeQuad(const Quad<T>& q) 
-    {
-        beginPath();
-        drawClosedPath(q._data);
-        stroke();
-    }
+    
 
     void strokeRect(double x, double y, double w, double h)
     {
@@ -476,10 +471,16 @@ public:
     }
 
     // Overloads
-    void strokeRect(const FRect& r)                    { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    void fillRect(const FRect& r)                      { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    void strokeEllipse(double cx, double cy, double r) { strokeEllipse(cx, cy, r, r); }
-    void fillEllipse(double cx, double cy, double r)   { fillEllipse(cx, cy, r, r); }
+    template<typename T> void strokeQuad(const Quad<T>& q)
+    {
+        beginPath();
+        drawClosedPath(q._data);
+        stroke();
+    }
+    template<typename T> void strokeRect(const Rect<T>& r)  { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void fillRect(const Rect<T>& r)    { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    void strokeEllipse(double cx, double cy, double r)      { strokeEllipse(cx, cy, r, r); }
+    void fillEllipse(double cx, double cy, double r)        { fillEllipse(cx, cy, r, r); }
 
     void drawArrow(DVec2 a, DVec2 b, Color color)
     {
@@ -565,7 +566,7 @@ public:
         if (camera.scale_text)
             scale(camera.zoomX(), camera.zoomY());
 
-        SimplePainter::fillText(txt, px, py);
+        SimplePainter::fillText(txt, 0, 0);
     }
 
     void fillText(std::string_view txt, const DVec2& p) {

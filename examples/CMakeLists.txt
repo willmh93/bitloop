@@ -16,8 +16,8 @@ bitloop_add_dependency(examples "./ExampleText")
 #bitloop_show(Cardioid)
 
 #bitloop_show_only(Mandelbrot)
-bitloop_hide(Tiger)
-bitloop_hide(ExampleText)
+#bitloop_hide(Tiger)
+#bitloop_hide(ExampleText)
 
 
 

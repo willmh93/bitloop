@@ -1,8 +1,7 @@
 #pragma once
-#include <bitloop/core/platform_macros.h>
+#include <bitloop/platform/platform_macros.h>
 
 BL_PUSH_PRECISE
-//#include "nlohmann_json.hpp"
 #include "nlohmann/json.hpp"
 BL_POP_PRECISE
 #include <regex>

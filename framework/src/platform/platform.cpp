@@ -1,5 +1,5 @@
 #include <bitloop/core/project.h>
-#include <bitloop/ui/imgui_custom.h>
+#include <bitloop/imguix/imgui_custom.h>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -139,7 +139,7 @@ bool PlatformManager::is_desktop_native()
     #if defined __EMSCRIPTEN__ || defined FORCE_WEB_UI
     return false;
     #else
-    return true;
+    return !is_mobile();
     #endif
 }
 

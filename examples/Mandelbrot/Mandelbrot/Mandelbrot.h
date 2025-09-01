@@ -16,7 +16,7 @@ using namespace BL;
 struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 {
     char config_buf_name[32] = "Mandelbrot";
-    std::string config_buf = "hi";
+    std::string config_buf = "";
     //char pos_tween_buf[1024] = "";
     //char zoom_tween_buf[1024] = "";
 
@@ -84,7 +84,7 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 
         sync(show_axis);
         sync(cam_view);
-        sync(smooth_iter_dist_ratio);
+        sync(iter_dist_mix);
         sync(flatten);
         sync(flatten_amount);
         sync(show_period2_bulb);
@@ -95,13 +95,15 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
         sync(iter_lim);
         sync(x_spline);
         sync(y_spline);
-        sync(dynamic_color_cycle_limit);
-        sync(normalize_depth_range);
-        sync(log1p_weight);
-        sync(invert_dist);
+
+        sync(cycle_iter_dynamic_limit);
+        sync(cycle_iter_normalize_depth);
+        sync(cycle_iter_log1p_weight);
+        sync(cycle_dist_invert);
         sync(cycle_iter_value);
         sync(cycle_dist_value);
-        sync(active_color_template);
+        sync(cycle_dist_sharpness);
+
         sync(gradient);
         sync(hue_shift);
         sync(show_color_animation_options);
@@ -157,20 +159,20 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
         dynamic_iter_lim = false;
         quality = iter_lim;
 
-        MandelState& state = *this;
+        MandelState& this_state = *this;
 
         target.reference_zoom = reference_zoom;
         target.ctx_stage_size = ctx_stage_size;
 
-        r1 = getAngledRect(state);
+        r1 = getAngledRect(this_state);
         r2 = getAngledRect(target);
 
         DAngledRect encompassing;
         encompassing.fitTo(r1, r2, r1.aspectRatio());
 
-        double encompassing_zoom = (state.ctx_world_size() / encompassing.size).average();
+        double encompassing_zoom = (this_state.ctx_world_size() / encompassing.size).average();
         double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
-        tween_lift = encompassing_height - std::max(toHeight(state.cam_view.zoom), toHeight(target.cam_view.zoom));
+        tween_lift = encompassing_height - std::max(toHeight(this_state.cam_view.zoom), toHeight(target.cam_view.zoom));
 
         double max_lift = 1.0 - toHeight(target.cam_view.zoom);
         if (max_lift < 0) max_lift = 0;
@@ -178,16 +180,13 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
             tween_lift = max_lift;
 
         // Now, set start/end tween states
-        state_a = state;
+        state_a = this_state;
         state_b = target;
 
         // Begin tween
         tween_progress = 0.0;
         tweening = true;
         tween_duration = pow(tweenDistance(state_a, state_b), 0.5);
-
-        // Immediately applied attributes (todo: tween as much as possible)
-        state.active_color_template = target.active_color_template;
     }
 
     void loadTemplate(std::string_view data);
@@ -197,10 +196,15 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 
 struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 {
+
     // --- Custom Launch Config ---
     struct Config {};
     Mandelbrot_Scene(Config&) {}
-    
+
+    std::shared_ptr<NanoFont> font;
+
+    bool display_intro = true;
+
     int current_row = 0;
     EscapeField field_9x9 = EscapeField(0); // Processed in a single frame (fast)
     EscapeField field_3x3 = EscapeField(1); // Processed over multiple frames
@@ -284,8 +288,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             double iter_r = field_pixel.final_depth / log_color_cycle_iters;
             double dist_r = field_pixel.final_dist  / cycle_dist_value;
 
-            double iter_w = 1.0 - smooth_iter_dist_ratio;
-            double dist_w = smooth_iter_dist_ratio;
+            double iter_w = 1.0 - iter_dist_mix;
+            double dist_w = iter_dist_mix;
 
             double combined_t = Math::wrap(iter_r*iter_w + dist_r*dist_w, 0.0, 1.0);
             //double combined_t = Math::wrap(iter_r*dist_r, 0.0, 1.0);
@@ -393,10 +397,9 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
     void refreshFieldDepthNormalized()
     {
-        //bool calculate_floor_depth = normalize_depth_range && 
+        //bool calculate_floor_depth = cycle_iter_normalize_depth && 
         //    smoothing_type & (int)MandelSmoothing::ITER;
 
-        blPrint() << "refreshFieldDepthNormalized()";
 
         //if (calculate_floor_depth)
         {
@@ -438,11 +441,13 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
         //pending_bmp->forEachWorldPixel<double>(row, 
         //     [&](int x, int y, double wx, double wy)
 
-        double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.1, 0 }).magnitude(); // quarter pixel
+        double dist_min_pixel_ratio = (100.0 - cycle_dist_sharpness) / 100.0 + 0.00001;
+        double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ dist_min_pixel_ratio, 0 }).magnitude(); // quarter pixel
+        //double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.0000000000001, 0 }).magnitude(); // quarter pixel
         double stable_max_raw_dist = pending_bmp->worldSize().magnitude() / 2.0; // half diagonal world viewport size
 
-        double stable_min_dist = (invert_dist ? -1 : 1) * log(stable_min_raw_dist);
-        double stable_max_dist = (invert_dist ? -1 : 1) * log(stable_max_raw_dist);
+        double stable_min_dist = (cycle_dist_invert ? -1 : 1) * log(stable_min_raw_dist);
+        double stable_max_dist = (cycle_dist_invert ? -1 : 1) * log(stable_max_raw_dist);
 
         pending_bmp->forEachPixel([&](int x, int y)
         {
@@ -457,7 +462,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             ///    raw_dist = std::numeric_limits<double>::epsilon();
             ///}
             /// 
-            //double lower_depth_bound = normalize_depth_range ? pending_field->min_depth : 0;
+            //double lower_depth_bound = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
             //
             //double normalized_depth = Math::lerpFactor(depth, lower_depth_bound, (double)iter_lim);
 
@@ -469,21 +474,32 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             ///double ceil_dist  = pending_field->max_dist;
 
             // "dist" is highest next to mandelbrot set
-            double dist = (smoothing_type & (int)MandelSmoothing::DIST) ? ((invert_dist ? -1 : 1) * log(raw_dist)) : 0;// std::numeric_limits<double>::epsilon();
+            double dist = (smoothing_type & (int)MandelSmoothing::DIST) ?
+                //((cycle_dist_invert ? 1 : 1) * Math::linear_log_lerp(raw_dist, dist_log1p_weight))
+                ((cycle_dist_invert ? -1 : 1) * log(raw_dist))
+                : 0;
 
-            //floor_dist = Math::linear_log1p_lerp(floor_dist, log1p_weight);
-            //ceil_dist = Math::linear_log1p_lerp(ceil_dist, log1p_weight);
-            //dist = Math::linear_log1p_lerp(dist, log1p_weight);
+            //floor_dist = Math::linear_log1p_lerp(floor_dist, cycle_iter_log1p_weight);
+            //ceil_dist = Math::linear_log1p_lerp(ceil_dist, cycle_iter_log1p_weight);
+            //dist = Math::linear_log1p_lerp(dist, cycle_iter_log1p_weight);
 
-            //double max_log_dist = Math::linear_log1p_lerp(ceil_dist - floor_dist, log1p_weight);
-            //double final_dist   = Math::linear_log1p_lerp(dist      - floor_dist, log1p_weight) / max_log_dist;
+            //double max_log_dist = Math::linear_log1p_lerp(ceil_dist - floor_dist, cycle_iter_log1p_weight);
+            //double final_dist   = Math::linear_log1p_lerp(dist      - floor_dist, cycle_iter_log1p_weight) / max_log_dist;
 
             //double dist_factor  = Math::lerpFactor(dist, floor_dist, ceil_dist);
-            double dist_factor = invert_dist ?
+
+            ///double dist_factor = cycle_dist_invert ?
+            ///    (0 - Math::lerpFactor(dist, stable_min_raw_dist, stable_max_raw_dist)) :
+            ///         Math::lerpFactor(dist, stable_min_raw_dist, stable_max_raw_dist);
+
+            double dist_factor = cycle_dist_invert ?
                 (0 - Math::lerpFactor(dist, stable_min_dist, stable_max_dist)) :
                      Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
 
-            //dist_factor = Math::linear_log1p_lerp(dist_factor, log1p_weight);
+            //if (dist_factor < 0) dist_factor = 0;
+
+            //dist_factor = Math::linear_log_lerp(dist_factor, dist_log1p_weight);
+
 
             double final_dist = dist_factor;// dist;
             ///UNUSED(floor_dist);
@@ -492,7 +508,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
             //
             //double log_depth = -log(std::max(normalized_depth,0.0000000001));
-            //double final_depth = Math::lerp(log_depth, normalized_depth, log1p_weight);
+            //double final_depth = Math::lerp(log_depth, normalized_depth, cycle_iter_log1p_weight);
             //
             if (isnan(final_dist))
             {
@@ -500,10 +516,10 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             }
             //double normalized_dist = -log(dist);
 
-            double floor_depth = normalize_depth_range ? pending_field->min_depth : 0;
+            double floor_depth = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
 
-            ///double max_log_depth = Math::linear_log1p_lerp(pending_field->max_depth - floor_depth, log1p_weight);
-            double final_depth = Math::linear_log1p_lerp(depth - floor_depth, log1p_weight);// / max_log_depth;
+            ///double max_log_depth = Math::linear_log1p_lerp(pending_field->max_depth - floor_depth, cycle_iter_log1p_weight);
+            double final_depth = Math::linear_log1p_lerp(depth - floor_depth, cycle_iter_log1p_weight);// / max_log_depth;
 
 
             //field_pixel.final_value = final_value;
@@ -525,7 +541,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
                 break;
                 case MandelSmoothing::MIX:
                 {
-                    field_pixel.final_value = Math::lerp(final_depth, final_dist, smooth_iter_dist_ratio);
+                    field_pixel.final_value = Math::lerp(final_depth, final_dist, iter_dist_mix);
                 }
                 break;
             }

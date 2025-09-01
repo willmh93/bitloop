@@ -10,7 +10,7 @@
 #include <sstream>
 #include <type_traits>
 
-#include <bitloop/core/platform_macros.h>
+#include <bitloop/platform/platform_macros.h>
 
 ///
 

@@ -1,4 +1,3 @@
-// main.cpp
 extern "C" 
 {
 
@@ -7,14 +6,14 @@ extern "C"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 
-    // Call this each time you have a new RGBA frame at ptr (w×h×4 bytes)
+    // Call this each time you have a new RGBA frame at ptr (wÃ—hÃ—4 bytes)
     void add_frame(unsigned char* ptr, int w, int h) {
         EM_ASM({
           addFrame($0, $1, $2);
         }, ptr, w, h);
     }
 
-    // Call this when you’re done; it will trigger the download
+    // Call this when youâ€™re done; it will trigger the download
     void finish_video() {
         EM_ASM({ finishVideo(); });
     }

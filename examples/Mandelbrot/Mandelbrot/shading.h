@@ -26,20 +26,19 @@ enum class MandelTransform
 
 enum struct GradientPreset
 {
-    CUSTOM,
-
     CLASSIC,
     SINUSOIDAL_RAINBOW,
     WAVES,
+    //CUSTOM,
 
     COUNT
 };
 
 static const char* ColorGradientNames[(int)GradientPreset::COUNT] = {
-    "", // Diplay custom as blank
     "CLASSIC",
     "SINUSOIDAL_RAINBOW",
     "WAVES"
+    "", // Diplay custom as blank
 };
 
 

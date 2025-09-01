@@ -1,7 +1,7 @@
 #include <cmath>
 #include <core/camera.h>
 #include <core/project.h>
-#include <core/platform.h>
+#include <platform/platform.h>
 
 BL_BEGIN_NS
 

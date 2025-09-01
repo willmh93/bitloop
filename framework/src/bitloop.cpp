@@ -73,14 +73,13 @@
 #endif
 
 /// ImGui
-#include <bitloop/ui/imgui_custom.h>
+#include <bitloop/imguix/imgui_custom.h>
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 
 /// Project files
 #include <bitloop/core/project_worker.h>
 #include <bitloop/core/main_window.h>
-#include <bitloop/shared_sync.h>
 
 using namespace BL;
 

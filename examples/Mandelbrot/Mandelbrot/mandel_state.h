@@ -23,17 +23,19 @@ struct MandelState
 
     /// ─────────────────────── Tweenable Info ───────────────────────
 
-    bool dynamic_iter_lim               = true;
-    double quality                      = 0.5; // Used for UI (ignored during tween until tween complete)
-    double smooth_iter_dist_ratio       = 0.0;
+    bool     dynamic_iter_lim             = true;
+    double   quality                      = 0.5; // Used for UI (ignored during tween, represents iter_lim OR % of iter_lim)
 
-    bool dynamic_color_cycle_limit      = true;
-    bool normalize_depth_range          = true;
-    double log1p_weight                 = 0.0;
+    double   iter_dist_mix                = 0.0;
 
-    double cycle_iter_value             = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
-    double cycle_dist_value             = 0.5f;
-    bool   invert_dist                  = false;
+    bool     cycle_iter_dynamic_limit   = true;
+    bool     cycle_iter_normalize_depth = true;
+    double   cycle_iter_log1p_weight    = 0.0;
+    double   cycle_iter_value           = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
+
+    double   cycle_dist_value           = 0.5f;
+    bool     cycle_dist_invert          = false;
+    double   cycle_dist_sharpness       = 0.9; // Used for UI (ignored during tween)
 
     double gradient_shift               = 0.0;
     double hue_shift                    = 0.0;
@@ -41,8 +43,7 @@ struct MandelState
     double gradient_shift_step          = 0.0078;
     double hue_shift_step               = 0.136;
 
-    int active_color_template           = (int)GradientPreset::CLASSIC;
-    int smoothing_type                  = (int)MandelSmoothing::MIX;
+    int smoothing_type                  = (int)MandelSmoothing::ITER;
 
     ImGradient gradient;
 
@@ -58,12 +59,13 @@ struct MandelState
         return (
             cam_view == rhs.cam_view &&
             quality == rhs.quality &&
-            smooth_iter_dist_ratio == rhs.smooth_iter_dist_ratio &&
+            iter_dist_mix == rhs.iter_dist_mix &&
             dynamic_iter_lim == rhs.dynamic_iter_lim &&
-            normalize_depth_range == rhs.normalize_depth_range &&
-            log1p_weight == rhs.log1p_weight &&
+            cycle_iter_normalize_depth == rhs.cycle_iter_normalize_depth &&
+            cycle_iter_log1p_weight == rhs.cycle_iter_log1p_weight &&
             cycle_iter_value == rhs.cycle_iter_value &&
             cycle_dist_value == rhs.cycle_dist_value &&
+            cycle_dist_invert == rhs.cycle_dist_invert &&
             gradient_shift == rhs.gradient_shift &&
             hue_shift == rhs.hue_shift &&
             gradient_shift_step == rhs.gradient_shift_step &&
@@ -78,7 +80,6 @@ struct MandelState
 
     void loadGradientPreset(GradientPreset preset)
     {
-        active_color_template = (int)preset;
         generateGradientFromPreset(gradient, preset);
     }
 
@@ -91,8 +92,8 @@ struct MandelState
         if (dynamic_iter_lim)           flags |= MANDEL_DYNAMIC_ITERS;
         if (show_axis)                  flags |= MANDEL_SHOW_AXIS;
         if (flatten)                    flags |= MANDEL_FLATTEN;
-        if (dynamic_color_cycle_limit)  flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
-        if (normalize_depth_range)      flags |= MANDEL_NORMALIZE_DEPTH;
+        if (cycle_iter_dynamic_limit)   flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
+        if (cycle_iter_normalize_depth) flags |= MANDEL_NORMALIZE_DEPTH;
 
         flags |= ((uint32_t)smoothing_type << MANDEL_SMOOTH_BITSHIFT);
         flags |= (version << MANDEL_VERSION_BITSHIFT);
@@ -117,9 +118,9 @@ struct MandelState
             // Quality
             info["q"] = JSON::markCleanFloat(quality, 3);
 
-            // Color cycle
+            // Color cycle (ITER)
             info["i"] = JSON::markCleanFloat(cycle_iter_value);
-            info["l"] = JSON::markCleanFloat(log1p_weight);
+            info["l"] = JSON::markCleanFloat(cycle_iter_log1p_weight);
 
             // Shift
             info["g"] = JSON::markCleanFloat(gradient_shift);
@@ -199,11 +200,11 @@ struct MandelState
         {
             smoothing_type = ((flags & MANDEL_SMOOTH_MASK) >> MANDEL_SMOOTH_BITSHIFT);
 
-            dynamic_iter_lim = flags & MANDEL_DYNAMIC_ITERS;
-            show_axis = flags & MANDEL_SHOW_AXIS;
-            flatten = flags & MANDEL_FLATTEN;
-            dynamic_color_cycle_limit = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
-            normalize_depth_range = flags & MANDEL_NORMALIZE_DEPTH;
+            dynamic_iter_lim            = flags & MANDEL_DYNAMIC_ITERS;
+            show_axis                   = flags & MANDEL_SHOW_AXIS;
+            flatten                     = flags & MANDEL_FLATTEN;
+            cycle_iter_dynamic_limit    = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
+            cycle_iter_normalize_depth  = flags & MANDEL_NORMALIZE_DEPTH;
 
             // View
             cam_view.x = info.value("x", 0.0);
@@ -219,7 +220,7 @@ struct MandelState
 
             // Color cycle
             cycle_iter_value = info.value("i", cycle_iter_value);
-            log1p_weight = info.value("l", log1p_weight);
+            cycle_iter_log1p_weight = info.value("l", cycle_iter_log1p_weight);
 
             // Shift
             show_color_animation_options = info.value("A", show_color_animation_options ? 1 : 0) != 0;

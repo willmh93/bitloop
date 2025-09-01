@@ -1,5 +1,5 @@
 #include <core/event.h>
-#include <core/platform.h>
+#include <platform/platform.h>
 #include <core/project.h>
 
 BL_BEGIN_NS

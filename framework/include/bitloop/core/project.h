@@ -9,13 +9,13 @@
 #include <type_traits>
 #include <random>
 
-#include <bitloop/utility/text_util.h>
-#include <bitloop/utility/json.h>
-#include <bitloop/utility/change_tracker.h>
-#include <bitloop/graphics/nano_canvas.h>
-#include <bitloop/ui/imgui_custom.h>
+#include <bitloop/util/text_util.h>
+#include <bitloop/util/json.h>
+#include <bitloop/util/change_tracker.h>
+#include <bitloop/nanovgx/nano_canvas.h>
+#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/platform/platform.h>
 
-#include "platform.h"
 #include "types.h"
 #include "event.h"
 #include "camera.h"

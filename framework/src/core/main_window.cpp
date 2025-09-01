@@ -1,4 +1,4 @@
-#include <bitloop/core/platform.h>
+#include <bitloop/platform/platform.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
 

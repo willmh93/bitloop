@@ -116,6 +116,12 @@ namespace Math
         return a + (log(1 + a) - a) * lerp_factor;
     }
 
+    template<typename T>
+    [[nodiscard]] inline T linear_log_range_lerp(T x, T a, T b, T lerp_factor)
+    {
+        return x + (log(((x - a) / (b - a))) - x) * lerp_factor;
+    }
+
     // Ratios (a->b,  0->1)
     template<typename T> [[nodiscard]] constexpr T ratio(T a, T b) { return ((b-a)/a); }
     template<typename T> [[nodiscard]] constexpr T absRatio(T a, T b) { return abs((b-a)/a); }

@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include <bitloop/utility/compression.h>
+#include <bitloop/util/compression.h>
 
 #include <random>
 #include <string>

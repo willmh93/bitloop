@@ -21,29 +21,35 @@ file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     "${BL_SRC}/core/*.cpp"
 )
 
+file(GLOB PLATFORM_SOURCES CONFIGURE_DEPENDS
+    "${BL_INC}/platform/*.h"
+    "${BL_SRC}/platform/*.cpp"
+)
+
 file(GLOB UTILITY_SOURCES CONFIGURE_DEPENDS
-    "${BL_SRC}/utility/*.cpp"
-    "${BL_INC}/utility/*.h"
+    "${BL_SRC}/util/*.cpp"
+    "${BL_INC}/util/*.h"
 )
 
-file(GLOB UI_SOURCES CONFIGURE_DEPENDS
-    "${BL_SRC}/ui/*.cpp"
-    "${BL_INC}/ui/*.h"
+file(GLOB IMGUIX_SOURCES CONFIGURE_DEPENDS
+    "${BL_SRC}/imguix/*.cpp"
+    "${BL_INC}/imguix/*.h"
 )
 
-file(GLOB GRAPHICS_SOURCES CONFIGURE_DEPENDS
-    "${BL_SRC}/graphics/*.cpp"
-    "${BL_INC}/graphics/*.h"
+file(GLOB NANOVGX_SOURCES CONFIGURE_DEPENDS
+    "${BL_SRC}/nanovgx/*.cpp"
+    "${BL_INC}/nanovgx/*.h"
 )
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #source_group("CMakeLists (main)"    FILES ${CMAKE_SOURCE_DIR}/CMakeLists.txt)
 #source_group("3rd party"            FILES ${EXTERNAL_HEADERS} ${EXTERNAL_SOURCES})
-source_group("Core"                 FILES ${CORE_SOURCES})
-source_group("Utility"              FILES ${UTILITY_SOURCES})
-source_group("Graphics"             FILES ${GRAPHICS_SOURCES})
-source_group("ImGui (custom)"       FILES ${UI_SOURCES})
-source_group("Simulations"          FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
+source_group("Core"                  FILES ${CORE_SOURCES})
+source_group("Platform"              FILES ${PLATFORM_SOURCES})
+source_group("Utility"               FILES ${UTILITY_SOURCES})
+source_group("ImGui (extras)"        FILES ${IMGUIX_SOURCES})
+source_group("NanoVG (extras)"       FILES ${NANOVGX_SOURCES})
+source_group("Simulations"           FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
 
 # ──────── Mark all .c files as c++ ────────
 foreach(_cfile IN LISTS EXTERNAL_SOURCES)
@@ -55,9 +61,10 @@ endforeach()
 
 set(ALL_SRC_FILES
     ${CORE_SOURCES}
+    ${PLATFORM_SOURCES}
     ${UTILITY_SOURCES}
-    ${UI_SOURCES}
-    ${GRAPHICS_SOURCES}
+    ${IMGUIX_SOURCES}
+    ${NANOVGX_SOURCES}
     #${EXTERNAL_HEADERS}
     #${EXTERNAL_SOURCES}
 )

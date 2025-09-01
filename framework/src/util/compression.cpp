@@ -1,4 +1,4 @@
-#include <bitloop/utility/compression.h>
+#include <bitloop/util/compression.h>
 
 #include <brotli/encode.h>
 #include <brotli/decode.h>

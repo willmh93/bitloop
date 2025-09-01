@@ -111,11 +111,13 @@ void ExampleText_Scene::viewportDraw(Viewport* ctx) const
 
     ctx->setFontSize(font_size);
     ctx->setFillStyle(255, 255, 255);
+    ctx->setTextAlign(TextAlign::ALIGN_CENTER);
     for (size_t i = 0; i < fonts.size(); i++)
     {
         double y = (double)i * font_size + 20;
         ctx->setFont(fonts[i]);
-        ctx->fillText("The quick brown fox jumps over the lazy dog", 20, y);
+        //ctx->fillText("The quick brown fox jumps over the lazy dog", 20, y);
+        ctx->fillText("The quick brown fox jumps over the lazy dog", 100, y);
 
     }
 }

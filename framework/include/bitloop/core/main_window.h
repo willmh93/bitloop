@@ -3,8 +3,8 @@
 #include <vector>
 #include <bitloop/core/threads.h>
 #include <bitloop/core/project.h>
-#include <bitloop/ui/imgui_custom.h>
-#include <bitloop/graphics/nano_canvas.h>
+#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/nanovgx/nano_canvas.h>
 
 #ifndef __EMSCRIPTEN__
 extern "C" {

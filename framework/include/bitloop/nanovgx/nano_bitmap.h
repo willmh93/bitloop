@@ -10,8 +10,8 @@
 #include "nanovg.h"
 #include <vector>
 
-#include <bitloop/utility/math_util.h>
-#include <bitloop/utility/color.h>
+#include <bitloop/util/math_util.h>
+#include <bitloop/util/color.h>
 #include <bitloop/core/threads.h>
 #include <bitloop/core/camera.h>
 

@@ -55,13 +55,15 @@ void Mandelbrot_Scene_Data::initData()
 //    ImGui::OpenPopup("Load Data"); // open on this frame
 //}
 
+
+
+
+
 void Mandelbrot_Scene_Data::populateUI()
 {
     bool is_tweening = tweening;
     if (is_tweening)
         ImGui::BeginDisabled();
-
-    //ImGui::InputTextMultiline("###Config", &config_buf);
 
     if (ImGui::Section("Saving & Loading", true, 0))
     {
@@ -283,75 +285,91 @@ void Mandelbrot_Scene_Data::populateUI()
     /// --------------------------------------------------------------
     if (ImGui::Section("Colour Cycle", true, 5.0f, 2.0f))
     {
-        ImGui::SliderDouble("Iter/Dist Mix", &smooth_iter_dist_ratio, 0.0, 1.0, "%.2f");
+        ImGui::SliderDouble("Iter/Dist Mix", &iter_dist_mix, 0.0, 1.0, "%.2f");
 
-        int iter_pct = (int)((1.0 - smooth_iter_dist_ratio) * 100.0);
-        int dist_pct = (int)(smooth_iter_dist_ratio * 100.0);
+        int iter_pct = (int)((1.0 - iter_dist_mix) * 100.0);
+        int dist_pct = (int)(iter_dist_mix * 100.0);
         bool disable_iter_options = (iter_pct == 0);
         bool disable_dist_options = (dist_pct == 0);
 
         char iter_header[32];
         char dist_header[32];
-        sprintf_s(iter_header, "Iteration  (%d%% Weight)", iter_pct);
-        sprintf_s(dist_header, "Distance  (%d%% Weight)", dist_pct);
+        sprintf_s(iter_header, "Iteration  -  %d%% Weight", iter_pct);
+        sprintf_s(dist_header, "Distance  -  %d%% Weight", dist_pct);
+
+        //ImGui::Dummy(ScaleSize(0, 6));
+        //ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, Platform()->line_height());
+        //ImGui::SeparatorText(iter_header);
+        //ImGui::PopStyleVar();
 
         if (disable_iter_options) ImGui::BeginDisabled();
-        ImGui::Dummy(ScaleSize(0, 6));
-        ImGui::SeparatorText(iter_header);
-        if (ImGui::Checkbox("Dynamic", &dynamic_color_cycle_limit))
         {
-            if (dynamic_color_cycle_limit)
-                cycle_iter_value /= iter_lim;
+            ImGui::GroupBox box("iter_group", iter_header);
+
+            if (ImGui::Checkbox("Auto from Zoom", &cycle_iter_dynamic_limit))
+            {
+                if (cycle_iter_dynamic_limit)
+                    cycle_iter_value /= iter_lim;
+                else
+                    cycle_iter_value *= iter_lim;
+            }
+
+            //ImGui::SameLine();
+            //ImGui::Dummy(ImVec2(10.0f, 0.0f));
+            ImGui::SameLine();
+            ImGui::Checkbox("Normalize Visible Range", &cycle_iter_normalize_depth);
+
+            double raw_cycle_iters;
+
+            if (cycle_iter_dynamic_limit)
+            {
+                double cycle_pct = cycle_iter_value * 100.0;
+                ImGui::SliderDouble("% Iterations", &cycle_pct, 0.001, 100.0, "%.4f%%",
+                    (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
+                    ImGuiSliderFlags_AlwaysClamp);
+                cycle_iter_value = cycle_pct / 100.0;
+
+                raw_cycle_iters = calculateIterLimit() * cycle_iter_value;
+
+            }
             else
-                cycle_iter_value *= iter_lim;
+            {
+                ImGui::SliderDouble("Iterations", &cycle_iter_value, 1.0, (float)iter_lim, "%.3f",
+                    (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
+                    ImGuiSliderFlags_AlwaysClamp);
+
+                raw_cycle_iters = cycle_iter_value;
+            }
+
+            double log_pct = cycle_iter_log1p_weight * 100.0;
+            if (ImGui::SliderDouble_InvLog("Logarithmic", &log_pct, 0.0, 100.0, "%.2f%%", ImGuiSliderFlags_NoRoundToFormat))
+            {
+                cycle_iter_log1p_weight = log_pct / 100.0;
+            }
+
+
+            ///// Print cycle iter values
+            ///{
+            ///    if (cycle_iter_dynamic_limit)
+            ///        ImGui::Text("raw_cycle_iters = %.1f", raw_cycle_iters);
+            ///
+            ///    double log_cycle_iters = Math::linear_log1p_lerp(raw_cycle_iters, cycle_iter_log1p_weight);
+            ///    ImGui::Text("log_cycle_iters = %.1f", log_cycle_iters);
+            ///}
         }
-
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(10.0f, 0.0f));
-        ImGui::SameLine();
-        ImGui::Checkbox("Normalize depth", &normalize_depth_range);
-
-        double raw_cycle_iters;
-
-        if (dynamic_color_cycle_limit)
-        {
-            double cycle_pct = cycle_iter_value * 100.0;
-            ImGui::SliderDouble("% Iterations", &cycle_pct, 0.001, 100.0, "%.4f%%",
-                (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
-                ImGuiSliderFlags_AlwaysClamp);
-            cycle_iter_value = cycle_pct / 100.0;
-
-            raw_cycle_iters = calculateIterLimit() * cycle_iter_value;
-
-        }
-        else
-        {
-            ImGui::SliderDouble("Iterations", &cycle_iter_value, 1.0, (float)iter_lim, "%.3f",
-                (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
-                ImGuiSliderFlags_AlwaysClamp);
-
-            raw_cycle_iters = cycle_iter_value;
-        }
-
-        double log1p_weight_v = 1.0 - log1p_weight;
-        ImGui::SliderDouble("Log -- Linear", &log1p_weight_v, 0.0, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic);
-        log1p_weight = 1.0 - log1p_weight_v;
-
-        ///// Print cycle iter values
-        ///{
-        ///    if (dynamic_color_cycle_limit)
-        ///        ImGui::Text("raw_cycle_iters = %.1f", raw_cycle_iters);
-        ///
-        ///    double log_cycle_iters = Math::linear_log1p_lerp(raw_cycle_iters, log1p_weight);
-        ///    ImGui::Text("log_cycle_iters = %.1f", log_cycle_iters);
-        ///}
         if (disable_iter_options) ImGui::EndDisabled();
 
         if (disable_dist_options) ImGui::BeginDisabled();
-        ImGui::Dummy(ScaleSize(0, 6));
-        ImGui::SeparatorText(dist_header);
-        ImGui::Checkbox("Invert", &invert_dist);
-        ImGui::SliderDouble("Dist", &cycle_dist_value, 0.001, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic);
+        {
+            ImGui::GroupBox box("dist_group", dist_header);
+
+            ImGui::Checkbox("Invert", &cycle_dist_invert);
+            ImGui::SliderDouble("Dist", &cycle_dist_value, 0.001, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic);
+            ImGui::PushID("DistLog");
+            ///ImGui::SliderDouble("Logarithmic", &dist_log1p_weight, 0.000, 2.0, "%.3f");
+            ImGui::PopID();
+            ImGui::SliderDouble_InvLog("Sharpness", &cycle_dist_sharpness, 0.0, 100.0, "%.4f%%", ImGuiSliderFlags_NoRoundToFormat);
+        }
         if (disable_dist_options) ImGui::EndDisabled();
     }
 
@@ -388,16 +406,19 @@ void Mandelbrot_Scene_Data::populateUI()
             ImGui::Unindent();
         }
     }
-    if (ImGui::Section("Gradient Picker", false, 5.0f, 2.0f))
-    {
-        /// ----------------------------------------
-        //ImGui::SeparatorText("Gradient Picker");
 
-        if (ImGui::Combo("###ColorTemplate", &active_color_template, ColorGradientNames, (int)GradientPreset::COUNT))
+    if (ImGui::Section("Gradient Picker", true, 5.0f, 2.0f))
+    {
+        ImGui::Text("Load Preset");
+        static int selecting_template = -1;
+        if (ImGui::Combo("###ColorTemplate", &selecting_template, ColorGradientNames, (int)GradientPreset::COUNT))
         {
-            loadGradientPreset((GradientPreset)active_color_template);
+            loadGradientPreset((GradientPreset)selecting_template);
+            selecting_template = -1;
             colors_updated = true;
         }
+
+        ImGui::Dummy(ScaleSize(0, 8));
 
         if (ImGui::GradientEditor(&gradient,
             Platform()->ui_scale_factor(), 
@@ -500,7 +521,7 @@ void Mandelbrot_Scene::sceneStart()
 
     cardioid_lerper.create(Math::TWO_PI / 5760.0, 0.005);
 
-    
+    font = NanoFont::create("/data/fonts/DroidSans.ttf");
 }
 
 void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
@@ -545,7 +566,7 @@ void Mandelbrot_Scene_Data::lerpState(
     // === Color Cycle ===
     float color_cycle_f = tween_color_cycle((float)f);
     dst.cycle_iter_value = Math::lerp(a.cycle_iter_value, b.cycle_iter_value, color_cycle_f);
-    dst.log1p_weight     = Math::lerp(a.log1p_weight, b.log1p_weight, color_cycle_f);
+    dst.cycle_iter_log1p_weight     = Math::lerp(a.cycle_iter_log1p_weight, b.cycle_iter_log1p_weight, color_cycle_f);
 
     // === Lerp Gradient/Hue Shift===
     dst.gradient_shift = Math::lerp(a.gradient_shift, b.gradient_shift, pos_f);
@@ -563,7 +584,7 @@ void Mandelbrot_Scene_Data::lerpState(
         dst.dynamic_iter_lim = b.dynamic_iter_lim;
         dst.quality = b.quality;
 
-        dst.dynamic_color_cycle_limit = b.dynamic_color_cycle_limit;
+        dst.cycle_iter_dynamic_limit = b.cycle_iter_dynamic_limit;
         dst.cycle_iter_value = b.cycle_iter_value;
 
         dst.show_color_animation_options = b.show_color_animation_options;
@@ -602,11 +623,15 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     {
         // Reshade active_bmp, but don't recalculate depth field 
         if (Changed(
+            iter_dist_mix,
             cycle_iter_value, 
-            dynamic_color_cycle_limit, 
-            log1p_weight, 
-            normalize_depth_range,
-            cycle_dist_value))
+            cycle_iter_dynamic_limit, 
+            cycle_iter_log1p_weight, 
+            cycle_iter_normalize_depth,
+            cycle_dist_value,
+            cycle_dist_invert,
+            cycle_dist_sharpness
+            ))
         {
             colors_updated = true;
         }
@@ -673,22 +698,12 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     world_quad = camera->toWorldQuad(0, 0, iw, ih);
 
-    // ======== Determine smoothing mode ========
-    //if (smooth_iter_dist_ratio <= std::numeric_limits<double>::epsilon())
-    //    smoothing_type = (int)MandelSmoothing::ITER;
-    //else if (smooth_iter_dist_ratio >= 1.0 - std::numeric_limits<double>::epsilon())
-    //    smoothing_type = (int)MandelSmoothing::DIST;
-    //else
-    //    smoothing_type = (int)MandelSmoothing::MIX;
-
-    if (Changed(smooth_iter_dist_ratio, invert_dist))
-        colors_updated = true;
-
+   
     // Does depth field need recalculating?
     bool mandel_changed = first_frame || Changed(
         world_quad,
         quality,
-        ///smoothing_type,
+        smoothing_type,
         dynamic_iter_lim,
         flatten,
         show_period2_bulb,
@@ -697,7 +712,27 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         y_spline.hash()
     );
 
-    bool __reset_field = false;
+    // ======== Determine "minimum" smoothing mode (ITER always needed, DIST might not be) ========
+    int old_smoothing = smoothing_type;
+    int new_smoothing;
+
+    if (iter_dist_mix <= std::numeric_limits<double>::epsilon())
+        new_smoothing = (int)MandelSmoothing::ITER;
+    else if (iter_dist_mix >= 1.0 - std::numeric_limits<double>::epsilon())
+        new_smoothing = (int)MandelSmoothing::DIST;
+    else
+        new_smoothing = (int)MandelSmoothing::MIX;
+
+    bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing >= (int)MandelSmoothing::DIST);
+    bool downgrade_smoothing_type = (old_smoothing == (int)MandelSmoothing::MIX)  && (new_smoothing == (int)MandelSmoothing::ITER);
+
+    // If we need DIST calcuation but we're missing it, force recalculate (regardless of whether mandel view changed)
+    // If mandel needs recalculating and we no longer need DIST calculation, downgrade. Otherwise no harm in keeping DIST info
+    if (upgrade_smoothing_type || (mandel_changed && downgrade_smoothing_type))
+    {
+        mandel_changed = true;
+        smoothing_type = new_smoothing;
+    }
 
     // Presented Mandelbrot *actually* changed? Restart on 9x9 bmp (phase 0)
     if (mandel_changed)
@@ -706,7 +741,8 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         bmp_3x3.clear(0, 255, 0, 255);
         bmp_1x1.clear(0, 255, 0, 255);
 
-        __reset_field = true;
+        if (!first_frame)
+            display_intro = false;
 
         computing_phase = 0;
         current_row = 0;
@@ -781,12 +817,12 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             }
 
             //bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
-            bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
+            //bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
 
 
             /*if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
-            else */if (b64) finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten);
-            else          finished_compute = table_invoke<flt128>(build_table(mandelbrot, [&]), smoothing, flatten);
+            else if (b64)*/ finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten);
+            //else          finished_compute = table_invoke<flt128>(build_table(mandelbrot, [&]), smoothing, flatten);
         }
         //else
         //{
@@ -839,42 +875,32 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     if (finished_compute || colors_updated)
     {
-        if (Changed(log1p_weight, normalize_depth_range, smooth_iter_dist_ratio, invert_dist))
+        if (Changed(
+            iter_dist_mix,
+            cycle_iter_log1p_weight,
+            cycle_iter_normalize_depth,
+            cycle_dist_invert,
+            cycle_dist_sharpness
+            ))
         {
-            //if (__reset_field && !finished_compute)
-            //{
-            //    DebugBreak();
-            //}
             if (frame_complete)
                 refreshFieldDepthNormalized();
         }
 
         // ======== Update Color Cycle iterations ========
         {
-            if (dynamic_color_cycle_limit)
+            if (cycle_iter_dynamic_limit)
             {
                 double assumed_iter_lim = mandelbrotIterLimit(cam_view.zoom) * 0.5;
 
                 /// "cycle_iter_value" represents ratio of iter_lim
-                double color_cycle_iters = (cycle_iter_value * (assumed_iter_lim - (normalize_depth_range ? active_field->min_depth : 0)));
-                log_color_cycle_iters = Math::linear_log1p_lerp(color_cycle_iters, log1p_weight);
-
-                if (!isfinite(log_color_cycle_iters))
-                {
-                    log_color_cycle_iters = Math::linear_log1p_lerp(color_cycle_iters, log1p_weight);
-                    blBreak();
-                }
+                double color_cycle_iters = (cycle_iter_value * (assumed_iter_lim - (cycle_iter_normalize_depth ? active_field->min_depth : 0)));
+                log_color_cycle_iters = Math::linear_log1p_lerp(color_cycle_iters, cycle_iter_log1p_weight);
             }
             else
             {
                 /// "cycle_iter_value" represents actual iter_lim
-                log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, log1p_weight);
-
-                if (!isfinite(log_color_cycle_iters))
-                {
-                    log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, log1p_weight);
-                    blBreak();
-                }
+                log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, cycle_iter_log1p_weight);
             }
         }
 
@@ -884,27 +910,6 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
 
     first_frame = false;
-}
-
-template<class T>
-T de_cap_from_view(const T cx, const T cy, const T half_w, const T half_h, const T escape_r)
-{
-    // farthest |c| among the 4 corners
-    const T x0 = cx - half_w, x1 = cx + half_w;
-    const T y0 = cy - half_h, y1 = cy + half_h;
-
-    auto hyp = [](T x, T y) { return std::sqrt(x * x + y * y); };
-    T rmax = std::max(
-                 std::max(hyp(x0, y0), hyp(x0, y1)),
-                 std::max(hyp(x1, y0), hyp(x1, y1))
-    );
-
-    // ensure at least escape radius (so the cap doesn't collapse when centered near the set)
-    T r_eff = rmax;
-
-    // far-field cap ~ r log r; add a small headroom factor to avoid clipping
-    const T headroom = T(1.2); // tweak 1.05..1.5 if needed
-    return headroom * r_eff * std::log(r_eff); // natural log
 }
 
 void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
@@ -935,92 +940,112 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
         }
     }
 
-    if (active_field && active_bmp)
+    //if (active_field && active_bmp)
+    //{
+    //    //ctx->print() << "\nactive_field->max_depth: " << active_field->max_depth;
+    //    ///ctx->print() << "\nactive_field->min_dist: " << active_field->min_dist;
+    //    ///ctx->print() << "\nactive_field->max_dist: " << active_field->max_dist;
+    //
+    //    int px = (int)mouse->stage_x;
+    //    int py = (int)mouse->stage_y;
+    //    if (px >= 0 && py >= 0 && px < active_bmp->width() && py < active_bmp->height())
+    //    {
+    //        IVec2 pos = active_bmp->pixelPosFromWorld(DVec2(mouse->world_x, mouse->world_y));
+    //        EscapeFieldPixel* p = active_field->get(pos.x, pos.y);
+    //    
+    //        if (p)
+    //        {
+    //            //double raw_depth = p->depth;
+    //            double raw_dist = p->dist;
+    //
+    //            double dist = log(raw_dist);
+    //
+    //            ///double dist_factor = Math::lerpFactor(dist, active_field->min_dist, active_field->max_dist);
+    //
+    //            ctx->print() << "\nraw_dist: " << raw_dist << "\n";
+    //            ctx->print() << "log_dist: " << dist << "\n";
+    //            ///ctx->print() << "dist_factor: " << dist_factor << "\n\n";
+    //
+    //            double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.5, 0 }).magnitude();
+    //            double stable_max_raw_dist = active_bmp->worldSize().magnitude() / 2.0;
+    //
+    //            double stable_min_dist = log(stable_min_raw_dist);
+    //            double stable_max_dist = log(stable_max_raw_dist);
+    //
+    //            ctx->print() << "stable_min_raw_dist: " << stable_min_raw_dist << "\n";
+    //            ctx->print() << "stable_max_raw_dist: " << stable_max_raw_dist << "\n\n";
+    //
+    //            ctx->print() << "min_possible_dist: " << stable_min_dist << "\n";
+    //            ctx->print() << "max_possible_dist: " << stable_max_dist << "\n\n";
+    //
+    //            ctx->print() << "Stabilized factor: " << Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
+    //
+    //
+    //            /*double lower_depth_bound = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
+    //
+    //            double normalized_depth = Math::lerpFactor(raw_depth, lower_depth_bound, (double)iter_lim);
+    //            double normalized_dist = Math::lerpFactor(raw_dist, pending_field->min_dist, pending_field->max_dist);
+    //
+    //            ctx->print() << std::setprecision(18);
+    //            ctx->print() << "\n\nnormalized_depth: " << normalized_depth;
+    //            ctx->print() << "\nnormalized_dist: " << normalized_dist;
+    //
+    //            ctx->print() << "\n\nraw_iters: " << raw_depth;
+    //            ctx->print() << "\nraw_dist: " << raw_dist << "\n";
+    //
+    //            double single_pixel_raw_dist = camera->stageToWorldOffset(DVec2{ 0.001, 0 }).magnitude();
+    //            double min_possible_dist = log(single_pixel_raw_dist);
+    //
+    //            double max_possible_raw_dist = ctx->worldSize().magnitude();
+    //            double max_possible_dist = log(max_possible_raw_dist);
+    //            //double max_possible_dist = de_cap_from_view(
+    //            //    camera->x(),
+    //            //    camera->y(),
+    //            //    ctx->worldSize().x / 2,
+    //            //    ctx->worldSize().y,
+    //            //    sqrt(escape_radius<MandelSmoothing::DIST>())
+    //            //);
+    //
+    //            ctx->print() << "\nlog_dist: " << log(raw_dist) << "\n";
+    //
+    //            //ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
+    //            ctx->print() << "single_pixel_raw_dist: " << single_pixel_raw_dist << "\n";
+    //            ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
+    //
+    //            ctx->print() << "min_possible_dist: " << min_possible_dist << "\n\n";
+    //            ctx->print() << "max_possible_dist: " << max_possible_dist << "\n\n";
+    //
+    //            double stable_normalized_dist = Math::lerpFactor(log(raw_dist), pending_field->min_dist, max_possible_dist);
+    //            ctx->print() << "stable_normalized_dist: " << stable_normalized_dist << "\n";*/
+    //
+    //        }
+    //    }
+    //}
+
+    if (smoothing_type == (int)MandelSmoothing::MIX)
+        ctx->print() << "Smoothing: MIX";
+    else if (smoothing_type == (int)MandelSmoothing::ITER)
+        ctx->print() << "Smoothing: ITER";
+    else if (smoothing_type == (int)MandelSmoothing::DIST)
+        ctx->print() << "Smoothing: DIST";
+
+    if (display_intro)
     {
-        //ctx->print() << "\nactive_field->max_depth: " << active_field->max_depth;
-        ///ctx->print() << "\nactive_field->min_dist: " << active_field->min_dist;
-        ///ctx->print() << "\nactive_field->max_dist: " << active_field->max_dist;
+        camera->stageTransform();
+        ctx->setFont(font);
+        ctx->setFontSize(20);
 
-        int px = (int)mouse->stage_x;
-        int py = (int)mouse->stage_y;
-        if (px >= 0 && py >= 0 && px < active_bmp->width() && py < active_bmp->height())
+        if (!Platform()->is_desktop_native())
         {
-            IVec2 pos = active_bmp->pixelPosFromWorld(DVec2(mouse->world_x, mouse->world_y));
-            EscapeFieldPixel* p = active_field->get(pos.x, pos.y);
-        
-            if (p)
-            {
-                double raw_depth = p->depth;
-                double raw_dist = p->dist;
-
-                double dist = log(raw_dist);
-
-                ///double dist_factor = Math::lerpFactor(dist, active_field->min_dist, active_field->max_dist);
-
-                ctx->print() << "\nraw_dist: " << raw_dist << "\n";
-                ctx->print() << "log_dist: " << dist << "\n";
-                ///ctx->print() << "dist_factor: " << dist_factor << "\n\n";
-
-                double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.5, 0 }).magnitude();
-                double stable_max_raw_dist = active_bmp->worldSize().magnitude() / 2.0;
-
-                double stable_min_dist = log(stable_min_raw_dist);
-                double stable_max_dist = log(stable_max_raw_dist);
-
-                ctx->print() << "stable_min_raw_dist: " << stable_min_raw_dist << "\n";
-                ctx->print() << "stable_max_raw_dist: " << stable_max_raw_dist << "\n\n";
-
-                ctx->print() << "min_possible_dist: " << stable_min_dist << "\n";
-                ctx->print() << "max_possible_dist: " << stable_max_dist << "\n\n";
-
-                ctx->print() << "Stabilized factor: " << Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
-
-                /*double lower_depth_bound = normalize_depth_range ? pending_field->min_depth : 0;
-
-                double normalized_depth = Math::lerpFactor(raw_depth, lower_depth_bound, (double)iter_lim);
-                double normalized_dist = Math::lerpFactor(raw_dist, pending_field->min_dist, pending_field->max_dist);
-
-                ctx->print() << std::setprecision(18);
-                ctx->print() << "\n\nnormalized_depth: " << normalized_depth;
-                ctx->print() << "\nnormalized_dist: " << normalized_dist;
-
-                ctx->print() << "\n\nraw_iters: " << raw_depth;
-                ctx->print() << "\nraw_dist: " << raw_dist << "\n";
-
-                double single_pixel_raw_dist = camera->stageToWorldOffset(DVec2{ 0.001, 0 }).magnitude();
-                double min_possible_dist = log(single_pixel_raw_dist);
-
-                double max_possible_raw_dist = ctx->worldSize().magnitude();
-                double max_possible_dist = log(max_possible_raw_dist);
-                //double max_possible_dist = de_cap_from_view(
-                //    camera->x(),
-                //    camera->y(),
-                //    ctx->worldSize().x / 2,
-                //    ctx->worldSize().y,
-                //    sqrt(escape_radius<MandelSmoothing::DIST>())
-                //);
-
-                ctx->print() << "\nlog_dist: " << log(raw_dist) << "\n";
-
-                //ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
-                ctx->print() << "single_pixel_raw_dist: " << single_pixel_raw_dist << "\n";
-                ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
-
-                ctx->print() << "min_possible_dist: " << min_possible_dist << "\n\n";
-                ctx->print() << "max_possible_dist: " << max_possible_dist << "\n\n";
-
-                double stable_normalized_dist = Math::lerpFactor(log(raw_dist), pending_field->min_dist, max_possible_dist);
-                ctx->print() << "stable_normalized_dist: " << stable_normalized_dist << "\n";*/
-
-            }
+            ctx->fillText("Controls:", ScaleSize(10), ScaleSize(10));
+            ctx->fillText("  - Use pinch-gesture to pan / rotate / zoom the camera view", ScaleSize(10), ScaleSize(35));
         }
+
+        ctx->setTextAlign(TextAlign::ALIGN_LEFT);
+        ctx->setTextBaseline(TextBaseline::BASELINE_BOTTOM);
+        ctx->fillText("Developed by Will Hemsworth", ScaleSize(4), ctx->height() - ScaleSize(4));
     }
 
-    ctx->setFillStyle(0, 0, 0);
-    ctx->setFontSize(16);
-    ctx->setTextAlign(TextAlign::ALIGN_LEFT);
-    ctx->setTextBaseline(TextBaseline::BASELINE_BOTTOM);
-    ctx->fillText("Created by: Will Hemsworth", ScaleSize(4), ctx->height() - ScaleSize(4));
 }
 
 void Mandelbrot_Scene::onEvent(Event e)
