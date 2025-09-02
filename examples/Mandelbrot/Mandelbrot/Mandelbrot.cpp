@@ -109,7 +109,7 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             show_share_dialog = true;
             #ifdef __EMSCRIPTEN__
-            url = Platform()->url_get_base() + "?data=" << serialize();
+            url = Platform()->url_get_base() + "?data=" + serialize("");
             #else
             url = "https://bitloop.dev/Mandelbrot?data=" + serialize("");
             #endif
