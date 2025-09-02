@@ -33,8 +33,8 @@ struct MandelState
     double   cycle_iter_log1p_weight    = 0.0;
     double   cycle_iter_value           = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
 
-    double   cycle_dist_value           = 0.5f;
     bool     cycle_dist_invert          = false;
+    double   cycle_dist_value           = 0.5f;
     double   cycle_dist_sharpness       = 0.9; // Used for UI (ignored during tween)
 
     double gradient_shift               = 0.0;
@@ -92,14 +92,16 @@ struct MandelState
         if (dynamic_iter_lim)           flags |= MANDEL_DYNAMIC_ITERS;
         if (show_axis)                  flags |= MANDEL_SHOW_AXIS;
         if (flatten)                    flags |= MANDEL_FLATTEN;
+
         if (cycle_iter_dynamic_limit)   flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
         if (cycle_iter_normalize_depth) flags |= MANDEL_NORMALIZE_DEPTH;
+        if (cycle_dist_invert)          flags |= MANDEL_INVERT_DIST;
 
         flags |= ((uint32_t)smoothing_type << MANDEL_SMOOTH_BITSHIFT);
         flags |= (version << MANDEL_VERSION_BITSHIFT);
 
         JSON::json info;
-        int decimals = 1 + Math::countWholeDigits(cam_view.zoom);
+        int decimals = cam_view.getCoordinateDecimals();
 
         if (version >= 0)
         {
@@ -118,9 +120,20 @@ struct MandelState
             // Quality
             info["q"] = JSON::markCleanFloat(quality, 3);
 
-            // Color cycle (ITER)
-            info["i"] = JSON::markCleanFloat(cycle_iter_value);
-            info["l"] = JSON::markCleanFloat(cycle_iter_log1p_weight);
+            // Color cycle
+            {
+                // Mix ratio
+                info["m"] = JSON::markCleanFloat(iter_dist_mix, 2);
+
+                // ITER
+                info["i"] = JSON::markCleanFloat(cycle_iter_value);
+                info["l"] = JSON::markCleanFloat(cycle_iter_log1p_weight);
+
+                // DIST
+                info["d"] = JSON::markCleanFloat(cycle_dist_value, 5);
+                info["s"] = JSON::markCleanFloat(cycle_dist_sharpness, 5);
+
+            }
 
             // Shift
             info["g"] = JSON::markCleanFloat(gradient_shift);
@@ -219,6 +232,7 @@ struct MandelState
             flatten                     = flags & MANDEL_FLATTEN;
             cycle_iter_dynamic_limit    = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
             cycle_iter_normalize_depth  = flags & MANDEL_NORMALIZE_DEPTH;
+            cycle_dist_invert           = flags & MANDEL_INVERT_DIST;
 
             // View
             cam_view.x = info.value("x", 0.0);
@@ -227,14 +241,24 @@ struct MandelState
             cam_view.zoom_xy.x = info.value("a", 1.0);
             cam_view.zoom_xy.y = info.value("b", 1.0);
             double angle_degrees = info.value("r", 0.0);
-            cam_view.angle = angle_degrees * Math::PI / 180.0;
+            cam_view.angle = Math::toRadians(angle_degrees);
 
             // Quality
             quality = info.value("q", quality);
 
             // Color cycle
-            cycle_iter_value = info.value("i", cycle_iter_value);
-            cycle_iter_log1p_weight = info.value("l", cycle_iter_log1p_weight);
+            {
+                // Mix ratio
+                iter_dist_mix = info.value("m", iter_dist_mix);
+
+                // ITER
+                cycle_iter_value = info.value("i", cycle_iter_value);
+                cycle_iter_log1p_weight = info.value("l", cycle_iter_log1p_weight);
+
+                // DIST
+                cycle_dist_value = info.value("d", cycle_dist_value);
+                cycle_dist_sharpness = info.value("s", cycle_dist_sharpness);
+            }
 
             // Shift
             show_color_animation_options = info.value("A", show_color_animation_options ? 1 : 0) != 0;

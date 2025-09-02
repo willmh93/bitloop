@@ -420,6 +420,11 @@ struct CameraViewController
 
     void populateUI(DRect cam_area = DRect::infinite());
 
+    int getCoordinateDecimals()
+    {
+        return 1 + Math::countWholeDigits(zoom * 5);
+    }
+
     void read(const Camera* camera)
     {
         x = camera->x();

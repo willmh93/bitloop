@@ -80,18 +80,19 @@ void Mandelbrot_Scene_Data::populateUI()
             // Attempt to load immediately from the clipboard (if valid save data)
             //emscripten_browser_clipboard::paste_now(&on_paste, &config_buf);
 
-            #ifdef __EMSCRIPTEN__
-            emscripten_browser_clipboard::paste_now([&](std::string&& buf)
-            {
-                config_buf = buf;
-                blPrint() << "config_buf: " << config_buf;
-
-                opening_popup = true;
-            });
-            #else
+            ///#ifdef __EMSCRIPTEN__
+            ///emscripten_browser_clipboard::paste_now([&](std::string&& buf)
+            ///{
+            ///    config_buf = buf;
+            ///    blPrint() << "config_buf: " << config_buf;
+            ///
+            ///    opening_popup = true;
+            ///});
+            ///#else
+            config_buf = "";
             show_load_dialog = true;
             ImGui::OpenPopup("Load Data");
-            #endif
+            ///#endif
         }
 
         #ifdef __EMSCRIPTEN__
@@ -160,6 +161,9 @@ void Mandelbrot_Scene_Data::populateUI()
                 emscripten_browser_clipboard::paste_now([&](std::string&& buf) {
                     config_buf = buf;
                 });
+                #else
+                size_t s;
+                config_buf = (char*)SDL_GetClipboardData("text/plain", &s);
                 #endif
             }
 

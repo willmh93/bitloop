@@ -510,7 +510,8 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
 
 void CameraViewController::populateUI(DRect cam_area)
 {
-    int decimals = 1 + Math::countWholeDigits(zoom*5);
+    //int decimals = 1 + Math::countWholeDigits(zoom*5);
+    int decimals = getCoordinateDecimals();
     char format[16];
     snprintf(format, sizeof(format), "%%.%df", decimals);
 
