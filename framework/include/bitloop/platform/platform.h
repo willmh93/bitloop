@@ -105,13 +105,20 @@ public:
 
     // URL helpers
     #ifdef __EMSCRIPTEN__
-    char*   url_get_base();
-    int     url_has(const char* k);
-    double  url_get_number(const char* k, double fallback);
-    char*   url_get_string(const char* k);
-    void    url_set_string(const char* key, const char* value, int use_hash = 0, int replace = 1);
-    void    url_set_number(const char* key, double value, int use_hash = 0, int replace = 1);
-    void    url_unset(const char* key, int use_hash = 0, int replace = 1);
+private:
+    char*        _url_get_base();
+    char*        _url_get_string(const char* k);
+                 
+public:          
+    int          url_has(const char* k);
+                 
+    std::string  url_get_base();
+    std::string  url_get_string(const char* k);
+    double       url_get_number(const char* k, double fallback);
+                 
+    void         url_set_string(const char* key, const char* value, int use_hash = 0, int replace = 1);
+    void         url_set_number(const char* key, double value, int use_hash = 0, int replace = 1);
+    void         url_unset(const char* key, int use_hash = 0, int replace = 1);
     #endif
 };
 

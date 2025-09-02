@@ -239,7 +239,7 @@ std::string PlatformManager::path(std::string_view virtual_path)
 }
 
 #ifdef __EMSCRIPTEN__
-char* PlatformManager::url_get_base() {
+char* PlatformManager::_url_get_base() {
     return (char*)MAIN_THREAD_EM_ASM_PTR({
       const u = new URL(location.href);
       let path = u.pathname;
@@ -251,6 +251,14 @@ char* PlatformManager::url_get_base() {
       stringToUTF8(s, p, n);
       return p;
     });
+}
+
+std::string PlatformManager::url_get_base()
+{
+    char* str = _url_get_base();
+    std::string ret = str;
+    free(str);
+    return ret;
 }
 
 int PlatformManager::url_has(const char* k)
@@ -284,7 +292,7 @@ double PlatformManager::url_get_number(const char* k, double fallback)
 }
 
 // Gets a string param; returns newly-allocated C string (caller free()), or 0 if missing
-char* PlatformManager::url_get_string(const char* k)
+char* PlatformManager::_url_get_string(const char* k)
 {
     return (char*)MAIN_THREAD_EM_ASM_PTR({
       const key = UTF8ToString($0);
@@ -301,6 +309,14 @@ char* PlatformManager::url_get_string(const char* k)
     }, k);
 }
 
+
+std::string PlatformManager::url_get_string(const char* k)
+{
+    char* str = _url_get_string(k);
+    std::string ret = str;
+    free(str);
+    return ret;
+}
 
 // Set a string param in ?query (use_hash=0) or #hash (use_hash=1).
 // replace=1 uses history.replaceState (good for live updates).

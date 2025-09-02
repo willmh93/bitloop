@@ -5,6 +5,8 @@
 #include <string_view>
 #include <sstream>
 
+BL_BEGIN_NS;
+
 namespace TextUtil
 {
     template<typename T>
@@ -39,13 +41,13 @@ namespace TextUtil
 
             // Remove the leading '0' for values between -1 and 1
             // (e.g. 0.7351 -> .7351)
-            ///if (!str.empty())
-            ///{
-            ///    bool negative = (str[0] == '-');
-            ///    std::size_t first = negative ? 1 : 0;
-            ///    if (first + 1 < str.size() && str[first] == '0' && str[first + 1] == '.')
-            ///        str.erase(first, 1);
-            ///}
+            if (!str.empty())
+            {
+                bool negative = (str[0] == '-');
+                std::size_t first = negative ? 1 : 0;
+                if (first + 1 < str.size() && str[first] == '0' && str[first + 1] == '.')
+                    str.erase(first, 1);
+            }
         }
 
         return str;
@@ -63,3 +65,5 @@ namespace TextUtil
 
     std::string_view trim_view(std::string_view text);
 }
+
+BL_END_NS;

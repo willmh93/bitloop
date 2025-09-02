@@ -74,7 +74,7 @@ void startTween(Mandelbrot_Scene_Data &scene_data, MandelState& target)
     // Begin tween
     scene_data.tween_progress = 0.0;
     scene_data.tweening = true;
-    scene_data.tween_duration = pow(tweenDistance(scene_data.state_a, scene_data.state_b), 0.5);
+    scene_data.tween_duration = 1;// tweenDistance(scene_data.state_a, scene_data.state_b);
 }
 
 void lerpState(

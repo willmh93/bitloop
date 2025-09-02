@@ -1,6 +1,9 @@
 #pragma once
-#include <map>
 #include <bitloop.h>
+
+SIM_BEG;
+
+using namespace BL;
 
 struct MandelPreset
 {
@@ -36,7 +39,7 @@ struct MandelPreset
     }
 };
 
-inline std::vector<MandelPreset> mandel_presets {
+/*inline std::vector<MandelPreset> mandel_presets {
 R"(
 =============== Home ===============
 G6YAAESBdaW-egJD0YvJOjn9d2C8Bt5WgHcO
@@ -131,4 +134,6 @@ dpL6jJaFmRjY6z8u0J8kaf_BXUs6UKR8lnSj
 KMZxT7lOKOk-mH3j69BIelCknJD5DQ==
 ====================================
 )"
-};
+};*/
+
+SIM_END;

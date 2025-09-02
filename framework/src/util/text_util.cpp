@@ -4,6 +4,8 @@ std::ostream& operator<<(std::ostream& os, const FiniteDouble& fd) {
     return os << fd.value;
 }
 
+BL_BEGIN_NS;
+
 namespace TextUtil {
 
 std::string wrapString(std::string_view input, size_t width)
@@ -249,3 +251,5 @@ std::string_view trim_view(std::string_view text)
 }
 
 } // End TextUtil NS
+
+BL_END_NS;

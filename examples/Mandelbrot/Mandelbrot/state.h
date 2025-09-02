@@ -103,7 +103,7 @@ struct MandelState
 
         if (version >= 0)
         {
-            info["f"] = flags; // Compression::base64_encode((const unsigned char*)&flags, sizeof(flags));
+            info["f"] = flags;
 
             /// Mark JSON floats with "CLEANFLOAT()" to remove trailing zeros/rounding errors when serializing
 
@@ -140,44 +140,53 @@ struct MandelState
             //info["B"] = y_spline.serialize(SplineSerializationMode::COMPRESS_SHORTEST);
         }
 
+        std::string raw_json = JSON::unmarkCleanFloats(info.dump());
+        //raw_json = JSON::json_remove_key_quotes(raw_json);
+
         if constexpr (COMPRESS_CONFIG)
         {
             // Post-process: Remove CLEANFLOAT() markers, compress & wrap lines
-            std::string json = JSON::unquoteCleanFloats(info.dump());
-            std::string compressed_txt = Compression::brotli_ascii_compress(json);
-            std::string ret = "====================================\n";
+            std::string json_unquoted = JSON::json_remove_key_quotes(raw_json);
+
+            //std::string compressed_quoted = Compression::brotli_ascii_compress(raw_json);
+            std::string compressed_unquoted = Compression::brotli_ascii_compress(json_unquoted);
+
+            //std::string ret = "==============================\n";
+            //std::string ret = "";
 
             // Insert name if provided
-            int name_len = (int)name.size();
-            if (name_len > 0)
-            {
-                int wrap_len = 36;
-                int eq_pad_len = (wrap_len - (name_len + 2)) / 2;
-                std::string eq_padding(eq_pad_len, '=');
-                ret = eq_padding + ' ' + name + ' ' + eq_padding + ((name.size() % 2) ? "=" : "") + '\n';
-            }
+            ///int name_len = (int)name.size();
+            ///if (name_len > 0)
+            ///{
+            ///    int wrap_len = 30;
+            ///    int eq_pad_len = (wrap_len - (name_len + 2)) / 2;
+            ///    std::string eq_padding(eq_pad_len, '=');
+            ///    ret = eq_padding + ' ' + name + ' ' + eq_padding + ((name.size() % 2) ? "=" : "") + '\n';
+            ///}
 
-            ret += TextUtil::wrapString(compressed_txt, 36);
-            ret += "\n====================================\n";
+            //ret += compressed_unquoted;
+            //ret += TextUtil::wrapString(compressed_txt, 30);
+            //ret += "\n==============================\n";
+            //return ret;
 
-            return ret;
+            return compressed_unquoted;
         }
         else
         {
-            std::string json = JSON::unquoteCleanFloats(info.dump());
-            return json;
+            return raw_json;
         }
     }
 
     bool deserialize(std::string_view sv)
     {
         sv = TextUtil::trim_view(sv);
-        std::string txt = TextUtil::dedent_max(sv);
-
-        size_t i0 = txt.find_first_of('\n') + 1;
-        size_t i1 = txt.find_last_of('=');
-        i1 = txt.find_last_of('\n', i1);
-        txt = txt.substr(i0, i1 - i0);
+        ///std::string txt = TextUtil::dedent_max(sv);
+        ///size_t i0 = txt.find_first_of('\n') + 1;
+        ///size_t i1 = txt.find_last_of('=');
+        ///i1 = txt.find_last_of('\n', i1);
+        ///txt = txt.substr(i0, i1 - i0);
+        
+        std::string txt = sv.data();
 
         std::string uncompressed;
         if constexpr (COMPRESS_CONFIG)
@@ -188,6 +197,11 @@ struct MandelState
         {
             uncompressed = txt;
         }
+
+        uncompressed = JSON::json_add_key_quotes(uncompressed);
+        uncompressed = JSON::json_add_leading_zeros(uncompressed);
+
+        blPrint() << "decoded: " <<  uncompressed;
 
         nlohmann::json info = nlohmann::json::parse(uncompressed, nullptr, false);
         if (info.is_discarded())

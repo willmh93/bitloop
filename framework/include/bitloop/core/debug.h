@@ -63,8 +63,12 @@ struct Global
 #undef DEBUG_SIMULATE_MOBILE
 #endif
 
+#ifndef BL_BEGIN_NS
 #define BL_BEGIN_NS namespace BL {
+#endif
+#ifndef BL_END_NS
 #define BL_END_NS   }
+#endif
 
 BL_BEGIN_NS
 

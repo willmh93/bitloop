@@ -18,7 +18,6 @@ namespace
         "abcdefghijklmnopqrstuvwxyz"
         "0123456789-_";
 
-
     //inline unsigned char b64_value(unsigned char c)
     //{
     //    if (c >= 'A' && c <= 'Z') return static_cast<unsigned char>(c - 'A');
@@ -77,6 +76,41 @@ namespace Compression {
             out[oi++] = lookup[(v >> 6) & 63];
             // last '=' already present
         }
+        return out;
+    }
+
+    std::string b62_encode(std::string_view bytes)
+    {
+        static constexpr char lut[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz"
+            "0123456789"; // 62 symbols
+
+        if (bytes.empty()) return {};
+
+        std::vector<unsigned char> n(bytes.begin(), bytes.end());
+        size_t zeros = 0;
+        while (zeros < n.size() && n[zeros] == 0) ++zeros;
+
+        std::vector<unsigned char> enc;
+        enc.reserve(n.size() * 2 / 3 + 1);
+
+        size_t start = zeros, end = n.size();
+        while (start < end) {
+            unsigned int carry = 0;
+            for (size_t i = start; i < end; ++i) {
+                unsigned int val = unsigned(n[i]) + (carry << 8); // *256
+                n[i] = static_cast<unsigned char>(val / 62);
+                carry = val % 62;
+            }
+            enc.push_back(static_cast<unsigned char>(carry));
+            while (start < end && n[start] == 0) ++start;
+        }
+
+        std::string out;
+        out.reserve(zeros + enc.size());
+        for (size_t i = 0; i < zeros; ++i) out.push_back(lut[0]);
+        for (auto it = enc.rbegin(); it != enc.rend(); ++it) out.push_back(lut[*it]);
         return out;
     }
 
@@ -141,6 +175,63 @@ namespace Compression {
         return out;
     }
 
+    std::string b62_decode(std::string_view s)
+    {
+        // Must match the encoder's alphabet and ordering
+        static int8_t map[256];
+        static bool inited = false;
+        if (!inited) {
+            for (int i = 0; i < 256; ++i) map[i] = -1;
+            for (int i = 0; i < 26; ++i) map[static_cast<unsigned>('A') + i] = i;        // 0..25
+            for (int i = 0; i < 26; ++i) map[static_cast<unsigned>('a') + i] = 26 + i;  // 26..51
+            for (int i = 0; i < 10; ++i) map[static_cast<unsigned>('0') + i] = 52 + i;  // 52..61
+            inited = true;
+        }
+
+        if (s.empty()) return {};
+
+        // Count leading zero digits (alphabet[0] == 'A') -> leading zero bytes
+        size_t zeros = 0;
+        while (zeros < s.size()) {
+            unsigned char c = static_cast<unsigned char>(s[zeros]);
+            int8_t v = map[c];
+            if (v < 0) throw std::runtime_error("invalid base62 char");
+            if (v != 0) break;
+            ++zeros;
+        }
+
+        // Convert Base62 digits (after leading zeros) to Base256 via repeated division by 256
+        std::vector<unsigned char> digits;
+        digits.reserve(s.size() - zeros);
+        for (size_t i = zeros; i < s.size(); ++i) {
+            int8_t v = map[static_cast<unsigned char>(s[i])];
+            if (v < 0) throw std::runtime_error("invalid base62 char");
+            digits.push_back(static_cast<unsigned char>(v));
+        }
+
+        std::vector<unsigned char> dec;
+        dec.reserve(digits.size());
+        size_t start = 0, end = digits.size();
+        while (start < end) {
+            unsigned int carry = 0;
+            for (size_t i = start; i < end; ++i) {
+                unsigned int val = static_cast<unsigned int>(digits[i]) + carry * 62u;
+                digits[i] = static_cast<unsigned char>(val / 256u);
+                carry = val % 256u;
+            }
+            dec.push_back(static_cast<unsigned char>(carry));
+            while (start < end && digits[start] == 0) ++start;
+        }
+
+        // Assemble output: leading zero bytes + reversed collected bytes
+        std::string out;
+        out.reserve(zeros + dec.size());
+        out.append(zeros, '\0');
+        for (auto it = dec.rbegin(); it != dec.rend(); ++it)
+            out.push_back(static_cast<char>(*it));
+        return out;
+    }
+
     // ========== Brotli + Base64 ==========
     std::string brotli_b64_compress(std::string_view input, int quality, int window)
     {
@@ -185,12 +276,12 @@ namespace Compression {
         if (!ok) throw std::runtime_error("brotli compress failed");
         comp.resize(out_size);
 
-        return b64_encode(comp);
+        return b62_encode(comp);
     }
 
     std::string brotli_ascii_decompress(const std::string& ascii)
     {
-        std::string comp = b64_decode(ascii);
+        std::string comp = b62_decode(ascii);
 
         // Only grow on demand
         std::string out(std::max<size_t>(comp.size() * 3 + 1024, 1024), '\0');

@@ -1,5 +1,12 @@
 #pragma once
 
+#ifndef BL_BEGIN_NS
+#define BL_BEGIN_NS namespace BL {
+#endif
+#ifndef BL_END_NS
+#define BL_END_NS   }
+#endif
+
 // ======== FAST_INLINE ========
 
 #if defined(_MSC_VER)

@@ -109,13 +109,12 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             show_share_dialog = true;
             #ifdef __EMSCRIPTEN__
-            url = Platform()->url_get_base();
+            url = Platform()->url_get_base() + "?data=" << serialize();
+            #else
+            url = "https://bitloop.dev/Mandelbrot?data=" + serialize("");
             #endif
             ImGui::OpenPopup("Share URL");
 
-            //double cx;
-            //if (url_has("cx")) cx = url_get_number("cx", cx);
-            //blPrint() << "cx: " << cx;
         }
 
         // Save Dialog
@@ -123,13 +122,17 @@ void Mandelbrot_Scene_Data::populateUI()
         if (ImGui::BeginPopupModal("Save Data", &show_save_dialog))
         {
             ImVec2 avail = ImGui::GetContentRegionAvail();
-            avail.y -= ImGui::GetFrameHeightWithSpacing() * 2; // leave room for buttons/input
+            avail.y -= ImGui::GetFrameHeightWithSpacing(); // leave room for buttons/input
 
-            ImGui::AlignTextToFramePadding();
-            ImGui::Text("Name:");
-            ImGui::SameLine();
-            if (ImGui::InputText("###mandel_name", config_buf_name, 28))
-                updateConfigBuffer();
+            if (!Platform()->is_mobile())
+            {
+                avail.y -= ImGui::GetFrameHeightWithSpacing();
+                ImGui::AlignTextToFramePadding();
+                ImGui::Text("Name:");
+                ImGui::SameLine();
+                if (ImGui::InputText("###mandel_name", config_buf_name, 28))
+                    updateConfigBuffer();
+            }
 
             ImGui::PushFont(MainWindow::instance()->monoFont());
             ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_ReadOnly);
@@ -197,32 +200,32 @@ void Mandelbrot_Scene_Data::populateUI()
     }
     
     
-    if (ImGui::Section("Examples", true, 0.0f, 2.0f))
-    {
-        ImGuiStyle& style = ImGui::GetStyle();
-        float avail_full = ImGui::GetContentRegionAvail().x;
-        float min_btn_w = ScaleSize(100.0f);
-        int   cols = (int)((avail_full + style.ItemSpacing.x) / (min_btn_w + style.ItemSpacing.x));
-        cols = cols < 1 ? 1 : cols;
-
-        if (ImGui::BeginTable("preset_grid", cols, ImGuiTableFlags_SizingStretchProp))
-        {
-            for (int i = 0; i < (int)mandel_presets.size(); ++i)
-            {
-                const auto& preset = mandel_presets[i];
-                ImGui::TableNextColumn();
-                ImGui::PushID(i);
-                if (ImGui::Button(preset.name.c_str()))
-                {
-                    MandelState dest;
-                    dest.deserialize(preset.data);
-                    startTween(*this, dest);
-                }
-                ImGui::PopID();
-            }
-            ImGui::EndTable();
-        }
-    }
+    //if (ImGui::Section("Examples", true, 0.0f, 2.0f))
+    //{
+    //    ImGuiStyle& style = ImGui::GetStyle();
+    //    float avail_full = ImGui::GetContentRegionAvail().x;
+    //    float min_btn_w = ScaleSize(100.0f);
+    //    int   cols = (int)((avail_full + style.ItemSpacing.x) / (min_btn_w + style.ItemSpacing.x));
+    //    cols = cols < 1 ? 1 : cols;
+    //
+    //    if (ImGui::BeginTable("preset_grid", cols, ImGuiTableFlags_SizingStretchProp))
+    //    {
+    //        for (int i = 0; i < (int)mandel_presets.size(); ++i)
+    //        {
+    //            const auto& preset = mandel_presets[i];
+    //            ImGui::TableNextColumn();
+    //            ImGui::PushID(i);
+    //            if (ImGui::Button(preset.name.c_str()))
+    //            {
+    //                MandelState dest;
+    //                dest.deserialize(preset.data);
+    //                startTween(*this, dest);
+    //            }
+    //            ImGui::PopID();
+    //        }
+    //        ImGui::EndTable();
+    //    }
+    //}
 
     /// --------------------------------------------------------------
     static bool show_view_by_default = !Platform()->is_mobile(); // Expect navigate by touch for mobile
@@ -511,6 +514,8 @@ void Mandelbrot_Scene::sceneStart()
     cardioid_lerper.create(Math::TWO_PI / 5760.0, 0.005);
 
     font = NanoFont::create("/data/fonts/DroidSans.ttf");
+
+    
 }
 
 void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
@@ -523,6 +528,14 @@ void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
 
     reference_zoom = camera->getReferenceZoom();
     ctx_stage_size = ctx->size();
+
+    #ifdef __EMSCRIPTEN__
+    if (Platform()->url_has("data"))
+    {
+        config_buf = Platform()->url_get_string("data");
+        loadConfigBuffer();
+    }
+    #endif
 }
 
 
@@ -955,12 +968,12 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     //    }
     //}
 
-    if (smoothing_type == (int)MandelSmoothing::MIX)
-        ctx->print() << "Smoothing: MIX";
-    else if (smoothing_type == (int)MandelSmoothing::ITER)
-        ctx->print() << "Smoothing: ITER";
-    else if (smoothing_type == (int)MandelSmoothing::DIST)
-        ctx->print() << "Smoothing: DIST";
+    //if (smoothing_type == (int)MandelSmoothing::MIX)
+    //    ctx->print() << "Smoothing: MIX";
+    //else if (smoothing_type == (int)MandelSmoothing::ITER)
+    //    ctx->print() << "Smoothing: ITER";
+    //else if (smoothing_type == (int)MandelSmoothing::DIST)
+    //    ctx->print() << "Smoothing: DIST";
 
 
     //DQuad quad = ctx->worldQuad();
@@ -973,10 +986,11 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
         ctx->setFont(font);
         ctx->setFontSize(20);
 
-        if (!Platform()->is_desktop_native())
+        //if (!Platform()->is_desktop_native())
         {
             ctx->fillText("Controls:", ScaleSize(10), ScaleSize(10));
-            ctx->fillText("  - Use pinch-gesture to pan / rotate / zoom the camera view", ScaleSize(10), ScaleSize(35));
+            ctx->fillText("  - Touch & drag to move", ScaleSize(10), ScaleSize(35));
+            ctx->fillText("  - Pinch to zoom / rotate", ScaleSize(10), ScaleSize(60));
         }
 
         ctx->setTextAlign(TextAlign::ALIGN_LEFT);
