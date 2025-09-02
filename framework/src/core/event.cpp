@@ -1,6 +1,6 @@
-#include <core/event.h>
-#include <platform/platform.h>
-#include <core/project.h>
+#include <bitloop/core/event.h>
+#include <bitloop/platform/platform.h>
+#include <bitloop/core/project.h>
 
 BL_BEGIN_NS
 

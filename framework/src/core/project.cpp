@@ -1,5 +1,5 @@
-#include <core/project.h>
-#include <core/main_window.h>
+#include <bitloop/core/project.h>
+#include <bitloop/core/main_window.h>
 
 BL_BEGIN_NS
 

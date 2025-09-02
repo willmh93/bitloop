@@ -93,19 +93,21 @@ _apply_common_settings(bitloop)
 #target_precompile_headers(bitloop PUBLIC <bitloop.h>)
 
 target_include_directories(bitloop
-  PUBLIC
-    # Consumers (and your tests) see only the root, so they must use <bitloop/...>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    PUBLIC
+        # Make: #include<bitloop.h> possible from child projects
+        #$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        #$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop>
 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
-  PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop>
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
+        $<INSTALL_INTERFACE:include/bitloop/3rd_party>
+        $<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
 
-    $<INSTALL_INTERFACE:include/bitloop/3rd_party>
-    $<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
+    PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
+
 )
 
 # ──────────────────────────────────────────────────────────────────

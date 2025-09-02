@@ -1,4 +1,4 @@
-#include <imguix/imgui_custom.h>
+#include <bitloop/imguix/imgui_custom.h>
 
 #define NANOSVG_IMPLEMENTATION
 #define NANOSVGRAST_IMPLEMENTATION

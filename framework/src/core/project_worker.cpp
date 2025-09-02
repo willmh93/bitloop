@@ -1,6 +1,6 @@
-#include <core/project_worker.h>
-#include <core/main_window.h>
-#include <core/project.h>
+#include <bitloop/core/project_worker.h>
+#include <bitloop/core/main_window.h>
+#include <bitloop/core/project.h>
 
 BL_BEGIN_NS
 

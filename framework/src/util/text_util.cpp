@@ -1,4 +1,4 @@
-#include <util/text_util.h>
+#include <bitloop/util/text_util.h>
 
 std::ostream& operator<<(std::ostream& os, const FiniteDouble& fd) {
     return os << fd.value;
