@@ -167,6 +167,9 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
     void loadTemplate(std::string_view data);
     void updateConfigBuffer();
     void loadConfigBuffer();
+
+    void savefileChanged();
+    std::string getURL();
 };
 
 struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
@@ -314,24 +317,24 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
                 return; 
 
             // Do we already have this result mirrored from across the X-axis?
-            if constexpr (Axis_Visible)
-            {
-                // Possibly not thread-safe since another task could be writing to mirrored pixel.
-                // However, in practice this seems to work fine
-                IVec2 mirrored_pixel_pos = pending_bmp->pixelPosFromWorld(DVec2{ wx, -wy });
-
-                if ((unsigned)mirrored_pixel_pos.x < w && (unsigned)mirrored_pixel_pos.y < h)
-                {
-                    EscapeFieldPixel& mirrored_pixel = pending_field->at(mirrored_pixel_pos.x, mirrored_pixel_pos.y);
-                    if (mirrored_pixel.depth >= 0)
-                    {
-                        // Yes
-                        field_pixel.depth = mirrored_pixel.depth;
-                        field_pixel.dist = mirrored_pixel.dist;
-                        return;
-                    }
-                }
-            }
+            ///if constexpr (Axis_Visible)
+            ///{
+            ///    // Possibly not thread-safe since another task could be writing to mirrored pixel.
+            ///    // However, in practice this seems to work fine
+            ///    IVec2 mirrored_pixel_pos = pending_bmp->pixelPosFromWorld(DVec2{ wx, -wy });
+            ///
+            ///    if ((unsigned)mirrored_pixel_pos.x < w && (unsigned)mirrored_pixel_pos.y < h)
+            ///    {
+            ///        EscapeFieldPixel& mirrored_pixel = pending_field->at(mirrored_pixel_pos.x, mirrored_pixel_pos.y);
+            ///        if (mirrored_pixel.depth >= 0)
+            ///        {
+            ///            // Yes
+            ///            field_pixel.depth = mirrored_pixel.depth;
+            ///            field_pixel.dist = mirrored_pixel.dist;
+            ///            return;
+            ///        }
+            ///    }
+            ///}
 
             double dist;
 

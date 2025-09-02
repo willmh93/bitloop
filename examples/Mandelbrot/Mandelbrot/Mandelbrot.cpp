@@ -108,11 +108,7 @@ void Mandelbrot_Scene_Data::populateUI()
         if (ImGui::Button("Share"))
         {
             show_share_dialog = true;
-            #ifdef __EMSCRIPTEN__
-            url = Platform()->url_get_base() + "?data=" + serialize("");
-            #else
-            url = "https://bitloop.dev/Mandelbrot?data=" + serialize("");
-            #endif
+            url = getURL();
             ImGui::OpenPopup("Share URL");
 
         }
@@ -334,7 +330,7 @@ void Mandelbrot_Scene_Data::populateUI()
             }
 
             double log_pct = cycle_iter_log1p_weight * 100.0;
-            if (ImGui::SliderDouble_InvLog("Logarithmic", &log_pct, 0.0, 100.0, "%.2f%%", ImGuiSliderFlags_NoRoundToFormat))
+            if (ImGui::SliderDouble_InvLog("Logarithmic", &log_pct, 0.0, 100.0, "%.2f%%", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_AlwaysClamp))
             {
                 cycle_iter_log1p_weight = log_pct / 100.0;
             }
@@ -356,11 +352,11 @@ void Mandelbrot_Scene_Data::populateUI()
             ImGui::GroupBox box("dist_group", dist_header);
 
             ImGui::Checkbox("Invert", &cycle_dist_invert);
-            ImGui::SliderDouble("Dist", &cycle_dist_value, 0.001, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic);
+            ImGui::SliderDouble("Dist", &cycle_dist_value, 0.001, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
             ImGui::PushID("DistLog");
             ///ImGui::SliderDouble("Logarithmic", &dist_log1p_weight, 0.000, 2.0, "%.3f");
             ImGui::PopID();
-            ImGui::SliderDouble_InvLog("Sharpness", &cycle_dist_sharpness, 0.0, 100.0, "%.4f%%", ImGuiSliderFlags_NoRoundToFormat);
+            ImGui::SliderDouble_InvLog("Sharpness", &cycle_dist_sharpness, 0.0, 100.0, "%.4f%%", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_AlwaysClamp);
         }
         if (disable_dist_options) ImGui::EndDisabled();
     }
@@ -371,7 +367,7 @@ void Mandelbrot_Scene_Data::populateUI()
 
         ImGui::Checkbox("Animate", &show_color_animation_options);
 
-        if (ImGui::DragDouble("Gradient shift", &gradient_shift, 0.01, -100.0, 100.0, " %.3f"))
+        if (ImGui::DragDouble("Gradient shift", &gradient_shift, 0.01, -100.0, 100.0, " %.3f", ImGuiSliderFlags_AlwaysClamp))
         {
             gradient_shift = Math::wrap(gradient_shift, 0.0, 1.0);
             colors_updated = true;
@@ -381,7 +377,7 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             ImGui::Indent();
             ImGui::PushID("gradient_increment");
-            ImGui::SliderDouble("Increment", &gradient_shift_step, -0.02, 0.02, "%.4f");
+            ImGui::SliderDouble("Increment", &gradient_shift_step, -0.02, 0.02, "%.4f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();
             ImGui::Unindent();
         }
@@ -393,7 +389,7 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             ImGui::Indent();
             ImGui::PushID("hue_increment");
-            ImGui::SliderDouble("Increment", &hue_shift_step, -5.0, 5.0, "%.3f");
+            ImGui::SliderDouble("Increment", &hue_shift_step, -5.0, 5.0, "%.3f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();
             ImGui::Unindent();
         }
@@ -507,6 +503,24 @@ void Mandelbrot_Scene_Data::loadConfigBuffer()
     deserialize(config_buf);
 }
 
+std::string Mandelbrot_Scene_Data::getURL()
+{
+    #ifdef __EMSCRIPTEN__
+    return Platform()->url_get_base() + "?data=" + serialize("");
+    #else
+    return "https://bitloop.dev/Mandelbrot?data=" + serialize("");
+    #endif
+}
+
+void Mandelbrot_Scene_Data::savefileChanged()
+{
+    config_buf = serialize(config_buf_name);
+    blPrint() << getURL();
+    #ifdef __EMSCRIPTEN__
+    Platform()->url_set_string("data", config_buf.c_str());
+    #endif
+}
+
 void Mandelbrot_Scene::sceneStart()
 {
     // todo: Stop this getting called twice on startup
@@ -546,7 +560,12 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     /// Process Viewports running this Scene
     ctx_stage_size = ctx->size();
 
+    bool savefile_changed = false;
+
     // ======== Progressing animation ========
+    if (Changed(show_color_animation_options))
+        savefile_changed = true;
+
     if (show_color_animation_options)
     {
         double ani_speed = dt / 0.016;
@@ -557,6 +576,11 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
         if (fabs(hue_shift_step) > 1.0e-4)
             hue_shift = Math::wrap(hue_shift + hue_shift_step*ani_speed, 0.0, 360.0);
+    }
+    else
+    {
+        if (Changed(gradient_shift, hue_shift, gradient_shift_step, hue_shift_step))
+            savefile_changed = true;
     }
 
 
@@ -575,6 +599,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             ))
         {
             colors_updated = true;
+            savefile_changed = true;
         }
     }
 
@@ -597,7 +622,9 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     }
 
     // ======== Updating Shifted Gradient ========
-    if (first_frame || Changed(gradient, gradient_shift, hue_shift))
+    bool gradient_changed = Changed(gradient);
+    if (gradient_changed) savefile_changed = true;
+    if (first_frame || gradient_changed || Changed(gradient_shift, hue_shift))
     {
         updateShiftedGradient();
         colors_updated = true;
@@ -639,7 +666,6 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     world_quad = camera->toWorldQuad(0, 0, iw, ih);
 
-   
     // Does depth field need recalculating?
     bool mandel_changed = first_frame || Changed(
         world_quad,
@@ -652,6 +678,9 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         x_spline.hash(),
         y_spline.hash()
     );
+
+    if (mandel_changed)
+        savefile_changed = true;
 
     // ======== Determine "minimum" smoothing mode (ITER always needed, DIST might not be) ========
     int old_smoothing = smoothing_type;
@@ -829,6 +858,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             cycle_dist_sharpness
             ))
         {
+            savefile_changed = true;
             if (frame_complete)
                 refreshFieldDepthNormalized();
         }
@@ -856,6 +886,9 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
 
     first_frame = false;
+
+    if (savefile_changed)
+        savefileChanged();
 }
 
 void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const

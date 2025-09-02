@@ -320,7 +320,7 @@ std::string PlatformManager::url_get_string(const char* k)
 
 // Set a string param in ?query (use_hash=0) or #hash (use_hash=1).
 // replace=1 uses history.replaceState (good for live updates).
-inline void PlatformManager::url_set_string(const char* key, const char* value, int use_hash, int replace)
+void PlatformManager::url_set_string(const char* key, const char* value, int use_hash, int replace)
 {
   MAIN_THREAD_EM_ASM({
     const key = UTF8ToString($0);
