@@ -52,11 +52,11 @@ void startTween(Mandelbrot_Scene_Data &scene_data, MandelState& target)
     target.reference_zoom = scene_data.reference_zoom;
     target.ctx_stage_size = scene_data.ctx_stage_size;
 
-    scene_data.r1 = scene_data.getAngledRect(this_state);
-    scene_data.r2 = scene_data.getAngledRect(target);
+    scene_data.tween_r1 = scene_data.getAngledRect(this_state);
+    scene_data.tween_r2 = scene_data.getAngledRect(target);
 
     DAngledRect encompassing;
-    encompassing.fitTo(scene_data.r1, scene_data.r2, scene_data.r1.aspectRatio());
+    encompassing.fitTo(scene_data.tween_r1, scene_data.tween_r2, scene_data.tween_r1.aspectRatio());
 
     double encompassing_zoom = (this_state.ctx_world_size() / encompassing.size).average();
     double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
@@ -74,7 +74,8 @@ void startTween(Mandelbrot_Scene_Data &scene_data, MandelState& target)
     // Begin tween
     scene_data.tween_progress = 0.0;
     scene_data.tweening = true;
-    scene_data.tween_duration = 1;// tweenDistance(scene_data.state_a, scene_data.state_b);
+    scene_data.tween_duration = 2;// tweenDistance(scene_data.state_a, scene_data.state_b);
+    scene_data.cycle_dist_invert = target.cycle_dist_invert;
 }
 
 void lerpState(
@@ -99,17 +100,24 @@ void lerpState(
     double a_height = toHeight(a.cam_view.zoom);
     double b_height = toHeight(b.cam_view.zoom);
 
-    double dst_height = Math::lerp(a_height, b_height, f) + lift_height;
+    double base_zoom_f = scene_data.tween_base_zoom_spline((float)f);
+    double dst_height = Math::lerp(a_height, b_height, base_zoom_f) + lift_height;
     dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
-    dst.cam_view.zoom = fromHeight(dst_height);
+    dst.cam_view.zoom = fromHeight(dst_height); // override zoom from computed "height"
 
     // === Quality ===
     dst.quality = Math::lerp(a.quality, dst_iter_lim, pos_f);
 
     // === Color Cycle ===
     float color_cycle_f = scene_data.tween_color_cycle((float)f);
+
+    dst.iter_dist_mix = Math::lerp(a.iter_dist_mix, b.iter_dist_mix, color_cycle_f);
+
     dst.cycle_iter_value = Math::lerp(a.cycle_iter_value, b.cycle_iter_value, color_cycle_f);
     dst.cycle_iter_log1p_weight = Math::lerp(a.cycle_iter_log1p_weight, b.cycle_iter_log1p_weight, color_cycle_f);
+
+    dst.cycle_dist_value = Math::lerp(a.cycle_dist_value, b.cycle_dist_value, color_cycle_f);
+    dst.cycle_dist_sharpness = Math::lerp(a.cycle_dist_sharpness, b.cycle_dist_sharpness, color_cycle_f);
 
     // === Lerp Gradient/Hue Shift===
     dst.gradient_shift = Math::lerp(a.gradient_shift, b.gradient_shift, pos_f);
@@ -128,7 +136,6 @@ void lerpState(
         dst.quality = b.quality;
 
         dst.cycle_iter_dynamic_limit = b.cycle_iter_dynamic_limit;
-        dst.cycle_iter_value = b.cycle_iter_value;
 
         dst.show_color_animation_options = b.show_color_animation_options;
     }

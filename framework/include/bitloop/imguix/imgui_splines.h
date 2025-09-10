@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -1516,12 +1516,7 @@ namespace ImSpline
 
 	inline bool SplineEditor(const char* label, Spline* spline, ImRect* view_rect, float max_editor_size=300.0f)
 	{
-		UNUSED(label);
-		UNUSED(spline);
-		UNUSED(view_rect);
-		UNUSED(max_editor_size);
-
-		/*using namespace ImGui;
+		using namespace ImGui;
 
 		//const ImGuiStyle& Style = GetStyle();
 		const ImGuiIO& IO = GetIO();
@@ -1548,8 +1543,7 @@ namespace ImSpline
 		//const bool hovered = IsItemActive() || ItemHoverable(bb, id, ImGui::GetCurrentContext()->LastItemData.ItemFlags);
 
 		ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
-		ImVec4 dim_bg = bg * 0.85f;
-		dim_bg.w = bg.w;
+		ImVec4 dim_bg = ImVec4(bg.x * 0.85f, bg.y * 0.85f, bg.z * 0.85f, bg.w);
 		
 		const ImGuiID id = Window->GetID(label);
 
@@ -1912,7 +1906,7 @@ namespace ImSpline
 				MarkItemEdited(id);
 		}
 
-		return spline_changed;*/
+		return spline_changed;
 		return false;
 	}
 
@@ -1932,7 +1926,7 @@ namespace ImSpline
 		UNUSED(min_graph_wrap_width);
 
 
-		/*float avail_width = ImGui::GetContentRegionAvail().x;
+		float avail_width = ImGui::GetContentRegionAvail().x;
 		float spacing = ImGui::GetStyle().ItemSpacing.x;
 
 		// Clamp the available width to max_graph_width if necessary.
@@ -1956,7 +1950,7 @@ namespace ImSpline
 			ImGui::SameLine(0, spacing);
 			bool ret2 = SplineEditor(label2, spline2, view_rect, graph_size);
 			return ret1 || ret2;
-		}*/
+		}
 		return false;
 	}
 }

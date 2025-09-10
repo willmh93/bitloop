@@ -16,13 +16,13 @@ enum MandelFlag : uint32_t
     MANDEL_DYNAMIC_COLOR_CYCLE  = 1u << 3,
     MANDEL_NORMALIZE_DEPTH      = 1u << 4,
     MANDEL_INVERT_DIST          = 1u << 5,
+    MANDEL_USE_SMOOTHING        = 1u << 6,
 
     // bitmasks
     MANDEL_FLAGS_MASK = 0x000FFFFFu, // max 24 bit-flags
     MANDEL_SMOOTH_MASK = 0x00F00000u, // max 16 smooth types
     MANDEL_VERSION_MASK = 0xFF000000u, // max 255 versions
 
-    MANDEL_SMOOTH_BITSHIFT = 20,
     MANDEL_VERSION_BITSHIFT = 24
 };
 
@@ -50,14 +50,12 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
 
     void setAllDepth(double value)
     {
-        blPrint() << "resetField(-1) - compute_phase: " << compute_phase;
         for (int i = 0; i < size(); i++)
             std::vector<EscapeFieldPixel>::at(i) = { value, value };
     }
     void setDimensions(int _w, int _h)
     {
-        if (size() >= (_w * _h))
-            return;
+        if (size() >= (_w * _h)) return;
         w = _w;
         h = _h;
         resize(w * h, { -1.0, -1.0 });

@@ -5,7 +5,7 @@
 SIM_BEG;
 using namespace BL;
 
-constexpr bool COMPRESS_CONFIG = true;
+
 
 struct MandelState
 {
@@ -26,24 +26,26 @@ struct MandelState
     bool     dynamic_iter_lim             = true;
     double   quality                      = 0.5; // Used for UI (ignored during tween, represents iter_lim OR % of iter_lim)
 
+    bool     use_smoothing                = true;
     double   iter_dist_mix                = 0.0;
 
-    bool     cycle_iter_dynamic_limit   = true;
-    bool     cycle_iter_normalize_depth = true;
-    double   cycle_iter_log1p_weight    = 0.0;
-    double   cycle_iter_value           = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
 
-    bool     cycle_dist_invert          = false;
-    double   cycle_dist_value           = 0.5f;
-    double   cycle_dist_sharpness       = 0.9; // Used for UI (ignored during tween)
+    bool     cycle_iter_dynamic_limit     = true;
+    bool     cycle_iter_normalize_depth   = true;
+    double   cycle_iter_log1p_weight      = 0.0;
+    double   cycle_iter_value             = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
+                                          
+    bool     cycle_dist_invert            = false;
+    double   cycle_dist_value             = 0.5f;
+    double   cycle_dist_sharpness         = 0.9; // Used for UI (ignored during tween)
+                                          
+    double gradient_shift                 = 0.0;
+    double hue_shift                      = 0.0;
+                                          
+    double gradient_shift_step            = 0.0078;
+    double hue_shift_step                 = 0.136;
 
-    double gradient_shift               = 0.0;
-    double hue_shift                    = 0.0;
-
-    double gradient_shift_step          = 0.0078;
-    double hue_shift_step               = 0.136;
-
-    int smoothing_type                  = (int)MandelSmoothing::ITER;
+    int smoothing_type = (int)MandelSmoothing::ITER; // this is being dynamically set, no need to save
 
     ImGradient gradient; // todo: NOT efficient to store entire gradient here
 
@@ -71,10 +73,11 @@ struct MandelState
             gradient_shift_step == rhs.gradient_shift_step &&
             hue_shift_step == rhs.hue_shift_step &&
             smoothing_type == rhs.smoothing_type &&
-            gradient == rhs.gradient &&
             show_color_animation_options == rhs.show_color_animation_options &&
             flatten == rhs.flatten &&
-            flatten_amount == rhs.flatten_amount
+            flatten_amount == rhs.flatten_amount &&
+            // Save slowest for last
+            gradient == rhs.gradient
         );
     }
 
@@ -83,8 +86,10 @@ struct MandelState
         generateGradientFromPreset(gradient, preset);
     }
 
-    std::string serialize(std::string name)
+    std::string serialize()
     {
+        constexpr bool COMPRESS_CONFIG = true;
+
         // Increment version each time the format changes
         uint32_t version = 0;
         uint32_t flags = 0;
@@ -96,8 +101,9 @@ struct MandelState
         if (cycle_iter_dynamic_limit)   flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
         if (cycle_iter_normalize_depth) flags |= MANDEL_NORMALIZE_DEPTH;
         if (cycle_dist_invert)          flags |= MANDEL_INVERT_DIST;
+        if (use_smoothing)              flags |= MANDEL_USE_SMOOTHING;
 
-        flags |= ((uint32_t)smoothing_type << MANDEL_SMOOTH_BITSHIFT);
+        //flags |= ((uint32_t)smoothing_type << MANDEL_SMOOTH_BITSHIFT);
         flags |= (version << MANDEL_VERSION_BITSHIFT);
 
         JSON::json info;
@@ -154,34 +160,12 @@ struct MandelState
         }
 
         std::string raw_json = JSON::unmarkCleanFloats(info.dump());
-        //raw_json = JSON::json_remove_key_quotes(raw_json);
 
         if constexpr (COMPRESS_CONFIG)
         {
             // Post-process: Remove CLEANFLOAT() markers, compress & wrap lines
             std::string json_unquoted = JSON::json_remove_key_quotes(raw_json);
-
-            //std::string compressed_quoted = Compression::brotli_ascii_compress(raw_json);
             std::string compressed_unquoted = Compression::brotli_ascii_compress(json_unquoted);
-
-            //std::string ret = "==============================\n";
-            //std::string ret = "";
-
-            // Insert name if provided
-            ///int name_len = (int)name.size();
-            ///if (name_len > 0)
-            ///{
-            ///    int wrap_len = 30;
-            ///    int eq_pad_len = (wrap_len - (name_len + 2)) / 2;
-            ///    std::string eq_padding(eq_pad_len, '=');
-            ///    ret = eq_padding + ' ' + name + ' ' + eq_padding + ((name.size() % 2) ? "=" : "") + '\n';
-            ///}
-
-            //ret += compressed_unquoted;
-            //ret += TextUtil::wrapString(compressed_txt, 30);
-            //ret += "\n==============================\n";
-            //return ret;
-
             return compressed_unquoted;
         }
         else
@@ -190,20 +174,16 @@ struct MandelState
         }
     }
 
-    bool deserialize(std::string_view sv)
+private:
+    bool _deserialize(std::string_view sv, bool COMPRESS_CONFIG)
     {
         sv = TextUtil::trim_view(sv);
-        ///std::string txt = TextUtil::dedent_max(sv);
-        ///size_t i0 = txt.find_first_of('\n') + 1;
-        ///size_t i1 = txt.find_last_of('=');
-        ///i1 = txt.find_last_of('\n', i1);
-        ///txt = txt.substr(i0, i1 - i0);
-        
         std::string txt = sv.data();
 
         std::string uncompressed;
-        if constexpr (COMPRESS_CONFIG)
+        if (COMPRESS_CONFIG)
         {
+            if (!Compression::valid_b62(txt)) return false;
             uncompressed = Compression::brotli_ascii_decompress(TextUtil::unwrapString(txt));
         }
         else
@@ -225,7 +205,7 @@ struct MandelState
 
         if (version >= 0)
         {
-            smoothing_type = ((flags & MANDEL_SMOOTH_MASK) >> MANDEL_SMOOTH_BITSHIFT);
+            //smoothing_type = ((flags & MANDEL_SMOOTH_MASK) >> MANDEL_SMOOTH_BITSHIFT);
 
             dynamic_iter_lim            = flags & MANDEL_DYNAMIC_ITERS;
             show_axis                   = flags & MANDEL_SHOW_AXIS;
@@ -233,6 +213,7 @@ struct MandelState
             cycle_iter_dynamic_limit    = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
             cycle_iter_normalize_depth  = flags & MANDEL_NORMALIZE_DEPTH;
             cycle_dist_invert           = flags & MANDEL_INVERT_DIST;
+            use_smoothing               = flags & MANDEL_USE_SMOOTHING;
 
             // View
             cam_view.x = info.value("x", 0.0);
@@ -272,6 +253,9 @@ struct MandelState
             // Gradient
             if (info.contains("p"))
                 gradient.deserialize(info.value("p", ""));
+
+            gradient.clearSelectedMark();
+            gradient.clearDraggingMark();
         }
         else if (version >= 1)
         {
@@ -279,6 +263,15 @@ struct MandelState
             //if (info.contains("B")) y_spline.deserialize(info["B"].get<std::string>());
         }
 
+        return true;
+    }
+
+public:
+    bool deserialize(std::string_view sv)
+    {
+        // First, try decoding compressed
+        if (_deserialize(sv, true)) return true;
+        if (_deserialize(sv, false)) return true;
         return true;
     }
 };

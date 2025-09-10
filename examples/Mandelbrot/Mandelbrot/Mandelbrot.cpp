@@ -28,26 +28,6 @@ void Mandelbrot_Scene_Data::initData()
     loadGradientPreset(GradientPreset::CLASSIC);
 }
 
-
-//static void on_paste(std::string&& text, void* user)
-//{
-//    blPrint() << "Button Pasted: " << text;
-//    blPrint() << "user: " << (uint64_t)user;
-//    
-//
-//    std::string* target = static_cast<std::string*>(user);
-//    blPrint() << "buf: " << (*target);
-//
-//    //*target = text;
-//    //*target = std::move(text);
-//
-//    ImGui::OpenPopup("Load Data"); // open on this frame
-//}
-
-
-
-
-
 void Mandelbrot_Scene_Data::populateUI()
 {
     bool is_tweening = tweening;
@@ -56,21 +36,13 @@ void Mandelbrot_Scene_Data::populateUI()
 
     if (ImGui::Section("Saving & Loading", true, 0))
     {
-        static bool show_save_dialog = false;
-        static bool show_load_dialog = false;
-        static bool show_share_dialog = false;
-
         if (ImGui::Button("Save"))
         {
             show_save_dialog = true;
-            strcpy(config_buf_name, "");
+            //strcpy(config_buf_name, "");
             updateConfigBuffer();
             ImGui::OpenPopup("Save Data"); // open on this frame
         }
-
-        #ifdef __EMSCRIPTEN__
-        static bool opening_popup = false;
-        #endif
 
         ImGui::SameLine();
         if (ImGui::Button("Load"))
@@ -86,7 +58,7 @@ void Mandelbrot_Scene_Data::populateUI()
             ///    config_buf = buf;
             ///    blPrint() << "config_buf: " << config_buf;
             ///
-            ///    opening_popup = true;
+            ///    opening_load_popup = true;
             ///});
             ///#else
             config_buf = "";
@@ -96,9 +68,9 @@ void Mandelbrot_Scene_Data::populateUI()
         }
 
         #ifdef __EMSCRIPTEN__
-        if (opening_popup)
+        if (opening_load_popup)
         {
-            opening_popup = false;
+            opening_load_popup = false;
             show_load_dialog = true;
             ImGui::OpenPopup("Load Data");
         }
@@ -121,15 +93,15 @@ void Mandelbrot_Scene_Data::populateUI()
             ImVec2 avail = ImGui::GetContentRegionAvail();
             avail.y -= ImGui::GetFrameHeightWithSpacing(); // leave room for buttons/input
 
-            if (!Platform()->is_mobile())
-            {
-                avail.y -= ImGui::GetFrameHeightWithSpacing();
-                ImGui::AlignTextToFramePadding();
-                ImGui::Text("Name:");
-                ImGui::SameLine();
-                if (ImGui::InputText("###mandel_name", config_buf_name, 28))
-                    updateConfigBuffer();
-            }
+            //if (!Platform()->is_mobile())
+            //{
+            //    avail.y -= ImGui::GetFrameHeightWithSpacing();
+            //    ImGui::AlignTextToFramePadding();
+            //    ImGui::Text("Name:");
+            //    ImGui::SameLine();
+            //    if (ImGui::InputText("###mandel_name", config_buf_name, 28))
+            //        updateConfigBuffer();
+            //}
 
             ImGui::PushFont(MainWindow::instance()->monoFont());
             ImGui::InputTextMultiline("###Config", &config_buf, avail, ImGuiInputTextFlags_ReadOnly);
@@ -198,34 +170,34 @@ void Mandelbrot_Scene_Data::populateUI()
             ImGui::EndPopup();
         }
     }
+
+    if (ImGui::Section("Examples", true, 0.0f, 2.0f))
+    {
+        ImGuiStyle& style = ImGui::GetStyle();
+        float avail_full = ImGui::GetContentRegionAvail().x;
+        float min_btn_w = ScaleSize(100.0f);
+        int   cols = (int)((avail_full + style.ItemSpacing.x) / (min_btn_w + style.ItemSpacing.x));
+        cols = cols < 1 ? 1 : cols;
     
-    
-    //if (ImGui::Section("Examples", true, 0.0f, 2.0f))
-    //{
-    //    ImGuiStyle& style = ImGui::GetStyle();
-    //    float avail_full = ImGui::GetContentRegionAvail().x;
-    //    float min_btn_w = ScaleSize(100.0f);
-    //    int   cols = (int)((avail_full + style.ItemSpacing.x) / (min_btn_w + style.ItemSpacing.x));
-    //    cols = cols < 1 ? 1 : cols;
-    //
-    //    if (ImGui::BeginTable("preset_grid", cols, ImGuiTableFlags_SizingStretchProp))
-    //    {
-    //        for (int i = 0; i < (int)mandel_presets.size(); ++i)
-    //        {
-    //            const auto& preset = mandel_presets[i];
-    //            ImGui::TableNextColumn();
-    //            ImGui::PushID(i);
-    //            if (ImGui::Button(preset.name.c_str()))
-    //            {
-    //                MandelState dest;
-    //                dest.deserialize(preset.data);
-    //                startTween(*this, dest);
-    //            }
-    //            ImGui::PopID();
-    //        }
-    //        ImGui::EndTable();
-    //    }
-    //}
+        if (ImGui::BeginTable("preset_grid", cols, ImGuiTableFlags_SizingStretchProp))
+        {
+            static std::vector<MandelPreset> mandel_presets = generateMandelPresets();
+            for (int i = 0; i < (int)mandel_presets.size(); ++i)
+            {
+                const auto& preset = mandel_presets[i];
+                ImGui::TableNextColumn();
+                ImGui::PushID(i);
+                if (ImGui::Button(preset.name.c_str()))
+                {
+                    MandelState dest;
+                    dest.deserialize(preset.data);
+                    startTween(*this, dest);
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+    }
 
     /// --------------------------------------------------------------
     static bool show_view_by_default = !Platform()->is_mobile(); // Expect navigate by touch for mobile
@@ -274,9 +246,28 @@ void Mandelbrot_Scene_Data::populateUI()
 
     } // End Header
 
+    //if (ImGui::Section("Instant Styles", false, 5.0f, 2.0f))
+    //{
+    //    if (ImGui::Button("High Contrast"))
+    //    {
+    //        iter_dist_mix = 1;
+    //        //cycle_iter_dynamic_limit = true;
+    //        //cycle_iter_normalize_depth = true;
+    //        //cycle_iter_value = 4;
+    //        cycle_dist_invert = false;
+    //        cycle_dist_value = 1;
+    //        cycle_dist_sharpness = 100;
+    //        show_color_animation_options = false;
+    //        gradient_shift = 0.0;
+    //        hue_shift = 0.0;
+    //        loadGradientPreset(GradientPreset::CLASSIC);
+    //    }
+    //}
+
     /// --------------------------------------------------------------
     if (ImGui::Section("Colour Cycle", true, 5.0f, 2.0f))
     {
+        ImGui::SetNextItemWidthForLabel("Iter/Dist Mix");
         ImGui::SliderDouble("Iter/Dist Mix", &iter_dist_mix, 0.0, 1.0, "%.2f");
 
         int iter_pct = (int)((1.0 - iter_dist_mix) * 100.0);
@@ -296,29 +287,41 @@ void Mandelbrot_Scene_Data::populateUI()
 
         if (disable_iter_options) ImGui::BeginDisabled();
         {
-            ImGui::GroupBox box("iter_group", iter_header);
+            ImGui::GroupBox box("iter_group", iter_header, ScaleSize(13.0f), ScaleSize(20.0f));
 
-            if (ImGui::Checkbox("Auto from Zoom", &cycle_iter_dynamic_limit))
+            if (ImGui::Checkbox("% of Max Iters", &cycle_iter_dynamic_limit))
             {
                 if (cycle_iter_dynamic_limit)
                     cycle_iter_value /= iter_lim;
                 else
                     cycle_iter_value *= iter_lim;
             }
+            ImGui::SameLine();
+            ImGui::Dummy(ImVec2(10.0f, 0.0f));
+            ImGui::SameLine();
+            ImGui::Checkbox("Smooth", &use_smoothing);
 
             //ImGui::SameLine();
             //ImGui::Dummy(ImVec2(10.0f, 0.0f));
-            ImGui::SameLine();
-            ImGui::Checkbox("Normalize Visible Range", &cycle_iter_normalize_depth);
+            ImGui::Checkbox("Normalize to Visible Range", &cycle_iter_normalize_depth);
 
             double raw_cycle_iters;
+
+            float required_space = 0.0f;
+            box.IncreaseRequiredSpaceForLabel(required_space, cycle_iter_dynamic_limit ? "% Iterations" : "Iterations");
+            box.IncreaseRequiredSpaceForLabel(required_space, "Logarithmic");
 
             if (cycle_iter_dynamic_limit)
             {
                 double cycle_pct = cycle_iter_value * 100.0;
+
+
+
+                box.SetNextItemWidthForSpace(required_space);
                 ImGui::SliderDouble("% Iterations", &cycle_pct, 0.001, 100.0, "%.4f%%",
                     (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
                     ImGuiSliderFlags_AlwaysClamp);
+
                 cycle_iter_value = cycle_pct / 100.0;
 
                 raw_cycle_iters = calculateIterLimit() * cycle_iter_value;
@@ -326,6 +329,7 @@ void Mandelbrot_Scene_Data::populateUI()
             }
             else
             {
+                box.SetNextItemWidthForSpace(required_space);
                 ImGui::SliderDouble("Iterations", &cycle_iter_value, 1.0, (float)iter_lim, "%.3f",
                     (/*color_cycle_use_log1p ?*/ ImGuiSliderFlags_Logarithmic /*: 0*/) |
                     ImGuiSliderFlags_AlwaysClamp);
@@ -334,6 +338,7 @@ void Mandelbrot_Scene_Data::populateUI()
             }
 
             double log_pct = cycle_iter_log1p_weight * 100.0;
+            box.SetNextItemWidthForSpace(required_space);
             if (ImGui::SliderDouble_InvLog("Logarithmic", &log_pct, 0.0, 100.0, "%.2f%%", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_AlwaysClamp))
             {
                 cycle_iter_log1p_weight = log_pct / 100.0;
@@ -355,11 +360,18 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             ImGui::GroupBox box("dist_group", dist_header);
 
+            float required_width = 0.0f;
+            box.IncreaseRequiredSpaceForLabel(required_width, "Dist");
+            box.IncreaseRequiredSpaceForLabel(required_width, "Sharpness");
+
             ImGui::Checkbox("Invert", &cycle_dist_invert);
+
+            box.SetNextItemWidthForSpace(required_width);
             ImGui::SliderDouble("Dist", &cycle_dist_value, 0.001, 1.0, "%.5f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
             ImGui::PushID("DistLog");
-            ///ImGui::SliderDouble("Logarithmic", &dist_log1p_weight, 0.000, 2.0, "%.3f");
             ImGui::PopID();
+
+            box.SetNextItemWidthForSpace(required_width);
             ImGui::SliderDouble_InvLog("Sharpness", &cycle_dist_sharpness, 0.0, 100.0, "%.4f%%", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_AlwaysClamp);
         }
         if (disable_dist_options) ImGui::EndDisabled();
@@ -371,6 +383,10 @@ void Mandelbrot_Scene_Data::populateUI()
 
         ImGui::Checkbox("Animate", &show_color_animation_options);
 
+        float required_space = 0.0f;
+        ImGui::IncreaseRequiredSpaceForLabel(required_space, "Gradient shift");
+
+        ImGui::SetNextItemWidthForSpace(required_space);
         if (ImGui::DragDouble("Gradient shift", &gradient_shift, 0.01, -100.0, 100.0, " %.3f", ImGuiSliderFlags_AlwaysClamp))
         {
             gradient_shift = Math::wrap(gradient_shift, 0.0, 1.0);
@@ -381,11 +397,13 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             ImGui::Indent();
             ImGui::PushID("gradient_increment");
+            ImGui::SetNextItemWidthForSpace(required_space);
             ImGui::SliderDouble("Increment", &gradient_shift_step, -0.02, 0.02, "%.4f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();
             ImGui::Unindent();
         }
 
+        ImGui::SetNextItemWidthForSpace(required_space);
         if (ImGui::SliderDouble("Hue shift", &hue_shift, 0.0, 360, "%.3f"))
             colors_updated = true;
 
@@ -393,6 +411,7 @@ void Mandelbrot_Scene_Data::populateUI()
         {
             ImGui::Indent();
             ImGui::PushID("hue_increment");
+            ImGui::SetNextItemWidthForSpace(required_space);
             ImGui::SliderDouble("Increment", &hue_shift_step, -5.0, 5.0, "%.3f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();
             ImGui::Unindent();
@@ -460,19 +479,23 @@ void Mandelbrot_Scene_Data::populateUI()
         ImGui::EndDisabled();
 
     // ======== Developer ========
-
-    /*static ImRect vr = { 0.0f, 1.0f, 1.0f, 0.0f };
+    #ifdef BL_DEBUG
+    static ImRect vr = { 0.0f, 1.0f, 1.0f, 0.0f };
 
     ImGui::SeparatorText("Position Tween");
     ImSpline::SplineEditor("tween_pos", &tween_pos_spline, &vr);
     ImSpline::SplineEditor("tween_zoom_lift", &tween_zoom_lift_spline, &vr);
+    ImSpline::SplineEditor("tween_base_zoom", &tween_base_zoom_spline, &vr);
 
     //ImGui::InputTextMultiline("###pos_buf", pos_tween_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput));
     if (ImGui::Button("Copy position spline")) ImGui::SetClipboardText(tween_pos_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
 
     //ImGui::InputTextMultiline("###pos_buf", zoom_tween_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput));
-    if (ImGui::Button("Copy zoom spline")) ImGui::SetClipboardText(tween_zoom_lift_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
-    */
+    if (ImGui::Button("Copy lift spline")) ImGui::SetClipboardText(tween_zoom_lift_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
+
+    if (ImGui::Button("Copy base zoom spline")) ImGui::SetClipboardText(tween_base_zoom_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
+    #endif
+    
 }
 
 int Mandelbrot_Scene_Data::calculateIterLimit() const
@@ -483,7 +506,7 @@ int Mandelbrot_Scene_Data::calculateIterLimit() const
     {
         int iters = (int)(quality);
         if (tweening) 
-            iters = std::min(iters, mandelbrotIterLimit(cam_view.zoom));
+            iters = std::min(iters, (int)(mandelbrotIterLimit(cam_view.zoom)*0.25f));
         return iters;
     }
 }
@@ -499,7 +522,7 @@ void Mandelbrot_Scene_Data::loadTemplate(std::string_view data)
 
 void Mandelbrot_Scene_Data::updateConfigBuffer()
 {
-    config_buf = serialize(config_buf_name);
+    config_buf = serialize();
 }
 
 void Mandelbrot_Scene_Data::loadConfigBuffer()
@@ -510,16 +533,15 @@ void Mandelbrot_Scene_Data::loadConfigBuffer()
 std::string Mandelbrot_Scene_Data::getURL()
 {
     #ifdef __EMSCRIPTEN__
-    return Platform()->url_get_base() + "?data=" + serialize("");
+    return Platform()->url_get_base() + "?data=" + serialize();
     #else
-    return "https://bitloop.dev/Mandelbrot?data=" + serialize("");
+    return "https://bitloop.dev/Mandelbrot?data=" + serialize();
     #endif
 }
 
 void Mandelbrot_Scene_Data::savefileChanged()
 {
-    config_buf = serialize(config_buf_name);
-    blPrint() << getURL();
+    config_buf = serialize();
     #ifdef __EMSCRIPTEN__
     Platform()->url_set_string("data", config_buf.c_str());
     #endif
@@ -532,8 +554,6 @@ void Mandelbrot_Scene::sceneStart()
     cardioid_lerper.create(Math::TWO_PI / 5760.0, 0.005);
 
     font = NanoFont::create("/data/fonts/DroidSans.ttf");
-
-    
 }
 
 void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
@@ -557,10 +577,10 @@ void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
 }
 
 
-
-
 void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 {
+    
+
     /// Process Viewports running this Scene
     ctx_stage_size = ctx->size();
 
@@ -586,6 +606,11 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         if (Changed(gradient_shift, hue_shift, gradient_shift_step, hue_shift_step))
             savefile_changed = true;
     }
+
+    //if (input.touch.now().fingers.size())
+    //    blPrint() << input.touch.now().fingers[0].stage_x;
+
+    
 
 
     // ======== Color cycle changed? ========
@@ -664,6 +689,26 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     // ======== Camera View ========
     cam_view.apply(camera);
 
+	// Process camera velocity
+    if (mouse->pressed)
+    {
+        camera_vel_pos = { 0, 0 };
+
+        // Stop zoom velocity on touch
+        //if (Platform()->is_mobile())
+            camera_vel_zoom = 1.0;
+    }
+    else
+    {
+        if (camera_vel_pos.magnitude() > 0.001)    camera->setPos(camera->pos() + camera_vel_pos);
+        if (std::abs(camera_vel_zoom-1.0) > 0.001) camera->setZoom(camera->zoom() * camera_vel_zoom);
+
+        camera_vel_pos *= 0.9;
+        camera_vel_zoom += (1 - camera_vel_zoom) * 0.1;
+    }
+
+    cam_view.read(camera);
+
     // Ensure size divisble by 9 for perfect result forwarding from: [9x9] to [3x3] to [1x1]
     int iw = (static_cast<int>(ceil(ctx->width() / 9))) * 9;
     int ih = (static_cast<int>(ceil(ctx->height() / 9))) * 9;
@@ -697,7 +742,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     else
         new_smoothing = (int)MandelSmoothing::MIX;
 
-    bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing >= (int)MandelSmoothing::DIST);
+    bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing == (int)MandelSmoothing::DIST);
     bool downgrade_smoothing_type = (old_smoothing == (int)MandelSmoothing::MIX)  && (new_smoothing == (int)MandelSmoothing::ITER);
 
     // If we need DIST calcuation but we're missing it, force recalculate (regardless of whether mandel view changed)
@@ -722,7 +767,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         current_row = 0;
         field_9x9.setAllDepth(-1.0);
 
-        compute_t0 = std::chrono::steady_clock::now();
+        ///compute_t0 = std::chrono::steady_clock::now();
     }
 
     // Has the compute phase changed? Force update
@@ -776,7 +821,10 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             ///bool linear = x_spline.isSimpleLinear() && y_spline.isSimpleLinear();
             MandelSmoothing smoothing = static_cast<MandelSmoothing>(smoothing_type);
 
-            double MAX_ZOOM_FLOAT;
+            ///if (!use_smoothing && smoothing == MandelSmoothing::ITER)
+            ///    smoothing = MandelSmoothing::NONE;
+
+            /*double MAX_ZOOM_FLOAT;
             double MAX_DOUBLE_ZOOM;
 
             if (smoothing != MandelSmoothing::DIST)
@@ -788,7 +836,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             {
                 MAX_ZOOM_FLOAT = 40;// 100;
                 MAX_DOUBLE_ZOOM = 2e10;
-            }
+            }*/
 
             //const DQuad wq = camera->toWorldQuad({ 0, 0, ctx->width(), ctx->height() });
 
@@ -798,6 +846,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             //bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
             //bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
 
+           
 
             /*if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
             else if (b64)*/ finished_compute = table_invoke<double>(build_table(mandelbrot, [&]), smoothing, flatten, x_axis_visible);
@@ -837,11 +886,10 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
                 case 2:
                     // Finish final 1x1 compute
-                    auto elapsed = std::chrono::steady_clock::now() - compute_t0;
-                    double dt = std::chrono::duration<double, std::milli>(elapsed).count();
-                    double dt_avg = timer_ma.push(dt);
-
-                    blPrint() << "Compute timer: " << BL::to_fixed(4) << dt_avg;
+                    ///auto elapsed = std::chrono::steady_clock::now() - compute_t0;
+                    ///double dt = std::chrono::duration<double, std::milli>(elapsed).count();
+                    ///double dt_avg = timer_ma.push(dt);
+                    ///blPrint() << "Compute timer: " << BL::to_fixed(4) << dt_avg;
                     break;
             }
 
@@ -849,8 +897,6 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                 computing_phase++;
         }
     }
-
-
 
     if (finished_compute || colors_updated)
     {
@@ -1017,9 +1063,12 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     //bool x_axis_visible = quad.intersects({ {quad.minX(), 0}, {quad.maxX(), 0}});
     //ctx->print() << "\nx_axis_visible: " << (x_axis_visible ? "true" : "false");
 
+    //ctx->printTouchInfo();
+
+    camera->stageTransform();
+
     if (display_intro)
     {
-        camera->stageTransform();
         ctx->setFont(font);
         ctx->setFontSize(20);
 
@@ -1032,19 +1081,99 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
 
         ctx->setTextAlign(TextAlign::ALIGN_LEFT);
         ctx->setTextBaseline(TextBaseline::BASELINE_BOTTOM);
-        ctx->fillText("Developed by Will Hemsworth", ScaleSize(4), ctx->height() - ScaleSize(4));
+        //ctx->fillText("Developer:    Will Hemsworth", ScaleSize(10), ctx->height() - ScaleSize(32));
+        ctx->fillText("Contact:  will.hemsworth@bitloop.dev", ScaleSize(10), ctx->height() - ScaleSize(10));
     }
 
+    //~ // Wont work nicely in slow scene, needs to be imgui or own it's own thread/layer/nanovg-overlay.
+      // uiOverlay(ctx) for both nanovg and imgui (on gui main thread)
+
+    ctx->print() << "camera_vel: " << camera_vel_pos << "\n";
+}
+
+void Mandelbrot_Scene::viewportOverlay(Viewport* ctx) const
+{
+    //ctx->setFillStyle(255, 0, 0, 255);
+    //ctx->fillRoundedRect(10, 10, 150, 50, 8);
+
+    UNUSED(ctx);
+    //if (input.touch.finger(0).pressed)
+    //{
+    //  minimizeMaximizeButton(ctx, false);
+    //}
+
+    //if (Input::Touch().Fingers(0).Released(minimizeMaximizeButton(ctx, false)))
+    //{
+    //
+    //}
+    //
+    //if (input.touch.now().fingers(0).clicked(minimizeMaximizeButton(ctx, false)))
+    //{
+    //}
+}
+
+DRect Mandelbrot_Scene::minimizeMaximizeButtonRect(Viewport* ctx) const
+{
+    const DVec2  s = ScaleSize(40, 40);
+    const double pad = ScaleSize(6);
+    const DRect vr = ctx->viewportRect();
+
+    DVec2 tl = vr.tr() + DVec2{ -s.x - pad, pad };
+    return DRect(tl, tl + s);
+}
+
+DRect Mandelbrot_Scene::minimizeMaximizeButton(Viewport* ctx, bool minimize) const
+{
+    DRect rect = minimizeMaximizeButtonRect(ctx);
+    DRect rect_a = minimize ? rect.scaled(0.65)  : rect.scaled(0.175);
+    DRect rect_b = minimize ? rect.scaled(0.175) : rect.scaled(0.65);
+    const double rounding = rect.size().magnitude() / 10.0;
+
+    Color col(255, 255, 255);
+    ctx->setStrokeStyle(col);
+    ctx->setLineWidth(ScaleSize(2));
+
+    ctx->setFillStyle(40, 40, 40, 150);
+    ctx->fillRoundedRect(rect, rounding);
+    ctx->strokeRoundedRect(rect, rounding);
+
+    ctx->drawArrow(rect_a.tr(), rect_b.tr(), col, 45, 0.9, false);
+    ctx->drawArrow(rect_a.bl(), rect_b.bl(), col, 45, 0.9, false);
+
+    return rect;
 }
 
 void Mandelbrot_Scene::onEvent(Event e)
 {
-    if (e.ctx_owner())
+    cam_view.read(camera);
+
+    DVec2 old_pos = { camera->x(), camera->y() };
+    DVec2 old_zoom = camera->zoom();
+    
+    if (handleWorldNavigation(e, true, true))
     {
-        // Handle camera navigation for viewport that captured the event
-        e.ctx_owner()->camera.handleWorldNavigation(e, true);
-        cam_view.read(&e.ctx_owner()->camera);
+        DVec2 zoom = camera->zoom();
+
+        avg_vel_pos.push({ camera->x() - old_pos.x, camera->y() - old_pos.y });
+        avg_vel_zoom.push( (camera->zoom() / old_zoom).average() );
+
+        camera_vel_pos  = avg_vel_pos.average();
+        camera_vel_zoom = avg_vel_zoom.average();
+
+        if (!Platform()->is_mobile())
+        {
+            // Stopped wheeling mouse
+            avg_vel_zoom.clear();
+        }
     }
+
+    if (e.type() == SDL_EVENT_MOUSE_BUTTON_UP)
+    {
+        avg_vel_zoom.clear();
+        avg_vel_pos.clear();
+    }
+
+    cam_view.apply(camera);
 }
 
 SIM_END;

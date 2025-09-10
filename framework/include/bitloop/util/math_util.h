@@ -47,7 +47,7 @@ namespace Math
 
     [[nodiscard]] inline int countDecimals(double num)
     {
-        // todo: Optimize?
+        // todo: Optimize
         std::ostringstream out;
         out << std::fixed << std::setprecision(10) << num;
         std::string str = out.str();
@@ -350,8 +350,8 @@ namespace Math
 
     // Lerp
     template<typename ValueT, typename Scalar>
-    [[nodiscard]] constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar x) {
-
+    [[nodiscard]] constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar x)
+    {
         return (ValueT)(a + (b - a) * x);
     }
     
@@ -383,17 +383,18 @@ namespace Math
 
     namespace MovingAverage
     {
+        template<typename T>
         class MA
         {
             int ma_count = 0;
-            double sum = 0.0;
-            std::vector<double> samples;
+            T sum{};
+            std::vector<T> samples;
 
         public:
             MA(int ma_count) : ma_count(ma_count)
             {}
 
-            double push(double v)
+            T push(T v)
             {
                 sum += v;
                 samples.push_back(v);
@@ -407,9 +408,15 @@ namespace Math
                 return average();
             }
 
-            [[nodiscard]] double average()
+            void clear()
             {
-                return (sum / static_cast<double>(samples.size()));
+                sum -= sum; // reset to "null" by cancelling out current value
+                samples.clear();
+            }
+
+            [[nodiscard]] T average()
+            {
+                return (sum / (double)samples.size());
             }
         };
     }

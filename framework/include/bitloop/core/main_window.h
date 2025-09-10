@@ -35,6 +35,7 @@ class MainWindow
     ImFont* mono_font = nullptr;
 
     bool initialized = false;
+    bool done_first_size = false;
     bool done_first_focus = false;
     bool update_docking_layout = false;
     bool vertical_layout = false;
@@ -50,6 +51,7 @@ class MainWindow
     ToolbarButtonState record = { ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1, 1, 1, 1), false };
 
     Canvas canvas;
+    Canvas overlay;
     SharedSync& shared_sync;
 
     const int window_flags =
@@ -69,6 +71,10 @@ public:
 
     [[nodiscard]] Canvas* getCanvas() {
         return &canvas;
+    }
+
+    [[nodiscard]] Canvas* getOverlay() {
+        return &overlay;
     }
 
     void init();

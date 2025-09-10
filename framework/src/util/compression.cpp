@@ -8,25 +8,19 @@
 
 namespace
 {
-    //constexpr char lookup[] =
-    //    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    //    "abcdefghijklmnopqrstuvwxyz"
-    //    "0123456789+/";
-
     constexpr char lookup[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
         "0123456789-_";
 
-    //inline unsigned char b64_value(unsigned char c)
-    //{
-    //    if (c >= 'A' && c <= 'Z') return static_cast<unsigned char>(c - 'A');
-    //    if (c >= 'a' && c <= 'z') return static_cast<unsigned char>(26 + (c - 'a'));
-    //    if (c >= '0' && c <= '9') return static_cast<unsigned char>(52 + (c - '0'));
-    //    if (c == '+') return 62;
-    //    if (c == '/') return 63;
-    //    return 0xFF; // invalid
-    //}
+
+    inline unsigned char b62_value(unsigned char c)
+    {
+        if (c >= 'A' && c <= 'Z') return static_cast<unsigned char>(c - 'A');
+        if (c >= 'a' && c <= 'z') return static_cast<unsigned char>(26 + (c - 'a'));
+        if (c >= '0' && c <= '9') return static_cast<unsigned char>(52 + (c - '0'));
+        return 0xFF; // invalid
+    }
 
     inline unsigned char b64_value(unsigned char c)
     {
@@ -115,6 +109,15 @@ namespace Compression {
     }
 
     // ========== Base64 decode ==========
+    bool valid_b62(std::string_view s)
+    {
+        for (char c : s) {
+            if (b62_value(c) == 255) return false;
+        }
+        return true;
+
+    }
+
     std::string b64_decode(std::string_view b64)
     {
         // Remove ASCII whitespace

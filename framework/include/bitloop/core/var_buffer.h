@@ -252,10 +252,10 @@ public:
         }
     }
 
-    void markLiveValues() { var_map.markLiveValues(); }
+    void markLiveValues()   { var_map.markLiveValues(); }
     void markShadowValues() { var_map.markShadowValues(); }
 
-    bool changedLive() { return var_map.changedLive(); }
+    bool changedLive()   { return var_map.changedLive(); }
     bool changedShadow() { return var_map.changedShadow(); }
 
     //std::string pad(const std::string& str, int width) const

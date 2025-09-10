@@ -57,6 +57,18 @@ namespace BL
         float dpr = BL::PlatformManager::get()->dpr();
         return ImVec2(w * dpr, h * dpr);
     }
+
+    inline DVec2 ScaleSize(double w, double h)
+    {
+        float dpr = BL::PlatformManager::get()->dpr();
+        return DVec2(w * dpr, h * dpr);
+    }
+
+    inline DVec2 ScaleSize(const DVec2& size)
+    {
+        float dpr = BL::PlatformManager::get()->dpr();
+        return DVec2(size.x * dpr, size.y * dpr);
+    }
 }
 
 std::ostream& operator<<(std::ostream& os, const ImSpline::Spline& spline);
@@ -95,6 +107,24 @@ namespace ImGui
     void BeginPaddedRegion(float padding);
     void EndPaddedRegion();
 
+    inline void IncreaseRequiredSpaceForLabel(float& w, const char* label, float pad_right = BL::ScaleSize(10.0f))
+    {
+        float lw = ImGui::CalcTextSize(label).x + pad_right;
+        if (lw > w) w = lw;
+    }
+
+    inline void SetNextItemWidthForSpace(float w)
+    {
+        float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - w - spacing);
+    }
+
+    inline void SetNextItemWidthForLabel(const char* label, float pad_right = BL::ScaleSize(10.0f))
+    {
+        float lw = ImGui::CalcTextSize(label).x + pad_right;
+        float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - lw - spacing);
+    }
 
     struct GroupBox {
         ImDrawList* dl{};
@@ -112,6 +142,7 @@ namespace ImGui
         {
             ImVec2 label_height = ImGui::CalcTextSize(label);
             ImGui::Dummy(ImVec2(0, label_height.y));        // space for title
+
 
             // NEW: measure full available width of the current row/column
             start_screen = ImGui::GetCursorScreenPos();
@@ -132,6 +163,7 @@ namespace ImGui
 
         ~GroupBox() {
             ImGui::EndGroup();
+            
 
             // content bounds (tight)
             content_min = ImGui::GetItemRectMin();
@@ -185,6 +217,19 @@ namespace ImGui
             ImGui::Dummy(ImVec2(span_w, 0.0f));
 
             ImGui::PopID();
+
+        }
+
+        void IncreaseRequiredSpaceForLabel(float& w, const char* label, float pad_right=BL::ScaleSize(10.0f))
+        {
+            float lw = ImGui::CalcTextSize(label).x + pad_right;
+            if (lw > w) w = lw;
+        }
+
+        void SetNextItemWidthForSpace(float w)
+        {
+            float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - w - spacing - pad);
         }
     };
 

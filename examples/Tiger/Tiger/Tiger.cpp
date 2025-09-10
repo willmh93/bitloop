@@ -50,12 +50,19 @@ void Tiger_Scene::sceneDestroy()
 {}
 
 void Tiger_Scene::sceneProcess()
-{}
+{
+}
 
 void Tiger_Scene::viewportProcess(Viewport*, double)
 {
-    // Apply updates from imgui to camera view
+    // First apply updates from imgui to camera view
     cam_view.apply(camera);
+
+    // Process your scene...
+    camera->setRotation(camera->rotation() + 0.01);
+
+    // Update the cam view UI from the camera (in case it was changed by this method)
+    cam_view.read(camera);
 }
 
 void Tiger_Scene::viewportDraw(Viewport* ctx) const
@@ -71,11 +78,8 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
 
 void Tiger_Scene::onEvent(Event e)
 {
-    if (e.ctx_owner())
+    if (handleWorldNavigation(e, true))
     {
-        // Handle camera navigation for viewport that captured the event
-        e.ctx_owner()->camera.handleWorldNavigation(e, true);
-
         // Update camera view after handling navigation
         cam_view.read(e.ctx_owner()->camera);
     }

@@ -115,6 +115,8 @@ void gui_loop()
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:
             case SDL_EVENT_MOUSE_MOTION:
+                ProjectWorker::instance()->queueEvent(e);
+
             case SDL_EVENT_MOUSE_WHEEL:
                 if (MainWindow::instance()->viewportHovered())
                     ProjectWorker::instance()->queueEvent(e);

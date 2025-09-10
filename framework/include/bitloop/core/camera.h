@@ -191,31 +191,39 @@ public:
     constexpr double viewportWidth() const { return viewport_w; }
     constexpr double viewportHeight() const { return viewport_h; }
 
-    void setX(flt128 _x)                 { cam_x = _x;                updateCameraMatrix(); }
-    void setY(flt128 _y)                 { cam_y = _y;                updateCameraMatrix(); }
-    void setPos(flt128 _x, flt128 _y)    { cam_x = _x; cam_y = _y;    updateCameraMatrix(); }
-    void setZoom(flt128 zoom)            { zoom_x = zoom_y = zoom;    updateCameraMatrix(); }
-    void setZoom(flt128 zx, flt128 zy)   { zoom_x = zx; zoom_y = zy;  updateCameraMatrix(); }
-    void setZoomX(flt128 _zoom_x)        { zoom_x = _zoom_x;          updateCameraMatrix(); }
-    void setZoomY(flt128 _zoom_y)        { zoom_y = _zoom_y;          updateCameraMatrix(); }
-                                         
-    void setX(double _x)                 { cam_x = _x;                updateCameraMatrix(); }
-    void setY(double _y)                 { cam_y = _y;                updateCameraMatrix(); }
-    void setPos(double _x, double _y)    { cam_x = _x; cam_y = _y;    updateCameraMatrix(); }
-    void setZoom(double zoom)            { zoom_x = zoom_y = zoom;    updateCameraMatrix(); }
-    void setZoom(double zx, double zy)   { zoom_x = zx; zoom_y = zy;  updateCameraMatrix(); }
-    void setZoomX(double _zoom_x)        { zoom_x = _zoom_x;          updateCameraMatrix(); }
-    void setZoomY(double _zoom_y)        { zoom_y = _zoom_y;          updateCameraMatrix(); }
-                                         
-    void setPan(double px, double py)    { pan_x = px; pan_y = py;    updateCameraMatrix(); }
-    void setRotation(double angle)       { cam_rotation = angle;      updateCameraMatrix(); }
+    // flt128
+    bool setX(flt128 _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
+    bool setY(flt128 _y)               { if (cam_y  != _y)                          { cam_y = _y;                       updateCameraMatrix(); return true; } return false; }
+    bool setZoomX(flt128 zx)           { if (zoom_x != zx)                          { zoom_x = zx;                      updateCameraMatrix(); return true; } return false; }
+    bool setZoomY(flt128 zy)           { if (zoom_y != zy)                          { zoom_y = zy;                      updateCameraMatrix(); return true; } return false; }
+                                                                                                                        
+    bool setPos(flt128 _x, flt128 _y)  { if (cam_x  != _x   || cam_y  != _y)        { cam_x = _x; cam_y = _y;           updateCameraMatrix(); return true; } return false; }
+    bool setZoom(flt128 zoom)          { if (zoom_x != zoom || zoom_y != zoom)      { zoom_x = zoom_y = zoom;           updateCameraMatrix(); return true; } return false; }
+    bool setZoom(flt128 zx, flt128 zy) { if (zoom_x != zx   || zoom_y != zy)        { zoom_x = zx; zoom_y = zy;         updateCameraMatrix(); return true; } return false; }
+                                                                                                                        
+    // double                                                                                                           
+    bool setX(double _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
+    bool setY(double _y)               { if (cam_y  != _y)                          { cam_y = _y;                       updateCameraMatrix(); return true; } return false; }
+    bool setZoomX(double zx)           { if (zoom_x != zx)                          { zoom_x = zx;                      updateCameraMatrix(); return true; } return false; }
+    bool setZoomY(double zy)           { if (zoom_y != zy)                          { zoom_y = zy;                      updateCameraMatrix(); return true; } return false; }
+                                                                                                                        
+    bool setPos(double _x, double _y)  { if (cam_x  != _x     || cam_y  != _y)      { cam_x = _x; cam_y = _y;           updateCameraMatrix(); return true; } return false; }
+    bool setPos(DVec2 pos)             { if (cam_x  != pos.x  || cam_y  != pos.y)   { cam_x = pos.x; cam_y = pos.y;     updateCameraMatrix(); return true; } return false; }
+    bool setZoom(double zoom)          { if (zoom_x != zoom   || zoom_y != zoom)    { zoom_x = zoom_y = zoom;           updateCameraMatrix(); return true; } return false; }
+    bool setZoom(DVec2 zoom)           { if (zoom_x != zoom.x || zoom_y != zoom.y)  { zoom_x = zoom.x; zoom_y = zoom.y; updateCameraMatrix(); return true; } return false; }
+    bool setZoom(double zx, double zy) { if (zoom_x != zx     || zoom_y != zy)      { zoom_x = zx; zoom_y = zy;         updateCameraMatrix(); return true; } return false; }
+                                                                                                                        
+    bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)            { pan_x = px; pan_y = py;           updateCameraMatrix(); return true; } return false; }
+    bool setRotation(double angle)     { if (cam_rotation != angle)                 { cam_rotation = angle;             updateCameraMatrix(); return true; } return false; }
+
+    [[nodiscard]] constexpr bool isPanning()  const   { return panning; }
 
     [[nodiscard]] constexpr double x()        const   { return (double)cam_x; }
     [[nodiscard]] constexpr double y()        const   { return (double)cam_y; }
     [[nodiscard]] constexpr DVec2  pos()      const   { return {(double)cam_x, (double)cam_y }; }
     [[nodiscard]] constexpr double panX()     const   { return (double)pan_x; }
     [[nodiscard]] constexpr double panY()     const   { return (double)pan_y; }
-    [[nodiscard]] constexpr DVec2 zoom()      const   { return {(double)zoom_x, (double)zoom_y }; }
+    [[nodiscard]] constexpr DVec2  zoom()      const   { return {(double)zoom_x, (double)zoom_y }; }
     [[nodiscard]] constexpr double zoomX()    const   { return (double)zoom_x; }
     [[nodiscard]] constexpr double zoomY()    const   { return (double)zoom_y; }
     [[nodiscard]] constexpr double rotation() const   { return (double)cam_rotation; }
@@ -228,7 +236,7 @@ public:
       /// Once world rect focused, use it as a "reference" for scaling relative to that reference zoom, e.g.
       /// > setRelativeZoom(2)  will zoom 2x relative to that focused rect
 
-    [[nodiscard]] DDVec2 getReferenceZoom() const  { return { ref_zoom_x, ref_zoom_y }; }               // Cached zoom set by focusWorldRect()
+    [[nodiscard]] DVec2 getReferenceZoom() const  { return { (double)ref_zoom_x, (double)ref_zoom_y }; }               // Cached zoom set by focusWorldRect()
     //[[nodiscard]] DDVec2 getRelativeZoom_f128() { return { zoom_x / ref_zoom_x, zoom_y / ref_zoom_y }; } // Current relative scale factor
     //[[nodiscard]] DVec2 getRelativeZoom() { return { zoom_x / ref_zoom_x, zoom_y / ref_zoom_y }; } // Current relative scale factor
 
@@ -363,9 +371,9 @@ public:
 
     void setDirectCameraPanning(bool b) { direct_cam_panning = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
-    void panDrag(int _x, int _y, double touch_dist, double touch_angle);
+    bool panDrag(int _x, int _y, double touch_dist, double touch_angle);
     void panEnd();
-    void panZoomProcess();
+    bool panZoomProcess();
 
     [[nodiscard]] std::vector<FingerInfo> pressedFingers() {
         return fingers;
@@ -398,7 +406,8 @@ public:
     [[nodiscard]] flt128 panBegCamZoomY()    const { return pan_beg_cam_zoom_x; }
     [[nodiscard]] double panBegCamAngle()    const { return pan_beg_cam_angle; }
 
-    void handleWorldNavigation(Event e, bool single_touch_pan);
+    bool handleWorldNavigation(Event e, bool single_touch_pan, bool zoom_anchor_mouse=false);
+	//void handleWorldNavigation(Event e, bool single_touch_pan);
 };
 
 struct CameraViewController

@@ -10,6 +10,7 @@
 //#define DEBUG_SIMULATE_WEB_UI
 //#define DEBUG_SIMULATE_MOBILE
 //#define DEBUG_SIMULATE_DPR 2.625f
+//#define DEBUG_SIMULATE_DPR 1.5f
 
 
 /// ======== Timer filters ========

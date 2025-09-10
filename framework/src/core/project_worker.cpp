@@ -47,7 +47,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         _destroyActiveProject();
 
         active_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
-        active_project->configure(e.project_uid, MainWindow::instance()->getCanvas(), &project_log);
+        active_project->configure(e.project_uid, MainWindow::instance()->getCanvas(), MainWindow::instance()->getOverlay(), &project_log);
         active_project->_projectPrepare();
     }
     break;
@@ -196,8 +196,13 @@ void ProjectWorker::pullDataFromShadow()
 
 void ProjectWorker::queueEvent(const SDL_Event& event)
 {
-    std::lock_guard<std::mutex> lock(event_queue_mutex);
-    input_event_queue.push_back(event);
+    // Queue events which should only be processed once the current worker frame completes
+    {
+        std::lock_guard<std::mutex> lock(event_queue_mutex);
+        input_event_queue.push_back(event);
+    }
+
+    // Immediately process events for the overlay
 }
 
 void ProjectWorker::pollEvents(bool discardBatch)
@@ -211,6 +216,9 @@ void ProjectWorker::pollEvents(bool discardBatch)
 
     if (!discardBatch)
     {
+        //if (active_project)
+        //    active_project->_clearEventQueue();
+
         for (SDL_Event& e : local)
             _onEvent(e);
     }
@@ -222,8 +230,41 @@ void ProjectWorker::populateAttributes()
         active_project->_populateAllAttributes();
 }
 
+void ProjectWorker::drawOverlay()
+{
+    if (active_project)
+        active_project->_projectOverlay();
+}
+
 void ProjectWorker::_onEvent(SDL_Event& e)
 {
+    #ifdef DEBUG_SIMULATE_MOBILE
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+    {
+        SDL_Event me = e;
+        e.type = SDL_EVENT_FINGER_DOWN;
+        e.tfinger.fingerID = 0;
+        e.tfinger.x = me.button.x / (float)Platform()->fbo_width();
+        e.tfinger.y = me.button.y / (float)Platform()->fbo_height();
+    }
+    else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
+    {
+        SDL_Event me = e;
+        e.type = SDL_EVENT_FINGER_UP;
+        e.tfinger.fingerID = 0;
+        e.tfinger.x = me.button.x / (float)Platform()->fbo_width();
+        e.tfinger.y = me.button.y / (float)Platform()->fbo_height();
+    }
+    else if (e.type == SDL_EVENT_MOUSE_MOTION)
+    {
+        SDL_Event me = e;
+        e.type = SDL_EVENT_FINGER_MOTION;
+        e.tfinger.fingerID = 0;
+        e.tfinger.x = me.button.x / (float)Platform()->fbo_width();
+        e.tfinger.y = me.button.y / (float)Platform()->fbo_height();
+    }
+    #endif
+
     if (active_project)
         active_project->_onEvent(e);
 }

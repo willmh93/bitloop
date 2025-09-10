@@ -78,20 +78,22 @@ void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments,
         // draw tangent arrow
         double tangent_head_x = p2_x + cos(ta) * 0.2;
         double tangent_head_y = p2_y + sin(ta) * 0.2;
-        ctx->beginPath();
-        ctx->arrowMoveTo(p2_x, p2_y);
-        ctx->arrowDrawTo(tangent_head_x, tangent_head_y);
-        ctx->stroke();
+        ctx->drawArrow({ p2_x, p2_y }, { tangent_head_x, tangent_head_y }, Color(255, 255, 255));
+        //ctx->beginPath();
+        //ctx->arrowMoveTo(p2_x, p2_y);
+        //ctx->arrowDrawTo(tangent_head_x, tangent_head_y);
+        //ctx->stroke();
 
         // Draw perpendicular arrow (to mouse)
         double perp_angle = Math::wrapRadians2PI(ta - Math::HALF_PI);
         tx2 = tx1 + cos(perp_angle) * d;
         ty2 = ty1 + sin(perp_angle) * d;
 
-        ctx->beginPath();
-        ctx->arrowMoveTo(tx1, ty1);
-        ctx->arrowDrawTo(tx2, ty2);
-        ctx->stroke();
+        //ctx->beginPath();
+        //ctx->arrowMoveTo(tx1, ty1);
+        //ctx->arrowDrawTo(tx2, ty2);
+        //ctx->stroke();
+        ctx->drawArrow({ tx1, ty1 }, { tx2, ty2 }, Color(255, 255, 255));
     }
     ctx->camera.restoreCameraTransform();
 }
@@ -267,7 +269,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
 
     DVec2 off = Offset(5, 5);
 
-    camera->scalingSizes(false);
+    //camera->scalingLines(false);
 
     // draw p1 dot
     ctx->setFillStyle(0, 255, 255);
@@ -286,10 +288,11 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
     // draw tangent arrow
     double tangent_head_x = p2_x + cos(tangent_angle) * 0.2;
     double tangent_head_y = p2_y + sin(tangent_angle) * 0.2;
-    ctx->beginPath();
-    ctx->arrowMoveTo(p2_x, p2_y);
-    ctx->arrowDrawTo(tangent_head_x, tangent_head_y);
-    ctx->stroke();
+    ctx->drawArrow({ p2_x, p2_y }, { tangent_head_x, tangent_head_y }, Color(255, 255, 255));
+    //ctx->beginPath();
+    //ctx->arrowMoveTo(p2_x, p2_y);
+    //ctx->arrowDrawTo(tangent_head_x, tangent_head_y);
+    //ctx->stroke();
     
     
     // Draw perpendicular arrow (to mouse)
@@ -303,10 +306,12 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
     double tx2 = tp.x;
     double ty2 = tp.y;
 
-    ctx->beginPath();
-    ctx->arrowMoveTo(tx1, ty1);
-    ctx->arrowDrawTo(tx2, ty2);
-    ctx->stroke();
+    //ctx->beginPath();
+    //ctx->arrowMoveTo(tx1, ty1);
+    //ctx->arrowDrawTo(tx2, ty2);
+    //ctx->stroke();
+
+    ctx->drawArrow({ tx1, ty1 }, { tx2, ty2 }, Color(255, 255, 255));
 
     ///ctx->print() << "p1 angle: " << QString::asprintf("%.0f deg", oa * 180.0 / M_PI);
     ///ctx->print() << "\np2 tangent angle: " << QString::asprintf("%.0f deg", ta * 180.0 / M_PI);

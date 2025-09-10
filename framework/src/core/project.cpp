@@ -7,6 +7,36 @@ BL_BEGIN_NS
 /// ======== Scene ========
 /// =======================
 
+/*TouchState::TouchState(const Event& e, const std::vector<FingerInfo>& _fingers) //: event(e)
+{
+    for (const FingerInfo& f : _fingers)
+        fingers.push_back(f);
+
+    Viewport* viewport = e.ctx_owner();
+    Camera& cam = viewport->camera;
+
+    for (SceneFingerInfo& f : fingers)
+    {
+        double viewport_mx = f.x - viewport->posX();
+        double viewport_my = f.y - viewport->posY();
+
+        if (cam.isPanning() ||
+            (viewport_mx >= 0 &&
+            viewport_my >= 0 &&
+            viewport_mx <= viewport->width() &&
+            viewport_my <= viewport->height()))
+        {
+
+            DVec2 world_mouse = cam.toWorld(viewport_mx, viewport_my);
+            f.viewport = viewport;
+            f.stage_x = viewport_mx;
+            f.stage_y = viewport_my;
+            f.world_x = world_mouse.x;
+            f.world_y = world_mouse.y;
+        }
+    }
+}*/
+
 void SceneBase::registerMount(Viewport* viewport)
 {
     mounted_to_viewports.push_back(viewport);
@@ -66,16 +96,26 @@ void SceneBase::pullDataFromShadow()
     ProjectWorker::instance()->pullDataFromShadow();
 }
 
-void SceneBase::handleWorldNavigation(Event e, bool single_touch_pan)
+bool SceneBase::handleWorldNavigation(Event e, bool single_touch_pan, bool zoom_anchor_mouse)
+{
+    if (e.ctx_focused())
+    {
+        return e.ctx_focused()->camera.handleWorldNavigation(e, single_touch_pan, zoom_anchor_mouse);
+        //return true;
+    }
+    return false;
+}
+
+/*void SceneBase::handleWorldNavigation(Event e, bool single_touch_pan)
 {
     if (e.ctx_focused())
         e.ctx_focused()->camera.handleWorldNavigation(e, single_touch_pan);
-}
+}*/
 
 double SceneBase::frame_dt(int average_samples) const
 {
     if (dt_call_index >= dt_scene_ma_list.size())
-        dt_scene_ma_list.push_back(Math::MovingAverage::MA(average_samples));
+        dt_scene_ma_list.push_back(Math::MovingAverage::MA<double>(average_samples));
 
     auto& ma = dt_scene_ma_list[dt_call_index++];
     return ma.push(project->dt_frameProcess);
@@ -84,7 +124,7 @@ double SceneBase::frame_dt(int average_samples) const
 double SceneBase::scene_dt(int average_samples) const
 {
     if (dt_call_index >= dt_scene_ma_list.size())
-        dt_scene_ma_list.push_back(Math::MovingAverage::MA(average_samples));
+        dt_scene_ma_list.push_back(Math::MovingAverage::MA<double>(average_samples));
 
     auto& ma = dt_scene_ma_list[dt_call_index++];
     return ma.push(dt_sceneProcess);
@@ -93,7 +133,7 @@ double SceneBase::scene_dt(int average_samples) const
 double SceneBase::project_dt(int average_samples) const
 {
     if (dt_process_call_index >= dt_project_ma_list.size())
-        dt_project_ma_list.push_back(Math::MovingAverage::MA(average_samples));
+        dt_project_ma_list.push_back(Math::MovingAverage::MA<double>(average_samples));
 
     auto& ma = dt_project_ma_list[dt_process_call_index++];
     return ma.push(project->dt_projectProcess);
@@ -103,15 +143,15 @@ double SceneBase::project_dt(int average_samples) const
 /// ======== Viewport ========
 /// ==========================
 
-Viewport::Viewport(Layout* layout, Canvas* canvas, int viewport_index, int grid_x, int grid_y) :
+Viewport::Viewport(Layout* layout, int viewport_index, int grid_x, int grid_y) :
     layout(layout),
     viewport_index(viewport_index),
     viewport_grid_x(grid_x),
     viewport_grid_y(grid_y)
 {
-    // Tell derived painter to paint to the same canvas
-    setGlobalScale(canvas->getGlobalScale());
-    setRenderTarget(canvas->getRenderTarget());
+    
+    
+    
 
     camera.viewport = this;
 }
@@ -167,31 +207,71 @@ void Viewport::draw()
     restore();
 }
 
+void Viewport::overlay()
+{
+    // Tell derived painter to paint to the same canvas
+    setGlobalScale(scene->project->overlay->getGlobalScale());
+    setRenderTarget(scene->project->overlay->getRenderTarget());
+
+    // Set defaults
+    setFont(getDefaultFont());
+    setTextAlign(TextAlign::ALIGN_LEFT);
+    setTextBaseline(TextBaseline::BASELINE_TOP);
+
+    // Snapshot default transformation (unscaled unrotated top-left viewport)
+    default_viewport_transform = currentTransform();
+
+    print_stream.str("");
+    print_stream.clear();
+
+    // Draw mounted project to this viewport
+    scene->camera = &camera;
+    scene->viewportOverlay(this);
+
+    // Draw print() lines at top-left of viewport
+    save();
+    camera.saveCameraTransform();
+    camera.stageTransform();
+    setTextAlign(TextAlign::ALIGN_LEFT);
+    setTextBaseline(TextBaseline::BASELINE_TOP);
+    setFillStyle(255, 255, 255);
+
+    print_stream.seekg(0);
+    int line_index = 0;
+    std::string line;
+    while (std::getline(print_stream, line, '\n'))
+        fillText(line, 5, 5 + (line_index++ * getGlobalScale() * 16.0f));
+
+    camera.restoreCameraTransform();
+    restore();
+}
+
 void Viewport::printTouchInfo()
 {
     double pinch_zoom_factor = camera.touchDist() / camera.panDownTouchDist();
 
-    print() << "cam.position:               (" << camera.x() << ",  " << camera.y() << ")\n";
-    print() << "cam.pan:                     (" << camera.panX() << ",  " << camera.panY() << ")\n";
-    print() << "cam.rotation:              " << camera.rotation() << "\n";
-    print() << "cam.zoom:                  (" << camera.zoomX() << ", " << camera.zoomY() << ")\n\n";
-    print() << "---------------------------------------------------------------\n";
-    print() << "pan_down_touch_x           = " << camera.panDownTouchX() << "\n";
-    print() << "pan_down_touch_y           = " << camera.panDownTouchY() << "\n";
-    print() << "pan_down_touch_dist      = " << camera.panDownTouchDist() << "\n";
-    print() << "pan_down_touch_angle   = " << camera.panDownTouchAngle() << "\n";
-    print() << "---------------------------------------------------------------\n";
-    print() << "pan_beg_cam_x                = " << (double)camera.panBegCamX() << "\n";
-    print() << "pan_beg_cam_y                = " << (double)camera.panBegCamY() << "\n";
+    setFont(getDefaultFont());
+    print() << "cam.position          = (" << camera.x() << ",  " << camera.y() << ")\n";
+    print() << "cam.pan               = (" << camera.panX() << ",  " << camera.panY() << ")\n";
+    print() << "cam.rotation          = " << camera.rotation() << "\n";
+    print() << "cam.zoom              = (" << camera.zoomX() << ", " << camera.zoomY() << ")\n\n";
+    print() << "--------------------------------------------------------------\n";
+    print() << "pan_down_touch_x      = " << camera.panDownTouchX() << "\n";
+    print() << "pan_down_touch_y      = " << camera.panDownTouchY() << "\n";
+    print() << "pan_down_touch_dist   = " << camera.panDownTouchDist() << "\n";
+    print() << "pan_down_touch_angle  = " << camera.panDownTouchAngle() << "\n";
+    print() << "--------------------------------------------------------------\n";
+    print() << "pan_beg_cam_x         = " << (double)camera.panBegCamX() << "\n";
+    print() << "pan_beg_cam_y         = " << (double)camera.panBegCamY() << "\n";
     print() << "pan_beg_cam_zoom_x    = " << (double)camera.panBegCamZoomX() << "\n";
     print() << "pan_beg_cam_zoom_y    = " << (double)camera.panBegCamZoomY() << "\n";
-    print() << "pan_beg_cam_angle        = " << camera.panBegCamAngle() << "\n";
-    print() << "---------------------------------------------------------------\n";
-    print() << "cam.touchAngle()        = " << camera.touchAngle() << "\n";
-    print() << "cam.touchDist()         = " << camera.touchDist() << "\n";
-    print() << "---------------------------------------------------------------\n";
-    print() << "pinch_zoom_factor   = " << pinch_zoom_factor << "x\n";
-    print() << "---------------------------------------------------------------\n";
+    print() << "pan_beg_cam_angle     = " << camera.panBegCamAngle() << "\n";
+    print() << "--------------------------------------------------------------\n";
+    print() << "cam.touchAngle()      = " << camera.touchAngle() << "\n";
+    print() << "cam.touchDist()       = " << camera.touchDist() << "\n";
+    print() << "--------------------------------------------------------------\n";
+    print() << "pinch_zoom_factor     = " << pinch_zoom_factor << "x\n";
+    print() << "--------------------------------------------------------------\n";
 
     int i = 0;
     for (auto finger : camera.pressedFingers())
@@ -220,7 +300,7 @@ void Layout::expandCheck(size_t count)
 
 void Layout::add(int _viewport_index, int _grid_x, int _grid_y)
 {
-    Viewport* viewport = new Viewport(this, project->canvas, _viewport_index, _grid_x, _grid_y);
+    Viewport* viewport = new Viewport(this, _viewport_index, _grid_x, _grid_y);
     viewports.push_back(viewport);
 }
 
@@ -266,7 +346,7 @@ void Layout::resize(size_t viewport_count)
             }
             else
             {
-                Viewport* viewport = new Viewport(this, project->canvas, i, x, y);
+                Viewport* viewport = new Viewport(this, i, x, y);
                 viewports.push_back(viewport);
             }
         }
@@ -280,12 +360,13 @@ void Layout::resize(size_t viewport_count)
 /// ======== Project ========
 /// =========================
 
-void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
+void ProjectBase::configure(int _sim_uid, Canvas* _canvas, Canvas* _overlay, ImDebugLog* shared_log)
 {
     blPrint() << "Project::configure";
 
     sim_uid = _sim_uid;
     canvas = _canvas;
+    overlay = _overlay;
     project_log = shared_log;
 
     viewports.project = this;
@@ -576,27 +657,31 @@ void ProjectBase::_projectDraw()
     ///    shaders_loaded = true;
     ///}
 
-    Canvas* ctx = canvas;
+    //Canvas* ctx = canvas;
     DVec2 surface_size = surfaceSize();
 
-    ctx->setFillStyle(10, 10, 15);
-    ctx->fillRect(0, 0, surface_size.x, surface_size.y);
+    canvas->setFillStyle(10, 10, 15);
+    canvas->fillRect(0, 0, surface_size.x, surface_size.y);
 
-    ctx->setFillStyle(255,255,255);
-    ctx->setStrokeStyle(255,255,255);
+    canvas->setFillStyle(255,255,255);
+    canvas->setStrokeStyle(255,255,255);
 
-    ctx->setFontSize(16.0f);
+    canvas->setFontSize(16.0f);
 
     ///timer_projectDraw.start();
 
     // Draw each viewport
     for (Viewport* viewport : viewports)
     {
-        ctx->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
-        ctx->save();
+        // Tell derived painter to paint to the main canvas
+        viewport->setGlobalScale(canvas->getGlobalScale());
+        viewport->setRenderTarget(canvas->getRenderTarget());
+
+        canvas->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
+        canvas->save();
 
         // Starting viewport position
-        ctx->translate(floor(viewport->x), floor(viewport->y));
+        canvas->translate(floor(viewport->x), floor(viewport->y));
 
         // Set default transform to "World"
         viewport->camera.worldTransform();
@@ -608,8 +693,8 @@ void ProjectBase::_projectDraw()
         viewport->draw();
 
         // Restore initial canvas transform
-        ctx->restore();
-        ctx->resetClipping();
+        canvas->restore();
+        canvas->resetClipping();
     }
 
     ///dt_projectDraw = timer_projectDraw.elapsed();
@@ -617,37 +702,122 @@ void ProjectBase::_projectDraw()
     // Draw viewport splitters
     for (Viewport* viewport : viewports)
     {
-        ctx->setLineWidth(6);
-        ctx->setStrokeStyle(30, 30, 40);
-        ctx->beginPath();
+        canvas->setLineWidth(6);
+        canvas->setStrokeStyle(30, 30, 40);
+        canvas->beginPath();
 
         // Draw vert line
         if (viewport->viewport_grid_x < viewports.cols - 1)
         {
             double line_x = floor(viewport->x + viewport->w) + 0.5;
-            ctx->moveTo(line_x, viewport->y);
-            ctx->lineTo(line_x, viewport->y + viewport->h + 1);
+            canvas->moveTo(line_x, viewport->y);
+            canvas->lineTo(line_x, viewport->y + viewport->h + 1);
         }
 
         // Draw horiz line
         if (viewport->viewport_grid_y < viewports.rows - 1)
         {
             double line_y = floor(viewport->y + viewport->h) + 0.5;
-            ctx->moveTo(viewport->x + viewport->w + 1, line_y);
-            ctx->lineTo(viewport->x, line_y);
+            canvas->moveTo(viewport->x + viewport->w + 1, line_y);
+            canvas->lineTo(viewport->x, line_y);
         }
 
-        ctx->stroke();
+        canvas->stroke();
+    }
+}
+
+void ProjectBase::_projectOverlay()
+{
+    if (!done_single_process) return;
+    if (!started) return;
+
+    DVec2 surface_size = surfaceSize();
+
+    //overlay->setFillStyle(10, 10, 15);
+    //overlay->fillRect(0, 0, surface_size.x, surface_size.y);
+
+    overlay->setFillStyle(255, 255, 255);
+    overlay->setStrokeStyle(255, 255, 255);
+
+    overlay->setFontSize(16.0f);
+
+    ///timer_projectDraw.start();
+
+    // Draw each viewport
+    for (Viewport* viewport : viewports)
+    {
+        // Tell derived painter to paint to the overlay
+        viewport->setGlobalScale(overlay->getGlobalScale());
+        viewport->setRenderTarget(overlay->getRenderTarget());
+
+        overlay->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
+        overlay->save();
+
+        // Starting viewport position
+        overlay->translate(floor(viewport->x), floor(viewport->y));
+
+        // Set default transform to "World"
+        viewport->camera.stageTransform();
+
+        // Draw Scene to Viewport
+        Camera::active = &viewport->camera;
+        viewport->scene->camera = &viewport->camera;
+
+        viewport->overlay();
+
+        // Restore initial canvas transform
+        overlay->restore();
+        overlay->resetClipping();
+    }
+}
+
+void ProjectBase::_clearEventQueue()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+    {
+        scene->input.clear();
     }
 }
 
 void ProjectBase::_onEvent(SDL_Event& e)
 {
-    Event event(e);
-
-    // Track "cursor" position (pointer/first touch)
+    // If viewport not hovered (e.g. Mouse over a popup window),
+    // ignore mouse/finger down events to avoid stealing focus
     switch (e.type)
     {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_FINGER_DOWN:
+    {
+        if (!MainWindow::instance()->viewportHovered())
+            return;
+    }
+    break;
+    }
+
+    // Wrap SDL event
+    Event event(e);
+
+    TouchInput s;
+
+    // Track "cursor" position
+    switch (e.type)
+    {
+        // Mouse
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        {
+            mouse.pressed = true;
+            mouse.client_x = e.motion.x;
+            mouse.client_y = e.motion.y;
+
+        }
+        break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+        {
+            mouse.pressed = false;
+            mouse.client_x = e.motion.x;
+            mouse.client_y = e.motion.y;
+        }
+        break;
         case SDL_EVENT_MOUSE_MOTION:
         {
             mouse.client_x = e.motion.x;
@@ -655,26 +825,24 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
         break;
 
+        // Touch
+        case SDL_EVENT_FINGER_DOWN:
+        case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_MOTION:
         {
             mouse.client_x = (double)(e.tfinger.x * (float)fboWidth());
             mouse.client_y = (double)(e.tfinger.y * (float)fboHeight());
         }
         break;
-
-        ///case SDL_MOUSEWHEEL:
-        ///{
-        ///    mouse.scroll_delta = e.wheel.
-        ///}
-        ///break;
     }
 
-    // Track "focused" and "hovered" viewports
+    // Detect which viewport we're "focusing" / "hovering" on
     switch (e.type)
     {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_FINGER_DOWN:
         {
+            // Detect which viewport we're "focusing" on
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
@@ -693,6 +861,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         case SDL_EVENT_MOUSE_MOTION:
         case SDL_EVENT_FINGER_MOTION:
         {
+            // Detect which viewport we're "hovering" over
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
@@ -713,7 +882,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
     // Track fingers
     if (Platform()->is_mobile())
     {
-        // Does this finger already have an owner? Attach it to the event
+        // Does this finger already have an "owner" viewport?
+        // If so, loop over fingers and restore it for 
         Viewport* ctx_owner = nullptr;
         
         // Support both single-finger pan & 2 finger transform
@@ -732,7 +902,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             info.y = pointer_event.y();
             pressed_fingers.push_back(info);
 
-            // Remember mouse-down ctx for mouse release/motion
+            // Remember touched-down ctx for touch release/motion event to use same owner
             event.setOwnerViewport(ctx_owner);
         }
         break;
@@ -783,17 +953,55 @@ void ProjectBase::_onEvent(SDL_Event& e)
     }
     else
     {
-        //if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
-        //{
-        //    blBreak();
-        //}
+        Viewport* ctx_owner = nullptr;
 
         switch (e.type)
         {
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            {
+                ctx_owner = ctx_focused;
+                PointerEvent pointer_event(event);
+
+                // Add pressed finger
+                FingerInfo info;
+                info.ctx_owner = ctx_focused;
+                info.fingerId = 0;
+                info.x = pointer_event.x();
+                info.y = pointer_event.y();
+                pressed_fingers.push_back(info);
+
+                // Remember touched-down ctx for touch release/motion event to use same owner
+                event.setOwnerViewport(ctx_owner);
+            }
+            break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
+            {
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                {
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == 0)
+                    {
+                        ctx_owner = info.ctx_owner;
+                        break;
+                    }
+                }
+
+                pressed_fingers.clear();
+                event.setOwnerViewport(ctx_owner);
+            }
+            break;
             case SDL_EVENT_MOUSE_MOTION:
             {
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                {
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == 0)
+                    {
+                        ctx_owner = info.ctx_owner;
+                        break;
+                    }
+                }
+
                 event.setOwnerViewport(ctx_focused);
             }
             break;
@@ -805,13 +1013,26 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
     }
 
+    
     event.setFocusedViewport(ctx_focused);
     event.setHoveredViewport(ctx_hovered);
+
+    if (event.ctx_owner())
+    {
+        //event.ctx_owner()->scene->input.addEvent(event, pressed_fingers);
+        event.ctx_owner()->scene->input.addEvent(event, pressed_fingers);
+    }
 
     onEvent(event);
 
     for (SceneBase* scene : viewports.all_scenes)
-        scene->_onEvent(event);
+    {
+        if (event.ctx_owner() &&
+            event.ctx_owner()->scene == scene)
+        {
+            scene->_onEvent(event);
+        }
+    }
 }
 
 void ProjectBase::setProjectInfoState(ProjectInfo::State state)

@@ -1,4 +1,5 @@
 #include <bitloop/util/text_util.h>
+#include <unordered_set>
 
 std::ostream& operator<<(std::ostream& os, const FiniteDouble& fd) {
     return os << fd.value;
@@ -248,6 +249,17 @@ std::string_view trim_view(std::string_view text)
     while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
         text.remove_suffix(1);
     return text;
+}
+
+bool contains_only(const std::string& s, const std::string& allowed)
+{
+    std::unordered_set<char> allowedSet(allowed.begin(), allowed.end());
+    for (char c : s) {
+        if (allowedSet.find(c) == allowedSet.end()) {
+            return false; // found a char not in allowed
+        }
+    }
+    return true;
 }
 
 } // End TextUtil NS

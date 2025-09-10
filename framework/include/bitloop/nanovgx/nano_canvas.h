@@ -144,12 +144,7 @@ public:
 
     void save() const { nvgSave(vg); }
     void restore() { nvgRestore(vg); }
-    struct LocalTransform
-    {
-        SimplePainter* painter;
-        LocalTransform(SimplePainter* p) : painter(p) { p->save(); p->resetTransform(); }
-        ~LocalTransform() { painter->restore(); }
-    };
+    
 
     void resetTransform()                                    { nvgResetTransform(vg); }
     void transform(const glm::mat3& m)                       { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
@@ -327,6 +322,17 @@ public:
 
     mutable Camera camera;
 
+    struct ScopedTransform
+    {
+        Painter* painter;
+        ScopedTransform(Painter* p) : painter(p) {
+            p->save();
+            p->resetTransform();
+            p->transform(painter->default_viewport_transform);
+        }
+        ~ScopedTransform() { painter->restore(); }
+    };
+
     // ======== Position/Size wrappers (applies only enabled camera transforms) ========
 
     DVec2 PT(double x, double y)      const { return camera.transform_coordinates ? camera.toStage(x, y) : DVec2{ x, y }; }
@@ -336,8 +342,14 @@ public:
     DVec2 SIZE(DVec2 s)               const { return camera.scale_sizes ? DVec2{s.x*camera.zoomX(), s.y*camera.zoomY()} : s; }
     double SIZE(double radius)        const { return camera.scale_sizes ? (radius*_avgZoom()) : radius; }
 
-    void ROTATE(double r)              { if (/*camera.transform_coordinates &&*/ r != 0.0) rotate(r); }
-    void TRANSLATE(double x, double y) { translate(PT(x, y)); }
+    void ROTATE(double r)                { if (r != 0.0) rotate(r); }
+    void TRANSLATE(double x, double y)   { translate(PT(x, y)); }
+    DVec2 TRANSFORMED(double x, double y, double w, double h, double rotation) {
+        translate(PT(x, y));
+        if (rotation != 0.0)
+            rotate(rotation);
+        return SIZE(w, h);
+    }
 
 
     // ======== Styles ========
@@ -417,97 +429,106 @@ public:
 
     void strokeRect(double x, double y, double w, double h)
     {
-        LocalTransform t(this);
-        TRANSLATE(x, y);
-        ROTATE(camera.rotation());
-        DVec2 s = SIZE(w, h);
+        ScopedTransform t(this);
+        DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::strokeRect(0, 0, s.x, s.y);
     }
     void fillRect(double x, double y, double w, double h)
     {
-        LocalTransform t(this);
-        TRANSLATE(x, y);
-        ROTATE(camera.rotation());
-        DVec2 s = SIZE(w, h);
+        ScopedTransform t(this);
+        DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::fillRect(0, 0, s.x, s.y);
     }
-    void strokeRoundedRect(double x, double y, double w, double h, double r)
-    {
-        LocalTransform t(this);
-        TRANSLATE(x, y);
-        ROTATE(camera.rotation());
-        DVec2 s = SIZE(w, h);
+    void strokeRoundedRect(double x, double y, double w, double h, double r) {
+        ScopedTransform t(this);
+        DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::strokeRoundedRect(0, 0, s.x, s.y, SIZE(r));
     }
     void fillRoundedRect(double x, double y, double w, double h, double r)
     {
-        LocalTransform t(this);
-        TRANSLATE(x, y);
-        ROTATE(camera.rotation());
-        DVec2 s = SIZE(w, h);
+        ScopedTransform t(this);
+        DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::fillRoundedRect(0, 0, s.x, s.y, SIZE(r));
     }
     void strokeEllipse(double cx, double cy, double rx, double ry)
     {
-        LocalTransform t(this);
-        TRANSLATE(cx, cy);
-        ROTATE(camera.rotation());
-        DVec2 s = SIZE(rx, ry);
-
+        ScopedTransform t(this);
+        DVec2 s = TRANSFORMED(cx, cy, rx, ry, camera.rotation());
         SimplePainter::beginPath();
         SimplePainter::ellipse(0, 0, s.x, s.y);
         SimplePainter::stroke();
     }
     void fillEllipse(double cx, double cy, double rx, double ry)
     {
-        LocalTransform t(this);
-        TRANSLATE(cx, cy);
-        ROTATE(camera.rotation());
-        DVec2 s = SIZE(rx, ry);
-
+        ScopedTransform t(this);
+        DVec2 s = TRANSFORMED(cx, cy, rx, ry, camera.rotation());
         SimplePainter::beginPath();
         SimplePainter::ellipse(0, 0, s.x, s.y);
         SimplePainter::fill();
     }
 
     // Overloads
-    template<typename T> void strokeQuad(const Quad<T>& q)
-    {
-        beginPath();
-        drawClosedPath(q._data);
-        stroke();
-    }
-    template<typename T> void strokeRect(const Rect<T>& r)  { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    template<typename T> void fillRect(const Rect<T>& r)    { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    void strokeEllipse(double cx, double cy, double r)      { strokeEllipse(cx, cy, r, r); }
-    void fillEllipse(double cx, double cy, double r)        { fillEllipse(cx, cy, r, r); }
+    template<typename T> void strokeQuad(const Quad<T>& q)                       { beginPath(); drawClosedPath(q._data); stroke(); }
+    template<typename T> void strokeRect(const Rect<T>& r)                       { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void fillRect(const Rect<T>& r)                         { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void strokeRoundedRect(const Rect<T>& r, double radius) { strokeRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
+    template<typename T> void fillRoundedRect(const Rect<T>& r, double radius)   { fillRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
+    void strokeEllipse(double cx, double cy, double r)                           { strokeEllipse(cx, cy, r, r); }
+    void fillEllipse(double cx, double cy, double r)                             { fillEllipse(cx, cy, r, r); }
 
-    void drawArrow(DVec2 a, DVec2 b, Color color)
+    void drawArrow(DVec2 a, DVec2 b, Color color=Color(255,255,255), double tip_angle=35, double tip_scale=1.0, bool fill_tip=true)
     {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
         double angle = atan2(dy, dx);
-        constexpr double tip_sharp_angle = 145.0 * Math::PI / 180.0;
-        double arrow_size = line_width * 4 / _avgZoom();
+        const double tip_sharp_angle = Math::toRadians(180.0 - tip_angle);// 145.0 * Math::PI / 180.0;
+        double arrow_size;// = (line_width * 4) / (camera.scale_lines ? _avgZoom() : 1);
 
-        setLineCap(LineCap::CAP_ROUND);
-        setFillStyle(color);
-        setStrokeStyle(color);
-        beginPath();
-        moveTo(a);
-        lineTo(b);
-        stroke();
+        if (camera.transform_coordinates)
+        {
+            arrow_size = (line_width * 4 * tip_scale) / _avgZoom();
+        }
+        else
+        {
+            arrow_size = (line_width * 4 * tip_scale) / (camera.scale_lines ? _avgZoom() : 1);
+        }
+
+        DVec2 c = b - (b - a).normalized() * arrow_size * 0.7;
 
         double rx1 = b.x + cos(angle + tip_sharp_angle) * arrow_size;
         double ry1 = b.y + sin(angle + tip_sharp_angle) * arrow_size;
         double rx2 = b.x + cos(angle - tip_sharp_angle) * arrow_size;
         double ry2 = b.y + sin(angle - tip_sharp_angle) * arrow_size;
 
-        beginPath();
-        moveTo(b);
-        lineTo(rx1, ry1);
-        lineTo(rx2, ry2);
-        fill();
+        if (fill_tip)
+        {
+            setLineCap(LineCap::CAP_ROUND);
+            setFillStyle(color);
+            setStrokeStyle(color);
+            beginPath();
+            moveTo(a);
+            lineTo(c);
+            stroke();
+
+            beginPath();
+            moveTo(b);
+            lineTo(rx1, ry1);
+            lineTo(rx2, ry2);
+            fill();
+        }
+        else // Stroke tip
+        {
+            setLineCap(LineCap::CAP_ROUND);
+            setFillStyle(color);
+            setStrokeStyle(color);
+            beginPath();
+            moveTo(a);
+            lineTo(b);
+            stroke();
+
+            strokeLine(b, {rx1, ry1});
+            strokeLine(b, {rx2, ry2});
+        }
     }
 
     double arrow_x0 = 0, arrow_y0 = 0;
@@ -557,7 +578,7 @@ public:
         //else
         //    SimplePainter::setFontSize(font_size);
 
-        LocalTransform t(this);
+        ScopedTransform t(this);
         TRANSLATE(px, py);
 
         if (camera.rotate_text)
@@ -816,6 +837,7 @@ class Canvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
     int fbo_width = 0, fbo_height = 0;
+    bool has_fbo = false;
 
 public:
 
@@ -828,6 +850,7 @@ public:
     GLuint texture() { return tex; }
     [[nodiscard]] int fboWidth() { return fbo_width; }
     [[nodiscard]] int fboHeight() { return fbo_height; }
+    [[nodiscard]] int fboExists() { return has_fbo; }
 };
 
 GLuint loadSVG(const char* path, int outputWidth, int outputHeight);

@@ -4,6 +4,7 @@
 
 #include "Cardioid/Cardioid.h"
 
+#include "types.h"
 #include "state.h"
 #include "types.h"
 #include "kernel.h"
@@ -40,21 +41,29 @@ inline double qualityFromIterLimit(int iter_lim, double zoom_x)
 
 struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
 {
-    char config_buf_name[32] = "Mandelbrot";
+    bool show_save_dialog = false;
+    bool show_load_dialog = false;
+    bool show_share_dialog = false;
+    #ifdef __EMSCRIPTEN__
+    bool opening_load_popup = false;
+    #endif
+
+    //char config_buf_name[32] = "Mandelbrot";
     std::string config_buf = "";
     //char pos_tween_buf[1024] = "";
     //char zoom_tween_buf[1024] = "";
 
-    MandelState state_a;
-    MandelState state_b;
-
+    // == tweening ==
     bool tweening = false;
     double tween_progress = 0.0; // 0..1
     double tween_lift = 0.0;
     double tween_duration = 0.0;
 
-    DAngledRect r1;
-    DAngledRect r2;
+    MandelState state_a;
+    MandelState state_b;
+
+    DAngledRect tween_r1;
+    DAngledRect tween_r2;
 
     double cardioid_lerp_amount = 1.0; // 1 - flatten
 
@@ -77,11 +86,15 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
     });
 
     ImSpline::Spline tween_pos_spline = ImSpline::Spline(100,
-        { {-0.147f,0.0f},{0.253f,0.0f},{0.553f,0.0f},{0.439f,1.0f},{0.74f,1.0f},{1.14f,1.0f} }
+        { {-0.147,0},{0.253,0},{0.553,0},{0.371,0.999},{0.675,1},{1.07,1} }
     );
 
     ImSpline::Spline tween_zoom_lift_spline = ImSpline::Spline(100,
-        { {-0.1f,0.0f},{0.0f,0.0f},{0.1f,0.0f},{0.201f,0.802f},{0.251f,1.002f},{0.351f,1.402f},{0.643f,1.397f},{0.744f,0.997f},{0.794f,0.797f},{0.9f,0.0f},{1.0f,0.0f},{1.1f,0.0f} }
+        { {-0.1,0},{0,0},{0.1,0},{0.201,0.802},{0.251,1.002},{0.351,1.402},{0.572,1.419},{0.672,0.799},{0.8,0},{0.8,0},{1,0},{1.104,0} }
+    );
+
+    ImSpline::Spline tween_base_zoom_spline = ImSpline::Spline(100,
+        { {-0.3f,0.0f},{0.0f,0.0f},{0.5f,0.0f},{0.5f,1.0f},{1.0f,1.0f},{1.5f,1.0f} }
     );
 
     ImSpline::Spline tween_color_cycle = ImSpline::Spline(100,
@@ -99,14 +112,17 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
         sync(tween_progress);
         sync(tween_lift);
 
+        #ifdef BL_DEBUG
         sync(tween_pos_spline);
         sync(tween_zoom_lift_spline);
+        sync(tween_base_zoom_spline);
+        #endif
 
         sync(reference_zoom);
         sync(ctx_stage_size);
 
-        sync(r1);
-        sync(r2);
+        sync(tween_r1);
+        sync(tween_r2);
 
         sync(show_axis);
         sync(cam_view);
@@ -117,7 +133,8 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
         sync(interactive_cardioid);
         sync(dynamic_iter_lim);
         sync(quality);
-        sync(smoothing_type);
+        sync(use_smoothing);
+        sync(smoothing_type); // todo, not needed in state
         sync(iter_lim);
         sync(x_spline);
         sync(y_spline);
@@ -146,23 +163,12 @@ struct Mandelbrot_Scene_Data : public VarBuffer, public MandelState
     int calculateIterLimit() const;
 
     
-
-
     DAngledRect getAngledRect(const MandelState& s) const
     {
         DVec2 world_size = (s.ctx_stage_size / reference_zoom) / s.cam_view.zoom;
         return DAngledRect(s.cam_view.x, s.cam_view.y, world_size.x, world_size.y, s.cam_view.angle);
     }
 
-    // Tweening
-    //void lerpState(
-    //    MandelState& dst,
-    //    MandelState& a,
-    //    MandelState& b,
-    //    double f,
-    //    bool complete);
-
-    
 
     void loadTemplate(std::string_view data);
     void updateConfigBuffer();
@@ -178,6 +184,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
     // --- Custom Launch Config ---
     struct Config {};
     Mandelbrot_Scene(Config&) {}
+
+    static constexpr int MAX_THREADS = 0;
 
     std::shared_ptr<NanoFont> font;
 
@@ -209,13 +217,26 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
     bool first_frame = true;
     bool finished_compute = false;
 
-    std::chrono::steady_clock::time_point compute_t0;
-    Math::MovingAverage::MA timer_ma = Math::MovingAverage::MA(10);
+    ///std::chrono::steady_clock::time_point compute_t0;
+    ///Math::MovingAverage::MA<double> timer_ma = Math::MovingAverage::MA<double>(10);
+
+    Math::MovingAverage::MA<DVec2> avg_vel_pos = Math::MovingAverage::MA<DVec2>(20);
+    Math::MovingAverage::MA<double> avg_vel_zoom = Math::MovingAverage::MA<double>(20);
+
+    DVec2 camera_vel_pos{0, 0};
+    double camera_vel_zoom{1};
     
     /// std::vector< std::vector<DVec2> > boundary_paths;
     /// 
     /// // Per-level boundry tracing
     /// void generateBoundary(EscapeField* field, double level, std::vector<DVec2>& path);
+    ///
+
+    inline int numThreads() const
+    {
+        if constexpr (MAX_THREADS > 0) return MAX_THREADS;
+        return Thread::idealThreadCount();
+    }
 
     ImGradient gradient_shifted;
     void updateShiftedGradient()
@@ -254,7 +275,12 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
             if (field_pixel.depth >= INSIDE_MANDELBROT_SET_SKIPPED) 
             {
-                active_bmp->setPixel(x, y, 0xFF000000);
+                ///#ifdef BL_DEBUG
+                ///if (field_pixel.depth == INSIDE_MANDELBROT_SET_SKIPPED)
+                ///    active_bmp->setPixel(x, y, 0xFF7F007F);
+                ///else
+                ///#endif
+                    active_bmp->setPixel(x, y, 0xFF000000);
                 return;
             }
              
@@ -279,7 +305,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             gradient_shifted.unguardedRGBA(combined_t, u32);
 
             active_bmp->setPixel(x, y, u32);
-        });
+        }, numThreads());
     }
 
     bool frame_complete = false;
@@ -287,7 +313,7 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
     //bool Use_Splines
     template<
         typename T,
-        MandelSmoothing Smooth_Iter,
+        MandelSmoothing Smoothing,
         bool flatten,
         bool Axis_Visible
     >
@@ -302,8 +328,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
         }
 
         //DQuad world_quad = pending_bmp->worldQuad();
-        unsigned w = pending_bmp->width();
-        unsigned h = pending_bmp->height();
+        //unsigned w = pending_bmp->width();
+        //unsigned h = pending_bmp->height();
 
         //blPrint() << "Computing field: " << computing_phase;
         frame_complete = pending_bmp->forEachWorldPixel<T>(
@@ -317,24 +343,24 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
                 return; 
 
             // Do we already have this result mirrored from across the X-axis?
-            ///if constexpr (Axis_Visible)
-            ///{
-            ///    // Possibly not thread-safe since another task could be writing to mirrored pixel.
-            ///    // However, in practice this seems to work fine
-            ///    IVec2 mirrored_pixel_pos = pending_bmp->pixelPosFromWorld(DVec2{ wx, -wy });
-            ///
-            ///    if ((unsigned)mirrored_pixel_pos.x < w && (unsigned)mirrored_pixel_pos.y < h)
-            ///    {
-            ///        EscapeFieldPixel& mirrored_pixel = pending_field->at(mirrored_pixel_pos.x, mirrored_pixel_pos.y);
-            ///        if (mirrored_pixel.depth >= 0)
-            ///        {
-            ///            // Yes
-            ///            field_pixel.depth = mirrored_pixel.depth;
-            ///            field_pixel.dist = mirrored_pixel.dist;
-            ///            return;
-            ///        }
-            ///    }
-            ///}
+            //if constexpr (Axis_Visible)
+            //{
+            //    // Possibly not thread-safe since another task could be writing to mirrored pixel.
+            //    // However, in practice this seems to work fine
+            //    IVec2 mirrored_pixel_pos = pending_bmp->pixelPosFromWorld(DVec2{ wx, -wy });
+            //
+            //    if ((unsigned)mirrored_pixel_pos.x < w && (unsigned)mirrored_pixel_pos.y < h)
+            //    {
+            //        EscapeFieldPixel& mirrored_pixel = pending_field->at(mirrored_pixel_pos.x, mirrored_pixel_pos.y);
+            //        if (mirrored_pixel.depth >= 0)
+            //        {
+            //            // Yes
+            //            field_pixel.depth = mirrored_pixel.depth;
+            //            field_pixel.dist = mirrored_pixel.dist;
+            //            return;
+            //        }
+            //    }
+            //}
 
             double dist;
 
@@ -349,44 +375,13 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             ///}
             ///else // linear
             {
-                //mandelbrot_ex<T, Smooth_Iter>(wx, wy, iter_lim, depth, dist);
-                // 
-                mandel_kernel<T, Smooth_Iter>(wx, wy, iter_lim, depth, dist);
-                //mandel_kernel<T, MandelSmoothing::ITER>(wx, wy, iter_lim, depth, dist);
-
-                //if (isnan(depth) || isnan(dist) || dist <= -1.0)
-                //{
-                //    mandel_kernel<T, Smooth_Iter>(wx, wy, iter_lim, depth, dist);
-                //    //mandelbrot_ex<T, Smooth_Iter>(wx, wy, iter_lim, depth, dist);
-                //    //mandelbrot_ex<T, Smooth_Iter>(wx, wy, iter_lim, depth, dist);
-                //
-                //    //dist = 0;
-                //}
-
-                /*if constexpr (Smooth_Iter == MandelSmoothing::DIST)
-                {
-                    // Distance to edge smoothing
-                    UNUSED(wx);
-                    UNUSED(wy);
-                    //depth = (double)mandelbrot_dist(wx, wy, iter_lim);
-                }
-                else
-                //if constexpr (Smooth_Iter == MandelSmoothing::ITER)
-                {
-                    // If Smooth_Iter *or* all smoothing options are disabled, handle here
-                    //v = mandelbrot_iter<Smooth_Iter>(wx, wy, iter_lim);
-
-                    //depth = mandelbrot_iter_ex<T, Smooth_Iter>(wx, wy, iter_lim);
-                    mandelbrot_ex<T, Smooth_Iter>(wx, wy, iter_lim, depth);
-                }*/
+                mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist);
             }
 
             field_pixel.depth = depth;
             field_pixel.dist = dist;
-
-            
  
-        }, 8, timeout);
+        }, numThreads(), timeout);
 
         if (frame_complete)
             refreshFieldDepthNormalized();
@@ -396,50 +391,24 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
     void refreshFieldDepthNormalized()
     {
-        //bool calculate_floor_depth = cycle_iter_normalize_depth && 
-        //    smoothing_type & (int)MandelSmoothing::ITER;
-
-
-        //if (calculate_floor_depth)
+        pending_field->min_depth = std::numeric_limits<double>::max();
+        pending_field->max_depth = std::numeric_limits<double>::lowest();
+ 
+        // Redetermine minimum depth for entire visible field
+        pending_bmp->forEachPixel([&, this](int x, int y)
         {
-            pending_field->min_depth = std::numeric_limits<double>::max();
-            pending_field->max_depth = std::numeric_limits<double>::lowest();
-            //pending_field->min_dist = std::numeric_limits<double>::max();
-            //pending_field->max_dist = std::numeric_limits<double>::lowest();
+            EscapeFieldPixel& field_pixel = pending_field->at(x, y);
+            double depth = field_pixel.depth;
 
+            if (depth >= INSIDE_MANDELBROT_SET_SKIPPED) return;
+            if (depth < pending_field->min_depth) pending_field->min_depth = depth;
+            if (depth > pending_field->max_depth) pending_field->max_depth = depth;
+        }, 0);
 
-
-            // Redetermine minimum depth for entire visible field
-            pending_bmp->forEachPixel([&, this](int x, int y)
-            {
-                EscapeFieldPixel& field_pixel = pending_field->at(x, y);
-                double depth = field_pixel.depth;
-
-                if (depth >= INSIDE_MANDELBROT_SET_SKIPPED) return;
-                if (depth < pending_field->min_depth) pending_field->min_depth = depth;
-                if (depth > pending_field->max_depth) pending_field->max_depth = depth;
-
-                //if (smoothing_type & (int)MandelSmoothing::DIST) // todo: make constexpr
-                //{
-                //    double dist = log(field_pixel.dist);
-                //    if (isnan(dist))
-                //    {
-                //        DebugBreak();
-                //    }
-                //    if (field_pixel.dist >= INSIDE_MANDELBROT_SET_SKIPPED) return;
-                //    if (dist < pending_field->min_dist) pending_field->min_dist = dist;
-                //    if (dist > pending_field->max_dist) pending_field->max_dist = dist;
-                //}
-            }, 0);
-
-            if (pending_field->min_depth == std::numeric_limits<double>::max()) pending_field->min_depth = 0;
-        }
+        if (pending_field->min_depth == std::numeric_limits<double>::max()) pending_field->min_depth = 0;
+        
 
         // Calculate normalized depth/dist
-        //int row = 0;
-        //pending_bmp->forEachWorldPixel<double>(row, 
-        //     [&](int x, int y, double wx, double wy)
-
         double dist_min_pixel_ratio = (100.0 - cycle_dist_sharpness) / 100.0 + 0.00001;
         double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ dist_min_pixel_ratio, 0 }).magnitude(); // quarter pixel
         //double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.0000000000001, 0 }).magnitude(); // quarter pixel
@@ -453,103 +422,33 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
             EscapeFieldPixel& field_pixel = pending_field->at(x, y);
 
             double depth = field_pixel.depth;
-            double raw_dist = field_pixel.dist;// / pending_field->max_dist;
-
-            ///if (raw_dist < std::numeric_limits<double>::epsilon())
-            ///{
-            ///    mandel_kernel<double, MandelSmoothing::DIST>(wx, wy, iter_lim, depth, raw_dist);
-            ///    raw_dist = std::numeric_limits<double>::epsilon();
-            ///}
-            /// 
-            //double lower_depth_bound = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
-            //
-            //double normalized_depth = Math::lerpFactor(depth, lower_depth_bound, (double)iter_lim);
-
-            ///double dist_factor = Math::lerpFactor(raw_dist, pending_field->min_dist, pending_field->max_dist);
-
-            //double floor_dist = log(pending_field->min_dist);
-            //double ceil_dist  = log(pending_field->max_dist);
-            ///double floor_dist = pending_field->min_dist;
-            ///double ceil_dist  = pending_field->max_dist;
+            double raw_dist = field_pixel.dist;
 
             // "dist" is highest next to mandelbrot set
             double dist = (smoothing_type & (int)MandelSmoothing::DIST) ?
-                //((cycle_dist_invert ? 1 : 1) * Math::linear_log_lerp(raw_dist, dist_log1p_weight))
                 ((cycle_dist_invert ? -1 : 1) * log(raw_dist))
                 : 0;
-
-            //floor_dist = Math::linear_log1p_lerp(floor_dist, cycle_iter_log1p_weight);
-            //ceil_dist = Math::linear_log1p_lerp(ceil_dist, cycle_iter_log1p_weight);
-            //dist = Math::linear_log1p_lerp(dist, cycle_iter_log1p_weight);
-
-            //double max_log_dist = Math::linear_log1p_lerp(ceil_dist - floor_dist, cycle_iter_log1p_weight);
-            //double final_dist   = Math::linear_log1p_lerp(dist      - floor_dist, cycle_iter_log1p_weight) / max_log_dist;
-
-            //double dist_factor  = Math::lerpFactor(dist, floor_dist, ceil_dist);
-
-            ///double dist_factor = cycle_dist_invert ?
-            ///    (0 - Math::lerpFactor(dist, stable_min_raw_dist, stable_max_raw_dist)) :
-            ///         Math::lerpFactor(dist, stable_min_raw_dist, stable_max_raw_dist);
 
             double dist_factor = cycle_dist_invert ?
                 (0 - Math::lerpFactor(dist, stable_min_dist, stable_max_dist)) :
                      Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
 
-            //if (dist_factor < 0) dist_factor = 0;
-
-            //dist_factor = Math::linear_log_lerp(dist_factor, dist_log1p_weight);
-
-
-            double final_dist = dist_factor;// dist;
-            ///UNUSED(floor_dist);
-            ///UNUSED(ceil_dist);
-            ///UNUSED(dist_factor);
-
-            //
-            //double log_depth = -log(std::max(normalized_depth,0.0000000001));
-            //double final_depth = Math::lerp(log_depth, normalized_depth, cycle_iter_log1p_weight);
-            //
-            ///if (isnan(final_dist))
-            ///{
-            ///    blBreak();
-            ///}
-            //double normalized_dist = -log(dist);
-
             double floor_depth = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
 
-            ///double max_log_depth = Math::linear_log1p_lerp(pending_field->max_depth - floor_depth, cycle_iter_log1p_weight);
-            double final_depth = Math::linear_log1p_lerp(depth - floor_depth, cycle_iter_log1p_weight);// / max_log_depth;
+            double final_dist = dist_factor;
+            double final_depth = Math::linear_log1p_lerp(depth - floor_depth, cycle_iter_log1p_weight);
 
-
-            //field_pixel.final_value = final_value;
+            #ifdef BL_DEBUG
+            if (isnan(final_depth))
+            {
+                // There is a definite crash here, don't remove until you've caught and solved it
+                blBreak();
+            }
+            #endif
             
             field_pixel.final_depth = final_depth;
             field_pixel.final_dist = final_dist;
-
-            /*switch ((MandelSmoothing)smoothing_type)
-            {
-                case MandelSmoothing::ITER:
-                {
-                    field_pixel.final_value = final_depth;
-                }
-                break;
-                case MandelSmoothing::DIST:
-                {
-                    field_pixel.final_value = final_dist;
-                }
-                break;
-                case MandelSmoothing::MIX:
-                {
-                    field_pixel.final_value = Math::lerp(final_depth, final_dist, iter_dist_mix);
-                }
-                break;
-            }
-
-            if (!isfinite(field_pixel.final_value))
-            {
-                DebugBreak();
-            }*/
-        });
+        }, numThreads());
     }
 
     template<
@@ -613,6 +512,10 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
     // Viewport handling
     void viewportProcess(Viewport* ctx, double dt) override;
     void viewportDraw(Viewport* ctx) const override;
+    void viewportOverlay(Viewport* ctx) const override;
+
+    DRect minimizeMaximizeButtonRect(Viewport* ctx) const;
+    DRect minimizeMaximizeButton(Viewport* ctx, bool minimize) const;
 
     // Input
     void onEvent(Event e) override;
@@ -620,10 +523,6 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
 
 struct Mandelbrot_Project : public BasicProject
 {
-    //static std::vector<std::string> categorize() {
-    //    return { "Fractal", "Mandelbrot", "Mandelbrot Viewer" };
-    //}
-
     static ProjectInfo info()
     {
         return ProjectInfo({ "Fractal", "Mandelbrot", "Mandelbrot Viewer" });

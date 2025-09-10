@@ -64,6 +64,7 @@ protected:
 
     void draw();
     void populateAttributes();
+    void drawOverlay();
 
 public:
     std::vector<SDL_Event> input_event_queue;

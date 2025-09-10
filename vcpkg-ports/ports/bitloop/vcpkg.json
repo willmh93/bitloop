@@ -1,0 +1,42 @@
+{
+  "name": "bitloop",
+  "version": "1.0",
+  "port-version": 4,
+  "dependencies": [
+    "brotli",
+    "bshoshany-thread-pool",
+    "catch2",
+    "concurrentqueue",
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "avcodec",
+        "avformat",
+        "swresample",
+        "swscale"
+      ],
+      "platform": "!wasm32"
+    },
+    "freetype",
+    "glm",
+    {
+      "name": "imgui",
+      "features": [
+        "docking-experimental",
+        "freetype",
+        "opengl3-binding",
+        "sdl3-binding"
+      ]
+    },
+    "nanosvg",
+    "nanovg",
+    "nlohmann-json",
+    "sdl3",
+    {
+      "name": "vcpkg-tool-ninja",
+      "host": true,
+      "platform": "windows"
+    }
+  ]
+}

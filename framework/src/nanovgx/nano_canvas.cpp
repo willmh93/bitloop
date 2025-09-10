@@ -231,6 +231,8 @@ bool Canvas::resize(int w, int h)
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    has_fbo = true;
+
     return true;
 }
 

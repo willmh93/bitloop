@@ -14,32 +14,31 @@
 #include "glm/glm.hpp"
 #include "glm/gtx/transform2.hpp"
 
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include <imgui.h>
+
 #define BL_BEGIN_NS namespace BL {
 #define BL_END_NS   }
+
+// Extend GLM types for flt128
 
 namespace glm {
     typedef mat<3, 3, flt128, glm::defaultp>	ddmat3;
     typedef vec<2, flt128, defaultp>		    ddvec2;
     typedef vec<3, flt128, defaultp>		    ddvec3;
+    typedef vec<4, flt128, defaultp>		    ddvec4;
 }
 
 BL_BEGIN_NS
 
-template<typename T>
-concept is_floating_point_v =
-    std::is_floating_point_v<T> ||
-    std::same_as<T, flt128>;
-
-template<class T>
-concept is_arithmetic_v = 
-    std::is_arithmetic_v<T> || 
-	std::is_same_v<T, flt128>;
-
-template<typename T>
-concept is_integral_v = std::is_integral_v<T>;
+template<typename T> concept is_floating_point_v = std::is_floating_point_v<T> || std::same_as<T, flt128>;
+template<class T>    concept is_arithmetic_v     = std::is_arithmetic_v<T> || std::is_same_v<T, flt128>;
+template<typename T> concept is_integral_v       = std::is_integral_v<T>;
 
 class ProjectBase;
 using ProjectCreatorFunc = std::function<ProjectBase*()>;
+
+// Forward declare math helpers for access
 
 namespace Math {
     template<typename T>
@@ -55,18 +54,28 @@ enum struct Anchor
     BOTTOM_LEFT,  BOTTOM,  BOTTOM_RIGHT
 };
 
+// Vec2, Vec3, Vec4
+
 template<typename T> struct GlmVec2Type;
 template<typename T> struct GlmVec3Type;
-template<> struct GlmVec2Type<float>        { using type = glm::vec2; };
-template<> struct GlmVec2Type<double>       { using type = glm::dvec2; };
-template<> struct GlmVec2Type<flt128>       { using type = glm::ddvec2; };
-template<> struct GlmVec2Type<int>          { using type = glm::ivec2; };
-template<> struct GlmVec3Type<float>        { using type = glm::vec3; };
-template<> struct GlmVec3Type<double>       { using type = glm::dvec3; };
-template<> struct GlmVec3Type<flt128>       { using type = glm::ddvec3; };
-template<> struct GlmVec3Type<int>          { using type = glm::ivec3; };
+template<typename T> struct GlmVec4Type;
+
+template<> struct GlmVec2Type<float>   { using type = glm::vec2; };
+template<> struct GlmVec2Type<double>  { using type = glm::dvec2; };
+template<> struct GlmVec2Type<flt128>  { using type = glm::ddvec2; };
+template<> struct GlmVec2Type<int>     { using type = glm::ivec2; };
+template<> struct GlmVec3Type<float>   { using type = glm::vec3; };
+template<> struct GlmVec3Type<double>  { using type = glm::dvec3; };
+template<> struct GlmVec3Type<flt128>  { using type = glm::ddvec3; };
+template<> struct GlmVec3Type<int>     { using type = glm::ivec3; };
+template<> struct GlmVec4Type<float>   { using type = glm::vec4; };
+template<> struct GlmVec4Type<double>  { using type = glm::dvec4; };
+template<> struct GlmVec4Type<flt128>  { using type = glm::ddvec4; };
+template<> struct GlmVec4Type<int>     { using type = glm::ivec4; };
+
 template<typename T> using GlmVec2 = typename GlmVec2Type<T>::type;
 template<typename T> using GlmVec3 = typename GlmVec3Type<T>::type;
+template<typename T> using GlmVec4 = typename GlmVec4Type<T>::type;
 
 template<typename T>
 struct Vec2
@@ -79,7 +88,7 @@ struct Vec2
     // constructors
     Vec2() = default;
     constexpr Vec2(T _x, T _y) : x(_x), y(_y) {}
-
+    constexpr Vec2(const ImVec2 rhs) : x(rhs.x), y(rhs.y) {}
     constexpr Vec2(const GlmVec2<T>& rhs) : x(rhs.x), y(rhs.y) {}
     constexpr explicit Vec2(const GlmVec3<T>& rhs) : x(rhs.x), y(rhs.y) {} // discards z for 2D
 
@@ -104,6 +113,15 @@ struct Vec2
     [[nodiscard]] constexpr Vec2 operator-(T v) const { return { x - v, y - v }; }
     [[nodiscard]] constexpr Vec2 operator*(T v) const { return { x * v, y * v }; }
     [[nodiscard]] constexpr Vec2 operator/(T v) const { return { x / v, y / v }; }
+
+    constexpr void operator+=(Vec2 rhs) { x += rhs.x; y += rhs.y; }
+    constexpr void operator-=(Vec2 rhs) { x -= rhs.x; y -= rhs.y; }
+    constexpr void operator*=(Vec2 rhs) { x *= rhs.x; y *= rhs.y; }
+    constexpr void operator/=(Vec2 rhs) { x /= rhs.x; y /= rhs.y; }
+    constexpr void operator+=(T v) { x += v; y += v; }
+    constexpr void operator-=(T v) { x -= v; y -= v; }
+    constexpr void operator*=(T v) { x *= v; y *= v; }
+    constexpr void operator/=(T v) { x /= v; y /= v; }
     
     // properties
     [[nodiscard]] constexpr T angle() const { return atan2(y, x); }
@@ -123,14 +141,156 @@ struct Vec2
     [[nodiscard]] static constexpr Vec2 lerp(const Vec2& a, const Vec2& b, T ratio) { return a + (b - a) * ratio; }
 };
 
+template<typename T>
+struct Vec3
+{
+    union {
+        struct { T x, y, z; };
+        T _data[3]{ 0 };
+    };
+
+    // constructors
+    Vec3() = default;
+    constexpr Vec3(T _x, T _y, T _z) : x(_x), y(_y), z(_z) {}
+    constexpr Vec3(const GlmVec3<T>& rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
+
+    // conversions
+    template<typename T2> constexpr operator Vec3<T2>()    const { return Vec3<T2>{(T2)x, (T2)y, (T2)z}; }
+    template<typename T2> constexpr operator GlmVec3<T2>() const { return GlmVec3<T2>{(T2)x, (T2)y, (T2)z}; }
+
+    // access
+    [[nodiscard]] constexpr const T& operator[](int i) const { return _data[i]; }
+    [[nodiscard]] constexpr T& operator[](int i) { return _data[i]; }
+    [[nodiscard]] constexpr T(&asArray())[3] { return _data; }
+
+    // arithmetic
+    [[nodiscard]] constexpr Vec3 operator-() const { return Vec3(-x, -y, -z); }
+    [[nodiscard]] constexpr bool operator==(const Vec3& other) const { return x == other.x && y == other.y && z != other.z; }
+    [[nodiscard]] constexpr bool operator!=(const Vec3& other) const { return x != other.x || y != other.y || z != other.z; }
+    [[nodiscard]] constexpr Vec3 operator+(const Vec3& rhs) const { return { x + rhs.x, y + rhs.y, z + rhs.z }; }
+    [[nodiscard]] constexpr Vec3 operator-(const Vec3& rhs) const { return { x - rhs.x, y - rhs.y, z - rhs.z }; }
+    [[nodiscard]] constexpr Vec3 operator*(const Vec3& rhs) const { return { x * rhs.x, y * rhs.y, z * rhs.z }; }
+    [[nodiscard]] constexpr Vec3 operator/(const Vec3& rhs) const { return { x / rhs.x, y / rhs.y, z / rhs.z }; }
+    [[nodiscard]] constexpr Vec3 operator+(T v) const { return { x + v, y + v, z + v }; }
+    [[nodiscard]] constexpr Vec3 operator-(T v) const { return { x - v, y - v, z - v }; }
+    [[nodiscard]] constexpr Vec3 operator*(T v) const { return { x * v, y * v, z * v }; }
+    [[nodiscard]] constexpr Vec3 operator/(T v) const { return { x / v, y / v, z / v }; }
+
+    constexpr void operator+=(Vec3 rhs) { x += rhs.x; y += rhs.y; z += rhs.z; }
+    constexpr void operator-=(Vec3 rhs) { x -= rhs.x; y -= rhs.y; z -= rhs.z; }
+    constexpr void operator*=(Vec3 rhs) { x *= rhs.x; y *= rhs.y; z *= rhs.z; }
+    constexpr void operator/=(Vec3 rhs) { x /= rhs.x; y /= rhs.y; z /= rhs.z; }
+    constexpr void operator+=(T v) { x += v; y += v; z += v; }
+    constexpr void operator-=(T v) { x -= v; y -= v; z -= v; }
+    constexpr void operator*=(T v) { x *= v; y *= v; z *= v; }
+    constexpr void operator/=(T v) { x /= v; y /= v; z /= v; }
+
+    // properties
+    [[nodiscard]] constexpr T average() const { return (x + y + z) / T{ 3 }; }
+    [[nodiscard]] constexpr T magnitude() const { return sqrt(x * x + y * y + z * z); }
+    [[nodiscard]] constexpr T dot(const Vec3& other) const { return x * other.x + y * other.y + z * other.z; }
+
+    // operators
+    [[nodiscard]] constexpr Vec3 floored() const { return { floor(x), floor(y), floor(z)}; }
+    [[nodiscard]] constexpr Vec3 rounded() const { return { round(x), round(y), round(z)}; }
+    [[nodiscard]] constexpr Vec3 floored(double offset) const { return { floor(x) + offset, floor(y) + offset, floor(z) + offset}; }
+    [[nodiscard]] constexpr Vec3 rounded(double offset) const { return { round(x) + offset, round(y) + offset, round(z) + offset }; }
+    [[nodiscard]] constexpr Vec3 normalized() const { return (*this) / magnitude(); }
+
+    // static
+    [[nodiscard]] static constexpr Vec3 lerp(const Vec3& a, const Vec3& b, T ratio) { return a + (b - a) * ratio; }
+};
+
+template<typename T>
+struct Vec4
+{
+    union {
+        struct { T x, y, z, w; };
+        T _data[4]{ 0 };
+    };
+
+    // constructors
+    Vec4() = default;
+    constexpr Vec4(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {}
+    constexpr Vec4(const GlmVec4<T>& rhs) : x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w) {}
+
+    // conversions
+    template<typename T2> constexpr operator Vec4<T2>()    const { return Vec4<T2>{(T2)x, (T2)y, (T2)z, (T2)w}; }
+    template<typename T2> constexpr operator GlmVec4<T2>() const { return GlmVec4<T2>{(T2)x, (T2)y, (T2)z, (T2)w}; }
+
+    // access
+    [[nodiscard]] constexpr const T& operator[](int i) const { return _data[i]; }
+    [[nodiscard]] constexpr T& operator[](int i) { return _data[i]; }
+    [[nodiscard]] constexpr T(&asArray())[4] { return _data; }
+
+    // arithmetic
+    [[nodiscard]] constexpr Vec4 operator-() const { return Vec4(-x, -y, -z, -w); }
+    [[nodiscard]] constexpr bool operator==(const Vec4& other) const { return x == other.x && y == other.y && z != other.z && w != other.w; }
+    [[nodiscard]] constexpr bool operator!=(const Vec4& other) const { return x != other.x || y != other.y || z != other.z || w != other.w; }
+    [[nodiscard]] constexpr Vec4 operator+(const Vec4& rhs) const { return { x + rhs.x, y + rhs.y, z + rhs.z, w + rhs.w }; }
+    [[nodiscard]] constexpr Vec4 operator-(const Vec4& rhs) const { return { x - rhs.x, y - rhs.y, z - rhs.z, w - rhs.w }; }
+    [[nodiscard]] constexpr Vec4 operator*(const Vec4& rhs) const { return { x * rhs.x, y * rhs.y, z * rhs.z, w * rhs.w }; }
+    [[nodiscard]] constexpr Vec4 operator/(const Vec4& rhs) const { return { x / rhs.x, y / rhs.y, z / rhs.z, w / rhs.w }; }
+    [[nodiscard]] constexpr Vec4 operator+(T v) const { return { x + v, y + v, z + v, w + v }; }
+    [[nodiscard]] constexpr Vec4 operator-(T v) const { return { x - v, y - v, z - v, w - v }; }
+    [[nodiscard]] constexpr Vec4 operator*(T v) const { return { x * v, y * v, z * v, w * v }; }
+    [[nodiscard]] constexpr Vec4 operator/(T v) const { return { x / v, y / v, z / v, w / v }; }
+
+    constexpr void operator+=(Vec4 rhs) { x += rhs.x; y += rhs.y; z += rhs.z; w += rhs.w; }
+    constexpr void operator-=(Vec4 rhs) { x -= rhs.x; y -= rhs.y; z -= rhs.z; w -= rhs.w; }
+    constexpr void operator*=(Vec4 rhs) { x *= rhs.x; y *= rhs.y; z *= rhs.z; w *= rhs.w; }
+    constexpr void operator/=(Vec4 rhs) { x /= rhs.x; y /= rhs.y; z /= rhs.z; w /= rhs.w; }
+    constexpr void operator+=(T v) { x += v; y += v; z += v; w += v; }
+    constexpr void operator-=(T v) { x -= v; y -= v; z -= v; w -= v; }
+    constexpr void operator*=(T v) { x *= v; y *= v; z *= v; w *= v; }
+    constexpr void operator/=(T v) { x /= v; y /= v; z /= v; w /= v; }
+
+    // properties
+    [[nodiscard]] constexpr T average() const { return (x + y + z + w) / T{ 4 }; }
+    [[nodiscard]] constexpr T magnitude() const { return sqrt(x * x + y * y + z * z + w * w); }
+    [[nodiscard]] constexpr T dot(const Vec4& other) const { return x * other.x + y * other.y + z * other.z + w * other.w; }
+
+    // operators
+    [[nodiscard]] constexpr Vec4 floored() const { return { floor(x), floor(y), floor(z), floor(w) }; }
+    [[nodiscard]] constexpr Vec4 rounded() const { return { round(x), round(y), round(z), round(w) }; }
+    [[nodiscard]] constexpr Vec4 floored(double offset) const { return { floor(x) + offset, floor(y) + offset, floor(z) + offset, floor(w) + offset }; }
+    [[nodiscard]] constexpr Vec4 rounded(double offset) const { return { round(x) + offset, round(y) + offset, round(z) + offset, round(w) + offset }; }
+    [[nodiscard]] constexpr Vec4 normalized() const { return (*this) / magnitude(); }
+
+    // static
+    [[nodiscard]] static constexpr Vec4 lerp(const Vec4& a, const Vec4& b, T ratio) { return a + (b - a) * ratio; }
+};
+
 // global arithmetic
+
 template<typename T> inline Vec2<T> operator*(T s, const Vec2<T>& v) { return v * s; }
 template<typename T> inline Vec2<T> operator*(const Vec2<T>& v, T s) { return v * s; }
+template<typename T> inline Vec2<T> operator/(T s, const Vec2<T>& v) { return v / s; }
+template<typename T> inline Vec2<T> operator/(const Vec2<T>& v, T s) { return v / s; }
 template<typename T> inline Vec2<T> operator+(T s, const Vec2<T>& v) { return v + s; }
 template<typename T> inline Vec2<T> operator+(const Vec2<T>& v, T s) { return v + s; }
 template<typename T> inline Vec2<T> operator-(T s, const Vec2<T>& v) { return v - s; }
 template<typename T> inline Vec2<T> operator-(const Vec2<T>& v, T s) { return v - s; }
 
+template<typename T> inline Vec3<T> operator*(T s, const Vec3<T>& v) { return v * s; }
+template<typename T> inline Vec3<T> operator*(const Vec3<T>& v, T s) { return v * s; }
+template<typename T> inline Vec3<T> operator/(T s, const Vec3<T>& v) { return v / s; }
+template<typename T> inline Vec3<T> operator/(const Vec3<T>& v, T s) { return v / s; }
+template<typename T> inline Vec3<T> operator+(T s, const Vec3<T>& v) { return v + s; }
+template<typename T> inline Vec3<T> operator+(const Vec3<T>& v, T s) { return v + s; }
+template<typename T> inline Vec3<T> operator-(T s, const Vec3<T>& v) { return v - s; }
+template<typename T> inline Vec3<T> operator-(const Vec3<T>& v, T s) { return v - s; }
+
+template<typename T> inline Vec4<T> operator*(T s, const Vec4<T>& v) { return v * s; }
+template<typename T> inline Vec4<T> operator*(const Vec4<T>& v, T s) { return v * s; }
+template<typename T> inline Vec4<T> operator/(T s, const Vec4<T>& v) { return v / s; }
+template<typename T> inline Vec4<T> operator/(const Vec4<T>& v, T s) { return v / s; }
+template<typename T> inline Vec4<T> operator+(T s, const Vec4<T>& v) { return v + s; }
+template<typename T> inline Vec4<T> operator+(const Vec4<T>& v, T s) { return v + s; }
+template<typename T> inline Vec4<T> operator-(T s, const Vec4<T>& v) { return v - s; }
+template<typename T> inline Vec4<T> operator-(const Vec4<T>& v, T s) { return v - s; }
+
+// Segment
 
 template<typename T>
 struct Segment
@@ -247,52 +407,13 @@ struct Segment
     }
 };
 
+// Ray
 
 template<typename T>
-struct Vec4
-{
-    T x = 0, y = 0, z = 0, w = 0;
-
-    Vec4() = default;
-    constexpr  Vec4(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {}
-
-    [[nodiscard]] constexpr Vec4 operator-() const { return Vec4(-x, -y, -z, -w); }
-    [[nodiscard]] constexpr bool operator==(const Vec4& other) const { return x == other.x && y == other.y && z == other.z && w == other.w; }
-    [[nodiscard]] constexpr bool operator!=(const Vec4& other) const { return x != other.x || y != other.y || z != other.z || w != other.w; }
-    [[nodiscard]] constexpr Vec4 operator+(const Vec4& rhs) const { return { x + rhs.x, y + rhs.y, z + rhs.z, w + rhs.w }; }
-    [[nodiscard]] constexpr Vec4 operator-(const Vec4& rhs) const { return { x - rhs.x, y - rhs.y, z - rhs.z, w - rhs.w }; }
-    [[nodiscard]] constexpr Vec4 operator*(const Vec4& rhs) const { return { x * rhs.x, y * rhs.y, z * rhs.z, w * rhs.w }; }
-    [[nodiscard]] constexpr Vec4 operator/(const Vec4& rhs) const { return { x / rhs.x, y / rhs.y, z / rhs.z, w / rhs.w }; }
-    [[nodiscard]] constexpr Vec4 operator*(T v) const { return { x * v, y * v, z * v, w * v }; }
-    [[nodiscard]] constexpr Vec4 operator/(T v) const { return { x / v, y / v, z / v, w / v }; }
-    [[nodiscard]] constexpr T& operator[](int i) const { return (&x)[i]; }
-
-    [[nodiscard]] constexpr T(&asArray())[4] { return *reinterpret_cast<T(*)[4]>(&x); }
-    //[[nodiscard]] T  average() const { return (x + y) / T{ 2 }; }
-    //[[nodiscard]] T  magnitude() const { return sqrt(x * x + y * y); }
-
-    [[nodiscard]] constexpr Vec4 floored(double off = 0) { return { floor(x) + off, floor(y) + off, floor(z) + off, floor(w) + off };}
-    [[nodiscard]] constexpr Vec4 rounded(double off = 0) { return { round(x) + off, round(y) + off, round(z) + off, round(w) + off }; }
-    //[[nodiscard]] Vec2 normalized() const {
-    //    T mag = sqrt(x * x + y * y);
-    //    return { x / mag, y / mag };
-    //}
-
-    [[nodiscard]] static constexpr Vec4 lerp(const Vec4& a, const Vec4& b, T ratio)
-    {
-        return {
-            (a.x + (b.x - a.x) * ratio),
-            (a.y + (b.y - a.y) * ratio),
-            (a.z + (b.z - a.z) * ratio),
-            (a.w + (b.w - a.w) * ratio)
-        };
-    }
-};
-
-template<typename T>
-struct Ray : public Vec2<T>
+struct Ray : public Vec2<T> // todo: Some methods maybe aren't ideal for inheriting
 {
     double angle;
+
     Ray() = default;
     constexpr Ray(double x, double y, T angle) : Vec2<T>(x, y), angle(angle) {}
     constexpr Ray(const Vec2<T>& p, T angle) : Vec2<T>(p.x, p.y), angle(angle) {}
@@ -306,6 +427,8 @@ struct Ray : public Vec2<T>
     }
 };
 
+// Triangle
+
 template <typename VecT>
 struct Triangle 
 {
@@ -316,7 +439,7 @@ struct Triangle
         // Calculate orientation
         double area = (p2->x - p1->x) * (p3->y - p1->y) - (p2->y - p1->y) * (p3->x - p1->x);
 
-        // Store points in CCW order
+        // Store in CCW order
         if (area < 0) { a = p1; b = p3; c = p2; }
         else          { a = p1; b = p2; c = p3; }
     }
@@ -389,6 +512,8 @@ struct TriangleEqual
     }
 };
 
+// Rect
+
 template<typename T> struct Quad;
 
 template<typename T>
@@ -415,6 +540,11 @@ struct Rect
     [[nodiscard]] constexpr double  cy() const { return (y1 + y2) / 2; }
     [[nodiscard]] constexpr Vec2<T> center() const { return { (x1 + x2) / 2, (y1 + y2) / 2 }; }
 
+    [[nodiscard]] constexpr Vec2<T> tl() const { return { std::min(x1, x2), std::min(y1, y2) }; }
+    [[nodiscard]] constexpr Vec2<T> tr() const { return { std::max(x1, x2), std::min(y1, y2) }; }
+    [[nodiscard]] constexpr Vec2<T> bl() const { return { std::min(x1, x2), std::max(y1, y2) }; }
+    [[nodiscard]] constexpr Vec2<T> br() const { return { std::max(x1, x2), std::max(y1, y2) }; }
+
     [[nodiscard]] constexpr bool hitTest(T x, T y) const { return (x >= x1 && y >= y1 && x <= x2 && y <= y2); }
     [[nodiscard]] constexpr Rect scaled(T mult) const {
         T cx = (x1 + x2) / 2;
@@ -438,79 +568,12 @@ struct Rect
     static constexpr Rect<T> infinite() { return Rect<T>(-bl_infinity<T>(), -bl_infinity<T>(), bl_infinity<T>(), bl_infinity<T>()); }
 };
 
+// AngledRect
+
 template<typename T> struct Quad;
 template<typename T> struct AngledRect;
 
-template<typename T>
-Vec2<T> enclosingSize(const AngledRect<T>& A, const AngledRect<T>& B, T avgAngle, T fixedAspectRatio = 0)
-{
-    // rotate world points by –avgAngle so the enclosing frame is axis-aligned
-    const T cosC = cos(-avgAngle);
-    const T sinC = sin(-avgAngle);
 
-    T xmin =  bl_infinity<T>(), ymin =  bl_infinity<T>();
-    T xmax = -bl_infinity<T>(), ymax = -bl_infinity<T>();
-
-    auto accumulate = [&](const AngledRect<T>& R)
-    {
-        const T d = R.angle - avgAngle; // local tilt inside the frame
-        const T cd = cos(d);
-        const T sd = sin(d);
-
-        // centre in the avgAngle frame
-        const T cxp = cosC * R.cx - sinC * R.cy;
-        const T cyp = sinC * R.cx + cosC * R.cy;
-
-        const T hw = R.w * 0.5;
-        const T hh = R.h * 0.5;
-
-        for (int sx = -1; sx <= 1; sx += 2)
-        {
-            for (int sy = -1; sy <= 1; sy += 2)
-            {
-                const T dx = sx * hw;
-                const T dy = sy * hh;
-
-                // rotate offset by d, then add to centre
-                const T x = cxp + dx * cd - dy * sd;
-                const T y = cyp + dx * sd + dy * cd;
-
-                xmin = std::min(xmin, x);
-                xmax = std::max(xmax, x);
-                ymin = std::min(ymin, y);
-                ymax = std::max(ymax, y);
-            }
-        }
-    };
-
-    accumulate(A);
-    accumulate(B);
-
-    T W, H;
-    if (fixedAspectRatio > 0)
-    {
-        const T Wraw = xmax - xmin;
-        const T Hraw = ymax - ymin;
-
-        if (Wraw / Hraw >= fixedAspectRatio)
-        {
-            W = Wraw;
-            H = W / fixedAspectRatio;
-        }
-        else
-        {
-            H = Hraw;
-            W = fixedAspectRatio * H;
-        }
-    }
-    else
-    {
-        W = xmax - xmin;
-        H = ymax - ymin;
-    }
-
-    return { W, H };
-}
 
 template<typename T>
 struct AngledRect
@@ -520,22 +583,78 @@ struct AngledRect
     T angle;
 
     AngledRect() {}
-    //AngledRect(T _cx, T _cy, T _w, T _h, T _angle)
-    //{
-    //    cx = _cx;
-    //    cy = _cy;
-    //
-    //}
-
     AngledRect(T _cx, T _cy, T _w, T _h, T _angle) :
         cx(_cx), cy(_cy), w(_w), h(_h), angle(_angle) {}
 
-    [[nodiscard]] Quad<T> toQuad() const { return Quad<T>(*this); }
-    operator Quad<T>() const { return Quad<T>(*this); }
+    [[nodiscard]] Quad<T> toQuad()   const { return Quad<T>(*this); }
+    [[nodiscard]] operator Quad<T>() const { return Quad<T>(*this); }
 
-    T aspectRatio() const
+    [[nodiscard]] T aspectRatio() const { return (w / h); }
+
+    template<typename T>
+    static Vec2<T> enclosingSize(const AngledRect<T>& A, const AngledRect<T>& B, T avgAngle, T fixedAspectRatio = 0)
     {
-        return (w / h);
+        // rotate world points by –avgAngle so the enclosing frame is axis-aligned
+        const T cosC = cos(-avgAngle);
+        const T sinC = sin(-avgAngle);
+
+        T xmin =  bl_infinity<T>(), ymin =  bl_infinity<T>();
+        T xmax = -bl_infinity<T>(), ymax = -bl_infinity<T>();
+
+        auto accumulate = [&](const AngledRect<T>& R)
+        {
+            const T d = R.angle - avgAngle; // local tilt inside the frame
+            const T cd = cos(d);
+            const T sd = sin(d);
+
+            // centre in the avgAngle frame
+            const T cxp = cosC * R.cx - sinC * R.cy;
+            const T cyp = sinC * R.cx + cosC * R.cy;
+            const T hw = R.w * 0.5;
+            const T hh = R.h * 0.5;
+
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sy = -1; sy <= 1; sy += 2)
+                {
+                    const T dx = sx * hw;
+                    const T dy = sy * hh;
+
+                    // rotate offset by d, then add to centre
+                    const T x = cxp + dx * cd - dy * sd;
+                    const T y = cyp + dx * sd + dy * cd;
+
+                    xmin = std::min(xmin, x);
+                    xmax = std::max(xmax, x);
+                    ymin = std::min(ymin, y);
+                    ymax = std::max(ymax, y);
+                }
+            }
+        };
+
+        accumulate(A);
+        accumulate(B);
+
+        T W, H;
+        if (fixedAspectRatio > 0)
+        {
+            const T Wraw = xmax - xmin;
+            const T Hraw = ymax - ymin;
+
+            if (Wraw / Hraw >= fixedAspectRatio) {
+                W = Wraw;
+                H = W / fixedAspectRatio;
+            } else {
+                H = Hraw;
+                W = fixedAspectRatio * H;
+            }
+        }
+        else {
+            W = xmax - xmin;
+            H = ymax - ymin;
+        }
+
+        return { W, H };
     }
 
     void fitTo(AngledRect a, AngledRect b, T fixed_aspect_ratio=0)
@@ -543,9 +662,11 @@ struct AngledRect
         cx = (a.cx + b.cx) / 2;
         cy = (a.cy + b.cy) / 2;
         angle = Math::avgAngle(a.angle, b.angle);
-        size = enclosingSize(a, b, angle, fixed_aspect_ratio);
+        size = AngledRect::enclosingSize(a, b, angle, fixed_aspect_ratio);
     }
 };
+
+// Quad
 
 template<typename T>
 struct Quad
@@ -564,15 +685,15 @@ struct Quad
     constexpr Quad(const AngledRect<T>& r)        { set(r.cx, r.cy, r.w, r.h, r.angle); }
     constexpr Quad(T cx, T cy, T w, T h, T angle) { set(cx, cy, w, h, angle); }
 
-    constexpr Segment<T> ab() const { return Segment<T>(a, b); }
-    constexpr Segment<T> bc() const { return Segment<T>(b, c); }
-    constexpr Segment<T> cd() const { return Segment<T>(c, d); }
-    constexpr Segment<T> da() const { return Segment<T>(d, a); }
+    [[nodiscard]] constexpr Segment<T> ab() const { return Segment<T>(a, b); }
+    [[nodiscard]] constexpr Segment<T> bc() const { return Segment<T>(b, c); }
+    [[nodiscard]] constexpr Segment<T> cd() const { return Segment<T>(c, d); }
+    [[nodiscard]] constexpr Segment<T> da() const { return Segment<T>(d, a); }
 
-    constexpr T minX() const { return std::min({ a.x, b.x, c.x, d.x }); }
-    constexpr T maxX() const { return std::max({ a.x, b.x, c.x, d.x }); }
-    constexpr T minY() const { return std::min({ a.y, b.y, c.y, d.y }); }
-    constexpr T maxY() const { return std::max({ a.y, b.y, c.y, d.y }); }
+    [[nodiscard]] constexpr T minX() const { return std::min({ a.x, b.x, c.x, d.x }); }
+    [[nodiscard]] constexpr T maxX() const { return std::max({ a.x, b.x, c.x, d.x }); }
+    [[nodiscard]] constexpr T minY() const { return std::min({ a.y, b.y, c.y, d.y }); }
+    [[nodiscard]] constexpr T maxY() const { return std::max({ a.y, b.y, c.y, d.y }); }
 
     template<typename T2>
     [[nodiscard]] constexpr operator Quad<T2>()
@@ -612,11 +733,11 @@ struct Quad
         return Rect<T>(min_x, min_y, max_x, max_y);
     }
 
-    static constexpr T cross(const Pt& u, const Pt& v) {
+    [[nodiscard]] static constexpr T cross(const Pt& u, const Pt& v) {
         return u.x * v.y - u.y * v.x;
     }
 
-    static constexpr T cross_at(const Pt& o, const Pt& u, const Pt& v) {
+    [[nodiscard]] static constexpr T cross_at(const Pt& o, const Pt& u, const Pt& v) {
         // cross( u - o, v - o )
         return (u.x - o.x) * (v.y - o.y) - (u.y - o.y) * (v.x - o.x);
     }
@@ -645,32 +766,43 @@ struct Quad
         return false;
     }
 };
-    //[[nodiscard]] AngledRect<T> toAngledRect() const;
 
-typedef Vec2<int>           IVec2;
-typedef Vec2<float>         FVec2;
-typedef Vec2<double>        DVec2;
-typedef Vec2<flt128>        DDVec2;
+// Typedefs
 
-typedef Segment<int>        ISegment;
-typedef Segment<float>      FSegment;
-typedef Segment<double>     DSegment;
+typedef Vec2<int>             IVec2;
+typedef Vec2<float>           FVec2;
+typedef Vec2<double>          DVec2;
+typedef Vec2<flt128>          DDVec2;
+                              
+typedef Vec3<int>             IVec3;
+typedef Vec3<float>           FVec3;
+typedef Vec3<double>          DVec3;
+typedef Vec3<flt128>          DDVec3;
+                              
+typedef Vec4<int>             IVec4;
+typedef Vec4<float>           FVec4;
+typedef Vec4<double>          DVec4;
+typedef Vec4<flt128>          DDVec4;
+                              
+typedef Segment<int>          ISegment;
+typedef Segment<float>        FSegment;
+typedef Segment<double>       DSegment;
+                              
+typedef Rect<int>             IRect;
+typedef Rect<float>           FRect;
+typedef Rect<double>          DRect;
+                              
+typedef Quad<int>             IQuad;
+typedef Quad<float>           FQuad;
+typedef Quad<double>          DQuad;
+                              
+typedef Ray<float>            FRay;
+typedef Ray<double>           DRay;
+                              
+typedef AngledRect<double>    DAngledRect;
+typedef AngledRect<flt128>    DDAngledRect;
 
-typedef Vec4<float>         FVec4;
-
-typedef Rect<int>           IRect;
-typedef Rect<float>         FRect;
-typedef Rect<double>        DRect;
-
-typedef Quad<int>           IQuad;
-typedef Quad<float>         FQuad;
-typedef Quad<double>        DQuad;
-
-typedef Ray<float>          FRay;
-typedef Ray<double>         DRay;
-
-typedef AngledRect<double>  DAngledRect;
-typedef AngledRect<flt128>  DDAngledRect;
+// Physics types
 
 struct MassForceParticle : public DVec2
 {
@@ -684,18 +816,25 @@ struct MassForceParticle : public DVec2
 
 BL_END_NS
 
-template<typename T>
-std::ostream& operator<<(std::ostream& os, const BL::Vec2<T>& vec) {
-    return os << "(" << vec.x << ", " << vec.y << ")";
+// Global std::ostream overloads
+
+template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Vec2<T>& vec) {
+    return os << "(x: " << vec.x << ", y: " << vec.y << ")";
 }
 
-template<typename T>
-std::ostream& operator<<(std::ostream& os, const BL::Quad<T>& q) {
-    return os << "{" << q.a << ", " << q.b << ", " << q.c << ", " << q.d << "}";
+template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Vec3<T>& vec) {
+    return os << "(x: " << vec.x << ", y: " << vec.y << ", z: " << vec.z << ")";
 }
 
-template<typename T>
-std::ostream& operator<<(std::ostream& os, const BL::AngledRect<T>& r) {
+template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Vec4<T>& vec) {
+    return os << "(x: " << vec.x << ", y: " << vec.y << ", z: " << vec.z << ", w: " << vec.w << ")";
+}
+
+template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Quad<T>& q) {
+    return os << "{a: " << q.a << ", b: " << q.b << ", c: " << q.c << ", d: " << q.d << "}";
+}
+
+template<typename T> std::ostream& operator<<(std::ostream& os, const BL::AngledRect<T>& r) {
     return os << "{cx: " << r.cx << ", cy: " << r.cy << ", w: " << r.w << ", h: " << r.h << "rot: " << r.angle << "}";
 }
 

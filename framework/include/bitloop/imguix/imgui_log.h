@@ -7,9 +7,22 @@
 
 BL_BEGIN_NS
 
+struct ImDebugLogMsg
+{
+    std::string txt;
+    int count = 1;
+
+    ImDebugLogMsg(std::string msg) : txt(msg) {}
+    std::string getFullText() const
+    {
+        if (count == 1) return txt;
+        return txt + "(x" + std::to_string(count) + ")";
+    }
+};
+
 struct ImDebugLog
 {
-    std::deque<std::string> logLines;
+    std::deque<ImDebugLogMsg> logLines;
     bool autoScroll = true;
     std::mutex log_mutex;
 
@@ -23,11 +36,19 @@ struct ImDebugLog
         std::lock_guard<std::mutex> lock(log_mutex);
 
         char buffer[1024];
-        vsnprintf(buffer, sizeof(buffer), fmt, ap); 
-        if (logLines.size() >= 256)
-            logLines.pop_front();
-        //OutputDebugStringA("Add Log Message\n");
-        logLines.emplace_back(buffer);
+        vsnprintf(buffer, sizeof(buffer), fmt, ap);
+
+        if (logLines.size() && logLines.back().txt == buffer)
+        {
+            logLines.back().count++;
+        }
+        else
+        {
+            if (logLines.size() >= 256)
+                logLines.pop_front();
+
+            logLines.emplace_back(buffer);
+        }
     }
 
     void log(const std::string& message) 
@@ -36,8 +57,15 @@ struct ImDebugLog
 
         if (logLines.size() >= 256)
             logLines.pop_front();
-        //OutputDebugStringA("Add Log Message\n");
-        logLines.emplace_back(message);
+
+        if (logLines.size() && logLines.back().txt == message)
+        {
+            logLines.back().count++;
+        }
+        else
+        {
+            logLines.emplace_back(message);
+        }
     }
 
     void log(const char* fmt, ...)
@@ -56,7 +84,7 @@ struct ImDebugLog
         {
             std::lock_guard<std::mutex> lock(log_mutex);
             for (const auto& line : logLines)
-                ImGui::TextUnformatted(line.c_str());
+                ImGui::TextUnformatted(line.getFullText().c_str());
         }
         //OutputDebugStringA("End Drawing log\n");
 

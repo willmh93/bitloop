@@ -99,9 +99,6 @@ namespace detail
 } // namespace detail
 
 
-
-
-
 template<MandelSmoothing Smooth_Iter>
 constexpr double escape_radius()
 {
@@ -137,6 +134,8 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
     return false;
 }
 
+
+
 //dist = mandelbrot_dist((double)x0, (double)y0, iter_lim);
 
 template<class T, MandelSmoothing S>
@@ -156,7 +155,7 @@ FAST_INLINE void mandel_kernel(
 
     using detail::cplx;
     constexpr bool NEED_DIST = (bool)((int)S & (int)MandelSmoothing::DIST);
-    constexpr bool NEED_ITER = (bool)((int)S & (int)MandelSmoothing::ITER);
+    constexpr bool NEED_SMOOTH_ITER = (bool)((int)S & (int)MandelSmoothing::ITER);
     constexpr T escape_r2 = T(escape_radius<S>());
     constexpr T zero = T(0), one = T(1), two = T(2);
 
@@ -198,7 +197,7 @@ FAST_INLINE void mandel_kernel(
         return;
     }
 
-    if constexpr (NEED_ITER)
+    if constexpr (NEED_SMOOTH_ITER)
     {
         T t = log2(r2) / two;
         T s = log2(t);
@@ -209,7 +208,6 @@ FAST_INLINE void mandel_kernel(
         depth = (double)iter;
     }
 }
-
 
 
 

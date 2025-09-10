@@ -32,15 +32,18 @@ protected:
     void setHoveredViewport(Viewport* ctx) { _hovered_ctx = ctx; }
     void setOwnerViewport(Viewport* ctx)   { _owner_ctx = ctx; }
 
-    [[nodiscard]] bool isPointerEvent()
+public:
+
+    [[nodiscard]] bool isPointerEvent() const
     {
         switch (sdl_event.type)
         {
         case SDL_EVENT_FINGER_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_FINGER_UP:
-        case SDL_EVENT_MOUSE_BUTTON_UP:
         case SDL_EVENT_FINGER_MOTION:
+
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
         case SDL_EVENT_MOUSE_MOTION:
         case SDL_EVENT_MOUSE_WHEEL:
             return true;
@@ -48,7 +51,7 @@ protected:
         return false;
     }
 
-    [[nodiscard]] bool isFingerEvent()
+    [[nodiscard]] bool isFingerEvent() const
     {
         switch (sdl_event.type)
         {
@@ -60,21 +63,21 @@ protected:
         return false;
     }
 
-public:
+
     Event(SDL_Event& e) : sdl_event(e) {}
 
-    [[nodiscard]] auto type() const       { return sdl_event.type; }
-    [[nodiscard]] Viewport* ctx_focused() { return _focused_ctx; }
-    [[nodiscard]] Viewport* ctx_hovered() { return _hovered_ctx; }
-    [[nodiscard]] Viewport* ctx_owner()   { return _owner_ctx; }
-    [[nodiscard]] SDL_Event* sdl()        { return &sdl_event; }
+    [[nodiscard]] auto type() const             { return sdl_event.type; }
+    [[nodiscard]] Viewport* ctx_focused() const { return _focused_ctx; }
+    [[nodiscard]] Viewport* ctx_hovered() const { return _hovered_ctx; }
+    [[nodiscard]] Viewport* ctx_owner()   const { return _owner_ctx; }
+    [[nodiscard]] SDL_Event* sdl()        const { return &sdl_event; }
     [[nodiscard]] std::string toString();
 };
 
 class PointerEvent : public Event
 {
 public:
-    PointerEvent(Event& e) : Event(e.sdl_event) {}
+    PointerEvent(const Event& e) : Event(e.sdl_event) {}
 
     // Mouse
     [[nodiscard]] Uint8 button() { return sdl_event.button.button; }
@@ -92,7 +95,7 @@ typedef SDL_Scancode ScanCode;
 class KeyEvent : public Event
 {
 public:
-    KeyEvent(Event& e) : Event(e.sdl_event) {}
+    KeyEvent(const Event& e) : Event(e.sdl_event) {}
 
     [[nodiscard]] KeyCode keyCode()     { return static_cast<KeyCode>(sdl_event.key.key); }
     [[nodiscard]] ScanCode scanCode()   { return static_cast<ScanCode>(sdl_event.key.scancode); }

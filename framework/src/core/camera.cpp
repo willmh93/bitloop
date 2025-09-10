@@ -243,10 +243,12 @@ void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
     restoreCameraTransform();
 }
 
-void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
+bool Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 {
     //blPrint("[DRAG] Cam Pos: (%.3f, %.3f) Zoom: (%.3f, %.3f) Angle: %.3f",
     //    (double)x, (double)y, (double)zoom_x, (double)zoom_y, cam_rotation);
+
+    bool changed = false;
 
     saveCameraTransform();
     worldTransform();
@@ -266,7 +268,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             //blPrint("(dx,dy) = (%.3f, %.3f)", world_offset.x, world_offset.y);
             //blPrint() << "(dx,dy) = (" << BL::dp(3) << world_offset.x << ", " << world_offset.)y
 
-            setPos(
+            changed |= setPos(
                 pan_beg_cam_x - world_offset.x /* * pan_mult */,
                 pan_beg_cam_y - world_offset.y /* * pan_mult */
             );
@@ -274,7 +276,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             if (pan_down_touch_dist > 0.0)
             {
                 double delta_zoom = touch_dist / pan_down_touch_dist;
-                setZoom(
+                changed |= setZoom(
                     pan_beg_cam_zoom_x * delta_zoom,
                     pan_beg_cam_zoom_y * delta_zoom
                 );
@@ -283,7 +285,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             if (fingers.size() >= 2)
             {
                 double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
-                setRotation(pan_beg_cam_angle + delta_rotation);
+                changed |= setRotation(pan_beg_cam_angle + delta_rotation);
                 //blPrint() << "Setting rotation: " << BL::dp(3) << (double)cam_rotation;
 
                 // todo: In order to lock camera during pan, you may need to manually
@@ -297,7 +299,7 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             int dx = _x - pan_down_touch_x;
             int dy = _y - pan_down_touch_y;
 
-            setPan(
+            changed |= setPan(
                 (double)(pan_beg_cam_x + (double)(dx/*/ zoom_x*/) /* * pan_mult*/),
                 (double)(pan_beg_cam_y + (double)(dy/*/ zoom_y*/) /* * pan_mult*/)
             );
@@ -305,25 +307,29 @@ void Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
     }
 
     restoreCameraTransform();
+    return changed;
 }
 
-void Camera::panZoomProcess()
+bool Camera::panZoomProcess()
 {
-    if (zoomX() < ref_zoom_x * min_zoom) setZoomX(ref_zoom_x * min_zoom);
-    if (zoomX() > ref_zoom_x * max_zoom) setZoomX(ref_zoom_x * max_zoom);
-    if (zoomY() < ref_zoom_y * min_zoom) setZoomX(ref_zoom_y * min_zoom);
-    if (zoomY() > ref_zoom_y * max_zoom) setZoomY(ref_zoom_y * max_zoom);
+    bool changed = false;
+    if (zoomX() < ref_zoom_x * min_zoom) changed |= setZoomX(ref_zoom_x * min_zoom);
+    if (zoomX() > ref_zoom_x * max_zoom) changed |= setZoomX(ref_zoom_x * max_zoom);
+    if (zoomY() < ref_zoom_y * min_zoom) changed |= setZoomX(ref_zoom_y * min_zoom);
+    if (zoomY() > ref_zoom_y * max_zoom) changed |= setZoomY(ref_zoom_y * max_zoom);
 
     if (fingers.size() == 1)
     {
-        panDrag((int)fingers[0].x, (int)fingers[0].y, 0.0, 0.0);
+        changed |= panDrag((int)fingers[0].x, (int)fingers[0].y, 0.0, 0.0);
     }
     else if (fingers.size() == 2)
     {
         double avg_x = (fingers[0].x + fingers[1].x) / 2.0;
         double avg_y = (fingers[0].y + fingers[1].y) / 2.0;
-        panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+        changed |= panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
     }
+
+    return changed;
 }
 
 void Camera::panEnd()
@@ -332,6 +338,203 @@ void Camera::panEnd()
     panning = false;
 }
 
+bool Camera::handleWorldNavigation(Event event, bool single_touch_pan, bool zoom_anchor_mouse)
+{
+    if (!event.isPointerEvent())
+        return false;
+
+    PointerEvent e(event);
+
+    if (Platform()->is_mobile())
+    {
+        // Support both single-finger pan & 2 finger transform
+        switch (e.type())
+        {
+        case SDL_EVENT_FINGER_DOWN:
+        {
+            if (fingers.size() >= 2)
+            {
+                // Ignore 3 or more fingers
+                return false;
+            }
+
+            // Add pressed finger
+            FingerInfo info;
+            info.fingerId = e.fingerID();
+            info.x = e.x();
+            info.y = e.y();
+            fingers.push_back(info);
+
+            if (fingers.size() == 1)
+            {
+                if (single_touch_pan)
+                    panBegin((int)e.x(), (int)e.y(), 0.0, 0.0);
+            }
+            else if (fingers.size() == 2)
+            {
+                if (panning)
+                {
+                    // Was already panning with a single finger. Restart with 2 fingers
+                    panEnd();
+                }
+
+                double avg_x = (fingers[0].x + fingers[1].x) / 2.0;
+                double avg_y = (fingers[0].y + fingers[1].y) / 2.0;
+                panBegin((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+            }
+
+            return true;
+        }
+        break;
+        case SDL_EVENT_FINGER_UP:
+        {
+            if (fingers.size() > 2)
+            {
+                // Ignore 3 or more fingers
+                return false;
+            }
+
+            double avg_x = 0.0;
+            double avg_y = 0.0;
+            if (fingers.size() == 2)
+            {
+                avg_x = (fingers[0].x + fingers[1].x) / 2.0;
+                avg_y = (fingers[0].y + fingers[1].y) / 2.0;
+            }
+
+            // Erase lifted finger
+            std::erase_if(fingers, [&](const FingerInfo& f) { return f.fingerId == e.fingerID(); });
+
+            if (fingers.size() == 0)
+            {
+                // End single-finger pan (previously had 1 remaining pressed finger)
+                if (single_touch_pan)
+                    panEnd();
+            }
+            else if (fingers.size() == 1)
+            {
+                // End 2-finger pan, switch to single-finger pan
+                panEnd();
+
+                // Switch to whichever finger is still pressed (might not be finger index 0)
+                if (single_touch_pan)
+                    panBegin((int)fingers.front().x, (int)fingers.front().y, 0.0, 0.0);
+            }
+
+            return false;
+        }
+        break;
+        case SDL_EVENT_FINGER_MOTION:
+        {
+            if (fingers.size() > 2)
+            {
+                // Ignore 3 or more fingers
+                return false;
+            }
+
+            // Update finger info
+            for (size_t i = 0; i < fingers.size(); i++)
+            {
+                FingerInfo& info = fingers[i];
+                if (info.fingerId == e.fingerID())
+                {
+                    info.x = e.x();
+                    info.y = e.y();
+                    break;
+                }
+            }
+
+            return panZoomProcess();
+
+            ///if (fingers.size() == 1)
+            ///{
+            ///    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
+            ///}
+            ///else if (fingers.size() == 2)
+            ///{
+            ///    double avg_x = (fingers[0].x + fingers[1].x) / 2.0;
+            ///    double avg_y = (fingers[0].y + fingers[1].y) / 2.0;
+            ///    panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
+            ///}
+        }
+        break;
+        }
+    }
+    else
+    {
+        switch (e.type())
+        {
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        {
+            if (fingers.size() == 0)
+            {
+                FingerInfo info;
+                info.fingerId = 0;
+                info.x = e.x();
+                info.y = e.y();
+                fingers.push_back(info);
+            }
+
+            if (!panning &&
+                e.button() == SDL_BUTTON_MIDDLE ||
+                (single_touch_pan && e.button() == SDL_BUTTON_LEFT))
+            {
+                panBegin((int)e.x(), (int)e.y(), 0.0, 0.0);
+            }
+        }
+        break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+        {
+            fingers.clear();
+            if (e.button() == SDL_BUTTON_MIDDLE ||
+                (single_touch_pan && e.button() == SDL_BUTTON_LEFT))
+            {
+                panEnd();
+            }
+        }
+        break;
+        case SDL_EVENT_MOUSE_MOTION:
+        {
+            if (fingers.size() > 0)
+            {
+                FingerInfo& info = fingers[0];
+                info.x = e.x();
+                info.y = e.y();
+            }
+
+            return panZoomProcess();
+            //if (panning)
+            //    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
+        }
+        break;
+        case SDL_EVENT_MOUSE_WHEEL:
+        {
+            UNUSED(zoom_anchor_mouse);
+            //if (zoom_anchor_mouse)
+            //{
+            //    // Zoom towards mouse position
+            //    DVec2 before_zoom = toWorld(e.x(), e.y());
+            //    setZoomX(zoomX() + (e.wheelY() / 10.0) * zoomX());
+            //    setZoomY(zoomY() + (e.wheelY() / 10.0) * zoomY());
+            //    DVec2 after_zoom = toWorld(e.x(), e.y());
+            //    setPos(x() + (before_zoom.x - after_zoom.x), y() + (before_zoom.y - after_zoom.y));
+            //    return panZoomProcess();
+            //}
+            //else
+            {
+                setZoomX(zoomX() + (e.wheelY() / 10.0) * zoomX());
+                setZoomY(zoomY() + (e.wheelY() / 10.0) * zoomY());
+                panZoomProcess();
+                return true;
+            }
+        }
+        break;
+        }
+    }
+    return false;
+}
+
+/*
 void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
 {
     if (!event.isPointerEvent())
@@ -507,9 +710,12 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
         }
     }
 }
-
+*/
 void CameraViewController::populateUI(DRect cam_area)
 {
+    float required_space = 0.0f;
+    ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", ScaleSize(20.0f));
+
     //int decimals = 1 + Math::countWholeDigits(zoom*5);
     int decimals = getCoordinateDecimals();
     char format[16];
@@ -517,10 +723,14 @@ void CameraViewController::populateUI(DRect cam_area)
 
     static double init_cam_x = x;
     static double init_cam_y = y;
+
+    ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableDragDouble("X", &x, &init_cam_x, 1 / avg_real_zoom, cam_area.x1, cam_area.x2, format);
+    ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableDragDouble("Y", &y, &init_cam_y, 1 / avg_real_zoom, cam_area.y1, cam_area.y2, format);
 
     static double init_degrees = angle_degrees;
+    ImGui::SetNextItemWidthForSpace(required_space);
     if (ImGui::RevertableSliderDouble("Rotation", &angle_degrees, &init_degrees, 0.0, 360.0, "%.0f\xC2\xB0"))
     {
         angle = angle_degrees * Math::PI / 180.0;
@@ -529,10 +739,12 @@ void CameraViewController::populateUI(DRect cam_area)
     // 1e16 = double limit before preicions loss
     static double zoom_speed = zoom / 100.0;
     static double init_cam_zoom = 1.0;
+    ImGui::SetNextItemWidthForSpace(required_space);
     if (ImGui::RevertableDragDouble("Zoom", &zoom, &init_cam_zoom, zoom_speed, 0.1, 1e16, "%.2f"))
         zoom_speed = zoom / 100.0;
 
     static DVec2 init_cam_zoom_xy = zoom_xy;
+    ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableSliderDouble2("Zoom X/Y", zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2fx");
 }
 

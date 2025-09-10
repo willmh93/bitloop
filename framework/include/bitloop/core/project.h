@@ -57,6 +57,17 @@ class ProjectBase;
 class ProjectManager;
 struct ImDebugLog;
 
+// Switch to "Input"
+// Input.mouse
+// Input.touch
+// Input.touch.fingers
+// Input.pointer (composite of mouse on finger 0)
+// Or just use single:
+// > Input.pointers[0].x
+// > Input.pointers[0].y
+// > Input.pointers[0].pressed
+// Then use in viewport::process directly (always for consistency/predictability?)
+
 struct MouseInfo
 {
     Viewport* viewport = nullptr;
@@ -67,7 +78,109 @@ struct MouseInfo
     double world_x = 0;
     double world_y = 0;
     int scroll_delta = 0;
+    bool pressed = false;
 };
+
+/// =================
+
+class Viewport;
+struct SceneFingerInfo : FingerInfo
+{
+    Viewport* viewport = nullptr;
+    double client_x = 0;
+    double client_y = 0;
+    double stage_x = 0;
+    double stage_y = 0;
+    double world_x = 0;
+    double world_y = 0;
+    int scroll_delta = 0;
+    bool pressed = false;
+
+    SceneFingerInfo(const FingerInfo& f) : FingerInfo(f)
+    {}
+};
+
+struct TouchState
+{
+    //PointerEvent event; // The actual event which updated this state
+    std::vector<SceneFingerInfo> fingers; // "Current" state of all fingers during this state
+
+    //TouchState(const Event& e, const std::vector<FingerInfo>& fingers);
+    //TouchState(const std::vector<FingerInfo>& fingers);
+
+    const SceneFingerInfo finger(int i=0) const
+    {
+        if (i < (int)fingers.size())
+            return fingers[i];
+
+    }
+};
+
+struct ScrollState
+{
+    PointerEvent event; // The event which updated this state
+
+    int scroll_delta = 0;
+};
+
+struct KeyboardState
+{
+    KeyEvent event; // The event which updated this state
+};
+
+struct TouchInput : TouchState
+{
+    std::vector<TouchState> updates;
+    //TouchState present;
+
+    //TouchState
+
+    /*const TouchState& now()const  {
+        if (updates.size())
+            return updates.back();
+
+        static SDL_Event dummy_sdl;
+        static Event dummy(dummy_sdl);
+        static std::vector<FingerInfo> dummy_fingers;
+        static TouchState dummy_state(dummy, dummy_fingers);
+        return dummy_state;
+    }*/
+
+    void push(const TouchState& s) {
+        updates.push_back(s);
+        static_cast<TouchState&>(*this) = s;
+    }
+
+    void clear() {
+        updates.clear();
+    }
+};
+
+struct Input
+{
+    TouchInput touch;
+    //InputStateQueue<KeyboardState>  keyboard;
+
+    void clear()
+    {
+        touch.clear();
+        //keyboard.clear();
+    }
+
+    void addEvent(const Event& e, const std::vector<FingerInfo>& fingers)
+    {
+        if (e.isPointerEvent())
+        {
+            UNUSED(fingers);
+            //TouchState s(fingers);
+            //touch.push(s);
+        }
+    }
+};
+
+/// =================
+
+
 
 struct ProjectInfo
 {
@@ -94,8 +207,8 @@ class SceneBase : public ChangeTracker
 
     int dt_sceneProcess = 0;
 
-    mutable std::vector<Math::MovingAverage::MA> dt_scene_ma_list;
-    mutable std::vector<Math::MovingAverage::MA> dt_project_ma_list;
+    mutable std::vector<Math::MovingAverage::MA<double>> dt_scene_ma_list;
+    mutable std::vector<Math::MovingAverage::MA<double>> dt_project_ma_list;
     //mutable std::vector<Math::MovingAverage::MA> dt_project_draw_ma_list;
 
     mutable size_t dt_call_index = 0;
@@ -151,10 +264,14 @@ protected:
 
 public:
 
+    // Dummy shared_ptr to keep locally created launch-config alive for at least as long as this Scene exists.
+    // See:  ProjectBase::create(typename SceneType::Config config)
     std::shared_ptr<void> temporary_environment;
 
     Camera* camera = nullptr;
     MouseInfo* mouse = nullptr;
+
+    Input input;
 
     struct Config {};
 
@@ -172,6 +289,7 @@ public:
     virtual void sceneProcess() {}
     virtual void viewportProcess(Viewport*, double) {}
     virtual void viewportDraw(Viewport*) const = 0;
+    virtual void viewportOverlay(Viewport*) const {};
 
     virtual void onEvent(Event e) { (void)e; }
 
@@ -186,7 +304,7 @@ public:
     virtual void onKeyDown(KeyEvent) {}
     virtual void onKeyUp(KeyEvent) {}
 
-    void handleWorldNavigation(Event e, bool single_touch_pan);
+    bool handleWorldNavigation(Event e, bool single_touch_pan=true, bool zoom_anchor_mouse=false);
 
     virtual std::string name() const { return "Scene"; }
     [[nodiscard]] int sceneIndex() const { return scene_index; }
@@ -291,7 +409,6 @@ public:
 
     Viewport(
         Layout* layout,
-        Canvas *canvas,
         int viewport_index,
         int grid_x,
         int grid_y
@@ -300,6 +417,7 @@ public:
     ~Viewport();
 
     void draw();
+    void overlay();
 
     [[nodiscard]] int viewportIndex() const { return viewport_index; }
     [[nodiscard]] int viewportGridX() const { return viewport_grid_x; }
@@ -431,7 +549,7 @@ class ProjectBase
     int scene_counter = 0;
     int sim_uid = -1;
 
-    int dt_projectProcess = 0;
+    double dt_projectProcess = 0;
     double dt_frameProcess = 0;
 
     std::chrono::steady_clock::time_point last_frame_time 
@@ -445,8 +563,10 @@ protected:
     friend class ProjectWorker;
     friend class Layout;
     friend class SceneBase;
+    friend class Viewport;
 
     Canvas* canvas = nullptr;
+    Canvas* overlay = nullptr;
     ImDebugLog* project_log = nullptr;
 
     // ----------- States -----------
@@ -454,7 +574,7 @@ protected:
     bool paused = false;
     bool done_single_process = false;
 
-    void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
+    void configure(int sim_uid, Canvas* canvas, Canvas* overlay, ImDebugLog* project_log);
 
     [[nodiscard]] DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
     void updateViewportRects();
@@ -521,8 +641,10 @@ protected:
     void _projectDestroy();
     void _projectProcess();
     void _projectDraw();
+    void _projectOverlay();
 
     std::vector<FingerInfo> pressed_fingers;
+    void _clearEventQueue();
     void _onEvent(SDL_Event& e);
 
 public:

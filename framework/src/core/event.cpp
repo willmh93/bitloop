@@ -14,8 +14,8 @@ std::string Event::toString()
     
     switch (sdl_event.type) 
     {
-    case SDL_EVENT_KEY_DOWN:    type = "SDL_KEYDOWN";          goto key_attribs;
-    case SDL_EVENT_KEY_UP:      type = "SDL_KEYUP";            goto key_attribs;
+    case SDL_EVENT_KEY_DOWN:           type = "SDL_KEYDOWN";          goto key_attribs;
+    case SDL_EVENT_KEY_UP:             type = "SDL_KEYUP";            goto key_attribs;
         key_attribs:
         sprintf(attribs, "{%s}", SDL_GetKeyName(sdl_event.key.key));
 
@@ -28,8 +28,8 @@ std::string Event::toString()
 
         break;
 
-    case SDL_EVENT_MOUSE_BUTTON_DOWN:   type = "SDL_MOUSEBUTTONDOWN";  goto mouse_attribs;
-    case SDL_EVENT_MOUSE_BUTTON_UP:     type = "SDL_MOUSEBUTTONUP";    goto mouse_attribs;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:  type = "SDL_MOUSEBUTTONDOWN";  goto mouse_attribs;
+    case SDL_EVENT_MOUSE_BUTTON_UP:    type = "SDL_MOUSEBUTTONUP";    goto mouse_attribs;
         mouse_attribs:
         sprintf(attribs, "{%.1f, %.1f}", 
             sdl_event.button.x, 
@@ -51,7 +51,7 @@ std::string Event::toString()
     case SDL_EVENT_MOUSE_WHEEL:        type = "SDL_MOUSEWHEEL";       break;
     case SDL_EVENT_TEXT_INPUT:         type = "SDL_TEXTINPUT";        break;
 
-    default:                    type = "UNKNOWN_EVENT";        break;
+    default:                           type = "UNKNOWN_EVENT";        break;
     }
 
     std::string info;

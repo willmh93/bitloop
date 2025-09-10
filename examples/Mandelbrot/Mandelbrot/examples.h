@@ -10,8 +10,9 @@ struct MandelPreset
     std::string name;
     std::string data;
 
-    MandelPreset(const char* _data)
+    MandelPreset(const char* _name, const char* _data)
     {
+        name = _name;
         data = _data;
         extractName();
     }
@@ -39,101 +40,26 @@ struct MandelPreset
     }
 };
 
-/*inline std::vector<MandelPreset> mandel_presets {
-R"(
-=============== Home ===============
-G6YAAESBdaW-egJD0YvJOjn9d2C8Bt5WgHcO
-PPCQkVThM_mFB50lkUQpJnCauU1WVGVWILFb
-eG8elpZInAnuDb_z6sWoQjWG4jXXZuazfKp2
-F7QMQ0yX_sSotGhzMEy6Cy2QeBzqiZcppPd8
-oHN_
-====================================
-)",
-R"(
-============= Firework =============
-G-AAAOThmKlTZzBhu5iEop5cJ6d_wNYKAw8C
-yzEKMOA8hzxuqZn9CxXIkoQWZFEjUqC0i62E
-xdWWiduOPjE6CbvSEogk7CHrKOqU4IcRsp2_
-cE-oTip2MskN5nV_7WaW5rP6DMa72tgYsbhM
-TwaRaXQGY9q7egEkPDbVCk8gXk-KdGQOiMTe
-ZSS8IatQo6cYAiNTYgkfyBKx40yMyUbN_Ac=
-====================================
-)",
-R"(
-============= Tendrils =============
-G00BAMR_pstpZ4XmkWA_FT0TTnQTs9rs9FoB
-W9AWWCuhnMIW6IvZu43p0C1RBe0P9sNeQ8HS
-7FUGUmpNyWQkWG-s_YrGXWqyUgk22XJNwjRc
-oGPb7JSX2BZLXH7idwUO8Gu1nDC50tmBavOB
-P2dbQw8DEMedgHDlf-bg1fkcx6pOeYTl4pmq
--8kASDUOoHUxkYDu_iUwGR2qHjmZOvPmqrqA
-2VwKuLTb2Tsqu0sGsle8eOvKP2N-zSwa6KPR
-BZebdoJOaHrE4xj-8ocz6IMJtnv_1Qq2Z6-x
-FOzKXl9kEEpD0lHojCbBbv0xjqyyOjLGkALu
-l7HaGNI2MhSE-h8=
-====================================
-)",
-R"(
-=========== Julia Island ===========
-Gz4BAMRkNqc9K7QHr6k7Fd3E9LHTCtQKKwrT
-Eso1yRe09YYtj8OhtJHdX0pRWEsqUFgFlbJc
-UJHTxqRNChdTOewpW9JSk7by9LriQgdHX18p
-LWm3Bqem7DPVflcVgHi1Glm3XH_44PZmah6l
-_szABVjgw4Dem9QGorXZ4NZy8ga6UXtw67Kc
-AvnuFXyoZbNwRpkslvNry6Cs8g_R27e2cI_P
-Kp6DQemD5vlZhBrXnsbzG6mFeBW3XUzQHUGo
-4yDLd_QMQosQzDODBzhGks7viw-8PEp6UTig
-g77Hvs9sS3pTOGBv9W0OWZI-FLZV6B8=
-====================================
-)",
-R"(
-========== Spiral Spears ===========
-G-QAAMQi__yqnzabd3tgQHT4AHVy-gesiRXk
-BWRfGEhuY3hdImiV8osakiR0kDhj1oQu0xIO
-mR8dL4JNcB273Grtog6EKyStXSatU5ZwvWiy
-CYFwN42nQv2yJg_CPu_vl7Y__vBCuunn9KO3
-OZuG1cvlSYifyychB6Z7I2bPn12Re7k8n36i
-T0MJhOcLJ0l4QZKBCV9IeZl5L12MVhG-P1As
-BxM04QcpOMvM_A8=
-====================================
-)",
-R"(
-============ Whirlpool =============
-GzABAMREXU67Vqs9he0U6An8gBsQ9Y3Tb1Ab
-f7DBxvFdp21B3XlEz4jITrbLg34odpjSFMur
-iM-UoTP1OtqPcFzF16F4TJPZpo0fBUxT2Gw7
-3IBpmU7GZ9pSTInLj31XUIC6VsuJIFc6R9C1
--cCes62hRQBohbsGnJX9mUNV53Mcq37KwikX
-z7q6nwyAVOMAvS4mEvC7fwlMRoeqRU5SZ9Vc
-VRcINpcCLu129o7K7pKB9IoXG0bln7G6ZhYN
-9NHoQsmmndAnNC3M2MBe_nCG_iCm3d38Ee3h
-Ki-15HiG6aZNPBGH6U6xEZF_
-====================================
-)",
-R"(
-============ Hurricane =============
-G9cAAMTCuVJ-bLC8zQGCA4J_nZy2gPEFdsEw
-t0tcQrmDdTqtBsHmhxSMxVGA0VJrh6Mockw6
-PpWex7GEsbRLfggr9dAiy_Y41hO52QBdjX1k
-CDnOMEivUvahvMv40PXK9WegLL_5aj5Lg3mT
-etfVTKnv6qysilvcqtblVVTsulo0XynUJsXA
-cfmFHNeL9lZCS8slcjk-PPieRcTxhXEodKSm
-fw==
-====================================
-)",
-R"(
-============= Minibrot =============
-GzEBAMRiNqv6bSGZ5RQu_x4TItqJqRucFjA3
-2DpYNgBuL4h7Di8llxQ7tnnSL0VKUoYijjN7
-krJKSf1Gg8RJZ08H7Eqabt0o40uaIebHrpTv
-S1oRu6Lk9de-KwpA3GqVpJ8vX0Lo-mJoL7n2
-yMIHtMBDA2ptfxcQtcUCp5qXtlCV0kXXDtMh
-kG4eoTelZBJe7z-J6fhYs8hz-iJa69oS_vZa
-xLXTyT1Q3V-z4H7paoOw8jsRt-yyiQGaPQje
-dpL6jJaFmRjY6z8u0J8kaf_BXUs6UKR8lnSj
-KMZxT7lOKOk-mH3j69BIelCknJD5DQ==
-====================================
-)"
-};*/
+std::vector<MandelPreset> generateMandelPresets()
+{
+    std::vector<MandelPreset> presets;
+    presets.push_back({ "Home", "BePlCeCPSy5XrU4SBOYCSVzmB4issBbKW2c2jeYedNVwUXwJMOu8HNLPHk5XlFdh9JwTpSaB6S88EKApvljk6M0E9EkohnQOTunHWAzILx9oiISwmZqhorxUx1a1hdSCURZxSAA7rBYviaqTEOQUJVNpNieO99Siqq3mgmPbZR1" });
+    presets.push_back({ "Heartbeat", "wDJRyfraMXobWo7Lw918h7XyDeL844ZAdHsquNWherePyJiGpVy8LQIREaH1rnO9CxQ8vVb6OIYeRMIAAyg182ZGyLZJOPpengWsSVm7DABYWicsZDRoiOdlEn9OczZKsuiyYZP6u4BjshDgatQ9XuYkg4sDAcZdp5pvvKsCo8ygJAWD0hKGi9gAThZGV9Wd5" });
+    presets.push_back({ "Iris", "KFQe8lbCTsdj6M9yWzsuYpB7ezvdy3FrCMge7qnqrTbuDnEP6f9u3tS9SecCBP0IOiKrg7TGZ0FjKHLK3b3b2C0V7jRoDJ28rtaR9ebsEEoIT98x6XZ79dhvvwwJV1r8BxpXopO8hE290JFtk5jHyZiw0rttnV9WKbqXcHaIVREkYvC6KxgpJk6DCk1NnLpFFVBTdq3U1RUxP605mWH0KGnm5OQOEftmxfLe0NJ" });
+    presets.push_back({ "Refraction", "qSt8FnEwGVnRMsymdYgWV0mRu8j0DdEGZHIAvFK6762fGKArk1BoIoOMEUcDAKgC8yTouhxTEGP3rF9C1Lu1gc1bBqn9DeoQrhPvpuW9OpgXBgXbpo9LMqO9k0BTFGRe3EKpBskMZ30wdumQvQw81HcuKIYEAq8v4YA6xs8yiNxjbVtNRG3qbZzzeN0tR" });
+    presets.push_back({ "Streams", "WA5qDkynVI6bwv5YNErirJYqJmkdknqHqlFzNRgkwdfC373Ye9pfWGDBHMJhlkuO8gv4xRMIu4ZSnAQzl5STQRbmkwAhr8lxz0FUGQZDoHhj5myDWYnfwU0mMhrzkQBk72smAE2gkbB976MKvgWjaDNLYUassxpS3ZiFIFgroKmF5lORDJC9ys3hWNNSlNL2vbKxC0HKYtZtTBM3U76H" });
+    presets.push_back({ "Clockwork", "EHv6iff7n7t5rJI7EOYueFhC5qACqkwthoajEp1EPapUdl1cdcvfTsf0jsN9WuT2o17y9m3pf459T4caPbSpC4462SWtejKCn3x9WxhVnQSTRssVSmh50ifTTyTjhREX0XbqVn3A31kGjtdJXa54trnLSFXqkWoPp7F7BSr7AMKQxr7Ph49pKWol482XAn0UDCU7bLTNowf" });
+    presets.push_back({ "Kaleidoscope", "B3Vr8GwyGaLn8nqsER7LaFUM1PJr8djr6HjoEgHPAwv7H6nFr1bB7MGuohiI8ZPBUsSsa42pPeAaRIhGw3fkuRPDrSjxfxX4f2edYZqeG19yc3qKOJGb5en2FoIQpw9jweCweFyQ2FKL2LZMRqMpjGxaCE3leMsMYFnOnX2PWvrTUNmTp7ugVP9jU3Tup1V9avRCqkYqFMpiJmuowd7wO9OFsw4gKj" });
+    presets.push_back({ "Kaleidoscope 2", "CbgB2eMxHi9CwbBqFyETz0938Dg0OWoETM2pnTKo4Z8239NQ9T1qvIj0lJvc7sS9RKRDnBEmO9xCNPNyk3KMs7p3uWyrSIeeGtnXxzdN0EQTBHFeKxh9uKjVhyeHQ50LmsETDAej0D67NoB0kDIQuaWx8RUGfCH91umJBec4LI6EvremliGgMZY2V8OYTIgs6Kpzmfahh0fZmoF37T3ZuQFg1RFBGmNYdruc71" });
+    presets.push_back({ "Firework", "I3ASi6FxIlj61gSjnm9wZNZVWXPxrd2PIpUACYGtDVJd48mD6FC4za6HCCP0ptvJ61KCt1wrW3RjsbG9gOXdxIPepHQuTlM1xorcnBjfMtl1QxUY0vdGoUJSKo5gU7ygvbKMxqVaj1H2Jd1aeFxRwm5aZXwJE4ddIsf58rENtlf8rB5yuEIbqWWMHS7rPjUV1n7mfIpc3vmRoOkksIzruyWQxTl5wcW9rYr" });
+    presets.push_back({ "Deep Zoom", "CT7wE4VKuxS2LFGWeMQcimz3IZqmLwBNB1LaZR2Hy7oP3I0tNxjRaOxZotThTSa4wZG7ZtHT7waqnLjQ87yX2sALS8rWgz0gNOIdgR7G5SN7Pv5870X1PXsozTKVvl3EUxzpAgdmBNoLtqWpxogBqQ1iZoB9OaNmhymzoMbuDsaayTRPLuBlZx5dczY6mStpw43j4hJAkJIozwsBfB1AacrTI3OJYqTWtx9NttfHlTz5MFkTmQM0V04gSDUMXFExTw7UVKNcRFOEWgz3h" });
+    presets.push_back({ "Tendrils", "PrrzukMgzPsc1xq2t1TnVcFnatAOIeiTdnkKgoRSQh4UoVHXxm1LuE0OT9bWcEmroMteY8e9GTFtkUe94JeC3m95C49103CoeI5RtPX5P5iH06KHmp5l0Mrca6lOdawCwtzeb4hBxRQu6h3dETC42DSj940x7DYQ4ezkDCsfCgg11skE1d3moUyBWrmyw8Iu9AM8Rhf4rPvuevWvAxImsuYFn8CGL9mxKfEBp0vnOY1BAQ02pKETzDaGhddCDSsF6QAdPsx8s2Alvbv27QtjHNCPaFHohGxmk5pp9k0lE58qXnGf5cF7J1SmmA3NC5pRNobHSGKhqWIsH" });
+    presets.push_back({ "Julia Island", "sNNgFdbZyFfFkZaVZqsBM5BrM2zhhQw82oO0LCvMFJa7UsiCGeMEZFRBihRwqM5AGxig2etNbbZYwDYFtqXpTWrayiT22E4L68vfeEJcbEp05aAEe7eLh4SYOH4VqIOO42uQLCtreUW9Ti0RKz7IjPK8bI8JKuUzk9cj2D5oM3Gw6otTeQELJb8JJ78AIaodOd1abwi190RO8A7aRwl2oUYxPdov8zuB2zihcmo5bbd1lQ6iwvZkBvT27BYuYBnk6Vn36UGz1rY77ADDRkjUgYqwZ0djSxJizUpYBUSWQDMfIuHSUvZdQwREtjiTk4gP58" });
+    presets.push_back({ "Dragons", "koPOeFuSA2hrEQuLEKFcFfjbMIGlfJIrBP1VnX7dJSr2GYU2mte8nbrv4kVlAjbQMKRHOWR2W1GkrRjYhjMfZp6oqN7YScE1IbDoj1K1EII8SmM6o9VdhH8UKUM7RGDqDSci7M3598OMj3zS3iXUlGwhKFLeiZzfcpJSPeJJZxUynJ8oxEAhKGOx2YTTrn1NNGTwtIloBmBakLUecMZ1aLjSr4KR8UtTbmZh" });
+    presets.push_back({ "Whirlpool", "Gaa6YwL5sCGRFub5Dao4tCyYaMUbWzIawJe8YIzupvFwBqzggcgXzjqXL2drkhuyrR8uan0GZZ5McPDpP9WbbSR9eELlKR6Bxtcr6jtJt6yMDBtllsf5g2eTQNj5KUjf6YWyAzMgq6rD20zCYwUjfCmdTni0FDgRu63Z3BT01iljf15BaEJSp8edRJotDCF9duyNL22SFmjKO1IGnjILbFpAluETG4of7bIAQAhtihnLOf0L4Zxvnc2VrUiHDoySd7xcUMpkBizMJ0Y7MXu2N4XoaL5GxcqmoUPpgvZtKR4AuJ1un" });
+    presets.push_back({ "Hurricane", "V9MjdlEWfhB3pk5mTJ8g9qzok4t6Eb4zth83LBLCuTkAkd6cmqb744mLUdHuS6fgIQiE7Z2eSG35X2u2axORxpUzhYgesnuNjDlu9IArCnhgZ8nLVhWLTnuoHGbbRfA4FknfwdyU4q5aJS5WyePVY3Q1etbiqJ5tQqUoMLddsl8IAQGNKdFJ7KErT3EF3A9UqxaMLeIqTkWl7KssBXzZ" });
+    presets.push_back({ "Pathfinder", "GDRSccs1pZ6D6fCCncE3XRlqXB2msimjVPeyylyqVdtVjNPThoI9AsWzezq018gvEJYNysd8LynmaugiqUWhufnIxvl1kaWVYDZSCy7eCjmMWyTtqXUFGPy9QD136Asu3qi2IAOwW0S0L4SIMjXWmLYO1z5SqMiI4gSiZE8BTlVFjowlhtfRM9ukIdSaRDQUztXvLbibMuv361W9V99Afx1" });
+    return presets;
+}
 
 SIM_END;

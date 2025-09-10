@@ -5,6 +5,7 @@
 #include <string_view>
 #include <sstream>
 
+
 BL_BEGIN_NS;
 
 namespace TextUtil
@@ -64,6 +65,8 @@ namespace TextUtil
     std::string dedent_max(std::string_view text);
 
     std::string_view trim_view(std::string_view text);
+
+    bool contains_only(const std::string& s, const std::string& allowed);
 }
 
 BL_END_NS;

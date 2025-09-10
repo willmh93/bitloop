@@ -29,6 +29,7 @@ void MainWindow::init()
     checkChangedDPR();
 
     canvas.create(Platform()->dpr());
+    overlay.create(Platform()->dpr());
 }
 
 void MainWindow::checkChangedDPR()
@@ -143,16 +144,7 @@ void MainWindow::initFonts()
 void MainWindow::populateProjectUI()
 {
     ImGui::BeginPaddedRegion(ScaleSize(10.0f));
-  
-    // Stall until we've finishing copying the shadow buffer to the live buffer (on worker thread)
-    shared_sync.wait_until_live_buffer_updated();
-
-    // Shadow buffer is now up-to-date free to access (while worker does processing)
-    {
-        std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-        ProjectWorker::instance()->populateAttributes();
-    }
-
+    ProjectWorker::instance()->populateAttributes();
     ImGui::EndPaddedRegion();
 }
 
@@ -479,6 +471,7 @@ void MainWindow::populateCollapsedLayout()
     }
     ImGui::End();
 
+    
     if (ImGui::Begin("Active", nullptr, window_flags))
     {
         // Only add padding after toolbar to inner-child
@@ -496,11 +489,13 @@ void MainWindow::populateCollapsedLayout()
         ImGui::PopStyleVar();
     }
 
+
     ImGui::End();
 }
 
 void MainWindow::populateExpandedLayout()
 {
+
     // Show both windows
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
@@ -510,7 +505,7 @@ void MainWindow::populateExpandedLayout()
         //ImGui::Dummy(ImVec2(0, 3));
 
         populateProjectTree(false);
-        populateProjectUI(); // Always call (in case sim does any unusual setup here)
+        populateProjectUI();
 
         ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
         ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
@@ -531,9 +526,8 @@ void MainWindow::populateViewport()
         int width = static_cast<int>(size.x);
         int height = static_cast<int>(size.y);
 
-        static bool done_first_size = false;
         bool resized = canvas.resize(width, height);
-
+        
 
         if (!done_first_size)
         {
@@ -580,13 +574,14 @@ void MainWindow::populateViewport()
             canvas.end();
         }
 
+        ImVec2 canvas_size((float)canvas.fboWidth(), (float)canvas.fboHeight());
+        ImVec2 start = ImGui::GetCursorScreenPos();
+
         // Draw cached (or freshly generated) frame
-        ImGui::Image(canvas.texture(), ImVec2(
-            static_cast<float>(canvas.fboWidth()),
-            static_cast<float>(canvas.fboHeight())),
-            ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
-            ImVec2(1.0f, 0.0f)    // UV bottom-right);
-        );
+        ImGui::Image(canvas.texture(), canvas_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        ImGui::SetItemAllowOverlap();              // allow next item to overlap this one
+        ImGui::SetCursorScreenPos(start);
+        ImGui::Image(overlay.texture(), canvas_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
         //viewport_rect.Min = ImVec2(0, 0);
         //viewport_rect.Max = size;
@@ -608,8 +603,6 @@ void MainWindow::populateUI()
     if (!manageDockingLayout())
         return;
 
-    // Show windows
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
     // Determine if we are ready to draw *before* populating simulation imgui attributes
     {
@@ -622,26 +615,80 @@ void MainWindow::populateUI()
     if (ProjectBase::projectInfoList().size() <= 1)
         collapse_layout = false;
 
-    if (collapse_layout)
-        populateCollapsedLayout();
-    else
-        populateExpandedLayout();
 
-    if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
-        done_first_focus = true;
-
-    ImGui::PopStyleVar();
-
-    ImGuiWindowClass wc{};
-    wc.DockNodeFlagsOverrideSet =
-        (int)ImGuiDockNodeFlags_NoTabBar |
-        (int)ImGuiWindowFlags_NoDocking;
-
-    ImGui::SetNextWindowClass(&wc);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
+    // ==== Allow project to populate UI / draw nanovg overlay ====
 
 
-    populateViewport();
+
+
+    // Shadow buffer is now up-to-date and free to access (while worker does processing)
+    {
+        if (canvas.fboExists())
+            overlay.resize(canvas.fboWidth(), canvas.fboHeight());
+
+        // Draw sidebar
+        {
+            // Stall until we've finishing copying the shadow buffer to the live buffer (on worker thread)
+            shared_sync.wait_until_live_buffer_updated();
+            std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+            if (collapse_layout)
+                populateCollapsedLayout();
+            else
+                populateExpandedLayout();
+
+            if (done_first_size)
+            {
+                overlay.begin(0, 0, 0, 0);
+                ProjectWorker::instance()->drawOverlay();
+                //overlay.setFillStyle(255, 0, 0, 255);
+                //overlay.fillRoundedRect(10, 10, 150, 50, 8);
+                overlay.end();
+            }
+
+            if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
+                done_first_focus = true;
+
+            ImGui::PopStyleVar();
+        }
+
+        // Draw viewport
+        {
+            ImGuiWindowClass wc{};
+            wc.DockNodeFlagsOverrideSet =
+                (int)ImGuiDockNodeFlags_NoTabBar |
+                (int)ImGuiWindowFlags_NoDocking;
+
+            ImGui::SetNextWindowClass(&wc);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
+
+            populateViewport();
+        }
+
+        //// Draw overlay
+        //{
+        //    // Stall until we've finishing copying the shadow buffer to the live buffer (on worker thread)
+        //    shared_sync.wait_until_live_buffer_updated();
+        //    std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+        //
+        //    
+        //
+        //   
+        //
+        //    //ImGui::Image(overlay.texture(), ImVec2(
+        //    //    static_cast<float>(overlay.fboWidth()),
+        //    //    static_cast<float>(overlay.fboHeight())),
+        //    //    ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
+        //    //    ImVec2(1.0f, 0.0f)    // UV bottom-right);
+        //    //);
+        //
+        //    //ImGui::Begin("Test Overlay");
+        //    //ImGui::Text("Hello from BSL!");
+        //    //ImGui::End();
+        //}
+    }
 
     #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
     ImGui::Begin("Debug"); // Begin Debug Window

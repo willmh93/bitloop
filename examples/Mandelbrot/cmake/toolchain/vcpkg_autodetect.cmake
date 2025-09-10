@@ -20,5 +20,12 @@ set(ENV{VCPKG_ROOT} "${_vcpkg_dir}")
 set(VCPKG_ROOT "${_vcpkg_dir}" CACHE PATH "" FORCE)
 set(_vcpkg_toolchain "${_vcpkg_dir}/scripts/buildsystems/vcpkg.cmake")
 
+if (DEFINED ENV{BITLOOP_ROOT})
+  set(OVERLAY_PORTS_PATH "$ENV{BITLOOP_ROOT}/vcpkg-ports/ports")
+  message(STATUS "@@@@@ Using VCPKG_OVERLAY_PORTS = ${OVERLAY_PORTS_PATH}")
+  list(APPEND VCPKG_OVERLAY_PORTS ${OVERLAY_PORTS_PATH})
+endif()
+
+
 message(STATUS "Using vcpkg at: ${_vcpkg_dir}")
 include("${_vcpkg_toolchain}")

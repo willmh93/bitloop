@@ -27,18 +27,18 @@ enum class MandelTransform
 enum struct GradientPreset
 {
     CLASSIC,
-    SINUSOIDAL_RAINBOW,
+    RAINBOW,
     WAVES,
-    //CUSTOM,
-
+    REFRACTION,
+    ///////////
     COUNT
 };
 
 static const char* ColorGradientNames[(int)GradientPreset::COUNT] = {
     "CLASSIC",
-    "SINUSOIDAL_RAINBOW",
-    "WAVES"
-    "", // Diplay custom as blank
+    "RAINBOW",
+    "WAVES",
+    "REFRACTION"
 };
 
 
@@ -51,7 +51,7 @@ inline void colorGradientTemplate(double t, uint8_t& r, uint8_t& g, uint8_t& b)
         g = (uint8_t)(15 * (1 - t) * (1 - t) * t * t * 255);
         b = (uint8_t)(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255);
     }
-    else if constexpr (type == GradientPreset::SINUSOIDAL_RAINBOW)
+    else if constexpr (type == GradientPreset::RAINBOW)
     {
         float a = (float)t * 3.14159265f;
         r = (uint8_t)(sin(a) * sin(a) * 255);
@@ -64,8 +64,8 @@ inline void colorGradientTemplate(GradientPreset type, double t, uint8_t& r, uin
 {
     switch (type)
     {
-    case GradientPreset::CLASSIC:            colorGradientTemplate<GradientPreset::CLASSIC>(t, r, g, b); break;
-    case GradientPreset::SINUSOIDAL_RAINBOW: colorGradientTemplate<GradientPreset::SINUSOIDAL_RAINBOW>(t, r, g, b); break;
+    case GradientPreset::CLASSIC: colorGradientTemplate<GradientPreset::CLASSIC>(t, r, g, b); break;
+    case GradientPreset::RAINBOW: colorGradientTemplate<GradientPreset::RAINBOW>(t, r, g, b); break;
     default: break;
     }
 }
@@ -99,7 +99,15 @@ inline void generateGradientFromPreset(
         grad.addMark(0.53f, ImColor(255, 56, 41));
         grad.addMark(0.62f, ImColor(208, 171, 1));
         grad.addMark(0.62001f, ImColor(0, 0, 0));
-        //grad.addMark(0.655f, ImColor(0, 0, 0));
+    }
+    break;
+
+    case GradientPreset::REFRACTION:
+    {
+        grad.addMark(0.0f, ImColor(0, 0, 0));
+        grad.addMark(0.45f, ImColor(70, 70, 70));
+        grad.addMark(0.5f, ImColor(255, 255, 255));
+        grad.addMark(0.55f, ImColor(50, 50, 50));
     }
     break;
 

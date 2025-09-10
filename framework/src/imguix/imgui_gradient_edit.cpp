@@ -225,6 +225,7 @@ void ImGradient::deserialize(std::string txt)
     for (short i = 0; i < num_marks; i++)
     {
         ImGradientMark mark;
+        mark.uid = i;
         in.read(reinterpret_cast<char*>(&mark.position), sizeof(float));
 
         uint32_t u32;
@@ -233,7 +234,6 @@ void ImGradient::deserialize(std::string txt)
         mark.color[1] = static_cast<float>((u32 & 0x0000FF00) >> 8) / 255.0f;
         mark.color[2] = static_cast<float>((u32 & 0x00FF0000) >> 16) / 255.0f;
         mark.color[3] = static_cast<float>((u32 & 0xFF000000) >> 24) / 255.0f;
-
         m_marks.push_back(mark);
     }
 
