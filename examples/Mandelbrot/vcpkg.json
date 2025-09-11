@@ -3,6 +3,7 @@
   "name": "sim",
   "version-string": "0.1.0",
   "dependencies": [
+    { "name": "brotli", "host": true, "platform": "windows" },
     "bitloop"
   ]
 }

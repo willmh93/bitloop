@@ -3,6 +3,7 @@
   "version-string": "0.9.20",
   "dependencies": [
     { "name": "vcpkg-tool-ninja", "host": true, "platform": "windows" },
+    { "name": "brotli-tool", "host": true },
     { "name": "catch2" },
     { "name": "freetype" },
     { "name": "sdl3" },

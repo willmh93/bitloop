@@ -591,38 +591,38 @@ struct AngledRect
 
     [[nodiscard]] T aspectRatio() const { return (w / h); }
 
-    template<typename T>
-    static Vec2<T> enclosingSize(const AngledRect<T>& A, const AngledRect<T>& B, T avgAngle, T fixedAspectRatio = 0)
+    template<typename T2>
+    static Vec2<T2> enclosingSize(const AngledRect<T2>& A, const AngledRect<T2>& B, T2 avgAngle, T2 fixedAspectRatio = 0)
     {
         // rotate world points by –avgAngle so the enclosing frame is axis-aligned
-        const T cosC = cos(-avgAngle);
-        const T sinC = sin(-avgAngle);
+        const T2 cosC = cos(-avgAngle);
+        const T2 sinC = sin(-avgAngle);
 
-        T xmin =  bl_infinity<T>(), ymin =  bl_infinity<T>();
-        T xmax = -bl_infinity<T>(), ymax = -bl_infinity<T>();
+        T2 xmin =  bl_infinity<T2>(), ymin =  bl_infinity<T2>();
+        T2 xmax = -bl_infinity<T2>(), ymax = -bl_infinity<T2>();
 
-        auto accumulate = [&](const AngledRect<T>& R)
+        auto accumulate = [&](const AngledRect<T2>& R)
         {
-            const T d = R.angle - avgAngle; // local tilt inside the frame
-            const T cd = cos(d);
-            const T sd = sin(d);
+            const T2 d = R.angle - avgAngle; // local tilt inside the frame
+            const T2 cd = cos(d);
+            const T2 sd = sin(d);
 
             // centre in the avgAngle frame
-            const T cxp = cosC * R.cx - sinC * R.cy;
-            const T cyp = sinC * R.cx + cosC * R.cy;
-            const T hw = R.w * 0.5;
-            const T hh = R.h * 0.5;
+            const T2 cxp = cosC * R.cx - sinC * R.cy;
+            const T2 cyp = sinC * R.cx + cosC * R.cy;
+            const T2 hw = R.w * 0.5;
+            const T2 hh = R.h * 0.5;
 
             for (int sx = -1; sx <= 1; sx += 2)
             {
                 for (int sy = -1; sy <= 1; sy += 2)
                 {
-                    const T dx = sx * hw;
-                    const T dy = sy * hh;
+                    const T2 dx = sx * hw;
+                    const T2 dy = sy * hh;
 
                     // rotate offset by d, then add to centre
-                    const T x = cxp + dx * cd - dy * sd;
-                    const T y = cyp + dx * sd + dy * cd;
+                    const T2 x = cxp + dx * cd - dy * sd;
+                    const T2 y = cyp + dx * sd + dy * cd;
 
                     xmin = std::min(xmin, x);
                     xmax = std::max(xmax, x);
@@ -635,11 +635,11 @@ struct AngledRect
         accumulate(A);
         accumulate(B);
 
-        T W, H;
+        T2 W, H;
         if (fixedAspectRatio > 0)
         {
-            const T Wraw = xmax - xmin;
-            const T Hraw = ymax - ymin;
+            const T2 Wraw = xmax - xmin;
+            const T2 Hraw = ymax - ymin;
 
             if (Wraw / Hraw >= fixedAspectRatio) {
                 W = Wraw;

@@ -438,7 +438,7 @@ void ScrollWhenDraggingOnVoid(const ImVec2& delta)
 
     
 
-    if (g.HoveredId == 0) // If nothing hovered so far in the frame (not same as IsAnyItemHovered()!)
+    //if (g.HoveredId == 0) // If nothing hovered so far in the frame (not same as IsAnyItemHovered()!)
         ImGui::ButtonBehavior(window->Rect(), id, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
     //if (held && delta.x != 0.0f)
     //    ImGui::SetScrollX(window, window->Scroll.x + delta.x);
@@ -450,6 +450,82 @@ void ScrollWhenDraggingOnVoid(const ImVec2& delta)
     if (/*held && */scroll_amount != 0.0f)
         ImGui::SetScrollY(window, window->Scroll.y + scroll_amount);
 }
+
+// Swipe-to-scroll with takeover + inertia for ImGui windows.
+// Requires: #include "imgui_internal.h"
+static void SwipeScrollWindow(float decay = 0.93f, float drag_threshold = 6.0f)
+{
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    ImGuiIO& io = g.IO;
+    ImGuiWindow* window = g.CurrentWindow;
+    if (!window) return;
+
+    // State (per window would be nicer; for simplicity, keep it static/global)
+    static bool   scrolling = false;
+    static ImVec2 press_pos = ImVec2(0, 0);
+    static float  vy = 0.0f;
+
+    const bool hovered_anyhow = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    const bool down = io.MouseDown[0];
+    const bool up = !down;
+
+    // Begin potential gesture
+    if (!scrolling && hovered_anyhow && ImGui::IsMouseClicked(0))
+    {
+        press_pos = io.MousePos;
+        vy = 0.0f;
+    }
+
+    // Decide when to take over
+    if (!scrolling && down && hovered_anyhow)
+    {
+        const float dy = io.MousePos.y - press_pos.y;
+        if (fabsf(dy) >= drag_threshold)
+        {
+            // Take over: cancel the currently active item so it won't trigger on release
+            if (g.ActiveId != 0)
+                ImGui::ClearActiveID();
+
+            // Optionally set ourselves as active (not strictly required but keeps ID bookkeeping tidy)
+            ImGuiID id = window->GetID("##swipe_scroll_captor");
+            ImGui::SetActiveID(id, window);
+
+            scrolling = true;
+        }
+    }
+
+    // While dragging, update velocity and scroll
+    if (scrolling && down)
+    {
+        vy = -io.MouseDelta.y; // swipe up -> scroll down; adjust sign to taste
+        if (vy != 0.0f)
+            ImGui::SetScrollY(window, window->Scroll.y + vy);
+    }
+
+    // On release, keep inertia; while idle, decay velocity
+    if (scrolling && up)
+    {
+        // free active id if we grabbed it
+        if (g.ActiveId != 0 && g.ActiveId == window->GetID("##swipe_scroll_captor"))
+            ImGui::ClearActiveID();
+        // keep scrolling with decay until velocity dies
+        if (fabsf(vy) < 0.01f)
+        {
+            vy = 0.0f;
+            scrolling = false;
+        }
+    }
+
+    // Apply inertial decay when not dragging
+    if (vy != 0.0f && !down)
+    {
+        ImGui::SetScrollY(window, window->Scroll.y + vy);
+        vy *= decay;
+        if (fabsf(vy) < 0.01f)
+            vy = 0.0f;
+    }
+}
+
 
 void MainWindow::populateCollapsedLayout()
 {
@@ -463,8 +539,10 @@ void MainWindow::populateCollapsedLayout()
 
         populateProjectTree(true);
 
-        ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
-        ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
+        //ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
+        //ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
+
+        SwipeScrollWindow();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();
@@ -482,8 +560,9 @@ void MainWindow::populateCollapsedLayout()
 
         populateProjectUI();
 
-        ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
-        ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
+        //ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
+        //ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
+        SwipeScrollWindow();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();
@@ -507,8 +586,9 @@ void MainWindow::populateExpandedLayout()
         populateProjectTree(false);
         populateProjectUI();
 
-        ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
-        ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
+        //ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
+        //ScrollWhenDraggingOnVoid(ImVec2(0.0f, -mouse_delta.y));
+        SwipeScrollWindow();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();

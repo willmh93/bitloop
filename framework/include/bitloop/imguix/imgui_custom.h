@@ -220,9 +220,9 @@ namespace ImGui
 
         }
 
-        void IncreaseRequiredSpaceForLabel(float& w, const char* label, float pad_right=BL::ScaleSize(10.0f))
+        void IncreaseRequiredSpaceForLabel(float& w, const char* text, float pad_right=BL::ScaleSize(10.0f))
         {
-            float lw = ImGui::CalcTextSize(label).x + pad_right;
+            float lw = ImGui::CalcTextSize(text).x + pad_right;
             if (lw > w) w = lw;
         }
 

@@ -1533,7 +1533,7 @@ namespace ImSpline
 		ImVec2 Canvas(dim, dim);
 		ImRect bb(Window->DC.CursorPos, Window->DC.CursorPos + Canvas);
 		ItemSize(bb);
-		if (!ItemAdd(bb, NULL))
+		if (!ItemAdd(bb, 0))
 			return 0;
 
 

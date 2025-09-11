@@ -969,87 +969,89 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
         }
     }
 
-    //if (active_field && active_bmp)
-    //{
-    //    //ctx->print() << "\nactive_field->max_depth: " << active_field->max_depth;
-    //    ///ctx->print() << "\nactive_field->min_dist: " << active_field->min_dist;
-    //    ///ctx->print() << "\nactive_field->max_dist: " << active_field->max_dist;
-    //
-    //    int px = (int)mouse->stage_x;
-    //    int py = (int)mouse->stage_y;
-    //    if (px >= 0 && py >= 0 && px < active_bmp->width() && py < active_bmp->height())
-    //    {
-    //        IVec2 pos = active_bmp->pixelPosFromWorld(DVec2(mouse->world_x, mouse->world_y));
-    //        EscapeFieldPixel* p = active_field->get(pos.x, pos.y);
-    //    
-    //        if (p)
-    //        {
-    //            //double raw_depth = p->depth;
-    //            double raw_dist = p->dist;
-    //
-    //            double dist = log(raw_dist);
-    //
-    //            ///double dist_factor = Math::lerpFactor(dist, active_field->min_dist, active_field->max_dist);
-    //
-    //            ctx->print() << "\nraw_dist: " << raw_dist << "\n";
-    //            ctx->print() << "log_dist: " << dist << "\n";
-    //            ///ctx->print() << "dist_factor: " << dist_factor << "\n\n";
-    //
-    //            double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.5, 0 }).magnitude();
-    //            double stable_max_raw_dist = active_bmp->worldSize().magnitude() / 2.0;
-    //
-    //            double stable_min_dist = log(stable_min_raw_dist);
-    //            double stable_max_dist = log(stable_max_raw_dist);
-    //
-    //            ctx->print() << "stable_min_raw_dist: " << stable_min_raw_dist << "\n";
-    //            ctx->print() << "stable_max_raw_dist: " << stable_max_raw_dist << "\n\n";
-    //
-    //            ctx->print() << "min_possible_dist: " << stable_min_dist << "\n";
-    //            ctx->print() << "max_possible_dist: " << stable_max_dist << "\n\n";
-    //
-    //            ctx->print() << "Stabilized factor: " << Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
-    //
-    //
-    //            /*double lower_depth_bound = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
-    //
-    //            double normalized_depth = Math::lerpFactor(raw_depth, lower_depth_bound, (double)iter_lim);
-    //            double normalized_dist = Math::lerpFactor(raw_dist, pending_field->min_dist, pending_field->max_dist);
-    //
-    //            ctx->print() << std::setprecision(18);
-    //            ctx->print() << "\n\nnormalized_depth: " << normalized_depth;
-    //            ctx->print() << "\nnormalized_dist: " << normalized_dist;
-    //
-    //            ctx->print() << "\n\nraw_iters: " << raw_depth;
-    //            ctx->print() << "\nraw_dist: " << raw_dist << "\n";
-    //
-    //            double single_pixel_raw_dist = camera->stageToWorldOffset(DVec2{ 0.001, 0 }).magnitude();
-    //            double min_possible_dist = log(single_pixel_raw_dist);
-    //
-    //            double max_possible_raw_dist = ctx->worldSize().magnitude();
-    //            double max_possible_dist = log(max_possible_raw_dist);
-    //            //double max_possible_dist = de_cap_from_view(
-    //            //    camera->x(),
-    //            //    camera->y(),
-    //            //    ctx->worldSize().x / 2,
-    //            //    ctx->worldSize().y,
-    //            //    sqrt(escape_radius<MandelSmoothing::DIST>())
-    //            //);
-    //
-    //            ctx->print() << "\nlog_dist: " << log(raw_dist) << "\n";
-    //
-    //            //ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
-    //            ctx->print() << "single_pixel_raw_dist: " << single_pixel_raw_dist << "\n";
-    //            ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
-    //
-    //            ctx->print() << "min_possible_dist: " << min_possible_dist << "\n\n";
-    //            ctx->print() << "max_possible_dist: " << max_possible_dist << "\n\n";
-    //
-    //            double stable_normalized_dist = Math::lerpFactor(log(raw_dist), pending_field->min_dist, max_possible_dist);
-    //            ctx->print() << "stable_normalized_dist: " << stable_normalized_dist << "\n";*/
-    //
-    //        }
-    //    }
-    //}
+    /*if (active_field && active_bmp)
+    {
+        //ctx->print() << "\nactive_field->max_depth: " << active_field->max_depth;
+        ///ctx->print() << "\nactive_field->min_dist: " << active_field->min_dist;
+        ///ctx->print() << "\nactive_field->max_dist: " << active_field->max_dist;
+    
+        int px = (int)mouse->stage_x;
+        int py = (int)mouse->stage_y;
+        if (px >= 0 && py >= 0 && px < active_bmp->width() && py < active_bmp->height())
+        {
+            IVec2 pos = active_bmp->pixelPosFromWorld(DVec2(mouse->world_x, mouse->world_y));
+            EscapeFieldPixel* p = active_field->get(pos.x, pos.y);
+        
+            if (p)
+            {
+                double raw_depth = p->depth;
+                double raw_dist = p->dist;
+    
+                double dist = log(raw_dist);
+    
+                ///double dist_factor = Math::lerpFactor(dist, active_field->min_dist, active_field->max_dist);
+    
+                ctx->print() << "\nraw_depth: " << raw_depth << "\n";
+                ctx->print() << "\nraw_dist: " << raw_dist << "\n";
+                //ctx->print() << "log_dist: " << dist << "\n";
+                ///ctx->print() << "dist_factor: " << dist_factor << "\n\n";
+    
+                double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ 0.5, 0 }).magnitude();
+                double stable_max_raw_dist = active_bmp->worldSize().magnitude() / 2.0;
+    
+                double stable_min_dist = log(stable_min_raw_dist);
+                double stable_max_dist = log(stable_max_raw_dist);
+    
+                ctx->print() << "stable_min_raw_dist: " << stable_min_raw_dist << "\n";
+                ctx->print() << "stable_max_raw_dist: " << stable_max_raw_dist << "\n\n";
+    
+                ctx->print() << "min_possible_dist: " << stable_min_dist << "\n";
+                ctx->print() << "max_possible_dist: " << stable_max_dist << "\n\n";
+    
+                ctx->print() << "Stabilized factor: " << Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
+    
+    
+                double lower_depth_bound = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
+    
+                double normalized_depth = Math::lerpFactor(raw_depth, lower_depth_bound, (double)iter_lim);
+                double normalized_dist = Math::lerpFactor(raw_dist, pending_field->min_dist, pending_field->max_dist);
+    
+                ctx->print() << std::setprecision(18);
+                ctx->print() << "\n\nnormalized_depth: " << normalized_depth;
+                ctx->print() << "\nnormalized_dist: " << normalized_dist;
+    
+                ctx->print() << "\n\nraw_iters: " << raw_depth;
+                ctx->print() << "\nraw_dist: " << raw_dist << "\n";
+    
+                double single_pixel_raw_dist = camera->stageToWorldOffset(DVec2{ 0.001, 0 }).magnitude();
+                double min_possible_dist = log(single_pixel_raw_dist);
+    
+                double max_possible_raw_dist = ctx->worldSize().magnitude();
+                double max_possible_dist = log(max_possible_raw_dist);
+                //double max_possible_dist = de_cap_from_view(
+                //    camera->x(),
+                //    camera->y(),
+                //    ctx->worldSize().x / 2,
+                //    ctx->worldSize().y,
+                //    sqrt(escape_radius<MandelSmoothing::DIST>())
+                //);
+    
+                ctx->print() << "\nlog_dist: " << log(raw_dist) << "\n";
+    
+                //ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
+                ctx->print() << "single_pixel_raw_dist: " << single_pixel_raw_dist << "\n";
+                ctx->print() << "max_possible_raw_dist: " << max_possible_raw_dist << "\n";
+    
+                ctx->print() << "min_possible_dist: " << min_possible_dist << "\n\n";
+                ctx->print() << "max_possible_dist: " << max_possible_dist << "\n\n";
+    
+                double stable_normalized_dist = Math::lerpFactor(log(raw_dist), pending_field->min_dist, max_possible_dist);
+                ctx->print() << "stable_normalized_dist: " << stable_normalized_dist << "\n";
+    
+            }
+        }
+    }
+    */
 
     //if (smoothing_type == (int)MandelSmoothing::MIX)
     //    ctx->print() << "Smoothing: MIX";
@@ -1088,7 +1090,7 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     //~ // Wont work nicely in slow scene, needs to be imgui or own it's own thread/layer/nanovg-overlay.
       // uiOverlay(ctx) for both nanovg and imgui (on gui main thread)
 
-    ctx->print() << "camera_vel: " << camera_vel_pos << "\n";
+    //ctx->print() << "camera_vel: " << camera_vel_pos << "\n";
 }
 
 void Mandelbrot_Scene::viewportOverlay(Viewport* ctx) const

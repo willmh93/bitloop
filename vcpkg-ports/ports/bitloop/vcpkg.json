@@ -1,8 +1,12 @@
 {
   "name": "bitloop",
   "version": "1.0",
-  "port-version": 4,
+  "port-version": 13,
   "dependencies": [
+    {
+      "name": "brotli-tool",
+      "host": true
+    },
     "brotli",
     "bshoshany-thread-pool",
     "catch2",

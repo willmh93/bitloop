@@ -1,7 +1,7 @@
 set(VCPKG_ENV_PASSTHROUGH_UNTRACKED EMSCRIPTEN_ROOT EMSDK PATH)
 set(CMAKE_SIZEOF_VOID_P 4 CACHE INTERNAL "Override for WebAssembly build" FORCE)
 
-message(STATUS "@@@@@@@@@@@@ Using custom wasm32-emscripten triplet from: ${CMAKE_CURRENT_LIST_FILE}")
+message(STATUS "Using custom wasm32-emscripten triplet from: ${CMAKE_CURRENT_LIST_FILE}")
 
 if(NOT DEFINED ENV{EMSCRIPTEN_ROOT})
    find_path(EMSCRIPTEN_ROOT "emcc")

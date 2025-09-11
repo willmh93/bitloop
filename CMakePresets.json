@@ -25,7 +25,7 @@
         "BUILD_FLAVOR": "ninja-debug",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
       }
     },
     {
@@ -36,7 +36,7 @@
         "BUILD_FLAVOR": "ninja-release",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
       }
     },
     {
@@ -53,7 +53,7 @@
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_BUILD_STATIC": "ON"
       }
     },
@@ -70,7 +70,7 @@
         "BUILD_FLAVOR": "vs2022",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
       }
     },
     {
@@ -83,7 +83,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
       }
     },
     {
@@ -93,9 +93,9 @@
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-debug",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE":   "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
+        "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
         "CMAKE_SUPPRESS_REGENERATION": "ON"
@@ -108,23 +108,23 @@
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-release",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE":   "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
+        "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
         "CMAKE_SUPPRESS_REGENERATION": "ON"
       }
     },
     {
-      "name": "wasm32-release-min-size",
+      "name": "wasm32-release-debug-info",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/wasm32-release-minsize",
+      "binaryDir": "${sourceDir}/build/wasm32-release-debug-info",
       "cacheVariables": {
-        "BUILD_FLAVOR": "wasm32-release-minsize",
+        "BUILD_FLAVOR": "wasm32-release-debug-info",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "CMAKE_BUILD_TYPE": "MinSizeRel",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE":   "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
@@ -134,10 +134,11 @@
   ],
 
   "buildPresets": [
-    { "name": "ninja-debug",              "configurePreset": "ninja-debug" },
-    { "name": "ninja-release",            "configurePreset": "ninja-release" },
-    { "name": "ninja-release-win-static", "configurePreset": "ninja-release-win-static" },
-    { "name": "wasm32-debug",             "configurePreset": "wasm32-debug" },
-    { "name": "wasm32-release",           "configurePreset": "wasm32-release" }
+    { "name": "ninja-debug",                "configurePreset": "ninja-debug" },
+    { "name": "ninja-release",              "configurePreset": "ninja-release" },
+    { "name": "ninja-release-win-static",   "configurePreset": "ninja-release-win-static" },
+    { "name": "wasm32-debug",               "configurePreset": "wasm32-debug" },
+    { "name": "wasm32-release",             "configurePreset": "wasm32-release" },
+    { "name": "wasm32-release-debug-info",  "configurePreset": "wasm32-release-debug-info" }
   ]
 }

@@ -12,6 +12,8 @@ set(BL_AUTOGEN_DIR			"${CMAKE_CURRENT_BINARY_DIR}/include_autogen" CACHE INTERNA
 # ──────────────────────── Private ─────────────────────────
 # ──────────────────────────────────────────────────────────
 
+
+
 function(_apply_common_settings _TARGET)
 	target_compile_features(${_TARGET} PUBLIC cxx_std_23)
 
@@ -21,24 +23,38 @@ function(_apply_common_settings _TARGET)
 	elseif (EMSCRIPTEN)
 		# O3 for WASM
 		target_compile_options(${_TARGET} PRIVATE 
-			"-O3"
-			"-sUSE_PTHREADS=1"
-			"-pthread"
-			"-matomics"
-			"-mbulk-memory"
+			-O3
+			-sUSE_PTHREADS=1
+			-pthread
+			-matomics
+			-mbulk-memory
+
+			$<$<CONFIG:RelWithDebInfo>:-g2> # keep DWARF + names in release
+			$<$<CONFIG:RelWithDebInfo>:-ffunction-sections>
+			$<$<CONFIG:RelWithDebInfo>:-fdata-sections>
 		)
 
 		target_link_options(${_TARGET} PRIVATE
-			#"-pthread"
-			"-sUSE_SDL=3"
-			"-sUSE_WEBGL2=1"
-			"-sFULL_ES3=1"
-			"-sALLOW_MEMORY_GROWTH=1"
-			"-sUSE_PTHREADS=1"
-			"-sPTHREAD_POOL_SIZE_STRICT=0"
-			"-sPTHREAD_POOL_SIZE=32"
-			"-sPTHREADS_DEBUG=1"
-			"-sEXPORTED_RUNTIME_METHODS=[ccall,UTF8ToString,stringToUTF8,lengthBytesUTF8]"
+			-sUSE_SDL=3
+			-sUSE_WEBGL2=1
+			-sFULL_ES3=1
+			-sALLOW_MEMORY_GROWTH=1
+			-sUSE_PTHREADS=1
+			-sPTHREAD_POOL_SIZE_STRICT=0
+			-sPTHREAD_POOL_SIZE=32
+			-sPTHREADS_DEBUG=1
+			-sEXPORTED_RUNTIME_METHODS=[ccall,UTF8ToString,stringToUTF8,lengthBytesUTF8]
+
+			# Prefer this OFF in Release (it bloats logs/binary)
+			-sPTHREADS_DEBUG=0
+
+			# Names + demangling for analysis
+			$<$<CONFIG:RelWithDebInfo>:--profiling-funcs>
+
+			# GC unreferenced sections
+			$<$<CONFIG:RelWithDebInfo>:-Wl>
+			$<$<CONFIG:RelWithDebInfo>:--gc-sections>
+			$<$<CONFIG:RelWithDebInfo>:-flto>
 		)
 	endif()
 endfunction()
@@ -56,7 +72,55 @@ function(_apply_main_settings _TARGET)
 			OUTPUT_NAME "index"
 			SUFFIX ".html"
 		)
+		_optimize_wasm(${_TARGET})
 	endif()
+endfunction()
+
+function(_optimize_wasm _TARGET)
+	# _HOST_TRIPLET: prefer what vcpkg gives us; otherwise infer from host OS/arch
+	set(_HOST_TRIPLET "${VCPKG_HOST_TRIPLET}")
+	if(NOT _HOST_TRIPLET)
+	  string(TOLOWER "${CMAKE_HOST_SYSTEM_PROCESSOR}" _host_arch)
+	  if(CMAKE_HOST_WIN32)
+		if(_host_arch MATCHES "arm64|aarch64")
+		  set(_HOST_TRIPLET "arm64-windows")
+		elseif(_host_arch MATCHES "x86_64|amd64|x64")
+		  set(_HOST_TRIPLET "x64-windows")
+		else()
+		  set(_HOST_TRIPLET "x86-windows")
+		endif()
+	  elseif(CMAKE_HOST_APPLE)
+		if(_host_arch MATCHES "arm64|aarch64")
+		  set(_HOST_TRIPLET "arm64-osx")
+		else()
+		  set(_HOST_TRIPLET "x64-osx")
+		endif()
+	  elseif(CMAKE_HOST_UNIX)
+		if(_host_arch MATCHES "arm64|aarch64")
+		  set(_HOST_TRIPLET "arm64-linux")
+		else()
+		  set(_HOST_TRIPLET "x64-linux")
+		endif()
+	  else()
+		# last-ditch default
+		set(_HOST_TRIPLET "x64-windows")
+	  endif()
+	endif()
+
+	message(STATUS "_HOST_TRIPLET: ${_HOST_TRIPLET}")
+	message(STATUS "BROTLI HINT: ${CMAKE_BINARY_DIR}/vcpkg_installed/${_HOST_TRIPLET}/tools/brotli-tool")
+
+	# where vcpkg puts host tools
+	set(_BROTLI_HINTS "${CMAKE_BINARY_DIR}/vcpkg_installed/${_HOST_TRIPLET}/tools/brotli-tool")
+	find_program(BROTLI_EXECUTABLE NAMES brotli brotli.exe HINTS ${_BROTLI_HINTS})
+
+	# Compute wasm paths using genex (resolved at build time)
+	set(_WASM "$<TARGET_FILE_DIR:${_TARGET}>/$<TARGET_FILE_BASE_NAME:${_TARGET}>.wasm")
+
+	# Precompress with brotli
+	message(STATUS "BROTLI_EXECUTABLE: ${BROTLI_EXECUTABLE}")
+	add_custom_command(TARGET ${_TARGET} POST_BUILD COMMAND "${BROTLI_EXECUTABLE}" -f -q 11 "${_WASM}" VERBATIM)
+  
 endfunction()
 
 function(_apply_root_exe_name target)
@@ -360,9 +424,6 @@ endmacro()
 macro(bitloop_show _TARGET)
 	_bitloop_set_visibility(${_TARGET} ON)
 endmacro()
-
-#macro(bitloop_show_only_tree _TARGET)
-#endmacro()
 
 
 # ──────────────────────────────────────────────────────────
