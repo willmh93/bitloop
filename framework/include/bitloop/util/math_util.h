@@ -222,6 +222,15 @@ namespace Math
     template<typename T> [[nodiscard]] inline T lerpAngle(T a, T b, T f) { return wrapRadians(a + f * closestAngleDifference(a, b)); }
     template<typename T> [[nodiscard]] inline T avgAngle(T a, T b) { return lerpAngle(a, b, T{ 0.5 }); }
 
+    // todo: Add support for "Segment" class, perhaps move to those classes for:
+    // >  Ray     --> Ray      intersection
+    // >  Segment --> Segment  intersection
+    // 
+    // >  Ray <-> Segment      intersection
+    // >  Ray <-> Quad         intersection
+    // >  Ray <-> Rect         intersection
+    // >  Ray <-> AngledRect   intersection
+
     // Intersections
     inline bool lineEqIntersect(DVec2* targ, const DRay& ray1, const DRay& ray2, bool bidirectional)
     {
