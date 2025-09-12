@@ -107,7 +107,7 @@ struct MandelState
         flags |= (version << MANDEL_VERSION_BITSHIFT);
 
         JSON::json info;
-        int decimals = cam_view.getCoordinateDecimals();
+        int decimals = cam_view.getPositionDecimalPlaces();
 
         if (version >= 0)
         {

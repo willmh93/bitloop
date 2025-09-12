@@ -209,10 +209,6 @@ void Viewport::draw()
 
 void Viewport::overlay()
 {
-    // Tell derived painter to paint to the same canvas
-    setGlobalScale(scene->project->overlay->getGlobalScale());
-    setRenderTarget(scene->project->overlay->getRenderTarget());
-
     // Set defaults
     setFont(getDefaultFont());
     setTextAlign(TextAlign::ALIGN_LEFT);
@@ -673,9 +669,8 @@ void ProjectBase::_projectDraw()
     // Draw each viewport
     for (Viewport* viewport : viewports)
     {
-        // Tell derived painter to paint to the main canvas
-        viewport->setGlobalScale(canvas->getGlobalScale());
-        viewport->setRenderTarget(canvas->getRenderTarget());
+        // Reuse derived painter for the primary canvas context
+        viewport->setPainterContext(canvas->getPainterContext());
 
         canvas->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
         canvas->save();
@@ -746,9 +741,8 @@ void ProjectBase::_projectOverlay()
     // Draw each viewport
     for (Viewport* viewport : viewports)
     {
-        // Tell derived painter to paint to the overlay
-        viewport->setGlobalScale(overlay->getGlobalScale());
-        viewport->setRenderTarget(overlay->getRenderTarget());
+        // Reuse derived painter for the overlay context
+        viewport->setPainterContext(overlay->getPainterContext());
 
         overlay->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
         overlay->save();

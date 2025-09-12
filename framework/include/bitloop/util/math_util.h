@@ -45,7 +45,7 @@ namespace Math
     template<typename T> [[nodiscard]] inline bool isinf(const T& v) { return std::isinf(v); }
     [[nodiscard]] inline bool isinf(const flt128& v) { return std::isinf(v.hi); }
 
-    [[nodiscard]] inline int countDecimals(double num)
+    [[nodiscard]] inline int countDecimalPlaces(double num)
     {
         // todo: Optimize
         std::ostringstream out;
@@ -55,6 +55,12 @@ namespace Math
         size_t pos = str.find('.');
         if (pos == std::string::npos) return 0;
         return int(str.size() - pos - 1);
+    }
+
+    template<typename T>
+    [[nodiscard]] inline T precisionFromDecimalPlaces(int count)
+    {
+        return pow(T{10.0}, -count);
     }
 
     [[nodiscard]] inline int countDigits(int n)

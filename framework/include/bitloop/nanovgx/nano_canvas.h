@@ -102,6 +102,21 @@ public:
     }
 };
 
+struct PainterContext
+{
+    NVGcontext* vg = nullptr;
+    double global_scale = 1.0;
+
+    // Text
+    std::shared_ptr<NanoFont> default_font;
+    std::shared_ptr<NanoFont> active_font;
+
+    TextAlign text_align = TextAlign::ALIGN_LEFT;
+    TextBaseline text_baseline = TextBaseline::BASELINE_TOP;
+
+    double font_size = 16.0;
+};
+
 class Painter;
 
 // ===========================================
@@ -110,42 +125,34 @@ class Painter;
 
 class SimplePainter
 {
+    PainterContext* paint_ctx = nullptr;
+    NVGcontext* vg = nullptr;
+
 protected:
 
     friend class Viewport;
     friend class Camera;
     friend class Painter;
 
-    NVGcontext* vg = nullptr;
-
-    TextAlign text_align = TextAlign::ALIGN_LEFT;
-    TextBaseline text_baseline = TextBaseline::BASELINE_TOP;
-
-    static std::shared_ptr<NanoFont> default_font;
-    std::shared_ptr<NanoFont> active_font;
-    
-    double global_scale = 1.0;
-    double font_size = 16.0;
-
 public:
 
-    void setGlobalScale(double _global_scale) {
-        global_scale = _global_scale;
-    }
-    double getGlobalScale() {
-        return global_scale; 
+
+    void setPainterContext(PainterContext* target)
+    {
+        paint_ctx = target;
+        vg = target->vg;
     }
 
-    void setRenderTarget(NVGcontext* nvg_ctx) { vg = nvg_ctx; }
-    [[nodiscard]] NVGcontext* getRenderTarget() { return vg; }
-    [[nodiscard]] std::shared_ptr<NanoFont> getDefaultFont() { return default_font; }
+    // ======== Context getter/setters ========
+    [[nodiscard]] std::shared_ptr<NanoFont> getDefaultFont() { return paint_ctx->default_font; }
+    [[nodiscard]] double getGlobalScale() { return paint_ctx->global_scale; }
+    void setGlobalScale(double scale) { paint_ctx->global_scale = scale; }
 
     // ======== Transforms ========
 
     void save() const { nvgSave(vg); }
     void restore() { nvgRestore(vg); }
     
-
     void resetTransform()                                    { nvgResetTransform(vg); }
     void transform(const glm::mat3& m)                       { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
     glm::mat3 currentTransform() const                       { float x[6]; nvgCurrentTransform(vg, x); return glm::mat3(x[0], x[1], 0, x[2], x[3], 0, x[4], x[5], 1); }
@@ -255,12 +262,12 @@ public:
 
     // ======== Text ========
 
-    void setTextAlign(TextAlign align)          { text_align = align;       nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
-    void setTextBaseline(TextBaseline baseline) { text_baseline = baseline; nvgTextAlign(vg, (int)(text_align) | (int)(text_baseline)); }
-    void setFontSize(double size_pts)           { nvgFontSize(vg, (float)(global_scale * size_pts)); }
+    void setTextAlign(TextAlign align)          { paint_ctx->text_align = align;       nvgTextAlign(vg, (int)(paint_ctx->text_align) | (int)(paint_ctx->text_baseline)); }
+    void setTextBaseline(TextBaseline baseline) { paint_ctx->text_baseline = baseline; nvgTextAlign(vg, (int)(paint_ctx->text_align) | (int)(paint_ctx->text_baseline)); }
+    void setFontSize(double size_pts)           { nvgFontSize(vg, (float)(paint_ctx->global_scale * size_pts)); }
     void setFont(std::shared_ptr<NanoFont> font)
     {
-        if (font == active_font)
+        if (font == paint_ctx->active_font)
             return;
 
         if (!font->created)
@@ -269,12 +276,12 @@ public:
             font->created = true;
 
             // Todo: Check if font changed and update even if already created
-            nvgFontSize(vg, (float)global_scale * font->size);
+            nvgFontSize(vg, (float)paint_ctx->global_scale * font->size);
 
         }
 
         nvgFontFaceId(vg, font->id);
-        active_font = font;
+        paint_ctx->active_font = font;
     }
 
 
@@ -288,7 +295,7 @@ public:
     void fillText(std::string_view txt, DVec2 pos) { fillText(txt, pos.x, pos.y); }
     void fillText(std::string_view txt, double x, double y)
     {
-        if (!active_font) setFont(default_font);
+        if (!paint_ctx->active_font) setFont(paint_ctx->default_font);
         nvgText(vg, (float)(x), (float)(y), txt.data(), txt.data() + txt.size());
     }
 };
@@ -797,8 +804,7 @@ public:
 
     // ======== Expose unchanged methods ========
 
-    using SimplePainter::setRenderTarget;
-    using SimplePainter::getRenderTarget;
+    using SimplePainter::setPainterContext;
     using SimplePainter::setGlobalScale;
     using SimplePainter::getGlobalScale;
     //
@@ -839,6 +845,8 @@ class Canvas : public SimplePainter
     int fbo_width = 0, fbo_height = 0;
     bool has_fbo = false;
 
+    PainterContext context;
+
 public:
 
     void create(double global_scale);
@@ -847,6 +855,7 @@ public:
     void begin(float r, float g, float b, float a = 1.0);
     void end();
 
+    PainterContext* getPainterContext() { return &context; }
     GLuint texture() { return tex; }
     [[nodiscard]] int fboWidth() { return fbo_width; }
     [[nodiscard]] int fboHeight() { return fbo_height; }

@@ -36,6 +36,8 @@ std::vector<MandelPreset> generateMandelPresets()
     presets.push_back({ "Hurricane",    "V9MjdlEWfhB3pk5mTJ8g9qzok4t6Eb4zth83LBLCuTkAkd6cmqb744mLUdHuS6fgIQiE7Z2eSG35X2u2axORxpUzhYgesnuNjDlu9IArCnhgZ8nLVhWLTnuoHGbbRfA4FknfwdyU4q5aJS5WyePVY3Q1etbiqJ5tQqUoMLddsl8IAQGNKdFJ7KErT3EF3A9UqxaMLeIqTkWl7KssBXzZ" });
     presets.push_back({ "Pathfinder",   "GDRSccs1pZ6D6fCCncE3XRlqXB2msimjVPeyylyqVdtVjNPThoI9AsWzezq018gvEJYNysd8LynmaugiqUWhufnIxvl1kaWVYDZSCy7eCjmMWyTtqXUFGPy9QD136Asu3qi2IAOwW0S0L4SIMjXWmLYO1z5SqMiI4gSiZE8BTlVFjowlhtfRM9ukIdSaRDQUztXvLbibMuv361W9V99Afx1" });
     presets.push_back({ "Hexadent",     "NBMQvNlv1HiTNmem4qDtTtspRQ1rdwF8A03QdoN76wHPU3a2pMUGdLDZsBi3cwHsfQ19HcVBRalf0OLrKnfl48UOr1tiCzcjG4n8zmafqu0GtoK1o3qy5yYrlhV9aIoI0xvPGcLiZZRgVsIHKXpwCjL0SDbc2OKyM2SIE7cWBz4eurIqmG3xf8Ubg1C1pcm8cFBZaQzFEgDJrbdSra9w8cHb6BjOJw5B4G1jAUDQ29gS5ob" });
+    presets.push_back({ "Hyperdrive",   "HyU81zDyMYSP3nArueWaIHfCItdLWgglt0iw1noP8tkD1KhO48w9jAWFDMK8GyArUNzGuTWOLWPRwvk03SZPDZEjcKZXgclVjUc8OIeBjeIX8DnCH2zBD9wgQq3bFH46R9o4mEZy4m9DmH6HI4xDv3UqCYjzMQ6oE9Qfd4EjJcN40ioc1Z8vHZGbfLfFamNdORaQDMghH0MpJjapaAbnf1o6rpVPyZx" });
+    presets.push_back({ "unnamed",      "Eq1M8hgLjaSlK1HsCcGIpBpZ2BYy117FgVUFg5Ht2SgEgVDVMF1EmmOC5LOJgCWOTBcyAgcPtXNqx4679OUf9jVCkbvSpXzEv7lNglRDztCQ2xw1HBnNfiZ9EsOlvD1jrIol0tJeZslur0q3Mdjy6PeE8VWUqdCmIqxGQdu8y8D9IDkPYQKb0BSBJOr5BnJbSqN764iiSXoIJUz" });
     return presets;
 }
 

@@ -11,7 +11,6 @@ file(GLOB SIM_SOURCES CONFIGURE_DEPENDS
 	"Mandelbrot/*.h"
 )
 
-
 bitloop_new_project(Mandelbrot  ${SIM_SOURCES})
 bitloop_add_dependency(Mandelbrot  "../Cardioid")
 

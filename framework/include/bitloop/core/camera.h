@@ -429,9 +429,14 @@ struct CameraViewController
 
     void populateUI(DRect cam_area = DRect::infinite());
 
-    int getCoordinateDecimals()
+    int getPositionDecimalPlaces()
     {
         return 1 + Math::countWholeDigits(zoom * 5);
+    }
+
+    double getPositionPrecision()
+    {
+        return Math::precisionFromDecimalPlaces<double>(getPositionDecimalPlaces());
     }
 
     void read(const Camera* camera)
@@ -489,7 +494,7 @@ struct CameraViewController
         CameraViewController ret;
         ret.x = Math::lerp(a.x, b.x, f);
         ret.y = Math::lerp(a.y, b.y, f);
-        ret.angle = Math::lerp(a.angle, b.angle, f);
+        ret.angle = Math::lerpAngle(a.angle, b.angle, f);
         ret.zoom = Math::lerp(a.zoom, b.zoom, f);
         ret.zoom_xy = Math::lerp(a.zoom_xy, b.zoom_xy, f);
         ret.angle_degrees = Math::toDegrees(ret.angle);

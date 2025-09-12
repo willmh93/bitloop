@@ -220,8 +220,8 @@ struct Mandelbrot_Scene : public Scene<Mandelbrot_Scene_Data>
     ///std::chrono::steady_clock::time_point compute_t0;
     ///Math::MovingAverage::MA<double> timer_ma = Math::MovingAverage::MA<double>(10);
 
-    Math::MovingAverage::MA<DVec2> avg_vel_pos = Math::MovingAverage::MA<DVec2>(20);
-    Math::MovingAverage::MA<double> avg_vel_zoom = Math::MovingAverage::MA<double>(20);
+    Math::MovingAverage::MA<DVec2> avg_vel_pos = Math::MovingAverage::MA<DVec2>(8);
+    Math::MovingAverage::MA<double> avg_vel_zoom = Math::MovingAverage::MA<double>(8);
 
     DVec2 camera_vel_pos{0, 0};
     double camera_vel_zoom{1};

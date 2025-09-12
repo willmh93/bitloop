@@ -1,6 +1,6 @@
 #include "Test1.h"
 
-SIM_DECLARE(Test1)
+SIM_BEG;
 
 using namespace BL;
 
@@ -160,8 +160,6 @@ void Test1_Scene::viewportProcess(Viewport*, double)
         camera->setRotation(camera_rotation);
     }
 
-
-
     ///obj.align_x = 0.5;
     ///obj.align_y = 0.5;
 
@@ -179,6 +177,10 @@ void Test1_Scene::viewportDraw(Viewport* ctx) const
     //ctx->beginPath();
     //ctx->circle(0, 0, 5);
     //ctx->fill();
+
+    //static auto font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
+    //ctx->setFont(font);
+    //ctx->setFontSize(16);
 
     // Draw scene
     //ctx->scaleGraphics(scale_graphics);
@@ -331,4 +333,4 @@ void Test1_Scene::onEvent(Event e)
 //void Test_Scene::onKeyUp(KeyEvent e) {}
 
 
-SIM_END(Test1)
+SIM_END;

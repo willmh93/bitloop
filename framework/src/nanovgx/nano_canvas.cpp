@@ -9,8 +9,6 @@
 
 BL_BEGIN_NS
 
-std::shared_ptr<NanoFont> SimplePainter::default_font;
-
 constexpr double nice_steps[] = { 1.0, 2.0, 5.0, 10.0 };
 constexpr int    nice_steps_count = 4;
 
@@ -187,16 +185,18 @@ void Painter::drawWorldAxis(
 void Canvas::create(double _global_scale)
 {
     #ifdef __EMSCRIPTEN__
-    vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    context.vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     #else
-    vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    context.vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     #endif
-
+    setPainterContext(&context);
+    
     setGlobalScale(_global_scale);
 
+
     //SimplePainter::default_font = NanoFont::create("/data/fonts/Roboto-Regular.ttf");
-    SimplePainter::default_font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
-    SimplePainter::default_font->setSize(16.0f);
+    context.default_font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
+    context.default_font->setSize(16.0f);
 }
 
 bool Canvas::resize(int w, int h)
@@ -243,16 +243,16 @@ void Canvas::begin(float r, float g, float b, float a)
     glClearColor(r, g, b, a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    nvgBeginFrame(vg, 
+    nvgBeginFrame(context.vg, 
         static_cast<float>(fbo_width), 
         static_cast<float>(fbo_height),
-        static_cast<float>(global_scale) // Improve render quality on high DPR devices
+        static_cast<float>(context.global_scale) // Improve render quality on high DPR devices
     );
 }
 
 void Canvas::end()
 {
-    nvgEndFrame(vg);
+    nvgEndFrame(context.vg);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

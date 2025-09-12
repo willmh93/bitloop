@@ -234,7 +234,7 @@ void Mandelbrot_Scene_Data::populateUI()
             double quality_pct = quality * 100.0;
             static double initial_quality = quality_pct;
             ImGui::PushID("QualitySlider");
-            ImGui::RevertableSliderDouble("Quality", &quality_pct, &initial_quality, 1.0, 100.0, "%.0f%%");
+            ImGui::RevertableDragDouble("Quality", &quality_pct, &initial_quality, 1, 1.0, 500.0, "%.0f%%");
             ImGui::PopID();
             quality = quality_pct / 100.0;
 
@@ -700,11 +700,13 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     }
     else
     {
-        if (camera_vel_pos.magnitude() > 0.001)    camera->setPos(camera->pos() + camera_vel_pos);
+        //double threshold = cam_view.getPositionPrecision() / 10.0;
+        double threshold = 0.001 / cam_view.zoom;
+        if (camera_vel_pos.magnitude() > threshold)    camera->setPos(camera->pos() + camera_vel_pos);
         if (std::abs(camera_vel_zoom-1.0) > 0.001) camera->setZoom(camera->zoom() * camera_vel_zoom);
 
-        camera_vel_pos *= 0.9;
-        camera_vel_zoom += (1 - camera_vel_zoom) * 0.1;
+        camera_vel_pos *= 0.8;
+        camera_vel_zoom += (1 - camera_vel_zoom) * 0.2;
     }
 
     cam_view.read(camera);
@@ -742,7 +744,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     else
         new_smoothing = (int)MandelSmoothing::MIX;
 
-    bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing == (int)MandelSmoothing::DIST);
+    bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing >= (int)MandelSmoothing::DIST);
     bool downgrade_smoothing_type = (old_smoothing == (int)MandelSmoothing::MIX)  && (new_smoothing == (int)MandelSmoothing::ITER);
 
     // If we need DIST calcuation but we're missing it, force recalculate (regardless of whether mandel view changed)
@@ -927,6 +929,24 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             {
                 /// "cycle_iter_value" represents actual iter_lim
                 log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, cycle_iter_log1p_weight);
+            }
+
+            if (isnan(log_color_cycle_iters))
+            {
+                DebugBreak();
+                if (cycle_iter_dynamic_limit)
+                {
+                    double assumed_iter_lim = mandelbrotIterLimit(cam_view.zoom) * 0.5;
+
+                    /// "cycle_iter_value" represents ratio of iter_lim
+                    double color_cycle_iters = (cycle_iter_value * (assumed_iter_lim - (cycle_iter_normalize_depth ? active_field->min_depth : 0)));
+                    log_color_cycle_iters = Math::linear_log1p_lerp(color_cycle_iters, cycle_iter_log1p_weight);
+                }
+                else
+                {
+                    /// "cycle_iter_value" represents actual iter_lim
+                    log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, cycle_iter_log1p_weight);
+                }
             }
         }
 

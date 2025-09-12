@@ -717,7 +717,7 @@ void CameraViewController::populateUI(DRect cam_area)
     ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", ScaleSize(20.0f));
 
     //int decimals = 1 + Math::countWholeDigits(zoom*5);
-    int decimals = getCoordinateDecimals();
+    int decimals = getPositionDecimalPlaces();
     char format[16];
     snprintf(format, sizeof(format), "%%.%df", decimals);
 

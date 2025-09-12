@@ -40,6 +40,17 @@
       }
     },
     {
+      "name": "ninja-release-debug-info",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ninja-release-debug-info",
+      "cacheVariables": {
+        "BUILD_FLAVOR": "ninja-release-debug-info",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
+      }
+    },
+    {
       "name": "ninja-release-win-static",
       "condition": {
         "type": "equals",
@@ -93,7 +104,7 @@
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-debug",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "CMAKE_TOOLCHAIN_FILE":   "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
         "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
@@ -108,7 +119,7 @@
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-release",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "CMAKE_TOOLCHAIN_FILE":   "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
@@ -124,7 +135,7 @@
         "BUILD_FLAVOR": "wasm32-release-debug-info",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_TOOLCHAIN_FILE":   "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
