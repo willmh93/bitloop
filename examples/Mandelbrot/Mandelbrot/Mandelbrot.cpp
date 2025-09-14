@@ -3,6 +3,7 @@
 #include "Mandelbrot.h"
 #include "examples.h"
 #include "tween.h"
+#include "conversions.h"
 
 #ifdef __EMSCRIPTEN__
 #include <bitloop/platform/emscripten_browser_clipboard.h>
@@ -22,6 +23,10 @@ void Mandelbrot_Project::projectPrepare(Layout& layout)
 
 /// ─────────────────────── Scene ───────────────────────
 
+// ────── Helper functions ──────
+
+
+
 // ────── UI ──────
 
 void Mandelbrot_Scene::UI::populate()
@@ -37,19 +42,30 @@ void Mandelbrot_Scene::UI::populate()
 
     bl_pull(show_axis);
     bl_pull(cam_view);
-    bl_pull(iter_dist_mix);
     bl_pull(dynamic_iter_lim);
     bl_pull(quality);
     bl_pull(use_smoothing);
     bl_pull(iter_lim);
 
+    bl_pull(iter_dist_mix);
+
+    //bl_pull(cycle_iter_weight);
+    //bl_pull(cycle_dist_weight);
+    //bl_pull(cycle_stripe_weight);
+
+    bl_pull(iter_ratio);
+    bl_pull(dist_ratio);
+    bl_pull(stripe_ratio);
+
     bl_pull(cycle_iter_dynamic_limit);
     bl_pull(cycle_iter_normalize_depth);
     bl_pull(cycle_iter_log1p_weight);
-    bl_pull(cycle_dist_invert);
     bl_pull(cycle_iter_value);
+
+    bl_pull(cycle_dist_invert);
     bl_pull(cycle_dist_value);
     bl_pull(cycle_dist_sharpness);
+
 
     bl_pull(gradient);
     bl_pull(hue_shift);
@@ -122,7 +138,7 @@ void Mandelbrot_Scene::UI::populate()
         if (ImGui::Button("Share"))
         {
             show_share_dialog = true;
-            url = scene.getURL();
+            url = dataToURL(config_buf);
             ImGui::OpenPopup("Share URL");
 
         }
@@ -186,7 +202,7 @@ void Mandelbrot_Scene::UI::populate()
 
             if (ImGui::Button("Load"))
             {
-                scene._schedule([](Mandelbrot_Scene& scene)
+                bl_schedule([](Mandelbrot_Scene& scene)
                 {
                     scene.loadConfigBuffer();
                 });
@@ -273,7 +289,7 @@ void Mandelbrot_Scene::UI::populate()
             }
             else
             {
-                quality = scene.qualityFromIterLimit(iter_lim, cam_view.zoom);
+                quality = qualityFromIterLimit(iter_lim, cam_view.zoom);
             }
         }
 
@@ -286,7 +302,7 @@ void Mandelbrot_Scene::UI::populate()
             ImGui::PopID();
             quality = quality_pct / 100.0;
 
-            ImGui::Text("max_iter = %d", scene.finalIterLimit());
+            ImGui::Text("max_iter = %d", finalIterLimit(cam_view, quality, dynamic_iter_lim, tweening));
         }
         else
             ImGui::DragDouble("Max Iterations", &quality, 1000.0, 1.0, 1000000.0, "%.0f", ImGuiSliderFlags_Logarithmic);
@@ -315,27 +331,46 @@ void Mandelbrot_Scene::UI::populate()
     /// --------------------------------------------------------------
     if (ImGui::Section("Colour Cycle", true, 5.0f, 2.0f))
     {
-        ImGui::SetNextItemWidthForLabel("Iter/Dist Mix");
-        ImGui::SliderDouble("Iter/Dist Mix", &iter_dist_mix, 0.0, 1.0, "%.2f");
+        //ImGui::SetNextItemWidthForLabel("Iter/Dist Mix");
+        //ImGui::SliderDouble("Iter/Dist Mix", &iter_dist_mix, 0.0, 1.0, "%.2f");
 
-        int iter_pct = (int)((1.0 - iter_dist_mix) * 100.0);
-        int dist_pct = (int)(iter_dist_mix * 100.0);
-        bool disable_iter_options = (iter_pct == 0);
-        bool disable_dist_options = (dist_pct == 0);
+        ///int iter_pct = (int)((1.0 - iter_dist_mix) * 100.0);
+        ///int dist_pct = (int)(iter_dist_mix * 100.0);
+        ///bool disable_iter_options = (iter_pct == 0);
+        ///bool disable_dist_options = (dist_pct == 0);
+        
+        //double iter_ratio, dist_ratio, stripe_ratio;
+        //shadingRatios(
+        //    cycle_iter_weight, cycle_dist_weight, cycle_stripe_weight,
+        //    iter_ratio, dist_ratio, stripe_ratio
+        //);
 
-        char iter_header[32];
-        char dist_header[32];
+        int iter_pct   = (int)(iter_ratio * 100.0);
+        int dist_pct   = (int)(dist_ratio * 100.0);
+        int stripe_pct = (int)(stripe_ratio * 100.0);
+
+        char iter_header[64];
+        char dist_header[64];
+        char stripe_header[64];
         sprintf(iter_header, "Iteration  -  %d%% Weight", iter_pct);
         sprintf(dist_header, "Distance  -  %d%% Weight", dist_pct);
+        sprintf(stripe_header, "Stripe  -  %d%% Weight", stripe_pct);
 
         //ImGui::Dummy(ScaleSize(0, 6));
         //ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, Platform()->line_height());
         //ImGui::SeparatorText(iter_header);
         //ImGui::PopStyleVar();
 
-        if (disable_iter_options) ImGui::BeginDisabled();
+        //if (disable_iter_options) ImGui::BeginDisabled();
         {
             ImGui::GroupBox box("iter_group", iter_header, ScaleSize(13.0f), ScaleSize(20.0f));
+            if (ImGui::SliderDouble("Iter Ratio", &iter_ratio, 0.0, 1.0, "%.2f"))
+            {
+                dist_ratio = dist_ratio / (iter_ratio + dist_ratio + stripe_ratio);
+                stripe_ratio = stripe_ratio / (iter_ratio + dist_ratio + stripe_ratio);
+            }
+
+            ImGui::Separator();
 
             if (ImGui::Checkbox("% of Max Iters", &cycle_iter_dynamic_limit))
             {
@@ -370,7 +405,7 @@ void Mandelbrot_Scene::UI::populate()
 
                 cycle_iter_value = cycle_pct / 100.0;
 
-                raw_cycle_iters = scene.finalIterLimit() * cycle_iter_value;
+                raw_cycle_iters = finalIterLimit(cam_view, quality, dynamic_iter_lim, tweening) * cycle_iter_value;
 
             }
             else
@@ -400,11 +435,17 @@ void Mandelbrot_Scene::UI::populate()
             ///    ImGui::Text("log_cycle_iters = %.1f", log_cycle_iters);
             ///}
         }
-        if (disable_iter_options) ImGui::EndDisabled();
+        //if (disable_iter_options) ImGui::EndDisabled();
 
-        if (disable_dist_options) ImGui::BeginDisabled();
+        //if (disable_dist_options) ImGui::BeginDisabled();
         {
             ImGui::GroupBox box("dist_group", dist_header);
+            if (ImGui::SliderDouble("Dist Weight", &dist_ratio, 0.0, 1.0, "%.2f"))
+            {
+                iter_ratio = iter_ratio / (iter_ratio + dist_ratio + stripe_ratio);
+                stripe_ratio = stripe_ratio / (iter_ratio + dist_ratio + stripe_ratio);
+            }
+            ImGui::Separator();
 
             float required_width = 0.0f;
             box.IncreaseRequiredSpaceForLabel(required_width, "Dist");
@@ -420,7 +461,17 @@ void Mandelbrot_Scene::UI::populate()
             box.SetNextItemWidthForSpace(required_width);
             ImGui::SliderDouble_InvLog("Sharpness", &cycle_dist_sharpness, 0.0, 100.0, "%.4f%%", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_AlwaysClamp);
         }
-        if (disable_dist_options) ImGui::EndDisabled();
+        //if (disable_dist_options) ImGui::EndDisabled();
+
+        {
+            ImGui::GroupBox box("stripe_group", stripe_header);
+            if (ImGui::SliderDouble("Stripe Weight", &stripe_ratio, 0.0, 1.0, "%.2f"))
+            {
+                iter_ratio = iter_ratio / (iter_ratio + dist_ratio + stripe_ratio);
+                dist_ratio = dist_ratio / (iter_ratio + dist_ratio + stripe_ratio);
+            }
+            ImGui::Separator();
+        }
     }
 
     if (ImGui::Section("Color Offset + Animation", true, 5.0f, 2.0f))
@@ -565,20 +616,26 @@ void Mandelbrot_Scene::UI::populate()
 
     bl_push(show_axis);
     bl_push(cam_view);
-    bl_push(iter_dist_mix);
     bl_push(dynamic_iter_lim);
     bl_push(quality);
     bl_push(use_smoothing);
     bl_push(iter_lim);
 
+    bl_push(iter_dist_mix);
+
+    bl_push(iter_ratio);
+    bl_push(dist_ratio);
+    bl_push(stripe_ratio);
 
     bl_push(cycle_iter_dynamic_limit);
     bl_push(cycle_iter_normalize_depth);
     bl_push(cycle_iter_log1p_weight);
-    bl_push(cycle_dist_invert);
     bl_push(cycle_iter_value);
+
+    bl_push(cycle_dist_invert);
     bl_push(cycle_dist_value);
     bl_push(cycle_dist_sharpness);
+
 
     bl_push(hue_shift);
     bl_push(gradient_shift);
@@ -609,15 +666,6 @@ void Mandelbrot_Scene::loadConfigBuffer()
     deserialize(config_buf);
 }
 
-std::string Mandelbrot_Scene::getURL() const
-{
-    #ifdef __EMSCRIPTEN__
-    return Platform()->url_get_base() + "?data=" + serialize();
-    #else
-    return "https://bitloop.dev/Mandelbrot?data=" + serialize();
-    #endif
-}
-
 void Mandelbrot_Scene::onSavefileChanged()
 {
     config_buf = serialize();
@@ -642,8 +690,6 @@ void Mandelbrot_Scene::updateShiftedGradient()
     gradient_shifted.refreshCache();
 }
 
-
-
 void Mandelbrot_Scene::shadeBitmap()
 {
     active_bmp->forEachPixel([&, this](int x, int y)
@@ -663,13 +709,29 @@ void Mandelbrot_Scene::shadeBitmap()
 
         uint32_t u32;
 
-        double iter_r = field_pixel.final_depth / log_color_cycle_iters;
-        double dist_r = field_pixel.final_dist / cycle_dist_value;
+        double iter_v = field_pixel.final_depth / log_color_cycle_iters;
+        double dist_v = field_pixel.final_dist / cycle_dist_value;
+        double stripe_v = field_pixel.stripe;
+        
+        double iter_w = iter_ratio;
+        double dist_w = dist_ratio;
+        double stripe_w = stripe_ratio;
+        
+        double combined_t = Math::wrap(
+            iter_v * iter_w +
+            dist_v * dist_w +
+            stripe_v * stripe_w,
+            0.0, 1.0
+        );
 
-        double iter_w = 1.0 - iter_dist_mix;
-        double dist_w = iter_dist_mix;
+        ///double iter_r = field_pixel.final_depth / log_color_cycle_iters;
+        ///double dist_r = field_pixel.final_dist / cycle_dist_value;
+        ///
+        ///double iter_w = iter_ratio;// 1.0 - iter_dist_mix;
+        ///double dist_w = dist_ratio;// iter_dist_mix;
+        ///
+        ///double combined_t = Math::wrap(iter_r * iter_w + dist_r * dist_w, 0.0, 1.0);
 
-        double combined_t = Math::wrap(iter_r * iter_w + dist_r * dist_w, 0.0, 1.0);
 
         // alternative
         //double combined_t = Math::wrap(iter_r*dist_r, 0.0, 1.0);
@@ -744,35 +806,6 @@ void Mandelbrot_Scene::refreshFieldDepthNormalized()
     }, numThreads());
 }
 
-// ==== Quality calculations ====
-
-inline int Mandelbrot_Scene::mandelbrotIterLimit(double zoom) const
-{
-    const double l = std::log10(zoom * 400.0);
-    int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - 1841.0);
-    return (100 + (std::max(0, iters))) * 3;
-}
-
-inline double Mandelbrot_Scene::qualityFromIterLimit(int iter_lim, double zoom_x) const
-{
-    const int base = mandelbrotIterLimit(zoom_x);   // always >= 100
-    if (base == 0) return 0.0;                      // defensive, though impossible here
-    return static_cast<double>(iter_lim) / base;    // <= true quality by < 1/base
-}
-
-int Mandelbrot_Scene::finalIterLimit() const
-{
-    if (dynamic_iter_lim)
-        return (int)(mandelbrotIterLimit(cam_view.zoom) * quality);
-    else
-    {
-        int iters = (int)(quality);
-        if (tweening)
-            iters = std::min(iters, (int)(mandelbrotIterLimit(cam_view.zoom) * 0.25f));
-        return iters;
-    }
-}
-
 // ==== Scene overrides ====
 
 void Mandelbrot_Scene::sceneStart()
@@ -842,7 +875,9 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     // ======== Color cycle changed? ========
     if (Changed(
-        iter_dist_mix,
+        iter_ratio,
+        dist_ratio,
+        stripe_ratio,
         cycle_iter_value, 
         cycle_iter_dynamic_limit, 
         cycle_iter_log1p_weight, 
@@ -884,7 +919,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     }
 
     // ======== Calculate Depth Limit ========
-    iter_lim = finalIterLimit();
+    iter_lim = finalIterLimit(cam_view, quality, dynamic_iter_lim, tweening);
 
     // ======== Flattening ========
     {
@@ -956,26 +991,28 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         savefile_changed = true;
 
     // ======== Determine "minimum" smoothing mode (ITER always needed, DIST might not be) ========
-    int old_smoothing = smoothing_type;
-    int new_smoothing;
+    /// int old_smoothing = smoothing_type;
+    /// int new_smoothing;
+    /// 
+    /// if (iter_dist_mix <= std::numeric_limits<double>::epsilon())
+    ///     new_smoothing = (int)MandelSmoothing::ITER;
+    /// else if (iter_dist_mix >= 1.0 - std::numeric_limits<double>::epsilon())
+    ///     new_smoothing = (int)MandelSmoothing::DIST;
+    /// else
+    ///     new_smoothing = (int)MandelSmoothing::MIX;
+    /// 
+    /// bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing >= (int)MandelSmoothing::DIST);
+    /// bool downgrade_smoothing_type = (old_smoothing == (int)MandelSmoothing::MIX)  && (new_smoothing == (int)MandelSmoothing::ITER);
+    /// 
+    /// // If we need DIST calcuation but we're missing it, force recalculate (regardless of whether mandel view changed)
+    /// // If mandel needs recalculating and we no longer need DIST calculation, downgrade. Otherwise no harm in keeping DIST info
+    /// if (upgrade_smoothing_type || (mandel_changed && downgrade_smoothing_type))
+    /// {
+    ///     mandel_changed = true;
+    ///     smoothing_type = new_smoothing;
+    /// }
 
-    if (iter_dist_mix <= std::numeric_limits<double>::epsilon())
-        new_smoothing = (int)MandelSmoothing::ITER;
-    else if (iter_dist_mix >= 1.0 - std::numeric_limits<double>::epsilon())
-        new_smoothing = (int)MandelSmoothing::DIST;
-    else
-        new_smoothing = (int)MandelSmoothing::MIX;
-
-    bool upgrade_smoothing_type   = (old_smoothing == (int)MandelSmoothing::ITER) && (new_smoothing >= (int)MandelSmoothing::DIST);
-    bool downgrade_smoothing_type = (old_smoothing == (int)MandelSmoothing::MIX)  && (new_smoothing == (int)MandelSmoothing::ITER);
-
-    // If we need DIST calcuation but we're missing it, force recalculate (regardless of whether mandel view changed)
-    // If mandel needs recalculating and we no longer need DIST calculation, downgrade. Otherwise no harm in keeping DIST info
-    if (upgrade_smoothing_type || (mandel_changed && downgrade_smoothing_type))
-    {
-        mandel_changed = true;
-        smoothing_type = new_smoothing;
-    }
+    smoothing_type = (int)MandelSmoothing::MIX;
 
     // Presented Mandelbrot *actually* changed? Restart on 9x9 bmp (phase 0)
     if (mandel_changed)
@@ -1080,9 +1117,9 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             /*if (b32)      finished_compute = table_invoke<float>(build_table(mandelbrot, [&]), smoothing, flatten);
             else if (b64)*/
 
-            smoothing = MandelSmoothing::MIX;
+            
 
-            finished_compute = table_invoke<double>(
+            finished_compute = frame_complete = table_invoke<double>(
                 build_table(mandelbrot, [&], pending_bmp, pending_field, iter_lim, numThreads(), timeout, current_row),
                 smoothing, flatten, x_axis_visible
             );
@@ -1141,15 +1178,18 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     if (finished_compute || colors_updated)
     {
         if (Changed(
-            iter_dist_mix,
+            iter_ratio,
+            dist_ratio,
+            stripe_ratio,
             cycle_iter_log1p_weight,
             cycle_iter_normalize_depth,
             cycle_dist_invert,
+            cycle_dist_value,
             cycle_dist_sharpness
             ))
         {
             savefile_changed = true;
-            if (finished_compute)
+            if (frame_complete) // check the data is ready to be displayed (but first needs normalizing)
                 refreshFieldDepthNormalized();
         }
 

@@ -138,34 +138,30 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
     return false;
 }
 
-// simple params (can be constexpr if you like)
 struct StripeParams {
-    double freq = 8.0;   // stripes per 2π
-    double phase = 0.0;   // radians
-    double contrast = 3.0;   // shaping (tanh)
-    double weightAlpha = 0.0;   // 0 = unweighted, else 1/|z|^alpha
+    double freq = 8.0;  // stripes per 2π
+    double phase = 0.0;  // radians
+    double contrast = 3.0;  // tanh shaping
+    int    skip = 1;    // skip first (skip) iterates (z1..z_skip)
 };
 
-template<class T>
-FAST_INLINE T clamp01(T v) { return v < T(0) ? T(0) : (v > T(1) ? T(1) : v); }
-
-//dist = mandelbrot_dist((double)x0, (double)y0, iter_lim);
+template<class T> FAST_INLINE T clamp01(T v) { return v < T(0) ? T(0) : (v > T(1) ? T(1) : v); }
 
 template<class T, MandelSmoothing S>
 FAST_INLINE void mandel_kernel(
     const T& x0,
     const T& y0,
     int iter_lim,
-    double& depth, double& dist, double& stripes,
-    StripeParams sp = {})
+    double& depth,
+    double& dist,
+    double& stripes ,
+    StripeParams sp = {}
+)
 {
-    if (interiorCheck(x0, y0))
-    {
+    if (interiorCheck(x0, y0)) {
         depth = INSIDE_MANDELBROT_SET_SKIPPED;
-        if constexpr (((int)S & (int)MandelSmoothing::DIST) != 0)
-            dist = INSIDE_MANDELBROT_SET;
-        if constexpr (((int)S & (int)MandelSmoothing::STRIPES) != 0)
-            stripes = 0.0;
+        if constexpr (((int)S & (int)MandelSmoothing::DIST) != 0) dist = INSIDE_MANDELBROT_SET;
+        if constexpr (((int)S & (int)MandelSmoothing::STRIPES) != 0) stripes = 0.0;
         return;
     }
 
@@ -175,107 +171,85 @@ FAST_INLINE void mandel_kernel(
     constexpr bool NEED_STRIPES = (bool)((int)S & (int)MandelSmoothing::STRIPES);
 
     constexpr T escape_r2 = T(escape_radius<S>());
-    constexpr T zero = T(0), one = T(1), two = T(2);
+    constexpr T zero = T(0), one = T(1);
 
     cplx<T> z{ zero, zero };
     cplx<T> c{ x0, y0 };
     cplx<T> dz{ one, zero };
     int iter = 0;
-    T r2;
+    T r2 = detail::mag2(z);
 
-    // stripe accumulators (only used when enabled)
+    // stripe accumulators
     double sum = 0.0;
-    double wsum = 0.0;
+    int    cnt = 0;
+    double last_added = 0.0;
 
     while (true)
     {
-        r2 = detail::mag2(z);
-        if (r2 > escape_r2 || iter >= iter_lim) break;
+        if constexpr (NEED_DIST) detail::step_d(z, dz);
 
-        if constexpr (NEED_STRIPES)
-        {
-            // sample stripe based on orbit angle
-            double a = std::atan2((double)z.y, (double)z.x);                // [-π, π]
-            double s = 0.5 + 0.5 * std::sin(sp.freq * a + sp.phase);        // [0,1]
-
-            // optional weighting by radius
-            double r = std::hypot((double)z.x, (double)z.y);
-            double w = (sp.weightAlpha > 0.0)
-                ? std::pow(std::max(r, 1e-12), -sp.weightAlpha)
-                : 1.0;
-
-            sum += w * s;
-            wsum += w;
-        }
-
-        if constexpr (NEED_DIST)
-            detail::step_d(z, dz);
-
+        // step
         detail::step(z, c);
         ++iter;
+
+        // update radius^2
+        r2 = detail::mag2(z);
+
+        if constexpr (NEED_STRIPES) {
+            if (iter > sp.skip) {
+                double a = std::atan2((double)z.y, (double)z.x);
+                last_added = 0.5 + 0.5 * std::sin(sp.freq * a + sp.phase);
+                sum += last_added;
+                ++cnt;
+            }
+        }
+
+        if (r2 > escape_r2 || iter >= iter_lim) break;
     }
 
     const bool escaped = (r2 > escape_r2) && (iter < iter_lim);
 
-    // --- distance estimate ---
-    if constexpr (NEED_DIST)
-    {
-        if (escaped)
-        {
+    if constexpr (NEED_DIST) {
+        if (escaped) {
             const T r = sqrt(r2);
             const T dz_abs = sqrt(detail::mag2(dz));
             dist = (dz_abs == zero) ? 0.0 : (double)(r * log(r) / dz_abs);
         }
-        else
-        {
+        else {
             dist = INSIDE_MANDELBROT_SET;
         }
     }
 
-    if (!escaped)
-    {
+    if (!escaped) {
         depth = INSIDE_MANDELBROT_SET;
         if constexpr (NEED_STRIPES) stripes = 0.0;
         return;
     }
 
-    // --- smooth escape fraction t = ν - iter (0..1) ---
-    // ν = iter + 1 - log2(log|z|)
-    const double log_abs_z = 0.5 * std::log((double)r2);
-    const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
-    const double t = std::clamp(nu - (double)iter, 0.0, 1.0);
-
-    // --- depth (iteration coloring) ---
-    if constexpr (NEED_SMOOTH_ITER)
-    {
-        // your offset uses escape_radius<S>()
+    // smooth iteration depth (your existing scheme)
+    if constexpr (NEED_SMOOTH_ITER) {
+        const double log_abs_z = 0.5 * std::log((double)r2);
+        const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
         depth = nu - mandelbrot_smoothing_offset<S>();
     }
-    else
-    {
+    else {
         depth = (double)iter;
     }
 
-    // --- stripes (stripe-average with fractional last sample) ---
-    if constexpr (NEED_STRIPES)
-    {
-        // add a fractional contribution of the post-escape state
-        double a_next = std::atan2((double)z.y, (double)z.x);
-        double s_next = 0.5 + 0.5 * std::sin(sp.freq * a_next + sp.phase);
-        double r_next = std::sqrt((double)r2);
-        double w_next = (sp.weightAlpha > 0.0)
-            ? std::pow(std::max(r_next, 1e-12), -sp.weightAlpha)
-            : 1.0;
+    if constexpr (NEED_STRIPES) {
+        double avg = (cnt > 0) ? (sum / (double)cnt) : 0.0;
+        double prev = (cnt > 1) ? ((sum - last_added) / (double)(cnt - 1)) : avg;
 
-        sum += t * w_next * s_next;
-        wsum += t * w_next;
+        // stripeAC interpolation weight (fraction inside the last band)
+        // frac = 1 + log2( log(ER^2) / log(|z|^2) ), clamped to [0,1]
+        double frac = 1.0 + std::log2(
+            std::log((double)escape_r2) / std::max(std::log((double)r2), 1e-300)
+        );
+        if (frac < 0.0) frac = 0.0; else if (frac > 1.0) frac = 1.0;
 
-        double avg = (wsum > 0.0) ? (sum / wsum) : 0.0;
-
-        // soft contrast curve (keeps it continuous)
-        avg = 0.5 + 0.5 * std::tanh(sp.contrast * (avg - 0.5));
-
-        stripes = clamp01(avg); // 0..1
+        double mix = frac * avg + (1.0 - frac) * prev; // linear interpolation
+        mix = 0.5 + 0.5 * std::tanh(sp.contrast * (mix - 0.5)); // optional shaping
+        stripes = clamp01(mix);
     }
 }
 
@@ -376,11 +350,12 @@ bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads,
         double depth = field_pixel.depth;
         if (depth >= 0) return;
 
-        double dist, stripes;
-        mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripes);
+        double dist, stripe;
+        mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripe);
 
         field_pixel.depth = depth;
         field_pixel.dist = dist;
+        field_pixel.stripe = stripe;
 
     }, threads, timeout);
 

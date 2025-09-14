@@ -1,34 +1,7 @@
 #include "Mandelbrot.h"
+#include "conversions.h"
 
 SIM_BEG;
-
-double toNormalizedZoom(double zoom)
-{
-    return log(zoom) + 1.0;
-}
-double fromNormalizedZoom(double normalized_zoom)
-{
-    return exp(normalized_zoom - 1.0);
-}
-
-/*
-void setNormalizedZoom(double normalized_zoom)
-{
-    cam_view.zoom = fromNormalizedZoom(normalized_zoom);
-}
-double getNormalizedZoom() {
-    return toNormalizedZoom(cam_view.zoom);
-}
-*/
-
-double toHeight(double zoom)
-{
-    return 1.0 / toNormalizedZoom(zoom);
-}
-double fromHeight(double height)
-{
-    return fromNormalizedZoom(1.0 / height);
-}
 
 double tweenDistance(
     MandelState& a,
@@ -91,7 +64,7 @@ void lerpState(
 
     // === Calculate true 'b' iter_lim for tweening  (using destination zoom, not current zoom) ===
     double dst_iter_lim = b.dynamic_iter_lim ?
-        (scene.mandelbrotIterLimit(b.cam_view.zoom) * b.quality) :
+        (mandelbrotIterLimit(b.cam_view.zoom) * b.quality) :
         b.quality;
 
     // === Lerp Camera View and normalized zoom from "height" ===

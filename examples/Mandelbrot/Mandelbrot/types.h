@@ -30,6 +30,7 @@ struct EscapeFieldPixel
 {
     double depth;
     double dist;
+    double stripe;
 
     double final_depth;
     double final_dist;

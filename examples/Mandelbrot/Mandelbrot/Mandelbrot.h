@@ -75,9 +75,9 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     ImSpline::Spline tween_color_cycle      = MandelSplines::tween_color_cycle;
 
     // ────── Quality calculations ──────
-    inline int    mandelbrotIterLimit(double zoom) const;
-    inline double qualityFromIterLimit(int iter_lim, double zoom_x) const;
-    inline int    finalIterLimit() const;
+    //inline int    mandelbrotIterLimit(double zoom) const;
+    //inline double qualityFromIterLimit(int iter_lim, double zoom_x) const;
+    //inline int    finalIterLimit() const;
 
     // ────── Saving / loading / URL ──────
     std::string config_buf = "";
@@ -115,7 +115,8 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     // 1 = 3x smaller
     // 2 = full resolution
     int  computing_phase = 0;
-    bool finished_compute = false;
+    bool finished_compute = false; // Whether a frame finished computing THIS frame
+    bool frame_complete = false;   // Similar to finished_compute, but not cleared each frame
     bool first_frame = true;
 
     // ────── Timers ──────

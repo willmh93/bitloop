@@ -14,38 +14,45 @@ struct MandelState
 
     /// ─────────────────────── Tweenable Info ───────────────────────
 
-    bool     dynamic_iter_lim             = true;
-    double   quality                      = 0.5; // Used for UI (ignored during tween, represents iter_lim OR % of iter_lim)
+    bool        dynamic_iter_lim               = true;
+    double      quality                        = 0.5; // Used for UI (ignored during tween, represents iter_lim OR % of iter_lim)
+                                               
+    bool        use_smoothing                  = true;
+    double      iter_dist_mix                  = 0.0;
 
-    bool     use_smoothing                = true;
-    double   iter_dist_mix                = 0.0;
+    double iter_ratio = 1.0, dist_ratio = 0.0, stripe_ratio = 0.0;
+                                               
+    double      cycle_iter_weight              = 0.0;
+    bool        cycle_iter_dynamic_limit       = true;
+    bool        cycle_iter_normalize_depth     = true;
+    double      cycle_iter_log1p_weight        = 0.0;
+    double      cycle_iter_value               = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
+                                               
+    double      cycle_dist_weight              = 0.0;
+    bool        cycle_dist_invert              = false;
+    double      cycle_dist_value               = 0.5f;
+    double      cycle_dist_sharpness           = 0.9; // Used for UI (ignored during tween)
+                                               
+    double      cycle_stripe_weight            = 0.0;
+                
+    double      gradient_shift                 = 0.0;
+    double      hue_shift                      = 0.0;
+                                               
+    double      gradient_shift_step            = 0.0078;
+    double      hue_shift_step                 = 0.136;
+                
+    int         smoothing_type = (int)MandelSmoothing::ITER; // this is being dynamically set, no need to save
 
-
-    bool     cycle_iter_dynamic_limit     = true;
-    bool     cycle_iter_normalize_depth   = true;
-    double   cycle_iter_log1p_weight      = 0.0;
-    double   cycle_iter_value             = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
-                                          
-    bool     cycle_dist_invert            = false;
-    double   cycle_dist_value             = 0.5f;
-    double   cycle_dist_sharpness         = 0.9; // Used for UI (ignored during tween)
-                                          
-    double   gradient_shift                 = 0.0;
-    double   hue_shift                      = 0.0;
-                                            
-    double   gradient_shift_step            = 0.0078;
-    double   hue_shift_step                 = 0.136;
-
-    int      smoothing_type = (int)MandelSmoothing::ITER; // this is being dynamically set, no need to save
-
-    ImGradient gradient;
+    ImGradient  gradient;
 
     // animate
-    bool show_color_animation_options   = false;
+    bool        show_color_animation_options   = false;
 
-    // Flattening
-    bool flatten = false;
-    double flatten_amount = 0.0;
+    // Flatten
+    bool        flatten = false;
+    double      flatten_amount = 0.0;
+
+    ///////////////////////////////////////////////////////////////////////////
 
     bool operator==(const MandelState&) const = default;
 
