@@ -8,15 +8,16 @@ using namespace BL;
 /// ======== Project ========
 /// =========================
 
-void Test1_Project_Vars::populateUI()
-{
-    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
-}
+//void Test1_Project_Vars::populateUI()
+//{
+//    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
+//}
 
 void Test1_Project::projectPrepare(Layout& layout)
 {
     /// Create multiple instance of a single Scene, mount to separate viewports
-    layout << create<Test1_Scene>(viewport_count);
+    //layout << create<Test1_Scene>(viewport_count);
+    layout << create<Test1_Scene>(1);
 
     /// Or create a single Scene instance and view on multiple Viewports
     //auto* scene = create<Test_Scene>();
@@ -33,19 +34,32 @@ void Test1_Project::projectPrepare(Layout& layout)
    
 }*/
 
-void Test1_Scene_Attributes::populateUI()
+void Test1_Scene::UI::populate()
 {
+    bl_pull(transform_coordinates);
+    bl_pull(scale_lines);
+    bl_pull(scale_sizes);
+    bl_pull(rotate_text);
+
+    bl_pull(cam_view);
+
     ImGui::Checkbox("Transform coordinates", &transform_coordinates); // updated in realtime
     ImGui::Checkbox("Scale Lines & Text", &scale_lines); // updated in realtime
     ImGui::Checkbox("Scale Sizes", &scale_sizes); // updated in realtime
     ImGui::Checkbox("Rotate Text", &rotate_text); // updated in realtime
 
-    ImGui::SliderDouble("Camera Rotatation", &camera_rotation, 0.0, pi * 2.0); // updated in realtime
-    ImGui::SliderDouble("Camera X",  &camera_x, -500.0, 500.0); // updated in realtime
-    ImGui::SliderDouble("Camera Y",  &camera_y, -500.0, 500.0); // updated in realtime
-    ImGui::SliderDouble("Zoom X",    &zoom_x, -5.0, 5.0); // updated in realtime
-    ImGui::SliderDouble("Zoom Y",    &zoom_y, -5.0, 5.0); // updated in realtime
-    ImGui::SliderDouble("Zoom Mult", &zoom_mult, 0.01, 100.0); // updated in realtime
+    if (ImGui::Section("View", true))
+    {
+        // imgui camera controls
+        cam_view.populateUI();
+    }
+
+    bl_push(transform_coordinates);
+    bl_push(scale_lines);
+    bl_push(scale_sizes);
+    bl_push(rotate_text);
+
+    bl_push(cam_view);
 
     //static ImRect vr = { 0.0f, 0.8f, 0.8f, 0.0f };
     //ImSpline::SplineEditor("X/Y Spline", &sync(spline), &vr);
@@ -83,6 +97,7 @@ void Test1_Scene::sceneMounted(Viewport*)
     camera->setDirectCameraPanning(true);
 
     //camera->focusWorldRect(0, 0, 300, 300);
+    cam_view.read(camera);
 }
 
 void Test1_Scene::sceneDestroy()
@@ -116,6 +131,8 @@ unsigned long long find_large_prime(unsigned long long start, int count) {
 
 void Test1_Scene::sceneProcess()
 {
+    cam_view.apply(camera);
+
     // Process scene update
     ///for (int i = 0; i < 10; i++)
     ///{
@@ -135,6 +152,8 @@ void Test1_Scene::sceneProcess()
     //static double a = 0.0;
     //spline[0].y = (float(sin(a) * 0.5 + 0.5));
     //a += 0.01;
+
+    cam_view.read(camera);
 }
 
 void Test1_Scene::viewportProcess(Viewport*, double)
@@ -153,12 +172,12 @@ void Test1_Scene::viewportProcess(Viewport*, double)
     //    camera->rotate_text = rotate_text;
     //}
     //else
-    {
-        //camera->setPos(camera_x, camera_y);
-        camera->setZoomX(zoom_x * zoom_mult);
-        camera->setZoomY(zoom_y * zoom_mult);
-        camera->setRotation(camera_rotation);
-    }
+    ///{
+    ///    //camera->setPos(camera_x, camera_y);
+    ///    camera->setZoomX(zoom_x * zoom_mult);
+    ///    camera->setZoomY(zoom_y * zoom_mult);
+    ///    camera->setRotation(camera_rotation);
+    ///}
 
     ///obj.align_x = 0.5;
     ///obj.align_y = 0.5;
@@ -322,7 +341,11 @@ void Test1_Scene::viewportDraw(Viewport* ctx) const
 
 void Test1_Scene::onEvent(Event e)
 {
-    handleWorldNavigation(e, true);
+    if (handleWorldNavigation(e, true))
+    {
+        // Update camera view after handling navigation
+        cam_view.read(e.ctx_owner()->camera);
+    }
 }
 
 //void Test_Scene::onPointerDown(PointerEvent e) {}

@@ -274,6 +274,7 @@ public:
     Input input;
 
     struct Config {};
+    struct UI {};
 
     SceneBase() : gen(std::random_device{}()) {}
     virtual ~SceneBase() = default;
@@ -339,42 +340,42 @@ public:
     void logClear();
 };
 
-struct Message
-{
-    int type;
-    std::any data;
-    Message(int type, std::any data) : type(type), data(std::move(data)) {}
-};
-
-template<DerivedFromVarBuffer VarBufferType>
-class Scene : public SceneBase, public DoubleBuffer<VarBufferType>
+template<typename SceneType>
+class Scene : public SceneBase, public VarBuffer<SceneType>
 {
     friend class ProjectBase;
 
-    Thread::ConcurrentQueue<Message> msg_queue;
-
 public:
 
-    Scene() : SceneBase(), DoubleBuffer<VarBufferType>()
+    using Interface = Scene_UI<SceneType>;
+    Interface* ui = nullptr;
+
+    Scene() : SceneBase()
     {
         has_var_buffer = true;
+        ui = new SceneType::UI((const SceneType*)this);
+    }
+
+    ~Scene()
+    {
+        delete ui;
     }
 
 protected:
 
     virtual void _sceneAttributes() override 
     {
-        DoubleBuffer<VarBufferType>::shadow_attributes.populateUI();
+        ui->populate();
     }
 
 private:
 
-    void updateLiveBuffers() override final   { DoubleBuffer<VarBufferType>::updateLiveBuffer(); }
-    void updateShadowBuffers() override final { DoubleBuffer<VarBufferType>::updateShadowBuffer(); }
-    void markLiveValues() override final      { DoubleBuffer<VarBufferType>::markLiveValues();   }
-    void markShadowValues() override final    { DoubleBuffer<VarBufferType>::markShadowValues(); }
-    bool changedLive() override final         { return DoubleBuffer<VarBufferType>::changedLive(); }
-    bool changedShadow() override final       { return DoubleBuffer<VarBufferType>::changedShadow(); }
+    void updateLiveBuffers() override final   { VarBuffer<SceneType>::updateLive(); VarBuffer<SceneType>::run_scheduled_after_ui_to_live(); }
+    void updateShadowBuffers() override final { VarBuffer<SceneType>::updateShadow(); }
+    void markLiveValues() override final      { VarBuffer<SceneType>::markLiveValue(); }
+    void markShadowValues() override final    { VarBuffer<SceneType>::markShadowValue(); }
+    bool changedLive() override final         { return VarBuffer<SceneType>::liveChanged(); }
+    bool changedShadow() override final       { return VarBuffer<SceneType>::shadowChanged(); }
 };
 
 class Viewport : public Painter
@@ -633,6 +634,8 @@ protected:
             scene->markShadowValues();
     }
 
+    
+
     // ---- Project Management ----
     void _projectPrepare();
     void _projectStart();
@@ -857,21 +860,20 @@ public:
     void logClear();
 };
 
-template<VarBufferConcept VarBufferType>
-class Project : public ProjectBase, public DoubleBuffer<VarBufferType>
+class Project : public ProjectBase
 {
     friend class ProjectBase;
 
 public:
 
-    Project() : ProjectBase(), DoubleBuffer<VarBufferType>()
+    Project() : ProjectBase()
     {
         has_var_buffer = true;
     }
 
 protected:
 
-    virtual void _projectAttributes() override
+    /*virtual void _projectAttributes() override
     {
         DoubleBuffer<VarBufferType>::shadow_attributes.populateUI();
     }
@@ -900,7 +902,7 @@ protected:
     { 
         if (ProjectBase::changedShadow()) return true; // call on Scenes
         return DoubleBuffer<VarBufferType>::changedShadow();
-    }
+    }*/
 };
 
 typedef ProjectBase BasicProject;

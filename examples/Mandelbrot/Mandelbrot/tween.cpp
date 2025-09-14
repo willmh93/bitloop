@@ -41,66 +41,66 @@ double tweenDistance(
     return d;
 }
 
-void startTween(Mandelbrot_Scene_Data &scene_data, MandelState& target)
+void startTween(Mandelbrot_Scene &scene, const MandelState& target)
 {
     // Switch to raw iter_lim for tween (and switch to quality mode on finish)
-    scene_data.dynamic_iter_lim = false;
-    scene_data.quality = scene_data.iter_lim;
+    scene.dynamic_iter_lim = false;
+    scene.quality = scene.iter_lim;
 
-    MandelState& this_state = scene_data;
+    MandelState& this_state = scene;
 
-    target.reference_zoom = scene_data.reference_zoom;
-    target.ctx_stage_size = scene_data.ctx_stage_size;
+    //target.reference_zoom = scene.reference_zoom;
+    //target.ctx_stage_size = scene.ctx_stage_size;
 
-    scene_data.tween_r1 = scene_data.getAngledRect(this_state);
-    scene_data.tween_r2 = scene_data.getAngledRect(target);
+    scene.tween_r1 = scene.getAngledRect(this_state);
+    scene.tween_r2 = scene.getAngledRect(target);
 
     DAngledRect encompassing;
-    encompassing.fitTo(scene_data.tween_r1, scene_data.tween_r2, scene_data.tween_r1.aspectRatio());
+    encompassing.fitTo(scene.tween_r1, scene.tween_r2, scene.tween_r1.aspectRatio());
 
-    double encompassing_zoom = (this_state.ctx_world_size() / encompassing.size).average();
+    double encompassing_zoom = (scene.stageWorldSize() / encompassing.size).average();
     double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
-    scene_data.tween_lift = encompassing_height - std::max(toHeight(this_state.cam_view.zoom), toHeight(target.cam_view.zoom));
+    scene.tween_lift = encompassing_height - std::max(toHeight(this_state.cam_view.zoom), toHeight(target.cam_view.zoom));
 
     double max_lift = 1.0 - toHeight(target.cam_view.zoom);
     if (max_lift < 0) max_lift = 0;
-    if (scene_data.tween_lift > max_lift)
-        scene_data.tween_lift = max_lift;
+    if (scene.tween_lift > max_lift)
+        scene.tween_lift = max_lift;
 
     // Now, set start/end tween states
-    scene_data.state_a = this_state;
-    scene_data.state_b = target;
+    scene.state_a = this_state;
+    scene.state_b = target;
 
     // Begin tween
-    scene_data.tween_progress = 0.0;
-    scene_data.tweening = true;
-    scene_data.tween_duration = 2;// tweenDistance(scene_data.state_a, scene_data.state_b);
-    scene_data.cycle_dist_invert = target.cycle_dist_invert;
+    scene.tween_progress = 0.0;
+    scene.tweening = true;
+    scene.tween_duration = 2;// tweenDistance(scene_data.state_a, scene_data.state_b);
+    scene.cycle_dist_invert = target.cycle_dist_invert;
 }
 
 void lerpState(
-    Mandelbrot_Scene_Data& scene_data,
+    Mandelbrot_Scene& scene,
     MandelState& a,
     MandelState& b,
     double f,
     bool complete)
 {
-    MandelState& dst = scene_data;
+    MandelState& dst = scene;
 
-    float pos_f = scene_data.tween_pos_spline((float)f);
+    float pos_f = scene.tween_pos_spline((float)f);
 
     // === Calculate true 'b' iter_lim for tweening  (using destination zoom, not current zoom) ===
     double dst_iter_lim = b.dynamic_iter_lim ?
-        (mandelbrotIterLimit(b.cam_view.zoom) * b.quality) :
+        (scene.mandelbrotIterLimit(b.cam_view.zoom) * b.quality) :
         b.quality;
 
     // === Lerp Camera View and normalized zoom from "height" ===
-    double lift_weight = (double)scene_data.tween_zoom_lift_spline((float)f);
-    double lift_height = scene_data.tween_lift * lift_weight;
+    double lift_weight = (double)scene.tween_zoom_lift_spline((float)f);
+    double lift_height = scene.tween_lift * lift_weight;
     double a_height = toHeight(a.cam_view.zoom);
     double b_height = toHeight(b.cam_view.zoom);
 
-    double base_zoom_f = scene_data.tween_base_zoom_spline((float)f);
+    double base_zoom_f = scene.tween_base_zoom_spline((float)f);
     double dst_height = Math::lerp(a_height, b_height, base_zoom_f) + lift_height;
     dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
     dst.cam_view.zoom = fromHeight(dst_height); // override zoom from computed "height"
@@ -109,7 +109,7 @@ void lerpState(
     dst.quality = Math::lerp(a.quality, dst_iter_lim, pos_f);
 
     // === Color Cycle ===
-    float color_cycle_f = scene_data.tween_color_cycle((float)f);
+    float color_cycle_f = scene.tween_color_cycle((float)f);
 
     dst.iter_dist_mix = Math::lerp(a.iter_dist_mix, b.iter_dist_mix, color_cycle_f);
 
@@ -128,7 +128,7 @@ void lerpState(
     dst.hue_shift_step = Math::lerp(a.hue_shift_step, b.hue_shift_step, pos_f);
 
     // === Lerp Color Gradient ===
-    ImGradient::lerp(scene_data.gradient, a.gradient, b.gradient, (float)f);
+    ImGradient::lerp(scene.gradient, a.gradient, b.gradient, (float)f);
 
     if (complete)
     {

@@ -143,6 +143,7 @@ void ProjectWorker::worker_loop()
                         pushDataToShadow();
                 }
 
+
                 //blPrint() << "----- END WORKER FRAME -----";
                 //blPrint() << "----------------------------";
                 //blPrint() << "";

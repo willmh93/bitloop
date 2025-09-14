@@ -385,9 +385,9 @@ struct CardioidLerper : public std::vector<LerpedCardioid>
     }
 };
 
-
-struct Cardioid_Scene_Vars : public VarBuffer
+struct Cardioid_Scene : public Scene<Cardioid_Scene>
 {
+    // --- Scene management ---
     bool   show_offset = false;
     bool   flatten = false;
     bool   interactive = false;
@@ -398,24 +398,11 @@ struct Cardioid_Scene_Vars : public VarBuffer
     double interact_angle = 0.0;
     double interact_dist = 0.0;
 
-    void registerSynced()
+    struct UI : Interface
     {
-        sync(show_offset);
-        sync(flatten);
-        sync(interactive);
-        sync(animate);
-        sync(ani_angle);
-        sync(interact_angle_step);
-        sync(interact_spin_mult);
-        sync(interact_angle);
-        sync(interact_dist);
-    }
-    void populateUI();
-};
-
-struct Cardioid_Scene : public Scene<Cardioid_Scene_Vars>
-{
-    // --- Scene management ---
+        using Interface::Interface;
+        void populate();
+    };
     
     void sceneStart() override;
     void sceneMounted(Viewport* viewport) override;

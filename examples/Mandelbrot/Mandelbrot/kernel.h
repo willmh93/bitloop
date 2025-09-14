@@ -4,6 +4,10 @@
 
 #include "shading.h"
 
+#include <complex>
+#include <algorithm>
+#include <cmath>
+
 SIM_BEG;
 
 constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
@@ -134,7 +138,16 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
     return false;
 }
 
+// simple params (can be constexpr if you like)
+struct StripeParams {
+    double freq = 8.0;   // stripes per 2π
+    double phase = 0.0;   // radians
+    double contrast = 3.0;   // shaping (tanh)
+    double weightAlpha = 0.0;   // 0 = unweighted, else 1/|z|^alpha
+};
 
+template<class T>
+FAST_INLINE T clamp01(T v) { return v < T(0) ? T(0) : (v > T(1) ? T(1) : v); }
 
 //dist = mandelbrot_dist((double)x0, (double)y0, iter_lim);
 
@@ -143,19 +156,24 @@ FAST_INLINE void mandel_kernel(
     const T& x0,
     const T& y0,
     int iter_lim,
-    double& depth, double& dist)
+    double& depth, double& dist, double& stripes,
+    StripeParams sp = {})
 {
     if (interiorCheck(x0, y0))
     {
         depth = INSIDE_MANDELBROT_SET_SKIPPED;
         if constexpr (((int)S & (int)MandelSmoothing::DIST) != 0)
             dist = INSIDE_MANDELBROT_SET;
+        if constexpr (((int)S & (int)MandelSmoothing::STRIPES) != 0)
+            stripes = 0.0;
         return;
     }
 
     using detail::cplx;
     constexpr bool NEED_DIST = (bool)((int)S & (int)MandelSmoothing::DIST);
     constexpr bool NEED_SMOOTH_ITER = (bool)((int)S & (int)MandelSmoothing::ITER);
+    constexpr bool NEED_STRIPES = (bool)((int)S & (int)MandelSmoothing::STRIPES);
+
     constexpr T escape_r2 = T(escape_radius<S>());
     constexpr T zero = T(0), one = T(1), two = T(2);
 
@@ -165,10 +183,30 @@ FAST_INLINE void mandel_kernel(
     int iter = 0;
     T r2;
 
+    // stripe accumulators (only used when enabled)
+    double sum = 0.0;
+    double wsum = 0.0;
+
     while (true)
     {
         r2 = detail::mag2(z);
         if (r2 > escape_r2 || iter >= iter_lim) break;
+
+        if constexpr (NEED_STRIPES)
+        {
+            // sample stripe based on orbit angle
+            double a = std::atan2((double)z.y, (double)z.x);                // [-π, π]
+            double s = 0.5 + 0.5 * std::sin(sp.freq * a + sp.phase);        // [0,1]
+
+            // optional weighting by radius
+            double r = std::hypot((double)z.x, (double)z.y);
+            double w = (sp.weightAlpha > 0.0)
+                ? std::pow(std::max(r, 1e-12), -sp.weightAlpha)
+                : 1.0;
+
+            sum += w * s;
+            wsum += w;
+        }
 
         if constexpr (NEED_DIST)
             detail::step_d(z, dz);
@@ -178,6 +216,8 @@ FAST_INLINE void mandel_kernel(
     }
 
     const bool escaped = (r2 > escape_r2) && (iter < iter_lim);
+
+    // --- distance estimate ---
     if constexpr (NEED_DIST)
     {
         if (escaped)
@@ -192,20 +232,50 @@ FAST_INLINE void mandel_kernel(
         }
     }
 
-    if (!escaped) {
+    if (!escaped)
+    {
         depth = INSIDE_MANDELBROT_SET;
+        if constexpr (NEED_STRIPES) stripes = 0.0;
         return;
     }
 
+    // --- smooth escape fraction t = ν - iter (0..1) ---
+    // ν = iter + 1 - log2(log|z|)
+    const double log_abs_z = 0.5 * std::log((double)r2);
+    const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
+    const double t = std::clamp(nu - (double)iter, 0.0, 1.0);
+
+    // --- depth (iteration coloring) ---
     if constexpr (NEED_SMOOTH_ITER)
     {
-        T t = log2(r2) / two;
-        T s = log2(t);
-        depth = (double)(iter + (one - s)) - mandelbrot_smoothing_offset<S>();
+        // your offset uses escape_radius<S>()
+        depth = nu - mandelbrot_smoothing_offset<S>();
     }
     else
     {
         depth = (double)iter;
+    }
+
+    // --- stripes (stripe-average with fractional last sample) ---
+    if constexpr (NEED_STRIPES)
+    {
+        // add a fractional contribution of the post-escape state
+        double a_next = std::atan2((double)z.y, (double)z.x);
+        double s_next = 0.5 + 0.5 * std::sin(sp.freq * a_next + sp.phase);
+        double r_next = std::sqrt((double)r2);
+        double w_next = (sp.weightAlpha > 0.0)
+            ? std::pow(std::max(r_next, 1e-12), -sp.weightAlpha)
+            : 1.0;
+
+        sum += t * w_next * s_next;
+        wsum += t * w_next;
+
+        double avg = (wsum > 0.0) ? (sum / wsum) : 0.0;
+
+        // soft contrast curve (keeps it continuous)
+        avg = 0.5 + 0.5 * std::tanh(sp.contrast * (avg - 0.5));
+
+        stripes = clamp01(avg); // 0..1
     }
 }
 
@@ -239,5 +309,84 @@ inline double mandelbrot_spline_iter(double x0, double y0, int iter_lim, ImSplin
     else
         return iter;
 }
+
+/*template<
+    bool Smooth,
+    bool Show_Period2_Bulb
+>
+bool radialMandelbrot()
+{
+    //double f_max_iter = static_cast<double>(iter_lim);
+    return pending_bmp->forEachWorldPixel(camera, current_row, [&](int x, int y, double angle, double point_dist)
+    {
+        DVec2 polard_coord = cardioid_lerper.originalPolarCoordinate(angle, point_dist, cardioid_lerp_amount);
+
+        // Below x-axis
+        if (polard_coord.y < 0)
+        {
+            pending_bmp->setPixel(x, y, 0, 0, 0, 255);
+            return;
+        }
+
+        DVec2 mandel_pt = Cardioid::fromPolarCoordinate(polard_coord.x, polard_coord.y);
+        double recalculated_orig_angle = cardioid_lerper.originalPolarCoordinate(mandel_pt.x, mandel_pt.y, 1.0).x;
+
+        // Avoid picking pixels from opposite side of the cardioid which would be sampled twice
+        bool hide =
+            (polard_coord.x < Math::PI && recalculated_orig_angle > Math::PI * 1.1) ||
+            (polard_coord.x > Math::PI && recalculated_orig_angle < Math::PI * 0.9);
+
+        if (hide)
+        {
+            pending_bmp->setPixel(x, y, 0, 0, 0, 255);
+            return;
+        }
+
+        // Optionally hide everything left of main cardioid
+        if constexpr (!Show_Period2_Bulb)
+        {
+            if (mandel_pt.x < -0.75)
+            {
+                pending_bmp->setPixel(x, y, 0, 0, 0, 255);
+                return;
+            }
+        }
+
+        double smooth_iter = mandelbrot_iter<Smooth>(mandel_pt.x, mandel_pt.y, iter_lim);
+
+        uint32_t u32;
+        iter_gradient_color(smooth_iter, u32);
+
+        //double ratio = Smooth_Iter / f_max_iter;
+        //iter_ratio_color(ratio, r, g, b);
+
+        pending_bmp->setPixel(x, y, u32);
+    });
+};*/
+
+
+template<typename T, MandelSmoothing Smoothing, bool flatten, bool Axis_Visible>
+bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row)
+{
+    bool frame_complete = bmp->forEachWorldPixel<T>(current_row, [&](int x, int y, T wx, T wy)
+    {
+        EscapeFieldPixel& field_pixel = field->at(x, y);
+
+        // Pixel already calculated/forwarded from previous phase? Return early
+        double depth = field_pixel.depth;
+        if (depth >= 0) return;
+
+        double dist, stripes;
+        mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripes);
+
+        field_pixel.depth = depth;
+        field_pixel.dist = dist;
+
+    }, threads, timeout);
+
+    return frame_complete;
+};
+
+
 
 SIM_END;

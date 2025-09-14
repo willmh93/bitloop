@@ -583,8 +583,8 @@ struct AngledRect
     T angle;
 
     AngledRect() {}
-    AngledRect(T _cx, T _cy, T _w, T _h, T _angle) :
-        cx(_cx), cy(_cy), w(_w), h(_h), angle(_angle) {}
+    AngledRect(T _cx, T _cy, T _w, T _h, T _angle) : cx(_cx), cy(_cy), w(_w), h(_h), angle(_angle) {}
+    AngledRect(Vec2<T> cen, Vec2<T> size, T _angle) : cx(cen.x), cy(cen.y), w(size.x), h(size.y), angle(_angle) {}
 
     [[nodiscard]] Quad<T> toQuad()   const { return Quad<T>(*this); }
     [[nodiscard]] operator Quad<T>() const { return Quad<T>(*this); }

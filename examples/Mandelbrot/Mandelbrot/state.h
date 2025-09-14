@@ -5,17 +5,8 @@
 SIM_BEG;
 using namespace BL;
 
-
-
 struct MandelState
 {
-    // The final world quad should be predictable using
-    // only the state info & stage size.
-    DVec2 reference_zoom, ctx_stage_size;
-    DVec2 ctx_world_size() const {
-        return ctx_stage_size / reference_zoom;
-    }
-
     /// ─────────────────────── Saveable Info ───────────────────────
 
     bool show_axis = true;
@@ -39,15 +30,15 @@ struct MandelState
     double   cycle_dist_value             = 0.5f;
     double   cycle_dist_sharpness         = 0.9; // Used for UI (ignored during tween)
                                           
-    double gradient_shift                 = 0.0;
-    double hue_shift                      = 0.0;
-                                          
-    double gradient_shift_step            = 0.0078;
-    double hue_shift_step                 = 0.136;
+    double   gradient_shift                 = 0.0;
+    double   hue_shift                      = 0.0;
+                                            
+    double   gradient_shift_step            = 0.0078;
+    double   hue_shift_step                 = 0.136;
 
-    int smoothing_type = (int)MandelSmoothing::ITER; // this is being dynamically set, no need to save
+    int      smoothing_type = (int)MandelSmoothing::ITER; // this is being dynamically set, no need to save
 
-    ImGradient gradient; // todo: NOT efficient to store entire gradient here
+    ImGradient gradient;
 
     // animate
     bool show_color_animation_options   = false;
@@ -56,37 +47,13 @@ struct MandelState
     bool flatten = false;
     double flatten_amount = 0.0;
 
-    bool operator ==(const MandelState& rhs) const
-    {
-        return (
-            cam_view == rhs.cam_view &&
-            quality == rhs.quality &&
-            iter_dist_mix == rhs.iter_dist_mix &&
-            dynamic_iter_lim == rhs.dynamic_iter_lim &&
-            cycle_iter_normalize_depth == rhs.cycle_iter_normalize_depth &&
-            cycle_iter_log1p_weight == rhs.cycle_iter_log1p_weight &&
-            cycle_iter_value == rhs.cycle_iter_value &&
-            cycle_dist_value == rhs.cycle_dist_value &&
-            cycle_dist_invert == rhs.cycle_dist_invert &&
-            gradient_shift == rhs.gradient_shift &&
-            hue_shift == rhs.hue_shift &&
-            gradient_shift_step == rhs.gradient_shift_step &&
-            hue_shift_step == rhs.hue_shift_step &&
-            smoothing_type == rhs.smoothing_type &&
-            show_color_animation_options == rhs.show_color_animation_options &&
-            flatten == rhs.flatten &&
-            flatten_amount == rhs.flatten_amount &&
-            // Save slowest for last
-            gradient == rhs.gradient
-        );
-    }
+    bool operator==(const MandelState&) const = default;
 
-    void loadGradientPreset(GradientPreset preset)
-    {
-        generateGradientFromPreset(gradient, preset);
-    }
+    inline DVec2  cam_pos() const { return cam_view.pos; }
+    inline double cam_zoom() const { return cam_view.zoom; }
+    inline double cam_angle() const { return cam_view.angle; }
 
-    std::string serialize()
+    std::string serialize() const
     {
         constexpr bool COMPRESS_CONFIG = true;
 

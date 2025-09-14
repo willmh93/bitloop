@@ -72,7 +72,7 @@ enum struct BlendFactor
     BLEND_SRC_ALPHA_SATURATE    = NVGblendFactor::NVG_SRC_ALPHA_SATURATE
 };
 
-class NanoFont
+class NanoFontInternal
 {
     friend class SimplePainter;
 
@@ -85,12 +85,12 @@ protected:
 
 public:
 
-    static std::shared_ptr<NanoFont> create(const char* virtual_path)
-    {
-        return std::make_shared<NanoFont>(virtual_path);
-    }
+    //static std::shared_ptr<NanoFont> create(const char* virtual_path)
+    //{
+    //    return std::make_shared<NanoFont>(virtual_path);
+    //}
 
-    NanoFont(const char* virtual_path)
+    NanoFontInternal(const char* virtual_path)
     {
         //blPrint("NanoFont() called");
         path = Platform()->path(virtual_path);
@@ -102,14 +102,49 @@ public:
     }
 };
 
+struct NanoFont : std::shared_ptr<NanoFontInternal>
+{
+    static NanoFont create(const char* virtual_path)
+    {
+        return std::make_shared<NanoFontInternal>(virtual_path);
+    }
+
+    NanoFont() = default;
+    NanoFont(const NanoFont& rhs) = default;
+    NanoFont(std::shared_ptr<NanoFontInternal> f)
+        : std::shared_ptr<NanoFontInternal>(f)
+    {}
+};
+struct BLFontInteral
+{
+
+};
+
+struct BLFont : std::shared_ptr<BLFontInteral>
+{
+    static BLFont create()
+    {
+        return std::make_shared<BLFontInteral>();
+    }
+
+    BLFont(std::shared_ptr<BLFontInteral> f)
+        : std::shared_ptr<BLFontInteral>(f)
+    {}
+};
+
 struct PainterContext
 {
+    int a()
+    {
+        BLFont font = BLFont::create();
+    }
+
     NVGcontext* vg = nullptr;
     double global_scale = 1.0;
 
     // Text
-    std::shared_ptr<NanoFont> default_font;
-    std::shared_ptr<NanoFont> active_font;
+    NanoFont default_font;
+    NanoFont active_font;
 
     TextAlign text_align = TextAlign::ALIGN_LEFT;
     TextBaseline text_baseline = TextBaseline::BASELINE_TOP;
@@ -144,7 +179,7 @@ public:
     }
 
     // ======== Context getter/setters ========
-    [[nodiscard]] std::shared_ptr<NanoFont> getDefaultFont() { return paint_ctx->default_font; }
+    [[nodiscard]] NanoFont getDefaultFont() { return paint_ctx->default_font; }
     [[nodiscard]] double getGlobalScale() { return paint_ctx->global_scale; }
     void setGlobalScale(double scale) { paint_ctx->global_scale = scale; }
 
@@ -265,7 +300,7 @@ public:
     void setTextAlign(TextAlign align)          { paint_ctx->text_align = align;       nvgTextAlign(vg, (int)(paint_ctx->text_align) | (int)(paint_ctx->text_baseline)); }
     void setTextBaseline(TextBaseline baseline) { paint_ctx->text_baseline = baseline; nvgTextAlign(vg, (int)(paint_ctx->text_align) | (int)(paint_ctx->text_baseline)); }
     void setFontSize(double size_pts)           { nvgFontSize(vg, (float)(paint_ctx->global_scale * size_pts)); }
-    void setFont(std::shared_ptr<NanoFont> font)
+    void setFont(NanoFont font)
     {
         if (font == paint_ctx->active_font)
             return;

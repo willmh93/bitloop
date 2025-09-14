@@ -107,8 +107,15 @@ void Cardioid_Project::projectPrepare(Layout& layout)
 
 /// Scene ///
 
-void Cardioid_Scene_Vars::populateUI()
+void Cardioid_Scene::UI::populate()
 {
+    bl_pull(flatten);
+    bl_pull(interactive);
+    bl_pull(interact_angle_step);
+    bl_pull(interact_spin_mult);
+    bl_pull(interact_angle);
+    bl_pull(interact_dist);
+
     //ImGui::SliderDouble("Angle", &interact_angle, 0, (2 * M_PI));
     ImGui::Checkbox("Flatten", &flatten);
     ImGui::Checkbox("Interactive", &interactive);
@@ -118,6 +125,13 @@ void Cardioid_Scene_Vars::populateUI()
     ImGui::SliderDouble("Spin multiplier", &interact_spin_mult, 0.0, 1.0);
     ImGui::SliderDouble("Angle", &interact_angle, 0.0, Math::TWO_PI);
     ImGui::SliderDouble("Distance", &interact_dist, 0.0, 1.0);
+
+    bl_push(flatten);
+    bl_push(interactive);
+    bl_push(interact_angle_step);
+    bl_push(interact_spin_mult);
+    bl_push(interact_angle);
+    bl_push(interact_dist);
 
     //ImGui::Checkbox("show offset", &show_offset);
     //ImGui::Checkbox("show original", &show_original);

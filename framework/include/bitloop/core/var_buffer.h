@@ -1,279 +1,396 @@
 #include "debug.h"
 
-template<typename T>
-concept VarBufferConcept = requires(T t, const T & rhs)
-{
-    { t.populateUI() } -> std::same_as<void>;
-};
+#include <any>
+#include <array>
+#include <cstring>
+#include <sstream>
+#include <mutex>
+#include <algorithm>
+#include <type_traits>
+#include <unordered_map>
 
-struct BaseVariable
-{
-    std::string name;
 
-    BaseVariable(std::string_view name) : name(name) {}
+template<class T, class Enable = void>
+struct TypeOps {
+    using Store = std::remove_const_t<T>;
 
-    virtual BaseVariable* clone() { return nullptr; }
-    //virtual std::string toString() { return "<na>"; }
-    virtual void setValue(const BaseVariable* rhs) = 0;
-    virtual bool equals(const BaseVariable* rhs) const = 0;
-};
-
-template<typename T>
-struct Variable final : public BaseVariable
-{
-    using element_type =
-        std::conditional_t<std::is_array_v<T>,
-        std::remove_extent_t<T>,
-        T>;
-
-    using storage_ptr = element_type*;
-
-    storage_ptr ptr = nullptr;
-    bool owns_data = false;
-
-    Variable(std::string_view name, storage_ptr v, bool auto_destruct)
-        : BaseVariable(name), ptr(v), owns_data(auto_destruct)
-    {}
-
-    ~Variable()
-    {
-        if (owns_data && ptr)
-        {
-            // Make sure we only delete the clones, not variables which were allocated by simulations
-            delete ptr;
-            ptr = nullptr;
-        }
+    static void assign(void* dst, const std::any& src) {
+        const Store& s = std::any_cast<const Store&>(src);
+        *static_cast<Store*>(dst) = s;
     }
-
-    void setValue(const BaseVariable* rhs) override
-    {
-        const auto rhs_var = dynamic_cast<const Variable<T>*>(rhs);
-        if (!rhs_var)
-            return; // bad cast
-
-        if constexpr (std::is_array_v<T>)
-        {
-            constexpr std::size_t N = std::extent_v<T>;
-            std::copy(rhs_var->ptr, rhs_var->ptr + N, ptr);
-        }
+    static bool equals(const void* dst, const std::any& src) {
+        const Store& s = std::any_cast<const Store&>(src);
+        const Store& d = *static_cast<const Store*>(dst);
+        if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
+            return std::memcmp(&d, &s, sizeof(Store)) == 0;
         else
-        {
-            *ptr = *rhs_var->ptr;
-        }
+            return d == s;
     }
-
-    bool equals(const BaseVariable* rhs) const override
-    {
-        const auto rhs_var = dynamic_cast<const Variable<T>*>(rhs);
-        if (!rhs_var)
-            return false; // bad cast
-
-        if constexpr (std::is_array_v<T>)
-        {
-            constexpr std::size_t N = std::extent_v<T>;
-            return std::equal(ptr, ptr + N, rhs_var->ptr);
-        }
-        else if constexpr (std::is_standard_layout_v<T> && std::is_trivially_copyable_v<T>)
-        {
-            // Safe to compare as raw memory
-            return std::memcmp(ptr, rhs_var->ptr, sizeof(T)) == 0;
-        }
+    // copy live memory -> any
+    static void store(std::any& dst, const void* src) {
+        const Store& s = *static_cast<const Store*>(src);
+        dst = s;
+    }
+    // compare any vs any (same underlying type)
+    static bool equals_any(const std::any& a, const std::any& b) {
+        const Store& A = std::any_cast<const Store&>(a);
+        const Store& B = std::any_cast<const Store&>(b);
+        if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
+            return std::memcmp(&A, &B, sizeof(Store)) == 0;
         else
-        {
-            /// If you get an error here, your data type requires an operator==(const T&) overload
-            return *ptr == *rhs_var->ptr;
-        }
+            return A == B;
     }
-
-    Variable* clone() override
-    {
-        if constexpr (std::is_array_v<T>)
-        {
-            constexpr std::size_t N = std::extent_v<T>;
-            auto* new_arr = new element_type[N];
-            std::copy(ptr, ptr + N, new_arr);
-            return new Variable(name, new_arr, true);
-        }
-        else
-        {
-            return new Variable(name, new element_type(*ptr), true);
-        }
-    }
-
-    //std::string toString() override
-    //{
-    //    std::stringstream ss;
-    //    ss << *ptr;
-    //    return ss.str();
-    //}
 };
 
-struct VariableEntry
+// arrays T[N] => stage as std::array<T,N>, copy element-wise
+template<class E, std::size_t N>
+struct TypeOps<E[N], void>
 {
-    int id;
-    std::string name;
+    using Store = std::array<std::remove_const_t<E>, N>;
 
-    // Actual live/shadow buffers
-    BaseVariable* shadow_ptr    = nullptr;
-    BaseVariable* live_ptr      = nullptr;
-
-    // "Before" buffers to compare against and detect changes
-    BaseVariable* shadow_marked = nullptr;
-    BaseVariable* live_marked   = nullptr;
-
-    void updateLive()           { live_ptr->setValue(shadow_ptr); }
-    void updateShadow()         { shadow_ptr->setValue(live_ptr); }
-    void markLiveValue()        { live_marked->setValue(live_ptr); }
-    void markShadowValue()      { shadow_marked->setValue(shadow_ptr); }
-    bool liveChanged()   const  { return !live_ptr->equals(live_marked); }
-    bool shadowChanged() const  { return !shadow_ptr->equals(shadow_marked); }
-
-    //void print()
-    //{
-    //    blPrint() << "Shadow: " << shadow_ptr->toString() 
-    //                << "  Live: " << live_ptr->toString();
-    //}
+    static void assign(void* dst, const std::any& src) {
+        const Store& s = std::any_cast<const Store&>(src);
+        auto* d = static_cast<std::remove_const_t<E>*>(dst); // points to E[N]
+        std::copy(s.begin(), s.end(), d);
+    }
+    static bool equals(const void* dst, const std::any& src) {
+        const Store& s = std::any_cast<const Store&>(src);
+        const auto* d = static_cast<const E*>(dst);
+        return std::equal(s.begin(), s.end(), d);
+    }
+    static void store(std::any& dst, const void* src) {
+        const E* p = static_cast<const E*>(src);
+        Store s; std::copy(p, p + N, s.begin());
+        dst = std::move(s);
+    }
+    static bool equals_any(const std::any& a, const std::any& b) {
+        const Store& A = std::any_cast<const Store&>(a);
+        const Store& B = std::any_cast<const Store&>(b);
+        return std::equal(A.begin(), A.end(), B.begin());
+    }
 };
 
-struct VariableMap : public std::vector<VariableEntry>
+template<typename SceneType>
+struct Scene_UI
 {
-    void markLiveValues()   { for (size_t i=0; i<size(); i++) at(i).markLiveValue(); }
-    void markShadowValues() { for (size_t i=0; i<size(); i++) at(i).markShadowValue(); }
-    bool changedLive() {
-        for (size_t i = 0; i < size(); i++) {
-            if (at(i).liveChanged())
-                return true;
-        }
-        return false;
-    }
-    bool changedShadow() {
-        for (size_t i = 0; i < size(); i++)  {
-            if (at(i).shadowChanged())
-                return true;
-        }
-        return false;
-    }
+    const SceneType& scene;
+
+    Scene_UI(const SceneType* _scene) : scene(*_scene) {}
+    virtual void populate() = 0;
+
+    #define bl_pull(name)       auto& name = scene._pull(scene.name, false, #name)
+    #define bl_pull_temp(name)  auto& name = scene._temp_pull(scene.name, true, #name)
+    #define bl_push(name)       scene._commit(scene.name, name)
+    #define bl_schedule         scene._schedule
 };
 
+// detect ostream support
+template<class T>
+concept Ostreamable = requires(std::ostream & os, const T & t) { os << t; };
+
+template<class T> struct is_std_array : std::false_type {};
+template<class U, std::size_t N> struct is_std_array<std::array<U, N>> : std::true_type {};
+template<class T> inline constexpr bool is_std_array_v = is_std_array<T>::value;
+
+template<class SceneT>
 struct VarBuffer
 {
-    std::vector<BaseVariable*> buffer_var_ptrs;
-
     VarBuffer() = default;
     VarBuffer(const VarBuffer&) = delete;
+    VarBuffer& operator=(const VarBuffer&) = delete;
+    VarBuffer(VarBuffer&&) = delete;
+    VarBuffer& operator=(VarBuffer&&) = delete;
 
-    #define sync(v) _sync(#v, v)
-
-    template<typename T>
-    void _sync(const char* name, T& v)
+    struct Entry
     {
-        if constexpr (std::is_array_v<T>)
-            buffer_var_ptrs.push_back(new Variable<T>(name, v, false));   // v  -> element*
-        else
-            buffer_var_ptrs.push_back(new Variable<T>(name, &v, false));  // &v -> T*
+        std::string name;
+
+        // current staged value (shadow for ui_stage; live->ui for live_stage)
+        std::any value;
+
+        // snapshots for change detection
+        std::any mark_live;    // snapshot of *live* memory
+        std::any mark_shadow;  // snapshot of current shadow (value)
+
+        bool changed = false;  // differs from live (your existing flag)
+        bool temp = false;
+
+        // type-erased ops
+        void (*assign_fn)(void*, const std::any&) = nullptr;                 // any -> live
+        bool (*equals_fn)(const void*, const std::any&) = nullptr;           // live vs any
+        void (*store_from_live_fn)(std::any&, const void*) = nullptr;        // live -> any (NEW)
+        bool (*equals_any_fn)(const std::any&, const std::any&) = nullptr;   // any vs any (NEW)
+
+        void (*print_fn)(std::ostream&, const std::any&) = nullptr;
+
+        // identity
+        const void* key = nullptr;               // address of tracked member
+        const VarBuffer* owner = nullptr;        // back-pointer
+
+        // -------- per-entry helpers --------
+        void updateLive() {
+            if (!owner || !assign_fn || !value.has_value() || !key) return;
+            assign_fn(const_cast<void*>(key), value);
+        }
+        void updateShadow() {
+            if (!owner || !store_from_live_fn || !key) return;
+            store_from_live_fn(value, key);
+        }
+        void markLiveValue() {
+            if (!owner || !store_from_live_fn || !key) return;
+            store_from_live_fn(mark_live, key);
+        }
+        void markShadowValue() {
+            if (value.has_value()) mark_shadow = value;
+            else mark_shadow.reset();
+        }
+        bool liveChanged() const {
+            if (!equals_fn || !mark_live.has_value() || !key) return false;
+            return !equals_fn(key, mark_live);
+        }
+        bool shadowChanged() const {
+            if (!equals_any_fn || !value.has_value() || !mark_shadow.has_value()) return false;
+            return !equals_any_fn(value, mark_shadow);
+        }
+        std::string to_string() const {
+            if (!value.has_value() || !print_fn) return {};
+            std::ostringstream oss;
+            print_fn(oss, value);
+            return oss.str();
+        }
+    };
+
+
+    // post-commit (after UI->Live) task queue
+    using Task = std::function<void(SceneT&)>;
+    mutable std::mutex m_tasks;
+    mutable std::vector<Task> post_commit_tasks;
+
+    template<class F>
+    void _schedule(F&& f) const
+    {
+        static_assert(std::is_invocable_v<F&, SceneT&>, "_schedule expects a callable(SceneT&)");
+        post_commit_tasks.emplace_back(std::forward<F>(f));
+    }
+
+    void run_scheduled_after_ui_to_live()
+    {
+        std::vector<Task> tasks;
+        tasks.swap(post_commit_tasks);
+
+        SceneT& self = static_cast<SceneT&>(*this);
+        for (auto& task : tasks)
+            task(self);
     }
 
 
-    virtual void registerSynced() {};
-    virtual void initData() {}
-    virtual void populateUI() {}
-};
+    mutable std::unordered_map<const void*, Entry> ui_stage;
+    mutable std::unordered_map<const void*, Entry> live_stage;
+    //mutable std::mutex m_ui, m_live;
 
-template<typename T>
-concept DerivedFromVarBuffer = std::derived_from<T, VarBuffer>;
+    template<class T> std::remove_const_t<T>& _pull(T&&) const = delete;
+    template<class T> void _commit(T&&, const T&) const = delete;
 
-// ======== DoubleBuffer ========
-// Inherits from passed VarBuffer type, and stores an internal "shadow_attributes" VarBuffer
-// 
-// Call:  
-//   sync(...)  inside VarBuffer::registerSynced()  to register a variable for tracking/syncing
-// 
-// Allows marking live/shadow variables states to detect changes that need syncing
-
-template<DerivedFromVarBuffer VarBufferType>
-class DoubleBuffer : public VarBufferType
-{
-public:
-
-	VarBufferType shadow_attributes; // 2nd buffer, which is synced with the identical inherited VarBufferType
-    VariableMap var_map;
-
-    DoubleBuffer() : shadow_attributes()
+    // ---- bind helpers ----
+    template<class T>
+    static void bind_ops(Entry& e)
     {
-        // Let each buffer list their synced members with sync()
-        shadow_attributes.registerSynced();
-        VarBufferType::registerSynced();
+        using Ops = TypeOps<T>;
+        using Store = typename TypeOps<T>::Store;
 
-        // Join up the lists into a single 'var_map'
-        for (size_t i = 0; i < VarBufferType::buffer_var_ptrs.size(); i++)
+        if (!e.assign_fn)          e.assign_fn = +[](void* d, const std::any& a) { Ops::assign(d, a); };
+        if (!e.equals_fn)          e.equals_fn = +[](const void* d, const std::any& a) { return Ops::equals(d, a); };
+        if (!e.store_from_live_fn) e.store_from_live_fn = +[](std::any& dst, const void* src) { Ops::store(dst, src); };
+        if (!e.equals_any_fn)      e.equals_any_fn = +[](const std::any& a, const std::any& b) { return Ops::equals_any(a, b); };
+
+        if (!e.print_fn) {
+            e.print_fn = +[](std::ostream& os, const std::any& a) {
+                if constexpr (Ostreamable<Store>) {
+                    os << std::any_cast<const Store&>(a);
+                }
+                else if constexpr (is_std_array_v<Store>) {
+                    const auto& arr = std::any_cast<const Store&>(a);
+                    os << '[';
+                    for (std::size_t i = 0; i < arr.size(); ++i) {
+                        if (i) os << ',';
+                        if constexpr (Ostreamable<typename Store::value_type>) {
+                            os << arr[i];
+                        }
+                        else {
+                            // fallback for elements without operator<<
+                            os << "<elem>";
+                        }
+                    }
+                    os << ']';
+                }
+                else {
+                    os << "<invalid>";
+                }
+            };
+        }
+    }
+
+    // ---- UI side ----
+    template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
+    std::remove_const_t<T>& _pull(const T& member, bool temp = false, const char* name=nullptr) const
+    {
+        using U = std::remove_const_t<T>;
+
+        const void* key = static_cast<const void*>(&member);
+        auto& e = ui_stage[key];
+
+        if (!e.owner) {
+            e.owner = this;
+            e.key = key;
+            e.name = name;
+        }
+
+        if (!e.value.has_value())
         {
-            VariableEntry entry;
-            entry.shadow_ptr = shadow_attributes.buffer_var_ptrs[i];
-            entry.live_ptr = VarBufferType::buffer_var_ptrs[i];
-            entry.shadow_marked = entry.shadow_ptr->clone();
-            entry.live_marked = entry.live_ptr->clone();
-
-            entry.id = (int)i;
-            entry.name = entry.live_ptr->name;
-            //entry.print();
-
-            var_map.push_back(entry);
+            e.value = static_cast<const U&>(member);
+            bind_ops<T>(e);
         }
 
-        // Initialize data on shadow *after* we start tracking, so that changes detected and synced
-        shadow_attributes.initData();
-
-        // Taken ownership of pointers, clear lists
-        shadow_attributes.buffer_var_ptrs.clear();
-        VarBufferType::buffer_var_ptrs.clear();
+        e.temp = e.temp || temp;
+        return *std::any_cast<U>(&e.value);
     }
 
-    ///~DoubleBuffer()
-    ///{
-    ///    // todo: Clean up owned data pointers
-    ///    for (VariableEntry& entry : var_map)
-    ///    {
-    ///
-    ///    }
-    ///}
-
-    void updateLiveBuffer()
+    template<class T, std::size_t N>
+    std::array<std::remove_const_t<T>, N>& _pull(const T(&arr)[N], bool temp = false, const char* name = nullptr) const
     {
-        for (VariableEntry& entry : var_map) {
-            if (entry.shadowChanged())
-                entry.updateLive();
+        using Store = typename TypeOps<T[N]>::Store;
+
+        const void* key = static_cast<const void*>(arr);
+        auto& e = ui_stage[key];
+
+        if (!e.owner) {
+            e.owner = this;
+            e.key = key;
+            e.name = name;
         }
+
+        if (!e.value.has_value())
+        {
+            Store s; std::copy(arr, arr + N, s.begin());
+            e.value = std::move(s);
+            bind_ops<T[N]>(e);
+        }
+
+        e.temp = e.temp || temp;
+        return *std::any_cast<Store>(&e.value);
     }
-    void updateShadowBuffer()
+
+    // todo: Force a crash/debug break when committing the same member twice before syncing
+    template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
+    void _commit(const T& member, const T& staged_value) const
     {
-        for (VariableEntry& entry : var_map) {
-            if (entry.liveChanged())
-                entry.updateShadow();
+        using U = std::remove_const_t<T>;
+
+        const void* key = static_cast<const void*>(&member);
+        auto& e = ui_stage[key];
+
+        if (!e.owner)
+        {
+            e.owner = this;
+            e.key = key;
         }
+
+        e.value = static_cast<const U&>(staged_value);
+        bind_ops<T>(e);
+        e.changed = !e.equals_fn(&member, e.value);
     }
 
-    void markLiveValues()   { var_map.markLiveValues(); }
-    void markShadowValues() { var_map.markShadowValues(); }
+    // todo: Force a crash/debug break when committing the same member twice before syncing
+    template<class T, std::size_t N>
+    void _commit(const T(&member)[N], const std::array<T, N>& staged) const
+    {
+        const void* key = static_cast<const void*>(member);
+        auto& e = ui_stage[key];
+        if (!e.owner)
+        {
+            e.owner = this;
+            e.key = key;
+        }
+        e.value = staged;
+        bind_ops<T[N]>(e);
+        e.changed = !e.equals_fn(member, e.value);
+    }
 
-    bool changedLive()   { return var_map.changedLive(); }
-    bool changedShadow() { return var_map.changedShadow(); }
+    // todo: Force a crash/debug break when committing the same member twice before syncing
+    template<class T, std::size_t N>
+    void _commit(const T(&member)[N], const T(&staged)[N]) const
+    {
+        std::array<std::remove_const_t<T>, N> tmp;
+        std::copy(staged, staged + N, tmp.begin());
+        _commit(member, tmp);
+    }
 
-    //std::string pad(const std::string& str, int width) const
-    //{
-    //    return str + std::string(width > str.size() ? width - str.size() : 0, ' ');
-    //}
-    //std::string toString() const
-    //{
-    //    static const int name_len = 28;
-    //    static const int val_len = 10;
-    //
-    //    std::stringstream txt;
-    //    for (const auto& entry : var_map)
-    //        txt << pad(std::to_string(entry.id) + ". ", 4) << pad(entry.name, name_len)
-    //        << "SHADOW_MARKED: " << pad(entry.shadow_marked->toString(), val_len) << "   SHADOW_VAL: " << pad(entry.shadow_ptr->toString(), val_len)
-    //        << "    LIVE_MARKED:   " << pad(entry.live_marked->toString(), val_len) << "   LIVE_VAL: " << pad(entry.live_ptr->toString(), val_len)
-    //        << "\n";
-    //
-    //    return txt.str();
-    //}
+    template<class T>
+    std::remove_const_t<T>& _temp_pull(const T& member) const { return _pull(member, true); }
+    template<class T, std::size_t N>
+    auto& _temp_pull(const T(&arr)[N]) const { return _pull(arr, true); }
+
+    // ---- Live -> UI staging (unchanged except owner/key/bind) ----
+    template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
+    void stage_to_ui(const T& member, bool temp = false)
+    {
+        using U = std::remove_const_t<T>;
+
+        const void* key = static_cast<const void*>(&member);
+        auto& e = live_stage[key];
+
+        if (!e.owner)
+        {
+            e.owner = this;
+            e.key = key;
+        }
+
+        e.value = static_cast<const U&>(member);
+        bind_ops<T>(e);
+        e.changed = true;
+        e.temp = e.temp || temp;
+    }
+
+    template<class T, std::size_t N>
+    void stage_to_ui(const T(&member)[N], bool temp = false)
+    {
+        using Store = typename TypeOps<T[N]>::Store;
+        Store s; std::copy(member, member + N, s.begin());
+
+        const void* key = static_cast<const void*>(member);
+        auto& e = live_stage[key];
+        if (!e.owner)
+        {
+            e.owner = this;
+            e.key = key;
+        }
+        e.value = std::move(s);
+        bind_ops<T[N]>(e);
+        e.changed = true;
+        e.temp = e.temp || temp;
+    }
+
+    // -------- apply to all tracked vars in ui_stage --------
+    void updateLive() {
+        for (auto& kv : ui_stage) kv.second.updateLive();
+    }
+    void updateShadow() {
+        for (auto& kv : ui_stage) kv.second.updateShadow();
+    }
+    void markLiveValue() {
+        for (auto& kv : ui_stage) kv.second.markLiveValue();
+    }
+    void markShadowValue() {
+        for (auto& kv : ui_stage) kv.second.markShadowValue();
+    }
+    bool liveChanged() const {
+        for (auto const& kv : ui_stage)
+            if (kv.second.liveChanged()) return true;
+        return false;
+    }
+    bool shadowChanged() const {
+        for (auto const& kv : ui_stage)
+            if (kv.second.shadowChanged()) return true;
+        return false;
+    }
 };

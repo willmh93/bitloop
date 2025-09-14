@@ -14,40 +14,17 @@ struct Particle : public DVec2
     {}
 };
 
-struct Test1_Scene_Attributes : VarBuffer
+struct Test1_Scene : public Scene<Test1_Scene>
 {
+    DVec2 ball_pos = { 0, 0 };
+    std::vector<Particle> particles;
+
     bool transform_coordinates = true;
     bool scale_lines = true;
     bool scale_sizes = true;
     bool rotate_text = true;
 
-    double camera_x = 0;
-    double camera_y = 0;
-    double camera_rotation = 0;
-    double zoom_x = 1;
-    double zoom_y = 1;
-    double zoom_mult = 1;
-
-    void registerSynced() override
-    {
-        sync(transform_coordinates);
-        sync(scale_lines);
-        sync(scale_sizes);
-        sync(rotate_text);
-        sync(camera_x);
-        sync(camera_y);
-        sync(camera_rotation);
-        sync(zoom_x);
-        sync(zoom_y);
-        sync(zoom_mult);
-    }
-    void populateUI() override;
-};
-
-struct Test1_Scene : public Scene<Test1_Scene_Attributes>
-{
-    DVec2 ball_pos = { 0, 0 };
-    std::vector<Particle> particles;
+    CameraViewController cam_view;
 
     // --- Custom Launch Config Example ---
     struct Config
@@ -58,6 +35,12 @@ struct Test1_Scene : public Scene<Test1_Scene_Attributes>
     Test1_Scene(Config&) //:
         //speed(info.speed)
     {}
+
+    struct UI : Interface
+    {
+        using Interface::Interface;
+        void populate();
+    };
 
     // Scene management
     //void _sceneAttributes() override;
@@ -82,22 +65,9 @@ struct Test1_Scene : public Scene<Test1_Scene_Attributes>
     //void onKeyUp(KeyEvent e) override;
 };
 
-struct Test1_Project_Vars : public VarBuffer
+struct Test1_Project : public Project
 {
     int viewport_count = 1;
-
-    void populateUI();
-    void registerSynced()
-    {
-        sync(viewport_count);
-    }
-};
-
-struct Test1_Project : public Project<Test1_Project_Vars>
-{
-    //static std::vector<std::string> categorize() {
-    //    return { "Framework Tests", "Test A" };
-    //}
 
     static ProjectInfo info()
     {

@@ -14,7 +14,9 @@ enum class MandelSmoothing
     NONE = 0,
     ITER = 1,
     DIST = 2,
-    MIX = 3, // ITER | DIST
+    STRIPES = 4,
+    MIX = 7, // ITER | DIST
+    //MIX = 3, // ITER | DIST
     COUNT
 };
 

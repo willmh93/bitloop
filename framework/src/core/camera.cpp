@@ -716,20 +716,16 @@ void CameraViewController::populateUI(DRect cam_area)
     float required_space = 0.0f;
     ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", ScaleSize(20.0f));
 
-    //int decimals = 1 + Math::countWholeDigits(zoom*5);
     int decimals = getPositionDecimalPlaces();
     char format[16];
     snprintf(format, sizeof(format), "%%.%df", decimals);
 
-    static double init_cam_x = x;
-    static double init_cam_y = y;
 
     ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableDragDouble("X", &x, &init_cam_x, 1 / avg_real_zoom, cam_area.x1, cam_area.x2, format);
     ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableDragDouble("Y", &y, &init_cam_y, 1 / avg_real_zoom, cam_area.y1, cam_area.y2, format);
 
-    static double init_degrees = angle_degrees;
     ImGui::SetNextItemWidthForSpace(required_space);
     if (ImGui::RevertableSliderDouble("Rotation", &angle_degrees, &init_degrees, 0.0, 360.0, "%.0f\xC2\xB0"))
     {
@@ -737,13 +733,11 @@ void CameraViewController::populateUI(DRect cam_area)
     }
 
     // 1e16 = double limit before preicions loss
-    static double zoom_speed = zoom / 100.0;
-    static double init_cam_zoom = 1.0;
+    double zoom_speed = zoom / 100.0;
     ImGui::SetNextItemWidthForSpace(required_space);
     if (ImGui::RevertableDragDouble("Zoom", &zoom, &init_cam_zoom, zoom_speed, 0.1, 1e16, "%.2f"))
         zoom_speed = zoom / 100.0;
 
-    static DVec2 init_cam_zoom_xy = zoom_xy;
     ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableSliderDouble2("Zoom X/Y", zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2fx");
 }

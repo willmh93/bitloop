@@ -410,31 +410,53 @@ public:
 	//void handleWorldNavigation(Event e, bool single_touch_pan);
 };
 
-struct CameraViewController
+class CameraViewController
 {
-    double x = -0.5;
-    double y = 0.0;
-    double angle = 0.0;
-    double zoom = 1.0;
-    DVec2  zoom_xy = DVec2(1, 1);
+    double angle_degrees = 0.0;
+    double avg_real_zoom = 1.0;
 
-    double old_x = -0.5;
+    double init_cam_x = x;
+    double init_cam_y = y;
+    double init_degrees = angle_degrees;
+    double init_cam_zoom = 1.0;
+    DVec2 init_cam_zoom_xy = zoom_xy;
+
+    double old_x = 0;
     double old_y = 0.0;
     double old_angle = 0.0;
     double old_zoom = 1.0;
     DVec2  old_zoom_xy = DVec2(1, 1);
 
-    double angle_degrees = 0.0;
-    double avg_real_zoom = 1.0;
+public:
+
+    union
+    {
+        struct {
+            double x;
+            double y;
+        };
+        DVec2 pos{ 0, 0 };
+    };
+
+    double angle = 0.0;
+    double zoom = 1.0;
+    DVec2  zoom_xy = DVec2(1, 1);
 
     void populateUI(DRect cam_area = DRect::infinite());
 
-    int getPositionDecimalPlaces()
+    void setCurrentAsDefault()
+    {
+        init_cam_x = x;
+        init_cam_y = y;
+        init_degrees = angle_degrees;
+    }
+
+    int getPositionDecimalPlaces() const
     {
         return 1 + Math::countWholeDigits(zoom * 5);
     }
 
-    double getPositionPrecision()
+    double getPositionPrecision() const
     {
         return Math::precisionFromDecimalPlaces<double>(getPositionDecimalPlaces());
     }

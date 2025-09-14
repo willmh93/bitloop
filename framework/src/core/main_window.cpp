@@ -455,6 +455,8 @@ void ScrollWhenDraggingOnVoid(const ImVec2& delta)
 // Requires: #include "imgui_internal.h"
 static void SwipeScrollWindow(float decay = 0.93f, float drag_threshold = 6.0f)
 {
+    return;
+
     ImGuiContext& g = *ImGui::GetCurrentContext();
     ImGuiIO& io = g.IO;
     ImGuiWindow* window = g.CurrentWindow;

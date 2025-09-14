@@ -7,10 +7,10 @@ using namespace BL;
 
 /// ─────────────────────── Project ───────────────────────
 
-void Tiger_Project_Data::populateUI()
-{
-    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
-}
+//void Tiger_Project_Data::populateUI()
+//{
+//    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
+//}
 
 void Tiger_Project::projectPrepare(Layout& layout)
 {
@@ -19,18 +19,43 @@ void Tiger_Project::projectPrepare(Layout& layout)
 
 /// ─────────────────────── Scene ───────────────────────
 
-void Tiger_Scene_Data::populateUI()
+void Tiger_Scene::UI::populate()
 {
+    bl_pull(transform_coordinates);
+    bl_pull(scale_lines);
+    bl_pull(scale_sizes);
+    bl_pull(rotate_text);
+    bl_pull(cam_view);
+
     ImGui::Checkbox("Transform coordinates", &transform_coordinates);
     ImGui::Checkbox("Scale Lines", &scale_lines);
     ImGui::Checkbox("Scale Sizes", &scale_sizes);
     ImGui::Checkbox("Rotate Text", &rotate_text);
+
+    if (ImGui::Button("Bark"))
+    {
+        //scene._schedule([](Tiger_Scene& scene)
+        //{
+        //    scene.woof("WOOF!");
+        //});
+
+        //bl_schedule([](Tiger_Scene& scene)
+        //{
+        //    scene.woof("WOOF!");
+        //});
+    }
 
     if (ImGui::Section("View", true)) 
     {
         // imgui camera controls
         cam_view.populateUI();
     }
+
+    bl_push(transform_coordinates);
+    bl_push(scale_lines);
+    bl_push(scale_sizes);
+    bl_push(rotate_text);
+    bl_push(cam_view);
 }
 
 void Tiger_Scene::sceneStart()
@@ -74,6 +99,8 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
     camera->scalingSizes(scale_sizes);
 
     draw_tiger(ctx);
+
+    ctx->print() << "Bark: " << woof_noise;
 }
 
 void Tiger_Scene::onEvent(Event e)

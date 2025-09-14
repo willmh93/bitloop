@@ -5,7 +5,7 @@ SIM_BEG;
 
 using namespace BL;
 
-struct Tiger_Scene_Data : VarBuffer
+struct Tiger_Scene : public Scene<Tiger_Scene>
 {
     bool transform_coordinates = true;
     bool scale_lines = true;
@@ -13,21 +13,7 @@ struct Tiger_Scene_Data : VarBuffer
     bool rotate_text = true;
 
     CameraViewController cam_view;
-    
-    void registerSynced() override
-    {
-        sync(transform_coordinates);
-        sync(scale_lines);
-        sync(scale_sizes);
-        sync(rotate_text);
 
-        sync(cam_view);
-    }
-    void populateUI() override;
-};
-
-struct Tiger_Scene : public Scene<Tiger_Scene_Data>
-{
     /// ─────── Provide default Scene launch config ─────── 
     struct Config { 
         // double speed = 10;
@@ -36,8 +22,21 @@ struct Tiger_Scene : public Scene<Tiger_Scene_Data>
         // : speed(info.speed)  /// Initialize variables below from config
     {}
 
+    struct UI : Interface
+    {
+        using Interface::Interface;
+        void populate();
+    };
+
     /// ─────── Scene variables ─────── 
     // double speed;
+
+    /// ─────── Your custom methods ───────
+    std::string woof_noise;
+    void woof(std::string noise)
+    {
+        woof_noise = noise;
+    }
 
     /// ─────── Scene methods ─────── 
     void sceneStart() override;
@@ -52,28 +51,18 @@ struct Tiger_Scene : public Scene<Tiger_Scene_Data>
     /// ─────── Input handling ─────── 
     void onEvent(Event e) override;
 
-    /// ─────── Your custom methods ─────── 
 
 
 };
 
-struct Tiger_Project_Data : public VarBuffer
-{
-    int viewport_count = 1;
 
-    void populateUI();
-    void registerSynced()
-    {
-        sync(viewport_count);
-    }
-};
-
-struct Tiger_Project : public Project<Tiger_Project_Data>
+struct Tiger_Project : public Project
 {
-    static ProjectInfo info()
-    {
+    static ProjectInfo info() {
         return ProjectInfo({ "Tests", "Draw Tiger (vector graphics)" });
     }
+
+    int viewport_count = 1;
 
     void projectPrepare(Layout& layout) override;
 };
