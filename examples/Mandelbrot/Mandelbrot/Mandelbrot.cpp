@@ -66,6 +66,8 @@ void Mandelbrot_Scene::UI::populate()
     bl_pull(cycle_dist_value);
     bl_pull(cycle_dist_sharpness);
 
+    bl_pull(stripe_params);
+
 
     bl_pull(gradient);
     bl_pull(hue_shift);
@@ -471,6 +473,11 @@ void Mandelbrot_Scene::UI::populate()
                 dist_ratio = dist_ratio / (iter_ratio + dist_ratio + stripe_ratio);
             }
             ImGui::Separator();
+
+            ImGui::SliderDouble("Frequency", &stripe_params.freq, 1, 30.0, "%.0f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderDouble("Phase",     &stripe_params.phase, 1, Math::PI*2, "%.5f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderDouble("Contrast",  &stripe_params.contrast, 1, 10.0, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+
         }
     }
 
@@ -636,6 +643,7 @@ void Mandelbrot_Scene::UI::populate()
     bl_push(cycle_dist_value);
     bl_push(cycle_dist_sharpness);
 
+    bl_push(stripe_params);
 
     bl_push(hue_shift);
     bl_push(gradient_shift);
@@ -984,7 +992,8 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         show_period2_bulb,
         cardioid_lerp_amount,
         x_spline.hash(),
-        y_spline.hash()
+        y_spline.hash(),
+        stripe_params
     );
 
     if (mandel_changed)
@@ -1120,7 +1129,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             
 
             finished_compute = frame_complete = table_invoke<double>(
-                build_table(mandelbrot, [&], pending_bmp, pending_field, iter_lim, numThreads(), timeout, current_row),
+                build_table(mandelbrot, [&], pending_bmp, pending_field, iter_lim, numThreads(), timeout, current_row, stripe_params),
                 smoothing, flatten, x_axis_visible
             );
 

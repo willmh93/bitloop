@@ -32,6 +32,8 @@ struct MandelState
     bool        cycle_dist_invert              = false;
     double      cycle_dist_value               = 0.5f;
     double      cycle_dist_sharpness           = 0.9; // Used for UI (ignored during tween)
+
+    StripeParams stripe_params;
                                                
     double      cycle_stripe_weight            = 0.0;
                 

@@ -44,7 +44,7 @@ struct Global
 
 #ifdef NDEBUG // Relax coding style when debugging, force cleanup before release
 #pragma warning(error: 4189) // local variable is initialized but not referenced
-#pragma warning(error: 4458) // declaration hides class member
+//#pragma warning(error: 4458) // declaration hides class member
 #pragma warning(error: 4100) // unreferenced formal parameter
 #endif
 

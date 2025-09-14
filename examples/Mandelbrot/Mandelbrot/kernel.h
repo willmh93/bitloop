@@ -138,12 +138,6 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
     return false;
 }
 
-struct StripeParams {
-    double freq = 8.0;  // stripes per 2π
-    double phase = 0.0;  // radians
-    double contrast = 3.0;  // tanh shaping
-    int    skip = 1;    // skip first (skip) iterates (z1..z_skip)
-};
 
 template<class T> FAST_INLINE T clamp01(T v) { return v < T(0) ? T(0) : (v > T(1) ? T(1) : v); }
 
@@ -340,7 +334,7 @@ bool radialMandelbrot()
 
 
 template<typename T, MandelSmoothing Smoothing, bool flatten, bool Axis_Visible>
-bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row)
+bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row, StripeParams stripe_params={})
 {
     bool frame_complete = bmp->forEachWorldPixel<T>(current_row, [&](int x, int y, T wx, T wy)
     {
@@ -351,7 +345,7 @@ bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads,
         if (depth >= 0) return;
 
         double dist, stripe;
-        mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripe);
+        mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripe, stripe_params);
 
         field_pixel.depth = depth;
         field_pixel.dist = dist;

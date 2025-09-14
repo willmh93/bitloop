@@ -71,17 +71,51 @@ struct TypeOps<E[N], void>
 };
 
 template<typename SceneType>
-struct Scene_UI
+class Scene_UI
 {
-    const SceneType& scene;
+public:
 
-    Scene_UI(const SceneType* _scene) : scene(*_scene) {}
+    template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
+    std::remove_const_t<T>& _pull(const T& member, bool temp = false, const char* name = nullptr) const
+    {
+        return __scene._pull(member, temp, name);
+    }
+
+    template<class T, std::size_t N>
+    std::array<std::remove_const_t<T>, N>& _pull(const T(&arr)[N], bool temp = false, const char* name = nullptr) const
+    {
+        return __scene._pull(arr, temp, name);
+    }
+
+    // todo: Force a crash/debug break when committing the same member twice before syncing
+    template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
+    void _commit(const T& member, const T& staged) const
+    {
+        __scene._commit(member, staged);
+    }
+
+    // todo: Force a crash/debug break when committing the same member twice before syncing
+    template<class T, std::size_t N>
+    void _commit(const T(&member)[N], const std::array<T, N>& staged) const
+    {
+        __scene._commit(member, staged);
+    }
+
+    template<class F>
+    void _schedule(F&& f) const
+    {
+        __scene._schedule(std::forward<F>(f));
+    }
+
+    const SceneType& __scene;
+
+    Scene_UI(const SceneType* _scene) : __scene(*_scene) {}
     virtual void populate() = 0;
 
-    #define bl_pull(name)       auto& name = scene._pull(scene.name, false, #name)
-    #define bl_pull_temp(name)  auto& name = scene._temp_pull(scene.name, true, #name)
-    #define bl_push(name)       scene._commit(scene.name, name)
-    #define bl_schedule         scene._schedule
+    #define bl_pull(name)       auto& name = _pull(__scene.name, false, #name)
+    #define bl_pull_temp(name)  auto& name = _temp_pull(__scene.name, true, #name)
+    #define bl_push(name)       _commit(__scene.name, name)
+    #define bl_schedule         _schedule
 };
 
 // detect ostream support
@@ -204,7 +238,7 @@ struct VarBuffer
         if (!e.equals_any_fn)      e.equals_any_fn = +[](const std::any& a, const std::any& b) { return Ops::equals_any(a, b); };
 
         if (!e.print_fn) {
-            e.print_fn = +[](std::ostream& os, const std::any& a) {
+            e.print_fn = +[](std::ostream& os, const std::any& a [[maybe_unused]] ) {
                 if constexpr (Ostreamable<Store>) {
                     os << std::any_cast<const Store&>(a);
                 }

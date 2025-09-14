@@ -26,6 +26,21 @@ enum MandelFlag : uint32_t
     MANDEL_VERSION_BITSHIFT = 24
 };
 
+struct StripeParams
+{
+    double freq = 8.0;  // stripes per 2π
+    double phase = 0.0;  // radians
+    double contrast = 3.0;  // tanh shaping
+    int    skip = 0;    // skip first (skip) iterates (z1..z_skip)
+
+    StripeParams(double _freq = 8.0, double _phase = 0.0, double _contrast = 3.0)
+        : freq(_freq), phase(_phase), contrast(_contrast)
+    {}
+
+    bool operator==(const StripeParams&) const = default;
+};
+
+
 struct EscapeFieldPixel
 {
     double depth;
