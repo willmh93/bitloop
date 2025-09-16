@@ -26,14 +26,15 @@ enum MandelFlag : uint32_t
     MANDEL_VERSION_BITSHIFT = 24
 };
 
+
+
 struct StripeParams
 {
-    double freq = 8.0;  // stripes per 2π
-    double phase = 0.0;  // radians
-    double contrast = 3.0;  // tanh shaping
-    int    skip = 0;    // skip first (skip) iterates (z1..z_skip)
+    float freq = 8.0;    // stripes per 2π
+    float phase = 0.0;    // radians
+    float contrast = 3.0;  // tanh shaping
 
-    StripeParams(double _freq = 8.0, double _phase = 0.0, double _contrast = 3.0)
+    StripeParams(float _freq = 8.0f, float _phase = 0.0f, float _contrast = 3.0f)
         : freq(_freq), phase(_phase), contrast(_contrast)
     {}
 
@@ -43,20 +44,20 @@ struct StripeParams
 
 struct EscapeFieldPixel
 {
-    double depth;
-    double dist;
-    double stripe;
+    float depth;
+    float dist;
+    float stripe;
 
-    double final_depth;
-    double final_dist;
+    float final_depth;
+    float final_dist;
 };
 
 struct EscapeField : public std::vector<EscapeFieldPixel>
 {
     int compute_phase;
 
-    double min_depth = 0.0;
-    double max_depth = 0.0;
+    float min_depth = 0.0;
+    float max_depth = 0.0;
     //double min_dist = 0.0;
     //double max_dist = 0.0;
 
@@ -64,7 +65,7 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
 
     EscapeField(int phase) : compute_phase(phase) {}
 
-    void setAllDepth(double value)
+    void setAllDepth(float value)
     {
         for (int i = 0; i < size(); i++)
             std::vector<EscapeFieldPixel>::at(i) = { value, value };

@@ -370,7 +370,7 @@ macro(bitloop_finalize)
 		#####################################################
 
 		file(APPEND "${BL_AUTOGEN_INCLUDES}" "\nvoid initialize_simulations() {\n")
-		file(APPEND "${BL_AUTOGEN_INCLUDES}" "    using namespace BL;\n")
+		file(APPEND "${BL_AUTOGEN_INCLUDES}" "    using namespace bl;\n")
 
 		foreach(project_name IN LISTS _project_names)
 			_bitloop_get_project_visibility(${project_name} project_visible)

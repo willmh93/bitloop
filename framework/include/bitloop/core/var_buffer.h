@@ -87,6 +87,17 @@ public:
         return __scene._pull(arr, temp, name);
     }
 
+    template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
+    std::remove_const_t<T>& _temp_pull(const T& member, bool /*ignored*/ = true, const char* name = nullptr) const
+    {
+        return __scene._pull(member, true, name);
+    }
+    template<class T, std::size_t N>
+    auto& _temp_pull(const T(&arr)[N], bool /*ignored*/ = true, const char* name = nullptr) const
+    {
+        return __scene._pull(arr, true, name);
+    }
+
     // todo: Force a crash/debug break when committing the same member twice before syncing
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
     void _commit(const T& member, const T& staged) const
@@ -146,14 +157,14 @@ struct VarBuffer
         std::any mark_live;    // snapshot of *live* memory
         std::any mark_shadow;  // snapshot of current shadow (value)
 
-        bool changed = false;  // differs from live (your existing flag)
+        bool changed = false;  // set by _commit if shadow != mark_shadow
         bool temp = false;
 
         // type-erased ops
         void (*assign_fn)(void*, const std::any&) = nullptr;                 // any -> live
         bool (*equals_fn)(const void*, const std::any&) = nullptr;           // live vs any
-        void (*store_from_live_fn)(std::any&, const void*) = nullptr;        // live -> any (NEW)
-        bool (*equals_any_fn)(const std::any&, const std::any&) = nullptr;   // any vs any (NEW)
+        void (*store_from_live_fn)(std::any&, const void*) = nullptr;        // live -> any
+        bool (*equals_any_fn)(const std::any&, const std::any&) = nullptr;   // any vs any
 
         void (*print_fn)(std::ostream&, const std::any&) = nullptr;
 
@@ -251,7 +262,6 @@ struct VarBuffer
                             os << arr[i];
                         }
                         else {
-                            // fallback for elements without operator<<
                             os << "<elem>";
                         }
                     }
@@ -266,7 +276,7 @@ struct VarBuffer
 
     // ---- UI side ----
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
-    std::remove_const_t<T>& _pull(const T& member, bool temp = false, const char* name=nullptr) const
+    std::remove_const_t<T>& _pull(const T& member, bool temp = false, const char* name = nullptr) const
     {
         using U = std::remove_const_t<T>;
 
@@ -284,6 +294,8 @@ struct VarBuffer
             e.value = static_cast<const U&>(member);
             bind_ops<T>(e);
         }
+
+        //e.mark_shadow = e.value;
 
         e.temp = e.temp || temp;
         return *std::any_cast<U>(&e.value);
@@ -310,53 +322,54 @@ struct VarBuffer
             bind_ops<T[N]>(e);
         }
 
+        // NEW: snapshot "before" shadow value
+        //e.mark_shadow = e.value;
+
         e.temp = e.temp || temp;
         return *std::any_cast<Store>(&e.value);
     }
 
-    // todo: Force a crash/debug break when committing the same member twice before syncing
+    // _commit now ONLY compares shadow vs snapshot; no writes.
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
-    void _commit(const T& member, const T& staged_value) const
+    void _commit(const T& member, const T& /*staged_value*/) const
     {
-        using U = std::remove_const_t<T>;
-
         const void* key = static_cast<const void*>(&member);
-        auto& e = ui_stage[key];
+        auto it = ui_stage.find(key);
+        if (it == ui_stage.end()) return;
+        Entry& e = it->second;
 
-        if (!e.owner)
-        {
-            e.owner = this;
-            e.key = key;
-        }
-
-        e.value = static_cast<const U&>(staged_value);
-        bind_ops<T>(e);
-        e.changed = !e.equals_fn(&member, e.value);
+        if (!e.equals_any_fn) bind_ops<T>(e);
+        e.changed = (e.value.has_value() && e.mark_shadow.has_value())
+            ? !e.equals_any_fn(e.value, e.mark_shadow)
+            : false;
     }
 
-    // todo: Force a crash/debug break when committing the same member twice before syncing
     template<class T, std::size_t N>
-    void _commit(const T(&member)[N], const std::array<T, N>& staged) const
+    void _commit(const T(&member)[N], const std::array<T, N>& /*staged*/) const
     {
         const void* key = static_cast<const void*>(member);
-        auto& e = ui_stage[key];
-        if (!e.owner)
-        {
-            e.owner = this;
-            e.key = key;
-        }
-        e.value = staged;
-        bind_ops<T[N]>(e);
-        e.changed = !e.equals_fn(member, e.value);
+        auto it = ui_stage.find(key);
+        if (it == ui_stage.end()) return;
+        Entry& e = it->second;
+
+        if (!e.equals_any_fn) bind_ops<T[N]>(e);
+        e.changed = (e.value.has_value() && e.mark_shadow.has_value())
+            ? !e.equals_any_fn(e.value, e.mark_shadow)
+            : false;
     }
 
-    // todo: Force a crash/debug break when committing the same member twice before syncing
     template<class T, std::size_t N>
-    void _commit(const T(&member)[N], const T(&staged)[N]) const
+    void _commit(const T(&member)[N], const T(&)[N]) const
     {
-        std::array<std::remove_const_t<T>, N> tmp;
-        std::copy(staged, staged + N, tmp.begin());
-        _commit(member, tmp);
+        const void* key = static_cast<const void*>(member);
+        auto it = ui_stage.find(key);
+        if (it == ui_stage.end()) return;
+        Entry& e = it->second;
+
+        if (!e.equals_any_fn) bind_ops<T[N]>(e);
+        e.changed = (e.value.has_value() && e.mark_shadow.has_value())
+            ? !e.equals_any_fn(e.value, e.mark_shadow)
+            : false;
     }
 
     template<class T>

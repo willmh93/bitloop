@@ -3,7 +3,7 @@
 
 SIM_BEG;
 
-using namespace BL;
+using namespace bl;
 
 struct ExampleText_Scene_Data : VarBuffer
 {

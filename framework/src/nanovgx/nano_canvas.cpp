@@ -79,7 +79,7 @@ void Painter::drawWorldAxis(
     const double wMaxY = std::max({ TL.y, TR.y, BR.y, BL.y });
 
     // ======== Step calculation ========
-    const double targetPx = ScaleSize(140.0);
+    const double targetPx = scale_size(140.0);
     double coarseX, coarseY, fadeX, fadeY;
     const double stepX = niceStepDivisible(targetPx / camera.zoomX(), coarseX, fadeX);
     const double stepY = niceStepDivisible(targetPx / camera.zoomY(), coarseY, fadeY);
@@ -127,7 +127,7 @@ void Painter::drawWorldAxis(
     // ======== Tick marks and labels ========
     if (axis_opacity > 0.0 || text_opacity > 0.0) 
     {
-        const double tick_length = ScaleSize(6);
+        const double tick_length = scale_size(6);
 
         // Align all text by center
         camera.stageTransform();

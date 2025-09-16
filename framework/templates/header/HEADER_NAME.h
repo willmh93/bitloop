@@ -1,6 +1,6 @@
 #pragma once
 #include <bitloop.h>
-using namespace BL;
+using namespace bl;
 
 SIM_BEG;
 

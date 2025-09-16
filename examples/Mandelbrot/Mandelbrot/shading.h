@@ -7,7 +7,7 @@
 
 SIM_BEG;
 
-using namespace BL;
+using namespace bl;
 
 enum class MandelSmoothing
 {
@@ -36,6 +36,15 @@ enum struct GradientPreset
     COUNT
 };
 
+enum MandelShaderFormula
+{
+    ITER_DIST_STRIPE,          // a+b+c
+    ITER_DIST__MUL__STRIPE,   // (a+b)*c
+    ITER__MUL__DIST_STRIPE,  // a*(b+c)
+    COUNT
+    //~ // todo: Always tween stripe weight to 0 before switching mode
+};
+
 static const char* ColorGradientNames[(int)GradientPreset::COUNT] = {
     "CLASSIC",
     "RAINBOW",
@@ -43,6 +52,11 @@ static const char* ColorGradientNames[(int)GradientPreset::COUNT] = {
     "REFRACTION"
 };
 
+static const char* MandelFormulaNames[(int)MandelShaderFormula::COUNT] = {
+    "iter + dist + stripe",
+    "iter + (dist * stripe)",
+    "(iter * dist) + stripe"
+};
 
 template<GradientPreset type>
 inline void colorGradientTemplate(double t, uint8_t& r, uint8_t& g, uint8_t& b)
@@ -149,5 +163,6 @@ inline void generateGradientFromPreset(
     break;
     }
 }
+
 
 SIM_END;

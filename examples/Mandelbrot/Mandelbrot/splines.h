@@ -3,7 +3,7 @@
 
 SIM_BEG;
 
-using namespace BL;
+using namespace bl;
 
 namespace MandelSplines
 {

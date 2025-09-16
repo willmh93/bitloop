@@ -4,7 +4,7 @@
 
 SIM_BEG(Test2)
 
-using namespace BL;
+using namespace bl;
 
 struct Particle : public DVec2
 {

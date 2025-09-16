@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef BL_BEGIN_NS
-#define BL_BEGIN_NS namespace BL {
+#define BL_BEGIN_NS namespace bl {
 #endif
 #ifndef BL_END_NS
 #define BL_END_NS   }
@@ -73,7 +73,7 @@
 
 template<typename T>
 constexpr T bl_infinity() {
-    //static_assert(BL::is_floating_point_v<T>, "bl_infinity<T> requires a floating-point type");
+    //static_assert(bl::is_floating_point_v<T>, "bl_infinity<T> requires a floating-point type");
     #ifdef BL_FAST_MATH
     return T(1e300); // Safe large finite fallback
     #else

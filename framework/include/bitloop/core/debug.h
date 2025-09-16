@@ -64,7 +64,7 @@ struct Global
 #endif
 
 #ifndef BL_BEGIN_NS
-#define BL_BEGIN_NS namespace BL {
+#define BL_BEGIN_NS namespace bl {
 #endif
 #ifndef BL_END_NS
 #define BL_END_NS   }
@@ -229,7 +229,7 @@ inline DebugStream& operator<<(DebugStream& s, General) {
 BL_END_NS
 
 // factory
-[[nodiscard]] inline BL::DebugStream blPrint() { return BL::DebugStream{}; }
+[[nodiscard]] inline bl::DebugStream blPrint() { return bl::DebugStream{}; }
 inline void blPrint(const char* fmt, ...)
 {
     const size_t small_size = 1024;
@@ -247,7 +247,7 @@ inline void blPrint(const char* fmt, ...)
         #ifdef WIN32
         OutputDebugStringA(small_buf);
         #endif
-        BL::ImDebugPrint(small_buf);
+        bl::ImDebugPrint(small_buf);
         std::cout << small_buf;
         return;
     }
@@ -279,7 +279,7 @@ inline void blPrint(const char* fmt, ...)
     #ifdef WIN32
     OutputDebugStringA(buf.c_str());
     #endif
-    BL::ImDebugPrint(buf.c_str());
+    bl::ImDebugPrint(buf.c_str());
     std::cout << buf.c_str();
 }
 

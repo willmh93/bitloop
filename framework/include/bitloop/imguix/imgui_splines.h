@@ -382,7 +382,7 @@ namespace ImSpline
 		int dragging_index = -1;          // Point index of handle/knot being dragged
 		ImVec2 h1_offset, h2_offset;      // Handle offsets (when dragging knot)
 		float opposite_handle_dist = 0;   // Opposite knot handle dist when moving handle
-		float xy_precision = 0.001f;// 1e-6f;
+		float xy_precision = 0.001f;      // 1e-6f;
 
 		bool bInitialized = false;
 
@@ -498,6 +498,9 @@ namespace ImSpline
 		{
 			if (col_x_snap < 1e-9)
 				return;
+
+			for (int i = 0; i < col_segments.Size; i++)
+				col_segments[i].clear();
 
 			col_segments.clear();
 			col_segments.resize(col_count + 1, ImVector<int>());
@@ -715,6 +718,14 @@ namespace ImSpline
 			create(segment_count, points);
 		}
 
+
+		~Spline()
+		{
+			for (int i = 0; i < col_segments.Size; i++)
+				col_segments[i].clear();
+			col_segments.clear();
+		}
+
 		void create(int segment_count, std::initializer_list<ImVec2> points)
 		{
 			if (path_length != segment_count)
@@ -737,9 +748,18 @@ namespace ImSpline
 		Spline& operator =(const Spline& rhs)
 		{
 			// regular serialization not saving/loading path_length?
-			///deserialize(rhs.serialize());
+			//deserialize(rhs.serialize(SplineSerializationMode::CPP_ARRAY));
 
-			//if (spline_hash != rhs.spline_hash)
+			panning = rhs.panning;
+			pan_mouse_down_pos = rhs.pan_mouse_down_pos;        // Mouse position on middle click (drag)
+			pan_mouse_down_vr = rhs.pan_mouse_down_vr;;         // Viewport rect on middle click (drag)
+			dragging_index = rhs.dragging_index;          // Point index of handle/knot being dragged
+			h1_offset = rhs.h1_offset;
+			h2_offset = rhs.h2_offset;      // Handle offsets (when dragging knot)
+			opposite_handle_dist = rhs.opposite_handle_dist;   // Opposite knot handle dist when moving handle
+			xy_precision = rhs.xy_precision;      // 1e-6f;
+
+			if (spline_hash != rhs.spline_hash)
 			{
 				bInitialized = rhs.bInitialized;
 				point_arr = rhs.point_arr;
@@ -770,15 +790,16 @@ namespace ImSpline
 
 		bool operator ==(const Spline& rhs) const
 		{
-			bool a_empty = point_arr.empty();
-			bool b_empty = rhs.point_arr.empty();
-
-			if (a_empty && b_empty)
-				return true; // Both empty = same
-			else if (a_empty || b_empty)
-				return false; // Only one empty = different
-
-			return memcmp(point_arr.Data, rhs.point_arr.Data, rhs.point_arr.size_in_bytes()) == 0;
+			return hash() == rhs.hash();
+			///bool a_empty = point_arr.empty();
+			///bool b_empty = rhs.point_arr.empty();
+			///
+			///if (a_empty && b_empty)
+			///	return true; // Both empty = same
+			///else if (a_empty || b_empty)
+			///	return false; // Only one empty = different
+			///
+			///return memcmp(point_arr.Data, rhs.point_arr.Data, rhs.point_arr.size_in_bytes()) == 0;
 		}
 		bool operator !=(const Spline& rhs) const
 		{

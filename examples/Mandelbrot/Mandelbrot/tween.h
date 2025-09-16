@@ -6,9 +6,7 @@ struct Mandelbrot_Scene_Data;
 struct MandelState;
 
 
-void startTween(
-    Mandelbrot_Scene& scene_data,
-    const MandelState& target);
+void startTween(Mandelbrot_Scene& scene_data);
 
 void lerpState(
     Mandelbrot_Scene& scene_data,

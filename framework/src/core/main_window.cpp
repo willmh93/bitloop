@@ -28,19 +28,19 @@ void MainWindow::init()
     // Always initializes window on first call
     checkChangedDPR();
 
-    canvas.create(Platform()->dpr());
-    overlay.create(Platform()->dpr());
+    canvas.create(platform()->dpr());
+    overlay.create(platform()->dpr());
 }
 
 void MainWindow::checkChangedDPR()
 {
-    Platform()->update();
+    platform()->update();
 
     static float last_dpr = -1.0f;
-    if (fabs(Platform()->dpr() - last_dpr) > 0.01f)
+    if (fabs(platform()->dpr() - last_dpr) > 0.01f)
     {
         // DPR changed
-        last_dpr = Platform()->dpr();
+        last_dpr = platform()->dpr();
 
         initStyles();
         initFonts();
@@ -59,8 +59,8 @@ void MainWindow::initStyles()
     style.PopupRounding = 3.0f;
     style.GrabRounding = 2.0f;
     style.TabRounding = 6.0f;
-    style.ScrollbarRounding = Platform()->is_mobile() ? 12.0f : 6.0f;
-    style.ScrollbarSize = Platform()->is_mobile() ? 30.0f : 20.0f;
+    style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f;
+    style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;
 
     // Colors
     ImVec4* colors = ImGui::GetStyle().Colors;
@@ -120,7 +120,7 @@ void MainWindow::initStyles()
     colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);     // Dim background for windowing
     colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);      // Dim background for modal windows
 
-    style.ScaleAllSizes(Platform()->ui_scale_factor());
+    style.ScaleAllSizes(platform()->ui_scale_factor());
 }
 
 void MainWindow::initFonts()
@@ -129,22 +129,22 @@ void MainWindow::initFonts()
     ImGuiIO& io = ImGui::GetIO();
     
     float base_pt = 16.0f;
-    std::string font_path = Platform()->path("/data/fonts/DroidSans.ttf");
-    std::string font_path_mono = Platform()->path("/data/fonts/UbuntuMono.ttf");
+    std::string font_path = platform()->path("/data/fonts/DroidSans.ttf");
+    std::string font_path_mono = platform()->path("/data/fonts/UbuntuMono.ttf");
     ImFontConfig config;
     config.OversampleH = 3;
     config.OversampleV = 3;
     
     io.Fonts->Clear();
-    main_font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
-    mono_font = io.Fonts->AddFontFromFileTTF(font_path_mono.c_str(), base_pt * Platform()->dpr() * Platform()->font_scale(), &config);
+    main_font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), base_pt * platform()->dpr() * platform()->font_scale(), &config);
+    mono_font = io.Fonts->AddFontFromFileTTF(font_path_mono.c_str(), base_pt * platform()->dpr() * platform()->font_scale(), &config);
     io.Fonts->Build();
 }
 
 void MainWindow::populateProjectUI()
 {
-    ImGui::BeginPaddedRegion(ScaleSize(10.0f));
-    ProjectWorker::instance()->populateAttributes();
+    ImGui::BeginPaddedRegion(scale_size(10.0f));
+    project_worker()->populateAttributes();
     ImGui::EndPaddedRegion();
 }
 
@@ -210,12 +210,12 @@ bool MainWindow::toolbarButton(const char* id, const char* symbol, const Toolbar
 
 void MainWindow::populateToolbar()
 {
-    if (Platform()->is_mobile())
+    if (platform()->is_mobile())
         return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
 
-    float size = ScaleSize(30.0f);
+    float size = scale_size(30.0f);
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImVec2 toolbarSize(avail.x, size); // Outer frame size
     ImVec4 frameColor = ImVec4(0, 0, 0, 0); // Toolbar background color
@@ -237,7 +237,7 @@ void MainWindow::populateToolbar()
     ImGui::SameLine();
     toolbarButton("##pause", "pause", pause, ImVec2(size, size));
 
-    if (Platform()->is_desktop_native())
+    if (platform()->is_desktop_native())
     {
         ImGui::SameLine();
         toolbarButton("##record", "record", record, ImVec2(size, size));
@@ -264,8 +264,8 @@ void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i,
         // Leaf project node
         if (ImGui::Button(node.name.c_str()))
         {
-            ProjectWorker::instance()->setActiveProject(node.project_info->sim_uid);
-            ProjectWorker::instance()->startProject();
+            project_worker()->setActiveProject(node.project_info->sim_uid);
+            project_worker()->startProject();
         }
     }
     else
@@ -534,10 +534,10 @@ void MainWindow::populateCollapsedLayout()
     // Collapse layout
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(6.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6.0f, 6.0f));
         ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         //populateToolbar();
-        //ImGui::Dummy(ScaleSize(0, 3));
+        //ImGui::Dummy(scale_size(0, 3));
 
         populateProjectTree(true);
 
@@ -555,10 +555,10 @@ void MainWindow::populateCollapsedLayout()
     if (ImGui::Begin("Active", nullptr, window_flags))
     {
         // Only add padding after toolbar to inner-child
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(8.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(8.0f, 8.0f));
         ImGui::BeginChild("AttributesFrameInner", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         populateToolbar();
-        ImGui::Dummy(ScaleSize(0, 6));
+        ImGui::Dummy(scale_size(0, 6));
 
         populateProjectUI();
 
@@ -580,7 +580,7 @@ void MainWindow::populateExpandedLayout()
     // Show both windows
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaleSize(6, 6));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
         ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         //populateToolbar();
         //ImGui::Dummy(ImVec2(0, 3));
@@ -618,11 +618,11 @@ void MainWindow::populateViewport()
         else if (shared_sync.project_thread_started)
         {
             // Launch initial simulation 1 frame late (background thread)
-            if (!ProjectWorker::instance()->getActiveProject())
+            if (!project_worker()->getActiveProject())
             {
                 auto first_project = ProjectBase::projectInfoList().front();
-                ProjectWorker::instance()->setActiveProject(first_project->sim_uid);
-                ProjectWorker::instance()->startProject();
+                project_worker()->setActiveProject(first_project->sim_uid);
+                project_worker()->startProject();
 
                 // Kick-start work-render-work-render loop
                 need_draw = true;
@@ -638,7 +638,7 @@ void MainWindow::populateViewport()
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
 
                 //blPrint() << "projectDraw()";
-                ProjectWorker::instance()->draw();
+                project_worker()->draw();
                 canvas.end();
 
                 shared_sync.frame_ready = false;
@@ -692,7 +692,7 @@ void MainWindow::populateUI()
         need_draw = shared_sync.frame_ready;
     }
 
-    bool collapse_layout = vertical_layout || Platform()->max_char_rows() < 40.0f;
+    bool collapse_layout = vertical_layout || platform()->max_char_rows() < 40.0f;
 
     if (ProjectBase::projectInfoList().size() <= 1)
         collapse_layout = false;
@@ -724,7 +724,7 @@ void MainWindow::populateUI()
             if (done_first_size)
             {
                 overlay.begin(0, 0, 0, 0);
-                ProjectWorker::instance()->drawOverlay();
+                project_worker()->drawOverlay();
                 //overlay.setFillStyle(255, 0, 0, 255);
                 //overlay.fillRoundedRect(10, 10, 150, 50, 8);
                 overlay.end();

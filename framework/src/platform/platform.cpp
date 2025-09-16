@@ -75,7 +75,7 @@ void PlatformManager::resized()
     SDL_GetWindowSizeInPixels(window, &fb_w, &fb_h);
     #endif
 
-    Platform()->update();
+    platform()->update();
 }
 
 bool PlatformManager::device_vertical()

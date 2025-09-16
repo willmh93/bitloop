@@ -3,7 +3,7 @@
 #include "shading.h"
 
 SIM_BEG;
-using namespace BL;
+using namespace bl;
 
 struct MandelState
 {
@@ -18,9 +18,14 @@ struct MandelState
     double      quality                        = 0.5; // Used for UI (ignored during tween, represents iter_lim OR % of iter_lim)
                                                
     bool        use_smoothing                  = true;
-    double      iter_dist_mix                  = 0.0;
 
-    double iter_ratio = 1.0, dist_ratio = 0.0, stripe_ratio = 0.0;
+    double iter_weight = 1.0;
+    double dist_weight = 0.0;
+    double stripe_weight = 0.0;
+
+    //double iter_ratio = 1.0;
+    //double dist_ratio = 0.0;
+    //double stripe_ratio = 0.0;
                                                
     double      cycle_iter_weight              = 0.0;
     bool        cycle_iter_dynamic_limit       = true;
@@ -44,6 +49,7 @@ struct MandelState
     double      hue_shift_step                 = 0.136;
                 
     int         smoothing_type = (int)MandelSmoothing::ITER; // this is being dynamically set, no need to save
+    int         shade_formula = (int)MandelShaderFormula::ITER_DIST_STRIPE;
 
     ImGradient  gradient;
 
@@ -105,7 +111,9 @@ struct MandelState
             // Color cycle
             {
                 // Mix ratio
-                info["m"] = JSON::markCleanFloat(iter_dist_mix, 2);
+                info["m"] = JSON::markCleanFloat(iter_weight, 2);
+                info["n"] = JSON::markCleanFloat(dist_weight, 2);
+                info["o"] = JSON::markCleanFloat(stripe_weight, 2);
 
                 // ITER
                 info["i"] = JSON::markCleanFloat(cycle_iter_value);
@@ -115,6 +123,10 @@ struct MandelState
                 info["d"] = JSON::markCleanFloat(cycle_dist_value, 5);
                 info["s"] = JSON::markCleanFloat(cycle_dist_sharpness, 5);
 
+                // STRIPE
+                info["v"] = (int)stripe_params.freq;
+                info["j"] = JSON::markCleanFloat(stripe_params.phase, 4);
+                info["c"] = JSON::markCleanFloat(stripe_params.contrast, 3);
             }
 
             // Shift
@@ -206,7 +218,10 @@ private:
             // Color cycle
             {
                 // Mix ratio
-                iter_dist_mix = info.value("m", iter_dist_mix);
+                //iter_dist_mix = info.value("m", iter_dist_mix);
+                iter_weight = info.value("m", iter_weight);
+                dist_weight = info.value("n", 1.0 - iter_weight);
+                stripe_weight = info.value("o", 0.0);
 
                 // ITER
                 cycle_iter_value = info.value("i", cycle_iter_value);
@@ -215,6 +230,11 @@ private:
                 // DIST
                 cycle_dist_value = info.value("d", cycle_dist_value);
                 cycle_dist_sharpness = info.value("s", cycle_dist_sharpness);
+
+                // STRIPE
+                stripe_params.freq = info.value("v", 0.0f);
+                stripe_params.phase = info.value("j", 0.0f);
+                stripe_params.contrast = info.value("c", 3.0f);
             }
 
             // Shift
@@ -229,9 +249,6 @@ private:
             // Gradient
             if (info.contains("p"))
                 gradient.deserialize(info.value("p", ""));
-
-            gradient.clearSelectedMark();
-            gradient.clearDraggingMark();
         }
         else if (version >= 1)
         {

@@ -4,7 +4,7 @@
 
 SIM_BEG;
 
-using namespace BL;
+using namespace bl;
 
 
 void plot(const SceneBase* scene, Viewport* ctx, bool interactive, int segments = 720, double ox=0);

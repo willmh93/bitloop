@@ -3,7 +3,7 @@
 
 SIM_BEG;
 
-using namespace BL;
+using namespace bl;
 
 struct MandelPreset
 {
@@ -38,6 +38,11 @@ std::vector<MandelPreset> generateMandelPresets()
     presets.push_back({ "Hexadent",     "NBMQvNlv1HiTNmem4qDtTtspRQ1rdwF8A03QdoN76wHPU3a2pMUGdLDZsBi3cwHsfQ19HcVBRalf0OLrKnfl48UOr1tiCzcjG4n8zmafqu0GtoK1o3qy5yYrlhV9aIoI0xvPGcLiZZRgVsIHKXpwCjL0SDbc2OKyM2SIE7cWBz4eurIqmG3xf8Ubg1C1pcm8cFBZaQzFEgDJrbdSra9w8cHb6BjOJw5B4G1jAUDQ29gS5ob" });
     presets.push_back({ "Hyperdrive",   "HyU81zDyMYSP3nArueWaIHfCItdLWgglt0iw1noP8tkD1KhO48w9jAWFDMK8GyArUNzGuTWOLWPRwvk03SZPDZEjcKZXgclVjUc8OIeBjeIX8DnCH2zBD9wgQq3bFH46R9o4mEZy4m9DmH6HI4xDv3UqCYjzMQ6oE9Qfd4EjJcN40ioc1Z8vHZGbfLfFamNdORaQDMghH0MpJjapaAbnf1o6rpVPyZx" });
     presets.push_back({ "unnamed",      "Eq1M8hgLjaSlK1HsCcGIpBpZ2BYy117FgVUFg5Ht2SgEgVDVMF1EmmOC5LOJgCWOTBcyAgcPtXNqx4679OUf9jVCkbvSpXzEv7lNglRDztCQ2xw1HBnNfiZ9EsOlvD1jrIol0tJeZslur0q3Mdjy6PeE8VWUqdCmIqxGQdu8y8D9IDkPYQKb0BSBJOr5BnJbSqN764iiSXoIJUz" });
+    presets.push_back({ "Feathers",     "DkDmza9I0v64pvztFTquIlsrd9TZ844a5kHeT8kOX1L7eo4joxsIoMKzM9yGICOFbztE3tFvKopXGUosNWLwqyadEo6kMgwqmIMSNTn9lHdyv3GnCGN2U90vZmwVkqjmVefs1S2nO5IWIRo0TUpbLcYpGBQclCzdizhDYUucdVeD4UgwIkgRdJvKR3cgjDqE17YYCgySL1ldLnOVP0EG8zF7dg5gho1YFNa03AERPH4fNGPA5p" });
+    presets.push_back({ "Silk",         "Hyl1HBjNhNud9xtkS7zckfa9Lr0pA8BJDniNfAyfU6XPYuc4pYNSWfp7VWPt8sPJd3PnEQfBVCa4MZVpJQMB8etWpwlQH25MbgwpqI7JzjBzSDUF5J0RfsGJkwdAtsuwsXQhNuqmsD7sm5JzbNckhO9dfkjeqQjulkLrJrga1HpO1xp5WVbRROwghJYUB9jlYi021YWni54FJXPQ1FfnDDUfBIs149B" });
+    presets.push_back({ "Fern",         "RDkRNfRJwl1wRLToaLfH5yqx9UmgtM4jAIbWod7RmPKmVNdu0214lSbAWThWvSAflQc4LmFxgTfxXuAOvogU3S6sKpeX2yITUQAk9AmGp2Mk6YYXodZf9LMyd3AKVFGnhVTcdDhVqYURZXCdOpXfYsGe7BGtLtpGCN5zlW8RsLhePWND72zNsVrNaYuinVoYb1muHMZDAiUP" });
+    presets.push_back({ "Peacock",      "BpW3fk7RiWfAURbSS4aRfza5vDq0Hxe9JMAmwpwg4SoT7fkdCvUiQjGJCWzOmiiZhll7VCmVA1MEhayAirV6V0UOolnlZmWIRJK1j7IAEWkqCuAgYE2ZvvNS7IGIrwcCMkB2ReJwIYqKqICzeFDtdwZ6QRGuw5CISU3rtXwDKU2HQytVkbvZVSn5OdNQ0zUgtukgO5VxbXopJOFhNWqGdYgljR" });
+    //https://bitloop.dev/Mandelbrot?data=GDrdlgOQ7a1SWMnaVnoGYcEq339e6kI2yvmtTZOz8GJIGanq3Wf2XZjeifvtIi1lpdxXFvCPyqg3dTyTuF5XL6sJoQezHsfQFpTwpbpLMj59PNY1Dlw0tmoTGvQc9BH5c5cPwj5BORIFtYx35FaCulVFwvgwxFdEErk38clNVpchdVeD8lPW8b9RkbJtVgPlJtW8eweyUSJ2s2vfWvILJYD
     return presets;
 }
 

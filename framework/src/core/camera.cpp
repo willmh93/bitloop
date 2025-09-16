@@ -5,24 +5,6 @@
 
 BL_BEGIN_NS
 
-//void Camera::setTransformFilters(bool _transform_coordinates, bool _scale_line_txt, bool _scale_sizes, bool _rotate_text)
-//{
-//    transform_coordinates = _transform_coordinates;
-//    scale_lines = _scale_line_txt;
-//    scale_sizes = _scale_sizes;
-//    rotate_text = _rotate_text;
-//    viewport->setLineWidth(viewport->line_width);
-//}
-//
-//void Camera::setTransformFilters(bool all)
-//{
-//    transform_coordinates = all;
-//    scale_lines = all;
-//    scale_sizes = all;
-//    rotate_text = all;
-//    viewport->setLineWidth(viewport->line_width);
-//}
-
 void Camera::worldTransform()
 {
     transform_coordinates = true;
@@ -232,6 +214,8 @@ void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
         pan_beg_cam_zoom_x = this->zoomX();
         pan_beg_cam_zoom_y = this->zoomY();
         pan_beg_cam_angle = this->rotation();
+
+        last_pan_snapped_cam_grid_pos = DDVec2(cam_x * zoom_x, cam_y * zoom_y).snapped(cam_pos_stage_snap_size);
     }
     else
     {
@@ -266,12 +250,25 @@ bool Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 
             DVec2 world_offset = stageToWorldOffset(dx, dy);
             //blPrint("(dx,dy) = (%.3f, %.3f)", world_offset.x, world_offset.y);
-            //blPrint() << "(dx,dy) = (" << BL::dp(3) << world_offset.x << ", " << world_offset.)y
+            //blPrint() << "(dx,dy) = (" << bl::dp(3) << world_offset.x << ", " << world_offset.)y
 
-            changed |= setPos(
-                pan_beg_cam_x - world_offset.x /* * pan_mult */,
-                pan_beg_cam_y - world_offset.y /* * pan_mult */
-            );
+            flt128 new_cam_world_x = pan_beg_cam_x - world_offset.x;
+            flt128 new_cam_world_y = pan_beg_cam_y - world_offset.y;
+
+            DDVec2 potential_snapped_cam_grid_pos = DDVec2(new_cam_world_x * zoom_x, new_cam_world_y * zoom_y).snapped(cam_pos_stage_snap_size);
+
+            if (potential_snapped_cam_grid_pos != last_pan_snapped_cam_grid_pos)
+            {
+                changed |= setPos(
+                    potential_snapped_cam_grid_pos.x / zoom_x,
+                    potential_snapped_cam_grid_pos.y / zoom_y
+                );
+            }
+            
+            if (changed)
+            {
+                last_pan_snapped_cam_grid_pos = potential_snapped_cam_grid_pos;
+            }
 
             if (pan_down_touch_dist > 0.0)
             {
@@ -286,12 +283,12 @@ bool Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             {
                 double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
                 changed |= setRotation(pan_beg_cam_angle + delta_rotation);
-                //blPrint() << "Setting rotation: " << BL::dp(3) << (double)cam_rotation;
+                //blPrint() << "Setting rotation: " << bl::dp(3) << (double)cam_rotation;
 
                 // todo: In order to lock camera during pan, you may need to manually
                 //       send an event mimicking a mouse move in order to trigger pollEvents
 
-                //ProjectWorker::instance()->queueEvent()
+                //project_worker()->queueEvent()
             }
         }
         else
@@ -345,7 +342,7 @@ bool Camera::handleWorldNavigation(Event event, bool single_touch_pan, bool zoom
 
     PointerEvent e(event);
 
-    if (Platform()->is_mobile())
+    if (platform()->is_mobile())
     {
         // Support both single-finger pan & 2 finger transform
         switch (e.type())
@@ -542,7 +539,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
 
     PointerEvent e(event);
 
-    if (Platform()->is_mobile())
+    if (platform()->is_mobile())
     {
         // Support both single-finger pan & 2 finger transform
         switch (e.type())
@@ -714,7 +711,7 @@ void Camera::handleWorldNavigation(Event event, bool single_touch_pan)
 void CameraViewController::populateUI(DRect cam_area)
 {
     float required_space = 0.0f;
-    ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", ScaleSize(20.0f));
+    ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", scale_size(20.0f));
 
     int decimals = getPositionDecimalPlaces();
     char format[16];

@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <cmath>
 #include <limits>
+#include <type_traits>
+#include <cstddef>
 
 #include <bitloop/util/flt128.h>
 
@@ -17,7 +19,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
 
-#define BL_BEGIN_NS namespace BL {
+#define BL_BEGIN_NS namespace bl {
 #define BL_END_NS   }
 
 // Extend GLM types for flt128
@@ -131,6 +133,7 @@ struct Vec2
     [[nodiscard]] constexpr T angleTo(const Vec2& b) const { return atan2(b.y - y, b.x - x); }
 
     // operators
+    [[nodiscard]] constexpr Vec2 snapped(T step) const { return { round(x/step)*step, round(y/step)*step }; }
     [[nodiscard]] constexpr Vec2 floored() const { return { floor(x), floor(y) }; }
     [[nodiscard]] constexpr Vec2 rounded() const { return { round(x), round(y) }; }
     [[nodiscard]] constexpr Vec2 floored(double offset) const { return { floor(x) + offset, floor(y) + offset }; }
@@ -802,6 +805,181 @@ typedef Ray<double>           DRay;
 typedef AngledRect<double>    DAngledRect;
 typedef AngledRect<flt128>    DDAngledRect;
 
+
+#pragma once
+#include <type_traits>
+#include <cstddef>
+#include <cstdint>
+
+// ================= core utilities =================
+
+// nth_type<N, Ts...> -> the Nth type from Ts...
+template<std::size_t N, class T0, class... Ts>
+struct nth_type : nth_type<N - 1, Ts...> {};
+template<class T0, class... Ts>
+struct nth_type<0, T0, Ts...> { using type = T0; };
+
+// index_of<T, Ts...> -> first index of T, or npos
+constexpr std::size_t type_npos = static_cast<std::size_t>(-1);
+
+template<class T, class... Ts>
+struct index_of_impl;
+
+template<class T>
+struct index_of_impl<T> { static constexpr std::size_t value = type_npos; };
+
+template<class T, class U0, class... Us>
+struct index_of_impl<T, U0, Us...> {
+    static constexpr std::size_t tail = index_of_impl<T, Us...>::value;
+    static constexpr std::size_t value =
+        std::is_same_v<T, U0> ? 0 :
+        (tail == type_npos ? type_npos : 1 + tail);
+};
+
+template<class T, class... Ts>
+inline constexpr std::size_t index_of_v = index_of_impl<T, Ts...>::value;
+
+// ----- lazy machinery to avoid instantiating the "discarded" branch -----
+template<class T> struct type_identity { using type = T; };
+
+template<bool, class Then, class Else>
+struct lazy_cond;
+template<class Then, class Else>
+struct lazy_cond<true, Then, Else> { using type = typename Then::type; };
+template<class Then, class Else>
+struct lazy_cond<false, Then, Else> { using type = typename Else::type; };
+
+template<std::size_t N, class... Ts>
+struct lazy_nth { using type = typename nth_type<N, Ts...>::type; };
+
+// ================= upgrade / downgrade =================
+
+template<class T, class... Ladder>
+struct upgrade_type {
+private:
+    static constexpr std::size_t idx = index_of_v<T, Ladder...>;
+    static constexpr std::size_t N = sizeof...(Ladder);
+    static constexpr bool can_up = (idx != type_npos) && (idx + 1 < N);
+public:
+    using type = typename lazy_cond<
+        can_up,
+        lazy_nth<idx + 1, Ladder...>,
+        type_identity<T>
+    >::type;
+};
+template<class T, class... Ladder>
+using upgrade_type_t = typename upgrade_type<T, Ladder...>::type;
+
+template<class T, class... Ladder>
+struct downgrade_type {
+private:
+    static constexpr std::size_t idx = index_of_v<T, Ladder...>;
+    static constexpr bool        can_down = (idx != type_npos) && (idx > 0);
+public:
+    using type = typename lazy_cond<
+        can_down,
+        lazy_nth<idx - 1, Ladder...>,
+        type_identity<T>
+    >::type;
+};
+template<class T, class... Ladder>
+using downgrade_type_t = typename downgrade_type<T, Ladder...>::type;
+
+// ================= type_list + adapters =================
+
+template<class... Ts>
+struct type_list {};
+
+template<template<class, class...> class Target, class List>
+struct expand;
+
+template<template<class, class...> class Target, class... Ts>
+struct expand<Target, type_list<Ts...>> {
+    template<class T>
+    using into_t = typename Target<T, Ts...>::type;
+};
+
+// List-based adapters (nicer syntax)
+template<class T, class List>
+struct upgrade_from_list;
+template<class T, class... Ts>
+struct upgrade_from_list<T, type_list<Ts...>> {
+    using type = upgrade_type_t<T, Ts...>;
+};
+template<class T, class List>
+using upgrade_from_list_t = typename upgrade_from_list<T, List>::type;
+
+template<class T, class List>
+struct downgrade_from_list;
+template<class T, class... Ts>
+struct downgrade_from_list<T, type_list<Ts...>> {
+    using type = downgrade_type_t<T, Ts...>;
+};
+template<class T, class List>
+using downgrade_from_list_t = typename downgrade_from_list<T, List>::type;
+
+// ================= rebinding class templates =================
+// Upgrade/downgrade the FIRST type parameter of a class-template instance.
+
+template<class Instance, class List>
+struct upgrade_template;
+
+template<template<class, class...> class C, class T, class... Args, class... Ladder>
+struct upgrade_template<C<T, Args...>, type_list<Ladder...>> {
+    using type = C<upgrade_type_t<T, Ladder...>, Args...>;
+};
+template<class Instance, class List>
+using upgrade_template_t = typename upgrade_template<Instance, List>::type;
+
+template<class Instance, class List>
+struct downgrade_template;
+
+template<template<class, class...> class C, class T, class... Args, class... Ladder>
+struct downgrade_template<C<T, Args...>, type_list<Ladder...>> {
+    using type = C<downgrade_type_t<T, Ladder...>, Args...>;
+};
+template<class Instance, class List>
+using downgrade_template_t = typename downgrade_template<Instance, List>::type;
+
+// =================  ladders =================
+
+using float_types = type_list<float, double, flt128>;
+using signed_int_types = type_list<int8_t, int16_t, int32_t, int64_t>;
+using unsigned_int_types = type_list<uint8_t, uint16_t, uint32_t, uint64_t>;
+
+using vec2_types = type_list<FVec2, DVec2, DDVec2>;
+using vec3_types = type_list<FVec3, DVec3, DDVec3> ;
+using vec4_types = type_list<FVec4, DVec4, DDVec4> ;
+
+// ================= convenience aliases =================
+
+// integers
+template<class T> using upgrade_int_t = upgrade_from_list_t<T, signed_int_types>;
+template<class T> using downgrade_int_t = downgrade_from_list_t<T, signed_int_types>;
+template<class T> using upgrade_uint_t = upgrade_from_list_t<T, unsigned_int_types>;
+template<class T> using downgrade_uint_t = downgrade_from_list_t<T, unsigned_int_types>;
+
+// floats
+template<class T> using upgrade_float_t = upgrade_from_list_t<T, float_types>;
+template<class T> using downgrade_float_t = downgrade_from_list_t<T, float_types>;
+
+template<class T> using downgrade_vec2_float_t = downgrade_template_t<Vec2<T>, float_types>;
+template<class T> using downgrade_vec3_float_t = downgrade_template_t<Vec3<T>, float_types>;
+template<class T> using downgrade_vec4_float_t = downgrade_template_t<Vec4<T>, float_types>;
+
+template<class T> using upgrade_vec2_float_t = upgrade_template_t<Vec2<T>, float_types>;
+template<class T> using upgrade_vec3_float_t = upgrade_template_t<Vec3<T>, float_types>;
+template<class T> using upgrade_vec4_float_t = upgrade_template_t<Vec4<T>, float_types>;
+
+template<class T> using upgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signed_int_types>;
+template<class T> using upgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
+template<class T> using upgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
+
+template<class T> using downgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signed_int_types>;
+template<class T> using downgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
+template<class T> using downgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
+
+
 // Physics types
 
 struct MassForceParticle : public DVec2
@@ -818,23 +996,23 @@ BL_END_NS
 
 // Global std::ostream overloads
 
-template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Vec2<T>& vec) {
+template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Vec2<T>& vec) {
     return os << "(x: " << vec.x << ", y: " << vec.y << ")";
 }
 
-template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Vec3<T>& vec) {
+template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Vec3<T>& vec) {
     return os << "(x: " << vec.x << ", y: " << vec.y << ", z: " << vec.z << ")";
 }
 
-template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Vec4<T>& vec) {
+template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Vec4<T>& vec) {
     return os << "(x: " << vec.x << ", y: " << vec.y << ", z: " << vec.z << ", w: " << vec.w << ")";
 }
 
-template<typename T> std::ostream& operator<<(std::ostream& os, const BL::Quad<T>& q) {
+template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Quad<T>& q) {
     return os << "{a: " << q.a << ", b: " << q.b << ", c: " << q.c << ", d: " << q.d << "}";
 }
 
-template<typename T> std::ostream& operator<<(std::ostream& os, const BL::AngledRect<T>& r) {
+template<typename T> std::ostream& operator<<(std::ostream& os, const bl::AngledRect<T>& r) {
     return os << "{cx: " << r.cx << ", cy: " << r.cy << ", w: " << r.w << ", h: " << r.h << "rot: " << r.angle << "}";
 }
 

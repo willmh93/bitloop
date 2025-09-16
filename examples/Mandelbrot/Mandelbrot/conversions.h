@@ -69,7 +69,7 @@ inline void shadingRatios(
 inline std::string dataToURL(std::string config_buf)
 {
     #ifdef __EMSCRIPTEN__
-    return Platform()->url_get_base() + "?data=" + config_buf;
+    return platform()->url_get_base() + "?data=" + config_buf;
     #else
     return "https://bitloop.dev/Mandelbrot?data=" + config_buf;
     #endif

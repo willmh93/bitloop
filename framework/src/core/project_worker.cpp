@@ -47,7 +47,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         _destroyActiveProject();
 
         active_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
-        active_project->configure(e.project_uid, MainWindow::instance()->getCanvas(), MainWindow::instance()->getOverlay(), &project_log);
+        active_project->configure(e.project_uid, main_window()->getCanvas(), main_window()->getOverlay(), &project_log);
         active_project->_projectPrepare();
     }
     break;
@@ -245,24 +245,24 @@ void ProjectWorker::_onEvent(SDL_Event& e)
         SDL_Event me = e;
         e.type = SDL_EVENT_FINGER_DOWN;
         e.tfinger.fingerID = 0;
-        e.tfinger.x = me.button.x / (float)Platform()->fbo_width();
-        e.tfinger.y = me.button.y / (float)Platform()->fbo_height();
+        e.tfinger.x = me.button.x / (float)platform()->fbo_width();
+        e.tfinger.y = me.button.y / (float)platform()->fbo_height();
     }
     else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
     {
         SDL_Event me = e;
         e.type = SDL_EVENT_FINGER_UP;
         e.tfinger.fingerID = 0;
-        e.tfinger.x = me.button.x / (float)Platform()->fbo_width();
-        e.tfinger.y = me.button.y / (float)Platform()->fbo_height();
+        e.tfinger.x = me.button.x / (float)platform()->fbo_width();
+        e.tfinger.y = me.button.y / (float)platform()->fbo_height();
     }
     else if (e.type == SDL_EVENT_MOUSE_MOTION)
     {
         SDL_Event me = e;
         e.type = SDL_EVENT_FINGER_MOTION;
         e.tfinger.fingerID = 0;
-        e.tfinger.x = me.button.x / (float)Platform()->fbo_width();
-        e.tfinger.y = me.button.y / (float)Platform()->fbo_height();
+        e.tfinger.x = me.button.x / (float)platform()->fbo_width();
+        e.tfinger.y = me.button.y / (float)platform()->fbo_height();
     }
     #endif
 

@@ -88,12 +88,12 @@ void SceneBase::mountToAll(Layout& viewports)
 
 void SceneBase::pollEvents()
 {
-    ProjectWorker::instance()->pollEvents(false);
+    project_worker()->pollEvents(false);
 }
 
 void SceneBase::pullDataFromShadow()
 {
-    ProjectWorker::instance()->pullDataFromShadow();
+    project_worker()->pullDataFromShadow();
 }
 
 bool SceneBase::handleWorldNavigation(Event e, bool single_touch_pan, bool zoom_anchor_mouse)
@@ -384,7 +384,7 @@ void ProjectBase::_populateAllAttributes()
             ImGui::PopID();
         }
 
-        ImGui::Dummy(ScaleSize(0, 8));
+        ImGui::Dummy(scale_size(0, 8));
     }
 	
     // Scene sections
@@ -782,7 +782,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_FINGER_DOWN:
     {
-        if (!MainWindow::instance()->viewportHovered())
+        if (!main_window()->viewportHovered())
             return;
     }
     break;
@@ -874,7 +874,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
 
     // Track fingers
-    if (Platform()->is_mobile())
+    if (platform()->is_mobile())
     {
         // Does this finger already have an "owner" viewport?
         // If so, loop over fingers and restore it for 
@@ -1058,12 +1058,12 @@ void SceneBase::logMessage(std::string_view fmt, ...)
 
 void ProjectBase::pullDataFromShadow()
 {
-    ProjectWorker::instance()->pullDataFromShadow();
+    project_worker()->pullDataFromShadow();
 }
 
 void ProjectBase::pollEvents()
 {
-    ProjectWorker::instance()->pollEvents(false);
+    project_worker()->pollEvents(false);
 }
 
 void ProjectBase::logMessage(const char* fmt, ...)

@@ -1,5 +1,5 @@
 // Auto-generated from SVG: tiger.svg
-void draw_tiger(BL::Painter* ctx) {
+void draw_tiger(bl::Painter* ctx) {
     auto path_0 = [&]() {
         ctx->beginPath();
         ctx->moveTo(108.969, 403.827);

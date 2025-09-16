@@ -100,6 +100,9 @@ class Camera
     flt128 pan_beg_cam_zoom_y = 0;
     double pan_beg_cam_angle = 0;
 
+    int cam_pos_stage_snap_size = 1;
+    DDVec2 last_pan_snapped_cam_grid_pos;
+
     bool panning = false;
     bool direct_cam_panning = true;
 
@@ -151,11 +154,20 @@ public:
     {
         DVec2 origin_offset = originPixelOffset();
 
+        flt128 cam_stage_x = cam_x * zoom_x;
+        flt128 cam_stage_y = cam_y * zoom_y;
+
+        flt128 snapped_stage_cam_x = round(cam_stage_x / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
+        flt128 snapped_stage_cam_y = round(cam_stage_y / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
+
+        flt128 snapped_cam_x = snapped_stage_cam_x / zoom_x;
+        flt128 snapped_cam_y = snapped_stage_cam_y / zoom_y;
+
         ddResetTransform();
 
         ddTranslate(origin_offset.x + pan_x, origin_offset.y + pan_y);
         ddRotate(cam_rotation);
-        ddTranslate(-cam_x * zoom_x, -cam_y * zoom_y);
+        ddTranslate(-snapped_cam_x * zoom_x, -snapped_cam_y * zoom_y);
         ddScale(zoom_x, zoom_y);
 
         cos_128 = m128[0][0] / zoom_x;
@@ -184,6 +196,11 @@ public:
     //double stage_ox = 0;
     //double stage_oy = 0;
     //void setStageOffset(double ox, double oy);
+
+    void setCameraStageSnappingSize(int stage_pixels)
+    {
+        cam_pos_stage_snap_size = stage_pixels;
+    }
 
     void setOriginViewportAnchor(double ax, double ay);
     void setOriginViewportAnchor(Anchor anchor);

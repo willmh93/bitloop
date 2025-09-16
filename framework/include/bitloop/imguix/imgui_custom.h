@@ -38,35 +38,35 @@ inline ImTextureID ToImTextureID(GLuint tex)
     return (ImTextureID)(intptr_t)tex;
 }
 
-namespace BL 
+namespace bl 
 {
-    inline ImVec2 ScaleSize(const ImVec2& size)
+    inline ImVec2 scale_size(const ImVec2& size)
     {
-        float dpr = BL::PlatformManager::get()->dpr();
+        float dpr = bl::platform()->dpr();
         return ImVec2(size.x * dpr, size.y * dpr);
     }
 
-    inline ImVec2 ScaleSize(int w, int h)
+    inline ImVec2 scale_size(int w, int h)
     {
-        float dpr = BL::PlatformManager::get()->dpr();
+        float dpr = bl::platform()->dpr();
         return ImVec2((float)w * dpr, (float)h * dpr);
     }
 
-    inline ImVec2 ScaleSize(float w, float h)
+    inline ImVec2 scale_size(float w, float h)
     {
-        float dpr = BL::PlatformManager::get()->dpr();
+        float dpr = bl::platform()->dpr();
         return ImVec2(w * dpr, h * dpr);
     }
 
-    inline DVec2 ScaleSize(double w, double h)
+    inline DVec2 scale_size(double w, double h)
     {
-        float dpr = BL::PlatformManager::get()->dpr();
+        float dpr = bl::platform()->dpr();
         return DVec2(w * dpr, h * dpr);
     }
 
-    inline DVec2 ScaleSize(const DVec2& size)
+    inline DVec2 scale_size(const DVec2& size)
     {
-        float dpr = BL::PlatformManager::get()->dpr();
+        float dpr = bl::platform()->dpr();
         return DVec2(size.x * dpr, size.y * dpr);
     }
 }
@@ -107,7 +107,7 @@ namespace ImGui
     void BeginPaddedRegion(float padding);
     void EndPaddedRegion();
 
-    inline void IncreaseRequiredSpaceForLabel(float& w, const char* label, float pad_right = BL::ScaleSize(10.0f))
+    inline void IncreaseRequiredSpaceForLabel(float& w, const char* label, float pad_right = bl::scale_size(10.0f))
     {
         float lw = ImGui::CalcTextSize(label).x + pad_right;
         if (lw > w) w = lw;
@@ -119,7 +119,7 @@ namespace ImGui
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - w - spacing);
     }
 
-    inline void SetNextItemWidthForLabel(const char* label, float pad_right = BL::ScaleSize(10.0f))
+    inline void SetNextItemWidthForLabel(const char* label, float pad_right = bl::scale_size(10.0f))
     {
         float lw = ImGui::CalcTextSize(label).x + pad_right;
         float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
@@ -137,7 +137,7 @@ namespace ImGui
         ImVec2 start_screen{};   // left/top of the row after the Dummy()
         float  span_w{};         // width of parent content region
 
-        GroupBox(const char* id, const char* label_ = "", float pad_ = BL::ScaleSize(13.0f), float label_pad_x_ = BL::ScaleSize(10.0f))
+        GroupBox(const char* id, const char* label_ = "", float pad_ = bl::scale_size(13.0f), float label_pad_x_ = bl::scale_size(10.0f))
             : label(label_), pad(pad_), label_pad_x(label_pad_x_)
         {
             ImVec2 label_height = ImGui::CalcTextSize(label);
@@ -220,7 +220,7 @@ namespace ImGui
 
         }
 
-        void IncreaseRequiredSpaceForLabel(float& w, const char* text, float pad_right=BL::ScaleSize(10.0f))
+        void IncreaseRequiredSpaceForLabel(float& w, const char* text, float pad_right=bl::scale_size(10.0f))
         {
             float lw = ImGui::CalcTextSize(text).x + pad_right;
             if (lw > w) w = lw;

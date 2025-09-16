@@ -93,7 +93,7 @@ public:
     NanoFontInternal(const char* virtual_path)
     {
         //blPrint("NanoFont() called");
-        path = Platform()->path(virtual_path);
+        path = platform()->path(virtual_path);
     }
 
     void setSize(double size_pts)

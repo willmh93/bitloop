@@ -3,15 +3,19 @@
 #endif
 
 #include "shading.h"
+#include "conversions.h"
 
+#include <cmath>
 #include <complex>
 #include <algorithm>
-#include <cmath>
 
 SIM_BEG;
 
-constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
-const double INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0);
+//constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
+//const double INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0);
+
+constexpr float INSIDE_MANDELBROT_SET = std::numeric_limits<float>::max();
+const float INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0f);
 
 inline int mandelbrot_depth(double x0, double y0, int iter_lim)
 {
@@ -104,16 +108,16 @@ namespace detail
 
 
 template<MandelSmoothing Smooth_Iter>
-constexpr double escape_radius()
+constexpr float escape_radius()
 {
     return (((int)Smooth_Iter & (int)MandelSmoothing::DIST) ? 512.0 : 64.0);
 }
 
 template<MandelSmoothing Smooth_Iter>
-constexpr double mandelbrot_smoothing_offset()
+constexpr float mandelbrot_smoothing_offset()
 {
-    constexpr double r2 = escape_radius<Smooth_Iter>();
-    return log2(log2(r2)) - 1.0;
+    constexpr float r2 = escape_radius<Smooth_Iter>();
+    return log2(log2(r2)) - 1.0f;
 }
 
 template<typename T>
@@ -139,18 +143,20 @@ FAST_INLINE bool interiorCheck(T x0, T y0)
 }
 
 
-template<class T> FAST_INLINE T clamp01(T v) { return v < T(0) ? T(0) : (v > T(1) ? T(1) : v); }
+template<class T> FAST_INLINE T clamp01(T v)
+{
+    return v < T(0) ? T(0) : (v > T(1) ? T(1) : v);
+}
 
 template<class T, MandelSmoothing S>
 FAST_INLINE void mandel_kernel(
     const T& x0,
     const T& y0,
     int iter_lim,
-    double& depth,
-    double& dist,
-    double& stripes ,
-    StripeParams sp = {}
-)
+    float& depth,
+    float& dist,
+    float& stripes ,
+    StripeParams sp = {})
 {
     if (interiorCheck(x0, y0)) {
         depth = INSIDE_MANDELBROT_SET_SKIPPED;
@@ -167,20 +173,21 @@ FAST_INLINE void mandel_kernel(
     constexpr T escape_r2 = T(escape_radius<S>());
     constexpr T zero = T(0), one = T(1);
 
+    int iter = 0;
+    T r2 = 0;
+
     cplx<T> z{ zero, zero };
     cplx<T> c{ x0, y0 };
     cplx<T> dz{ one, zero };
-    int iter = 0;
-    T r2 = detail::mag2(z);
 
     // stripe accumulators
-    double sum = 0.0;
-    int    cnt = 0;
-    double last_added = 0.0;
+    float sum = 0.0, last_added = 0.0;
+    int sum_samples = 0;
 
     while (true)
     {
-        if constexpr (NEED_DIST) detail::step_d(z, dz);
+        if constexpr (NEED_DIST)
+            detail::step_d(z, dz);
 
         // step
         detail::step(z, c);
@@ -189,13 +196,12 @@ FAST_INLINE void mandel_kernel(
         // update radius^2
         r2 = detail::mag2(z);
 
-        if constexpr (NEED_STRIPES) {
-            if (iter > sp.skip) {
-                double a = std::atan2((double)z.y, (double)z.x);
-                last_added = 0.5 + 0.5 * std::sin(sp.freq * a + sp.phase);
-                sum += last_added;
-                ++cnt;
-            }
+        if constexpr (NEED_STRIPES)
+        {
+            float a = (float)atan2(z.y, z.x);
+            last_added = 0.5f + 0.5f * std::sin(sp.freq * a + sp.phase);
+            sum += last_added;
+            ++sum_samples;
         }
 
         if (r2 > escape_r2 || iter >= iter_lim) break;
@@ -203,46 +209,49 @@ FAST_INLINE void mandel_kernel(
 
     const bool escaped = (r2 > escape_r2) && (iter < iter_lim);
 
-    if constexpr (NEED_DIST) {
+    if constexpr (NEED_DIST)
+    {
         if (escaped) {
             const T r = sqrt(r2);
             const T dz_abs = sqrt(detail::mag2(dz));
-            dist = (dz_abs == zero) ? 0.0 : (double)(r * log(r) / dz_abs);
+            dist = (dz_abs == zero) ? 0.0f : (float)(r * log(r) / dz_abs);
         }
         else {
             dist = INSIDE_MANDELBROT_SET;
         }
     }
 
-    if (!escaped) {
+    if (!escaped)
+    {
         depth = INSIDE_MANDELBROT_SET;
         if constexpr (NEED_STRIPES) stripes = 0.0;
         return;
     }
 
     // smooth iteration depth (your existing scheme)
-    if constexpr (NEED_SMOOTH_ITER) {
-        const double log_abs_z = 0.5 * std::log((double)r2);
-        const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
+    if constexpr (NEED_SMOOTH_ITER)
+    {
+        const float log_abs_z = 0.5f * (float)log(r2);
+        const float nu = (float)iter + 1.0f - std::log2(std::max(log_abs_z, 1e-30f));
         depth = nu - mandelbrot_smoothing_offset<S>();
     }
-    else {
-        depth = (double)iter;
+    else
+    {
+        depth = (float)iter;
     }
 
-    if constexpr (NEED_STRIPES) {
-        double avg = (cnt > 0) ? (sum / (double)cnt) : 0.0;
-        double prev = (cnt > 1) ? ((sum - last_added) / (double)(cnt - 1)) : avg;
+    if constexpr (NEED_STRIPES)
+    {
+        float avg = (sum_samples > 0) ? (sum / (float)sum_samples) : 0.0f;
+        float prev = (sum_samples > 1) ? ((sum - last_added) / (float)(sum_samples - 1)) : avg;
 
         // stripeAC interpolation weight (fraction inside the last band)
         // frac = 1 + log2( log(ER^2) / log(|z|^2) ), clamped to [0,1]
-        double frac = 1.0 + std::log2(
-            std::log((double)escape_r2) / std::max(std::log((double)r2), 1e-300)
-        );
-        if (frac < 0.0) frac = 0.0; else if (frac > 1.0) frac = 1.0;
+        float frac = 1.0f + (float)std::log2((double)log(escape_r2) / std::max((double)log(r2), 1e-300));
+        frac = clamp01(frac);
 
-        double mix = frac * avg + (1.0 - frac) * prev; // linear interpolation
-        mix = 0.5 + 0.5 * std::tanh(sp.contrast * (mix - 0.5)); // optional shaping
+        float mix = frac * avg + (1.0f - frac) * prev; // linear interpolation
+        mix = 0.5f + 0.5f * std::tanh(sp.contrast * (mix - 0.5f)); // optional shaping
         stripes = clamp01(mix);
     }
 }
@@ -341,10 +350,10 @@ bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads,
         EscapeFieldPixel& field_pixel = field->at(x, y);
 
         // Pixel already calculated/forwarded from previous phase? Return early
-        double depth = field_pixel.depth;
+        float depth = field_pixel.depth;
         if (depth >= 0) return;
 
-        double dist, stripe;
+        float dist, stripe;
         mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripe, stripe_params);
 
         field_pixel.depth = depth;
@@ -356,6 +365,188 @@ bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads,
     return frame_complete;
 };
 
+/*
+template<MandelShaderFormula>
+void shadeBitmap(
+    EscapeField* active_field,
+    CanvasImage* bmp,
+    ImGradient* gradient,
+    double max_final_depth,
+    double max_final_dist,
+    double iter_weight,
+    double dist_weight,
+    double stripe_weight,
+    int threads
+{
+    double iter_ratio, dist_ratio, stripe_ratio;
+    shadingRatios(
+        iter_weight, dist_weight, stripe_weight,
+        iter_ratio, dist_ratio, stripe_ratio
+    );
 
+    bmp->forEachPixel([&, active_field](int x, int y)
+    {
+        EscapeFieldPixel& field_pixel = active_field->at(x, y);
+
+        if (field_pixel.depth >= INSIDE_MANDELBROT_SET_SKIPPED)
+        {
+            ///#ifdef BL_DEBUG
+            ///if (field_pixel.depth == INSIDE_MANDELBROT_SET_SKIPPED)
+            ///    active_bmp->setPixel(x, y, 0xFF7F007F);
+            ///else
+            ///#endif
+            bmp->setPixel(x, y, 0xFF000000);
+            return;
+        }
+
+        uint32_t u32;
+
+        double iter_v = field_pixel.final_depth / max_final_depth;// log_color_cycle_iters;
+        double dist_v = field_pixel.final_dist / max_final_dist; // cycle_dist_value;
+        double stripe_v = field_pixel.stripe;
+
+        double combined_t;
+
+        if constexpr (F == MandelShaderFormula::ITER_DIST_STRIPE)
+        {
+            combined_t = Math::wrap(
+                ((iter_v * iter_ratio) +
+                (dist_v * dist_ratio)) +
+                (stripe_v * stripe_ratio),
+                0.0, 1.0
+            );
+        }
+        else if constexpr (F == MandelShaderFormula::ITER_DIST__MUL__STRIPE)
+        {
+            combined_t = Math::wrap(
+                ((iter_v * iter_ratio) + (dist_v * dist_ratio)) *
+                (stripe_v * stripe_ratio),
+                0.0, 1.0
+            );
+        }
+        else if constexpr (F == MandelShaderFormula::ITER__MUL__DIST_STRIPE)
+        {
+            combined_t = Math::wrap(
+                (iter_v * iter_ratio) *
+                ((dist_v * dist_ratio) * (stripe_v * stripe_ratio)),
+                0.0, 1.0
+            );
+        }
+
+        ///double iter_r = field_pixel.final_depth / log_color_cycle_iters;
+        ///double dist_r = field_pixel.final_dist / cycle_dist_value;
+        ///
+        ///double iter_w = iter_ratio;// 1.0 - iter_dist_mix;
+        ///double dist_w = dist_ratio;// iter_dist_mix;
+        ///
+        ///double combined_t = Math::wrap(iter_r * iter_w + dist_r * dist_w, 0.0, 1.0);
+
+
+        // alternative
+        //double combined_t = Math::wrap(iter_r*dist_r, 0.0, 1.0);
+        //double iter_t = Math::wrap(iter_r, 0.0, 1.0);
+        //double dist_t = Math::wrap(dist_r, 0.0, 1.0);
+        //double avg_t = iter_t;// Math::avg(iter_t, dist_t);
+
+        gradient->unguardedRGBA(combined_t, u32);
+
+        bmp->setPixel(x, y, u32);
+    }, threads);
+}
+*/
+
+
+template<MandelShaderFormula F>
+void shadeBitmap(
+    EscapeField* active_field,
+    CanvasImage* bmp,
+    ImGradient* gradient,
+    float max_final_depth,
+    float max_final_dist,
+    float iter_weight,
+    float dist_weight,
+    float stripe_weight,
+    int threads
+)
+{
+    double iter_ratio, dist_ratio, stripe_ratio;
+    shadingRatios(
+        iter_weight, dist_weight, stripe_weight,
+        iter_ratio, dist_ratio, stripe_ratio
+    );
+
+    bmp->forEachPixel([&, active_field](int x, int y)
+    {
+        EscapeFieldPixel& field_pixel = active_field->at(x, y);
+
+        if (field_pixel.depth >= INSIDE_MANDELBROT_SET_SKIPPED)
+        {
+            ///#ifdef BL_DEBUG
+            ///if (field_pixel.depth == INSIDE_MANDELBROT_SET_SKIPPED)
+            ///    active_bmp->setPixel(x, y, 0xFF7F007F);
+            ///else
+            ///#endif
+            bmp->setPixel(x, y, 0xFF000000);
+            return;
+        }
+
+        uint32_t u32;
+
+        float iter_v = field_pixel.final_depth / max_final_depth;// log_color_cycle_iters;
+        float dist_v = field_pixel.final_dist / max_final_dist; // cycle_dist_value;
+        float stripe_v = field_pixel.stripe;
+
+        float combined_t;
+
+        if constexpr (F == MandelShaderFormula::ITER_DIST_STRIPE)
+        {
+            combined_t = Math::wrap(
+                ((iter_v * (float)iter_ratio) +
+                (dist_v * (float)dist_ratio)) +
+                (stripe_v * (float)stripe_ratio),
+                0.0f, 1.0f
+            );
+        }
+        else if constexpr (F == MandelShaderFormula::ITER_DIST__MUL__STRIPE)
+        {
+            combined_t = Math::wrap(
+                ((iter_v * (float)iter_ratio) + (dist_v * (float)dist_ratio)) *
+                (stripe_v * (float)stripe_ratio),
+                0.0f, 1.0f
+            );
+        }
+        else if constexpr (F == MandelShaderFormula::ITER__MUL__DIST_STRIPE)
+        {
+            combined_t = Math::wrap(
+                (iter_v * (float)iter_ratio) *
+                ((dist_v * (float)dist_ratio) * (stripe_v * (float)stripe_ratio)),
+                0.0f, 1.0f
+            );
+        }
+
+        ///double iter_r = field_pixel.final_depth / log_color_cycle_iters;
+        ///double dist_r = field_pixel.final_dist / cycle_dist_value;
+        ///
+        ///double iter_w = iter_ratio;// 1.0 - iter_dist_mix;
+        ///double dist_w = dist_ratio;// iter_dist_mix;
+        ///
+        ///double combined_t = Math::wrap(iter_r * iter_w + dist_r * dist_w, 0.0, 1.0);
+
+
+        // alternative
+        //double combined_t = Math::wrap(iter_r*dist_r, 0.0, 1.0);
+        //double iter_t = Math::wrap(iter_r, 0.0, 1.0);
+        //double dist_t = Math::wrap(dist_r, 0.0, 1.0);
+        //double avg_t = iter_t;// Math::avg(iter_t, dist_t);
+
+        gradient->unguardedRGBA(combined_t, u32);
+
+        bmp->setPixel(x, y, u32);
+    }, threads);
+}
+
+
+
+//template<MandelShaderFormula F>
 
 SIM_END;

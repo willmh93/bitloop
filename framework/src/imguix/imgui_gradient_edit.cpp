@@ -238,6 +238,9 @@ void ImGradient::deserialize(std::string txt)
     }
 
     refreshCache();
+
+    clearSelectedMark();
+    clearDraggingMark();
 }
 
 bool ImGradient::operator==(const ImGradient& rhs) const

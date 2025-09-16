@@ -6,14 +6,13 @@
 
 #include "types.h"
 #include "state.h"
-#include "types.h"
 #include "kernel.h"
 #include "shading.h"
 #include "splines.h"
 
 SIM_BEG;
 
-using namespace BL;
+using namespace bl;
 
 ///  Multiple layers of inheritance explained:
 ///
@@ -63,7 +62,7 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     ImGradient gradient_shifted;
     void updateShiftedGradient();
 
-    void shadeBitmap();
+    //void shadeBitmap();
     void refreshFieldDepthNormalized();
 
     // ────── Splines ──────

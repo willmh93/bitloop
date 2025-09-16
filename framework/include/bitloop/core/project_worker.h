@@ -69,7 +69,7 @@ protected:
 public:
     std::vector<SDL_Event> input_event_queue;
 
-    [[nodiscard]] static ProjectWorker* instance() {
+    [[nodiscard]] static constexpr ProjectWorker* instance() {
         return singleton;
     }
 
@@ -99,5 +99,10 @@ public:
     void stopProject()              { project_command_queue.push_back({ ProjectCommandType::PROJECT_STOP,  ProjectID::CURRENT_PROJECT }); }
     void pauseProject()             { project_command_queue.push_back({ ProjectCommandType::PROJECT_PAUSE, ProjectID::CURRENT_PROJECT }); }
 };
+
+[[nodiscard]] constexpr ProjectWorker* project_worker()
+{
+    return ProjectWorker::instance();
+}
 
 BL_END_NS

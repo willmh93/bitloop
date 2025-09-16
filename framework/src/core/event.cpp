@@ -43,8 +43,8 @@ std::string Event::toString()
         finger_attribs:
         sprintf(attribs, "{F_%llu, %d, %d}",
             (unsigned long long) sdl_event.tfinger.fingerID,
-            (int)(sdl_event.tfinger.x * (float)Platform()->fbo_width()),
-            (int)(sdl_event.tfinger.y * (float)Platform()->fbo_height()));
+            (int)(sdl_event.tfinger.x * (float)platform()->fbo_width()),
+            (int)(sdl_event.tfinger.y * (float)platform()->fbo_height()));
 
         break;
 
@@ -70,7 +70,7 @@ double PointerEvent::x()
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_MOTION:
-        return (double)(sdl_event.tfinger.x * (float)Platform()->fbo_width());
+        return (double)(sdl_event.tfinger.x * (float)platform()->fbo_width());
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -89,7 +89,7 @@ double PointerEvent::y()
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_MOTION:
-        return (double)(sdl_event.tfinger.y * (float)Platform()->fbo_height());
+        return (double)(sdl_event.tfinger.y * (float)platform()->fbo_height());
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:

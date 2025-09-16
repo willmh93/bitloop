@@ -12,6 +12,11 @@ BL_BEGIN_NS
 namespace Math
 {
     // Numbers
+    constexpr float FPI = (float)std::numbers::pi;
+    constexpr float FTWO_PI = (float)std::numbers::pi * 2.0f;
+    constexpr float FHALF_PI = (float)std::numbers::pi / 2.0f;
+    constexpr float FINV_TWO_PI = 1.0f / FTWO_PI;
+
     constexpr double PI = std::numbers::pi;
     constexpr double TWO_PI = std::numbers::pi * 2.0;
     constexpr double HALF_PI = std::numbers::pi / 2.0;
@@ -22,10 +27,10 @@ namespace Math
     template<typename T> [[nodiscard]] inline T roundUp(T v, T step) { return std::ceil(v / step) * step; }
     template<typename T> [[nodiscard]] inline bool divisible(T _big, T _small)
     {
-        static_assert(BL::is_arithmetic_v<T>, "divisible() only supports arithmetic types");
-        if constexpr (BL::is_floating_point_v<T>)
+        static_assert(bl::is_arithmetic_v<T>, "divisible() only supports arithmetic types");
+        if constexpr (bl::is_floating_point_v<T>)
             return std::abs(std::fmod(_big, _small)) <= std::abs(_small) * (std::numeric_limits<T>::epsilon() * 10);
-        else if constexpr (BL::is_integral_v<T>)
+        else if constexpr (bl::is_integral_v<T>)
             return _small != 0 && (_big % _small == 0);
         return false;
     }
@@ -78,7 +83,7 @@ namespace Math
     template <typename Float>
     [[nodiscard]] int countWholeDigits(Float x)
     {
-        static_assert(BL::is_floating_point_v<Float>, "Float must be a floating-point type");
+        static_assert(bl::is_floating_point_v<Float>, "Float must be a floating-point type");
         if (!isfinite(x)) return 0;
         x = fabs(x);
         if (x < 1) return 1;

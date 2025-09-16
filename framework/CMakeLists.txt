@@ -11,8 +11,9 @@ include(bitloopSimulation)
 # ──────────────────────  Framework Sources  ───────────────────────
 # ──────────────────────────────────────────────────────────────────
 
-set(BL_INC "${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop")
-set(BL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(BL_INC    "${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop")
+set(BL_SRC    "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(HINT_FILE "${BL_INC}/cpp.hint")
 
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop.h"
@@ -77,6 +78,8 @@ endforeach()
 
 
 set(ALL_SRC_FILES
+    ${HINT_FILE}
+
     ${CORE_SOURCES}
     ${PLATFORM_SOURCES}
     ${UTILITY_SOURCES}
@@ -86,6 +89,9 @@ set(ALL_SRC_FILES
     ${EXTERNAL_HEADERS}
     ${EXTERNAL_SOURCES}
 )
+
+#target_sources(bitloop PRIVATE "${HINT_FILE}")
+#set_source_files_properties("${HINT_FILE}" PROPERTIES HEADER_FILE_ONLY TRUE)
 
 add_library(bitloop STATIC ${ALL_SRC_FILES})
 _apply_common_settings(bitloop)

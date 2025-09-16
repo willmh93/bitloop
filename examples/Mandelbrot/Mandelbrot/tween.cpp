@@ -14,41 +14,39 @@ double tweenDistance(
     return d;
 }
 
-void startTween(Mandelbrot_Scene &scene, const MandelState& target)
+void startTween(Mandelbrot_Scene &scene)
 {
+
+    // Now, set start/end tween states
+    scene.state_a = scene;
+    //scene.state_b = target;
+
     // Switch to raw iter_lim for tween (and switch to quality mode on finish)
     scene.dynamic_iter_lim = false;
     scene.quality = scene.iter_lim;
 
-    MandelState& this_state = scene;
 
-    //target.reference_zoom = scene.reference_zoom;
-    //target.ctx_stage_size = scene.ctx_stage_size;
-
-    scene.tween_r1 = scene.getAngledRect(this_state);
-    scene.tween_r2 = scene.getAngledRect(target);
+    scene.tween_r1 = scene.getAngledRect(scene.state_a);
+    scene.tween_r2 = scene.getAngledRect(scene.state_b);
 
     DAngledRect encompassing;
     encompassing.fitTo(scene.tween_r1, scene.tween_r2, scene.tween_r1.aspectRatio());
 
     double encompassing_zoom = (scene.stageWorldSize() / encompassing.size).average();
     double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
-    scene.tween_lift = encompassing_height - std::max(toHeight(this_state.cam_view.zoom), toHeight(target.cam_view.zoom));
+    scene.tween_lift = encompassing_height - std::max(toHeight(scene.state_a.cam_view.zoom), toHeight(scene.state_b.cam_view.zoom));
 
-    double max_lift = 1.0 - toHeight(target.cam_view.zoom);
+    double max_lift = 1.0 - toHeight(scene.state_b.cam_view.zoom);
     if (max_lift < 0) max_lift = 0;
     if (scene.tween_lift > max_lift)
         scene.tween_lift = max_lift;
 
-    // Now, set start/end tween states
-    scene.state_a = this_state;
-    scene.state_b = target;
 
     // Begin tween
     scene.tween_progress = 0.0;
     scene.tweening = true;
     scene.tween_duration = 2;// tweenDistance(scene_data.state_a, scene_data.state_b);
-    scene.cycle_dist_invert = target.cycle_dist_invert;
+    scene.cycle_dist_invert = scene.state_b.cycle_dist_invert;
 }
 
 void lerpState(
@@ -84,13 +82,23 @@ void lerpState(
     // === Color Cycle ===
     float color_cycle_f = scene.tween_color_cycle((float)f);
 
-    dst.iter_dist_mix = Math::lerp(a.iter_dist_mix, b.iter_dist_mix, color_cycle_f);
+    // === Shader weights ===
+    dst.iter_weight = Math::lerp(a.iter_weight, b.iter_weight, color_cycle_f);
+    dst.dist_weight = Math::lerp(a.dist_weight, b.dist_weight, color_cycle_f);
+    dst.stripe_weight = Math::lerp(a.stripe_weight, b.stripe_weight, color_cycle_f);
 
+    // === Iter shader === 
     dst.cycle_iter_value = Math::lerp(a.cycle_iter_value, b.cycle_iter_value, color_cycle_f);
     dst.cycle_iter_log1p_weight = Math::lerp(a.cycle_iter_log1p_weight, b.cycle_iter_log1p_weight, color_cycle_f);
 
+    // === Dist Shader
     dst.cycle_dist_value = Math::lerp(a.cycle_dist_value, b.cycle_dist_value, color_cycle_f);
     dst.cycle_dist_sharpness = Math::lerp(a.cycle_dist_sharpness, b.cycle_dist_sharpness, color_cycle_f);
+
+    // === Stripe Shader
+    dst.stripe_params.freq = Math::lerp(a.stripe_params.freq, b.stripe_params.freq, color_cycle_f);
+    dst.stripe_params.phase = Math::lerp(a.stripe_params.phase, b.stripe_params.phase, color_cycle_f);
+    dst.stripe_params.contrast = Math::lerp(a.stripe_params.contrast, b.stripe_params.contrast, color_cycle_f);
 
     // === Lerp Gradient/Hue Shift===
     dst.gradient_shift = Math::lerp(a.gradient_shift, b.gradient_shift, pos_f);
@@ -110,6 +118,7 @@ void lerpState(
 
         dst.cycle_iter_dynamic_limit = b.cycle_iter_dynamic_limit;
 
+        dst.show_axis = b.show_axis;
         dst.show_color_animation_options = b.show_color_animation_options;
     }
 

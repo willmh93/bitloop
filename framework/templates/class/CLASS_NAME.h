@@ -2,7 +2,7 @@
 #include <bitloop.h>
 
 SIM_BEG;
-using namespace BL;
+using namespace bl;
 
 class {CLASS_NAME}
 {

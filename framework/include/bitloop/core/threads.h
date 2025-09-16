@@ -26,7 +26,7 @@
 #include "BS_thread_pool.hpp"
 #include "concurrentqueue/concurrentqueue.h"
 
-#define BL_BEGIN_NS namespace BL {
+#define BL_BEGIN_NS namespace bl {
 #define BL_END_NS   }
 
 BL_BEGIN_NS

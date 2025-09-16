@@ -2,7 +2,7 @@
 #include <SDL3/SDL.h>
 #include <string>
 
-#define BL_BEGIN_NS namespace BL {
+#define BL_BEGIN_NS namespace bl {
 #define BL_END_NS   }
 
 BL_BEGIN_NS

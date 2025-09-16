@@ -61,7 +61,7 @@ class MainWindow
 
 public:
 
-    static MainWindow* instance() { 
+    static constexpr MainWindow* instance() { 
         return singleton; 
     }
 
@@ -110,5 +110,10 @@ public:
     void populateExpandedLayout();
     void populateUI();
 };
+
+[[nodiscard]] constexpr MainWindow* main_window()
+{
+    return MainWindow::instance();
+}
 
 BL_END_NS;

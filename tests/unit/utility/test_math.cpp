@@ -4,7 +4,7 @@
 #include <bitloop.h>
 
 using Catch::Approx;
-using namespace BL;
+using namespace bl;
 
 TEST_CASE("roundUp/roundDown")
 {

@@ -36,18 +36,18 @@ class PlatformManager
 {
     static PlatformManager *singleton;
 
-    SDL_Window* window;
+    SDL_Window* window = nullptr;
 
-    double css_w, css_h;
-    int gl_w, gl_h;
-    int win_w, win_h;
-    int fb_w, fb_h;
+    double css_w = 0, css_h = 0;
+    int gl_w=0, gl_h = 0;
+    int win_w = 0, win_h = 0;
+    int fb_w = 0, fb_h = 0;
 
     bool is_mobile_device = false;
 
 public:
 
-    static constexpr PlatformManager* get()
+    static constexpr PlatformManager* instance()
     {
         return singleton;
     }
@@ -122,24 +122,24 @@ public:
     #endif
 };
 
-[[nodiscard]] constexpr PlatformManager* Platform()
+[[nodiscard]] constexpr PlatformManager* platform()
 {
-    return PlatformManager::get();
+    return PlatformManager::instance();
 }
 
-[[nodiscard]] inline float ScaleSize(float length)
+[[nodiscard]] inline float scale_size(float length)
 {
-    return PlatformManager::get()->dpr() * length;
+    return PlatformManager::instance()->dpr() * length;
 }
 
-[[nodiscard]] inline double ScaleSize(double length)
+[[nodiscard]] inline double scale_size(double length)
 {
-    return static_cast<double>(PlatformManager::get()->dpr()) * length;
+    return static_cast<double>(PlatformManager::instance()->dpr()) * length;
 }
 
-[[nodiscard]] inline int ScaleSize(int length)
+[[nodiscard]] inline int scale_size(int length)
 {
-    return static_cast<int>(PlatformManager::get()->dpr() * static_cast<float>(length));
+    return static_cast<int>(PlatformManager::instance()->dpr() * static_cast<float>(length));
 }
 
 BL_END_NS

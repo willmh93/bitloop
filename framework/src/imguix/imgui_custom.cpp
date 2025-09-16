@@ -9,7 +9,7 @@
 bool LoadPixelsRGBA(const char* path, int* outW, int* outH, std::vector<unsigned char>& outPixels)
 {
     int w, h, n;
-    unsigned char* data = stbi_load(BL::Platform()->path(path).c_str(), &w, &h, &n, 4);  // force RGBA
+    unsigned char* data = stbi_load(bl::platform()->path(path).c_str(), &w, &h, &n, 4);  // force RGBA
     if (!data) return false;
 
     outPixels.assign(data, data + (w * h * 4));
@@ -44,7 +44,7 @@ GLuint CreateGLTextureRGBA8(const void* pixels, int w, int h)
 GLuint loadSVG(const char* path, int outputWidth, int outputHeight)
 {
     // Step 1: Parse SVG
-    NSVGimage* image = nsvgParseFromFile(BL::Platform()->path(path).c_str(), "px", 96.0f); // 96 dpi, or 72 dpi depending on your needs
+    NSVGimage* image = nsvgParseFromFile(bl::platform()->path(path).c_str(), "px", 96.0f); // 96 dpi, or 72 dpi depending on your needs
     if (!image) {
         printf("Could not open SVG image: %s\n", path);
         return 0;
@@ -120,15 +120,15 @@ namespace ImGui
 {
     bool Section(const char* name, bool open_by_default, float header_spacing, float body_margin_top)
     {
-        ImGui::Dummy(BL::ScaleSize(0.0f, header_spacing));
+        ImGui::Dummy(bl::scale_size(0.0f, header_spacing));
         bool ret = ImGui::CollapsingHeader(name, open_by_default ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-        if (ret) ImGui::Dummy(BL::ScaleSize(0.0f, body_margin_top));
+        if (ret) ImGui::Dummy(bl::scale_size(0.0f, body_margin_top));
         return ret;
     }
 
     bool ResetBtn(const char* id)
     {
-        static int size = (int)BL::Platform()->line_height();
+        static int size = (int)bl::platform()->line_height();
         static int reset_icon = loadSVG("/data/icon/reset.svg", size, size);
         return ImGui::ImageButton(id, reset_icon, ImVec2((float)size, (float)size));
     }
@@ -143,7 +143,7 @@ namespace ImGui
     bool RevertableSliderDouble(const char* label, double* v, double* initial, double v_min, double v_max, const char* format, ImGuiSliderFlags flags)
     {
         bool ret = false;
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - BL::Platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= SliderScalar(label, ImGuiDataType_Double, v, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
 
@@ -161,7 +161,7 @@ namespace ImGui
     {
         bool ret = false;
 
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - BL::Platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= DragScalar(label, ImGuiDataType_Double, v, (float)v_speed, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
 
@@ -179,7 +179,7 @@ namespace ImGui
     {
         bool ret = false;
 
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - BL::Platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= SliderScalarN(label, ImGuiDataType_Double, v, 2, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
 

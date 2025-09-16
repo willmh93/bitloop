@@ -81,7 +81,7 @@
 #include <bitloop/core/project_worker.h>
 #include <bitloop/core/main_window.h>
 
-using namespace BL;
+using namespace bl;
 
 SDL_Window* window = nullptr;
 SharedSync shared_sync;
@@ -109,41 +109,41 @@ void gui_loop()
 
             case SDL_EVENT_WINDOW_RESIZED:
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-                Platform()->resized();
+                platform()->resized();
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:
             case SDL_EVENT_MOUSE_MOTION:
-                ProjectWorker::instance()->queueEvent(e);
+                project_worker()->queueEvent(e);
 
             case SDL_EVENT_MOUSE_WHEEL:
-                if (MainWindow::instance()->viewportHovered())
-                    ProjectWorker::instance()->queueEvent(e);
+                if (main_window()->viewportHovered())
+                    project_worker()->queueEvent(e);
                 break;
 
             case SDL_EVENT_KEY_DOWN:
             case SDL_EVENT_KEY_UP:
             case SDL_EVENT_TEXT_INPUT:
                 if (!imguiWantsKeyboard)
-                    ProjectWorker::instance()->queueEvent(e); break;
+                    project_worker()->queueEvent(e); break;
 
             default:
-                ProjectWorker::instance()->queueEvent(e); break;
+                project_worker()->queueEvent(e); break;
         }
     }
 
-    Platform()->update();
+    platform()->update();
 
     // ======== Prepare frame ========
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
-    ImGui::GetIO().DisplaySize = ImVec2((float)Platform()->fbo_width(), (float)Platform()->fbo_height());
+    ImGui::GetIO().DisplaySize = ImVec2((float)platform()->fbo_width(), (float)platform()->fbo_height());
     ImGui::GetIO().DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
     ImGui::NewFrame();
 
     // ======== Draw window ========
-    MainWindow::instance()->populateUI();
+    main_window()->populateUI();
 
     // ======== Render ========
     ImGui::Render();
@@ -243,9 +243,9 @@ int bitloop_main(int, char* [])
 
     }
 
-    auto platform_manager = std::make_unique<PlatformManager>(window);
-    auto project_worker = std::make_unique<ProjectWorker>(shared_sync);
-    auto main_window = std::make_unique<MainWindow>(shared_sync);
+    auto _platform_manager = std::make_unique<PlatformManager>(window);
+    auto _project_worker = std::make_unique<ProjectWorker>(shared_sync);
+    auto _main_window = std::make_unique<MainWindow>(shared_sync);
 
     // ======== ImGui setup ========
     {
@@ -265,9 +265,9 @@ int bitloop_main(int, char* [])
 
     // ======== Init window & start worker thread ========
     {
-        Platform()->init();
-        MainWindow::instance()->init();
-        ProjectWorker::instance()->startWorker();
+        platform()->init();
+        main_window()->init();
+        project_worker()->startWorker();
     }
 
 
@@ -284,7 +284,7 @@ int bitloop_main(int, char* [])
             }
 
             // Gracefully exit
-            ProjectWorker::instance()->end();
+            project_worker()->end();
 
             ImGui_ImplOpenGL3_Shutdown();
             ImGui_ImplSDL3_Shutdown();
