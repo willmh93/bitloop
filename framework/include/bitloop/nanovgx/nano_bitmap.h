@@ -17,22 +17,24 @@
 
 BL_BEGIN_NS
 
-class CanvasObject
+template<typename T>
+class CanvasObjectBase
 {
-    DVec2 toStage(const DVec2& p)             const { return Camera::active->toStage(p); }
-    DVec2 toWorld(double sx, double sy)       const { return Camera::active->toWorld(sx, sy); }
-    DVec2 toWorldOffset(double sx, double sy) const { return Camera::active->stageToWorldOffset(sx, sy); }
-    DVec2 toStageOffset(const DVec2& o)       const { return Camera::active->worldToStageOffset(o); }
+    DVec2   toStage(Vec2<T> p)                  const { return Camera::active->toStage<T>(p); }
+    DVec2   toStageOffset(const Vec2<T>& o)     const { return Camera::active->worldToStageOffset<T>(o); }
+
+    Vec2<T> toWorld(double sx, double sy)       const { return Camera::active->toWorld<T>(sx, sy); }
+    Vec2<T> toWorldOffset(double sx, double sy) const { return Camera::active->stageToWorldOffset<T>(sx, sy); }
 
     // local basis vectors after all transforms
-    DVec2 u{ 1, 0 };   // width direction
-    DVec2 v{ 0, 1 };   // height direction
+    Vec2<T> u{ 1, 0 };   // width direction
+    Vec2<T> v{ 0, 1 };   // height direction
 
 public:
 
     union {
-        DVec2 pos = { 0, 0 };
-        struct { double x, y; };
+        Vec2<T> pos = { 0, 0 };
+        struct { T x, y; };
     };
     
     union {
@@ -40,9 +42,9 @@ public:
         struct { double align_x, align_y; };
     };
 
-    double rotation = 0.0;
+    T rotation = 0;
 
-    ~CanvasObject() {}
+    ~CanvasObjectBase() {}
 
     void setAlign(int ax, int ay)      { align_x = ax; align_y = ay; }
     void setAlign(const DVec2& _align) { align = _align; }
@@ -54,12 +56,11 @@ public:
     [[nodiscard]] double stageHeight()   const { return toStageOffset(v).magnitude(); }
     [[nodiscard]] DVec2  stageSize()     const { return {stageWidth(), stageHeight()}; }
     [[nodiscard]] double stageRotation() const {
-        double cos_r = std::cos(rotation);
-        double sin_r = std::sin(rotation);
-        DVec2 local_u = DVec2{ worldSize().x * cos_r, worldSize().x * sin_r };
-
-        DVec2 stage_origin = Camera::active->toStage(pos);
-        DVec2 stage_u_end = Camera::active->toStage(pos + local_u);
+        T cos_r = cos(rotation);
+        T sin_r = sin(rotation);
+        Vec2<T> local_u = Vec2<T>{ worldSize().x * cos_r, worldSize().x * sin_r };
+        DVec2 stage_origin = toStage(pos);
+        DVec2 stage_u_end = toStage(pos + local_u);
         DVec2 u_stage = stage_u_end - stage_origin;
 
         return std::atan2(u_stage.y, u_stage.x);
@@ -68,7 +69,13 @@ public:
     void setStagePos(double sx, double sy) { pos = toWorld(sx, sy); }
     void setStageRect(double sx, double sy, double sw, double sh)
     {
+        blPrint() << "old_sx: " << sx << " old_sy: " << sy;
+
         pos = toWorld(sx, sy) - worldAlignOffset();
+
+        DVec2 orig = toStage(pos);
+        blPrint() << "new_sx: " << orig.x << " new_sy: " << orig.y;
+
         u = toWorld(sx + sw, sy) - pos;
         v = toWorld(sx, sy + sh) - pos;
     }
@@ -81,50 +88,54 @@ public:
 
     // ======== World Methods ========
 
-    [[nodiscard]] double worldWidth()  const { return u.magnitude(); }
-    [[nodiscard]] double worldHeight() const { return v.magnitude(); }
-    [[nodiscard]] DVec2  worldSize() const { return { u.magnitude(), v.magnitude() }; }
-    [[nodiscard]] DQuad worldQuad() {
-        DVec2 offset = 0.5 * ((-align_x - 1.0) * u + (-align_y - 1.0) * v);
-        DVec2 p = pos + offset;
+    [[nodiscard]] T worldWidth()  const { return u.magnitude(); }
+    [[nodiscard]] T worldHeight() const { return v.magnitude(); }
+    [[nodiscard]] Vec2<T> worldSize() const { return { u.magnitude(), v.magnitude() }; }
+    [[nodiscard]] Quad<T> worldQuad() {
+        Vec2<T> offset = T(0.5) * (T(-align_x - 1.0) * u + T(-align_y - 1.0) * v);
+        Vec2<T> p = pos + offset;
         return { p, p + u, p + u + v, p + v };
     }
-    [[nodiscard]] DVec2 topLeft() {
-        DVec2 offset = 0.5 * ((-align_x - 1.0) * u + (-align_y - 1.0) * v);
+    [[nodiscard]] Vec2<T> topLeft() {
+        Vec2<T> offset = T(0.5) * (T(-align_x - 1.0) * u + T(-align_y - 1.0) * v);
         return pos + offset;
     }
 
-    [[nodiscard]] DVec2 worldAlignOffset()   { return -(align + 1.0) * 0.5 * worldSize(); }
-    [[nodiscard]] double worldAlignOffsetX() { return -(align_x + 1) * 0.5 * worldWidth(); }
-    [[nodiscard]] double worldAlignOffsetY() { return -(align_y + 1) * 0.5 * worldHeight(); }
+    [[nodiscard]] Vec2<T> worldAlignOffset()   { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
+    [[nodiscard]] T worldAlignOffsetX() { return -(align_x + 1) * 0.5 * worldWidth(); }
+    [[nodiscard]] T worldAlignOffsetY() { return -(align_y + 1) * 0.5 * worldHeight(); }
 
-    [[nodiscard]] DVec2 worldToUVRatio(const DVec2& p) const
+    // todo: Do UV's really need 128-bit precision?
+    [[nodiscard]] Vec2<T> worldToUVRatio(const Vec2<T>& p) const
     {
         // p = origin + [a] * u + [b] * v
-        DVec2 origin = pos + 0.5 * ((-align_x - 1.0) * u + (-align_y - 1.0) * v);
-        DVec2 delta = p - origin;
+        Vec2<T> origin = pos + T(0.5) * (T(-align_x - 1.0) * u + T(-align_y - 1.0) * v);
+        Vec2<T> delta = p - origin;
 
         // Make sure uv vectors span 2D area
-        double det = u.x * v.y - u.y * v.x;
-        if (det == 0) return  { 0.0, 0.0 };
+        T det = u.x * v.y - u.y * v.x;
+        if (det == 0) return  Vec2<T>{ 0.0, 0.0 };
         //if (std::abs(det) < std::numeric_limits<double>::epsilon()) return { 0.0, 0.0 };
 
         // solve for a,b
-        double inv_det = 1.0 / det;
-        double a = (delta.x * v.y - delta.y * v.x) * inv_det;
-        double b = (u.x * delta.y - u.y * delta.x) * inv_det;
+        T inv_det = 1.0 / det;
+        T a = (delta.x * v.y - delta.y * v.x) * inv_det;
+        T b = (u.x * delta.y - u.y * delta.x) * inv_det;
         return { a, b };
     }
 
-    void setWorldRect(double _x, double _y, double _w, double _h)
+    void setWorldRect(T _x, T _y, T _w, T _h)
     {
-        rotation = 0.0;
+        rotation = 0;
         x = _x - worldAlignOffsetX();
         y = _y - worldAlignOffsetY();
         u = { _w, 0 };
         v = { 0, _h };
     }
 };
+
+typedef CanvasObjectBase<double> CanvasObject;
+typedef CanvasObjectBase<flt128> CanvasObject128;
 
 class Image
 {
@@ -340,14 +351,15 @@ protected:
     }*/
 };
 
-class CanvasImage : public Image, public CanvasObject
+template<typename T>
+class CanvasImageBase : public Image, public CanvasObjectBase<T>
 {
 protected:
     double bmp_fw = 0;
     double bmp_fh = 0;
 
     bool needs_reshading = false;
-    DQuad prev_world_quad;
+    Quad<T> prev_world_quad;
 
     friend class PaintContext;
 
@@ -360,8 +372,7 @@ public:
 
     [[nodiscard]] bool needsReshading()
     {
-        //DQuad world_quad = worldQuad(camera);
-        DQuad world_quad = worldQuad();
+        Quad<T> world_quad = CanvasObjectBase<T>::worldQuad();
         if (needs_reshading || (world_quad != prev_world_quad))
         {
             needs_reshading = false; // todo: Move to when drawn?
@@ -388,14 +399,12 @@ public:
         }
     }
 
-    //[[nodiscard]] DQuad worldQuad(Camera* camera);
-
-    [[nodiscard]] IVec2 pixelPosFromWorld(DVec2 p)
+    [[nodiscard]] IVec2 pixelPosFromWorld(Vec2<T> p)
     {
-        return static_cast<IVec2>(worldToUVRatio(p) * bmp_size);
+        return static_cast<IVec2>(CanvasObjectBase<T>::worldToUVRatio(p) * bmp_size);
     }
 
-    template<typename T = double, typename Callback>
+    template<typename Callback>
     bool forEachPixel(
         int& current_row,
         Callback&& callback,
@@ -495,7 +504,7 @@ public:
         //    "Callback must be: void(int x, int y, float_t wx, float_y wy)");
 
 
-    template<typename T = double, typename Callback>
+    template<typename WorldT, typename Callback>
     bool forEachWorldPixel(
         int& current_row,
         Callback&& callback,
@@ -508,14 +517,16 @@ public:
             std::chrono::milliseconds{ timeout_ms } :
             std::chrono::steady_clock::duration::max();
 
-        Quad<T> world_quad = static_cast<Quad<T>>(worldQuad());
-        T ax = world_quad.a.x, ay = world_quad.a.y;
-        T bx = world_quad.b.x, by = world_quad.b.y;
-        T cx = world_quad.c.x, cy = world_quad.c.y;
-        T dx = world_quad.d.x, dy = world_quad.d.y;
+        // World quad might be higher precision than is requested for the current zoom level, downgrade to requested WorldT
+        Quad<WorldT> world_quad = static_cast<Quad<WorldT>>( CanvasObjectBase<T>::worldQuad() );
 
-        T t_bmp_w = static_cast<T>(bmp_fw);
-        T t_bmp_h = static_cast<T>(bmp_fh);
+        WorldT ax = world_quad.a.x, ay = world_quad.a.y;
+        WorldT bx = world_quad.b.x, by = world_quad.b.y;
+        WorldT cx = world_quad.c.x, cy = world_quad.c.y;
+        WorldT dx = world_quad.d.x, dy = world_quad.d.y;
+
+        WorldT t_bmp_w = static_cast<WorldT>(bmp_fw);
+        WorldT t_bmp_h = static_cast<WorldT>(bmp_fh);
 
         if (thread_count > 0)
         {
@@ -563,22 +574,22 @@ public:
                     futures[ti] = Thread::pool().submit_task([&, row, thread_index]()
                     {
                         // Interpolate row pixel coordinate and invoke callback
-                        T bmp_fx, bmp_fy = static_cast<T>(row) + T{ 0.5 };
-                        T _v = bmp_fy / t_bmp_h;
-                        T scan_left_x = ax + (dx - ax) * _v;
-                        T scan_left_y = ay + (dy - ay) * _v;
-                        T scan_right_x = bx + (cx - bx) * _v;
-                        T scan_right_y = by + (cy - by) * _v;
+                        WorldT bmp_fx, bmp_fy = static_cast<WorldT>(row) + WorldT{ 0.5 };
+                        WorldT _v = bmp_fy / t_bmp_h;
+                        WorldT scan_left_x = ax + (dx - ax) * _v;
+                        WorldT scan_left_y = ay + (dy - ay) * _v;
+                        WorldT scan_right_x = bx + (cx - bx) * _v;
+                        WorldT scan_right_y = by + (cy - by) * _v;
                         for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
                         {
-                            bmp_fx = static_cast<T>(bmp_x) + T{ 0.5 };
-                            T _u = bmp_fx / t_bmp_w;
-                            T wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
-                            T wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
+                            bmp_fx = static_cast<WorldT>(bmp_x) + WorldT{ 0.5 };
+                            WorldT _u = bmp_fx / t_bmp_w;
+                            WorldT wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
+                            WorldT wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
 
-                            if constexpr (std::is_invocable_r_v<void, Callback, int, int, T, T, int>)
+                            if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT, int>)
                                 std::forward<Callback>(callback)(bmp_x, row, wx, wy, thread_index); 
-                            else if constexpr (std::is_invocable_r_v<void, Callback, int, int, T, T>)
+                            else if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT>)
                                 std::forward<Callback>(callback)(bmp_x, row, wx, wy);
                             else 
                                 static_assert(sizeof(Callback) == 0,
@@ -612,26 +623,26 @@ public:
         }
         else
         {
-            T bmp_fx, bmp_fy;
+            WorldT bmp_fx, bmp_fy;
             for (int bmp_y = 0; bmp_y < bmp_height; ++bmp_y)
             {
                 // Interpolate left and right edges of the scanline
-                bmp_fy = static_cast<T>(bmp_y) + T{ 0.5 };
-                T _v = bmp_fy / t_bmp_h;
-                T scan_left_x = ax + (dx - ax) * _v;
-                T scan_left_y = ay + (dy - ay) * _v;
-                T scan_right_x = bx + (cx - bx) * _v;
-                T scan_right_y = by + (cy - by) * _v;
+                bmp_fy = static_cast<WorldT>(bmp_y) + WorldT{ 0.5 };
+                WorldT _v = bmp_fy / t_bmp_h;
+                WorldT scan_left_x = ax + (dx - ax) * _v;
+                WorldT scan_left_y = ay + (dy - ay) * _v;
+                WorldT scan_right_x = bx + (cx - bx) * _v;
+                WorldT scan_right_y = by + (cy - by) * _v;
                 for (int bmp_x = 0; bmp_x < bmp_width; ++bmp_x)
                 {
-                    bmp_fx = static_cast<T>(bmp_x) + T{ 0.5 };
-                    T _u = bmp_fx / t_bmp_w;
-                    T wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
-                    T wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
+                    bmp_fx = static_cast<WorldT>(bmp_x) + WorldT{ 0.5 };
+                    WorldT _u = bmp_fx / t_bmp_w;
+                    WorldT wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
+                    WorldT wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
 
-                    if constexpr (std::is_invocable_r_v<void, Callback, int, int, T, T, int>)
+                    if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT, int>)
                         std::forward<Callback>(callback)(bmp_x, bmp_y, wx, wy, 0);
-                    else if constexpr (std::is_invocable_r_v<void, Callback, int, int, T, T>)
+                    else if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT>)
                         std::forward<Callback>(callback)(bmp_x, bmp_y, wx, wy);
                     else
                         static_assert(sizeof(Callback) == 0,
@@ -678,5 +689,8 @@ public:
     //    );
     //}
 };
+
+typedef CanvasImageBase<double> CanvasImage;
+typedef CanvasImageBase<flt128> CanvasImage128;
 
 BL_END_NS

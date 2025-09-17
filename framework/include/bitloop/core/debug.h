@@ -7,6 +7,11 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
+#include <concepts>
+
+#include <ostream>
+#include <sstream>
+#include <type_traits>
 
 #include <cstdarg> // va_list, va_start, va_end, va_copy
 #include <cstdio>
@@ -100,6 +105,13 @@ struct General {};
 inline constexpr Scientific scientific{};
 inline constexpr General general{};
 
+// Detect if `os << t` is valid
+template<class T>
+concept OstreamInsertable =
+    requires(std::ostream & os, const T & v) {
+        { os << v } -> std::same_as<std::ostream&>;
+};
+
 // ---------- stream ----------
 class DebugStream {
 public:
@@ -150,7 +162,24 @@ public:
     // floats
     DebugStream& operator<<(float v) { return append_float(static_cast<double>(v)); }
     DebugStream& operator<<(double v) { return append_float(v); }
-    DebugStream& operator<<(long double v) { return append_float(static_cast<double>(v)); }
+    //DebugStream& operator<<(long double v) { return append_float(static_cast<double>(v)); }
+
+    
+
+    // Fallback for anything with an std::ostream << overload
+    template<class T> requires OstreamInsertable<T> &&
+        (!std::is_integral_v<T> || std::is_same_v<T, bool>) && // exclude your integer path (keep bool)
+        (!std::is_same_v<std::remove_cvref_t<T>, char>) &&      // exclude your char path
+        (!std::is_convertible_v<T, const char*>) &&             // exclude your const char* path
+        (!std::is_same_v<std::remove_cvref_t<T>, std::string_view>) && // exclude your sv path
+        (!std::is_pointer_v<std::remove_reference_t<T>>)        // let your const void* path handle pointers
+        DebugStream& operator<<(const T& v)
+    {
+        std::ostringstream oss;
+        oss << v;                          // uses ADL-found std::ostream<< (e.g., your flt128 overload)
+        const std::string s = oss.str();   // materialize once
+        return (*this) << std::string_view{ s };
+    }
 
     // flush now (optional manual call)
     void flush() {

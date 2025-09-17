@@ -343,7 +343,7 @@ bool radialMandelbrot()
 
 
 template<typename T, MandelSmoothing Smoothing, bool flatten, bool Axis_Visible>
-bool mandelbrot(CanvasImage* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row, StripeParams stripe_params={})
+bool mandelbrot(CanvasImage128* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row, StripeParams stripe_params={})
 {
     bool frame_complete = bmp->forEachWorldPixel<T>(current_row, [&](int x, int y, T wx, T wy)
     {
@@ -459,7 +459,7 @@ void shadeBitmap(
 template<MandelShaderFormula F>
 void shadeBitmap(
     EscapeField* active_field,
-    CanvasImage* bmp,
+    CanvasImage128* bmp,
     ImGradient* gradient,
     float max_final_depth,
     float max_final_dist,

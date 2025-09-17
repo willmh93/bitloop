@@ -469,7 +469,7 @@ void Cardioid_Graph_Scene::viewportProcess(Viewport* ctx, double)
     {
         // Tangent angle heatmap
         int current_row = 0;
-        bmp.forEachWorldPixel(current_row, [this](int x, int y, double wx, double wy)
+        bmp.forEachWorldPixel<double>(current_row, [this](int x, int y, double wx, double wy)
         {
             double tx1, ty1, ta, oa, d;
             cardioidPolarCoord(wx, wy, tx1, ty1, ta, d, oa);

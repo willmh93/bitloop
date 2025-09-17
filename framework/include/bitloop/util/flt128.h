@@ -56,7 +56,7 @@ public:
     constexpr flt128(flt128&&) = default;
     constexpr flt128& operator=(flt128&&) = default;
 
-    /// ======== Basic helpers (error-free transforms) ========
+    /// ======== Basic helpers ========
 
     static FAST_INLINE constexpr flt128 quick_two_sum(double a, double b)
     {
@@ -65,8 +65,20 @@ public:
         return { s, err };
     }
 
-    /// ======== Normalisation (ensure |lo| <= 0.5 ulp(hi)) ========
+    friend FAST_INLINE constexpr flt128 recip(flt128 b)
+    {
+        flt128 y = flt128(1.0 / b.hi);
+        flt128 one = flt128(1.0);
+        flt128 e = one - b * y;
 
+        y += y * e;
+        e = one - b * y;
+        y += y * e;
+
+        return y;
+    }
+
+    /// ======== Normalisation (ensure |lo| <= 0.5 ulp(hi)) ========
     static FAST_INLINE constexpr flt128 renorm(double hi, double lo)
     {
         double s, e;
@@ -108,14 +120,10 @@ public:
         e1 += a.hi * b.lo + a.lo * b.hi;
         return renorm(p1, e1);
     }
+
     friend FAST_INLINE constexpr flt128 operator/(flt128 a, flt128 b)
     {
-        // one Newton step after double quotient
-        double q = a.hi / b.hi;                // coarse
-        flt128 qb = b * q;               // q * b
-        flt128 r = a - qb;              // remainder
-        double q_corr = r.hi / b.hi;         // refine
-        return renorm(q + q_corr, 0.0);
+        return a * recip(b);
     }
 
     /// ======== compound assignments ========
@@ -128,16 +136,15 @@ public:
     friend FAST_INLINE flt128 sqrt(flt128 a)
     {
         double approx = std::sqrt(a.hi);
-        flt128 y(approx);                    // y ≈ sqrt(a)
-        flt128 y_sq = y * y;                 // y^2
-        flt128 r = a - y_sq;                 // residual
+        flt128 y(approx);
+        flt128 y_sq = y * y;
+        flt128 r = a - y_sq;
         flt128 half = 0.5;
-        y += r * (half / y);                       // one Newton iteration
+        y += r * (half / y);
         return y;
     }
     friend FAST_INLINE flt128 sin(flt128 a)
     {
-        // Reduce to double first, then correct with one term of series
         double s = std::sin(a.hi);
         double c = std::cos(a.hi);
         return flt128(s) + flt128(c) * a.lo;
@@ -164,10 +171,8 @@ public:
     }
 };
 
-namespace std {
-
-    //template<> struct is_floating_point<flt128> : true_type {};
-
+namespace std
+{
     template<> struct numeric_limits<flt128>
     {
         static constexpr bool is_specialized = true;
@@ -309,7 +314,7 @@ inline flt128 atan2(const flt128& y, const flt128& x)
     return v;
 }
 inline flt128 atan(const flt128& x) { return atan2(x, flt128(1.0)); }
-inline std::string to_string(const flt128& x)
+/*inline std::string to_string(const flt128& x)
 {
     if (x.hi == 0.0) return "0";
 
@@ -344,7 +349,56 @@ inline std::string to_string(const flt128& x)
     s += std::to_string(exp10);
 
     return s;
+}*/
+
+inline std::string to_string(const flt128& x)
+{
+    if (x.hi == 0.0 && x.lo == 0.0)
+        return "0";
+
+    flt128 v = x;
+    bool neg = false;
+    if (v.hi < 0) { neg = true; v.hi = -v.hi; v.lo = -v.lo; }
+
+    // estimate decimal exponent
+    int exp10 = static_cast<int>(std::floor(std::log10(v.hi)));
+    flt128 scale = std::pow(10.0, -exp10);
+    v *= scale; // normalized to [1,10)
+
+    constexpr int max_digits = 32; // double-double: ~106 bits ≈ 31–32 decimal digits
+
+    std::string digits;
+    digits.reserve(max_digits);
+    for (int i = 0; i < max_digits; ++i) {
+        int d = static_cast<int>(v.hi);
+        digits.push_back(static_cast<char>('0' + d));
+        v -= flt128(d);
+        v *= 10.0;
+    }
+
+    int pointPos = exp10 + 1;
+    std::string s;
+    if (neg) s.push_back('-');
+
+    if (pointPos <= 0) {
+        s += "0.";
+        s.append(-pointPos, '0');
+        s += digits;
+    }
+    else if (pointPos >= (int)digits.size()) {
+        s += digits;
+        s.append(pointPos - (int)digits.size(), '0');
+    }
+    else {
+        s.append(digits.begin(), digits.begin() + pointPos);
+        s.push_back('.');
+        s.append(digits.begin() + pointPos, digits.end());
+    }
+
+    return s;
 }
+
+
 inline std::ostream& operator<<(std::ostream& os, const flt128& x)
 {
     return os << to_string(x);

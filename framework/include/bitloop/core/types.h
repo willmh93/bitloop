@@ -7,6 +7,7 @@
 #include <limits>
 #include <type_traits>
 #include <cstddef>
+#include <cstdint>
 
 #include <bitloop/util/flt128.h>
 
@@ -92,7 +93,9 @@ struct Vec2
     constexpr Vec2(T _x, T _y) : x(_x), y(_y) {}
     constexpr Vec2(const ImVec2 rhs) : x(rhs.x), y(rhs.y) {}
     constexpr Vec2(const GlmVec2<T>& rhs) : x(rhs.x), y(rhs.y) {}
-    constexpr explicit Vec2(const GlmVec3<T>& rhs) : x(rhs.x), y(rhs.y) {} // discards z for 2D
+
+    template<typename T2>
+    constexpr explicit Vec2(const GlmVec3<T2>& rhs) : x((T)rhs.x), y((T)rhs.y) {} // discards z for 2D
 
     // conversions
     template<typename T2> constexpr operator Vec2<T2>()    const { return Vec2<T2>{(T2)x, (T2)y}; }
@@ -142,6 +145,10 @@ struct Vec2
 
     // static
     [[nodiscard]] static constexpr Vec2 lerp(const Vec2& a, const Vec2& b, T ratio) { return a + (b - a) * ratio; }
+
+    friend std::ostream& operator<<(std::ostream& os, const Vec2& v) {
+        return os << "(x: " << v.x << ", y: " << v.y << ")";
+    }
 };
 
 template<typename T>
@@ -794,10 +801,12 @@ typedef Segment<double>       DSegment;
 typedef Rect<int>             IRect;
 typedef Rect<float>           FRect;
 typedef Rect<double>          DRect;
+typedef Rect<flt128>          DDRect;
                               
 typedef Quad<int>             IQuad;
 typedef Quad<float>           FQuad;
 typedef Quad<double>          DQuad;
+typedef Quad<flt128>          DDQuad;
                               
 typedef Ray<float>            FRay;
 typedef Ray<double>           DRay;
@@ -807,9 +816,7 @@ typedef AngledRect<flt128>    DDAngledRect;
 
 
 #pragma once
-#include <type_traits>
-#include <cstddef>
-#include <cstdint>
+
 
 // ================= core utilities =================
 
@@ -996,9 +1003,9 @@ BL_END_NS
 
 // Global std::ostream overloads
 
-template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Vec2<T>& vec) {
-    return os << "(x: " << vec.x << ", y: " << vec.y << ")";
-}
+///template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Vec2<T>& vec) {
+///    return os << "(x: " << vec.x << ", y: " << vec.y << ")";
+///}
 
 template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Vec3<T>& vec) {
     return os << "(x: " << vec.x << ", y: " << vec.y << ", z: " << vec.z << ")";

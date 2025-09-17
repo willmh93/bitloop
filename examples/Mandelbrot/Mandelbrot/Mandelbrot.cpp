@@ -713,9 +713,10 @@ void Mandelbrot_Scene::refreshFieldDepthNormalized()
 
     // Calculate normalized depth/dist
     double dist_min_pixel_ratio = (100.0 - cycle_dist_sharpness) / 100.0 + 0.00001;
-    double stable_min_raw_dist = camera->stageToWorldOffset(DVec2{ dist_min_pixel_ratio, 0 }).magnitude(); // quarter pixel
-    double stable_max_raw_dist = pending_bmp->worldSize().magnitude() / 2.0; // half diagonal world viewport size
+    flt128 stable_min_raw_dist = camera->stageToWorldOffset<flt128>(DVec2{ dist_min_pixel_ratio, 0 }).magnitude(); // quarter pixel
+    flt128 stable_max_raw_dist = pending_bmp->worldSize().magnitude() / 2.0; // half diagonal world viewport size
 
+    // @@ todo: Use downgraded type from: stable_min_raw_dist?
     float stable_min_dist = (cycle_dist_invert ? -1 : 1) * (float)log(stable_min_raw_dist);
     float stable_max_dist = (cycle_dist_invert ? -1 : 1) * (float)log(stable_max_raw_dist);
 
@@ -743,11 +744,11 @@ void Mandelbrot_Scene::refreshFieldDepthNormalized()
         float final_depth = Math::linear_log1p_lerp(depth - floor_depth, (float)cycle_iter_log1p_weight);
 
         #ifdef BL_DEBUG
-        if (!isfinite(final_depth) || !isfinite(final_dist))
-        {
-            // There is a definite crash here, don't remove until you've caught and solved it
-            blBreak();
-        }
+        ///if (!isfinite(final_depth) || !isfinite(final_dist))
+        ///{
+        ///    // There is a definite crash here, don't remove until you've caught and solved it
+        ///    blBreak();
+        ///}
         #endif
 
         field_pixel.final_depth = final_depth;
@@ -885,12 +886,12 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     // ======== Camera View ========
     cam_view.apply(camera);
-
+    
 	// Process camera velocity
     if (mouse->pressed)
     {
         camera_vel_pos = { 0, 0 };
-
+    
         // Stop zoom velocity on touch
         //if (platform()->is_mobile())
             camera_vel_zoom = 1.0;
@@ -898,13 +899,13 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     else
     {
         double threshold = 0.001 / cam_view.zoom;
-        if (camera_vel_pos.magnitude() > threshold)    camera->setPos(camera->pos() + camera_vel_pos);
+        if (camera_vel_pos.magnitude() > threshold) camera->setPos(camera->pos() + camera_vel_pos);
         if (std::abs(camera_vel_zoom-1.0) > 0.001) camera->setZoom(camera->zoom() * camera_vel_zoom);
-
+    
         camera_vel_pos *= 0.8;
         camera_vel_zoom += (1 - camera_vel_zoom) * 0.2;
     }
-
+    
     cam_view.read(camera);
 
     // Ensure size divisble by 9 for perfect result forwarding from: [9x9] to [3x3] to [1x1]
@@ -912,7 +913,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     int ih = (int)(ceil(ctx->height() / 9)) * 9;
 
     // Does depth field need recalculating?
-    world_quad = camera->toWorldQuad(0, 0, iw, ih);
+    world_quad = camera->toWorldQuad128(0, 0, iw, ih);
     bool mandel_changed = first_frame || Changed(
         world_quad,
         quality,
@@ -997,9 +998,6 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     // ======== Bitmap / Depth-field dimensions and view rect ========
     {
         pending_bmp->setStageRect(0, 0, iw, ih);
-
-        auto stagePos = pending_bmp->stagePos();
-        auto stageSize = pending_bmp->stageSize();
 
         bmp_9x9.setBitmapSize(iw / 9, ih / 9);
         bmp_3x3.setBitmapSize(iw / 3, ih / 3);
@@ -1171,23 +1169,23 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             }
 
             #ifdef BL_DEBUG // todo: Remove when certain bug fixed
-            if (isnan(log_color_cycle_iters))
-            {
-                DebugBreak();
-                if (cycle_iter_dynamic_limit)
-                {
-                    double assumed_iter_lim = mandelbrotIterLimit(cam_view.zoom) * 0.5;
-
-                    /// "cycle_iter_value" represents ratio of iter_lim
-                    double color_cycle_iters = (cycle_iter_value * (assumed_iter_lim - (cycle_iter_normalize_depth ? active_field->min_depth : 0)));
-                    log_color_cycle_iters = Math::linear_log1p_lerp(color_cycle_iters, cycle_iter_log1p_weight);
-                }
-                else
-                {
-                    /// "cycle_iter_value" represents actual iter_lim
-                    log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, cycle_iter_log1p_weight);
-                }
-            }
+            ///if (isnan(log_color_cycle_iters))
+            ///{
+            ///    DebugBreak();
+            ///    if (cycle_iter_dynamic_limit)
+            ///    {
+            ///        double assumed_iter_lim = mandelbrotIterLimit(cam_view.zoom) * 0.5;
+            ///
+            ///        /// "cycle_iter_value" represents ratio of iter_lim
+            ///        double color_cycle_iters = (cycle_iter_value * (assumed_iter_lim - (cycle_iter_normalize_depth ? active_field->min_depth : 0)));
+            ///        log_color_cycle_iters = Math::linear_log1p_lerp(color_cycle_iters, cycle_iter_log1p_weight);
+            ///    }
+            ///    else
+            ///    {
+            ///        /// "cycle_iter_value" represents actual iter_lim
+            ///        log_color_cycle_iters = Math::linear_log1p_lerp(cycle_iter_value, cycle_iter_log1p_weight);
+            ///    }
+            ///}
             #endif
         }
 
@@ -1228,8 +1226,8 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
     if (active_bmp)
         ctx->drawImage(*active_bmp, active_bmp->worldQuad());
 
-    if (show_axis)
-        ctx->drawWorldAxis(0.5, 0, 0.5);
+    //if (show_axis)
+    //    ctx->drawWorldAxis(0.5, 0, 0.5);
 
     if (interactive_cardioid)
     {

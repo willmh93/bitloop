@@ -583,9 +583,12 @@ public:
     //    SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
     //}
 
-    void drawImage(Image& bmp, DQuad quad) {
+    template<typename T>
+    void drawImage(Image& bmp, Quad<T> q)
+    {
+        auto _PT = [&](const DDVec2& p) { return camera.transform_coordinates ? camera.toStage<flt128>(p.x, p.y) : DVec2(p); };
 
-        quad = QUAD(quad);
+        Quad<T> quad = { _PT(q.a), _PT(q.b), _PT(q.c), _PT(q.d) };
 
         DVec2 a = quad.a;
         DVec2 u = quad.b - quad.a;
@@ -603,7 +606,9 @@ public:
 
         nvgRestore(vg);
     }
-    void drawImage(CanvasImage& bmp)
+
+    template<typename T>
+    void drawImage(CanvasImageBase<T>& bmp)
     {
         drawImage(bmp, bmp.worldQuad());
     }

@@ -5,45 +5,21 @@
 
 BL_BEGIN_NS
 
-inline glm::dmat3 glm_dtranslate(double tx, double ty) {
-    glm::dmat3 m(1.0);
-    m[2][0] = tx; // column 2, row 0
-    m[2][1] = ty; // column 2, row 1
-    return m;
-}
-
-inline glm::dmat3 glm_dscale(double sx, double sy) {
-    glm::dmat3 m(1.0);
-    m[0][0] = sx;
-    m[1][1] = sy;
-    return m;
-}
-
-inline glm::dmat3 glm_drotate(double r) {
-    double c = std::cos(r);
-    double s = std::sin(r);
-    return glm::dmat3(
-        c, s, 0.0,    // column 0
-        -s, c, 0.0,   // column 1
-        0.0, 0.0, 1.0 // column 2 (homogeneous)
-    );
-}
-
-inline glm::ddmat3 glm_dtranslate(flt128 tx, flt128 ty) {
+inline glm::ddmat3 glm_ddtranslate(flt128 tx, flt128 ty) {
     glm::ddmat3 m(1.0);
     m[2][0] = tx; // column 2, row 0
     m[2][1] = ty; // column 2, row 1
     return m;
 }
 
-inline glm::ddmat3 glm_dscale(flt128 sx, flt128 sy) {
+inline glm::ddmat3 glm_ddscale(flt128 sx, flt128 sy) {
     glm::ddmat3 m(1.0);
     m[0][0] = sx;
     m[1][1] = sy;
     return m;
 }
 
-inline glm::ddmat3 glm_drotate(flt128 r) {
+inline glm::ddmat3 glm_ddrotate(flt128 r) {
     flt128 c = cos(r);
     flt128 s = sin(r);
     return glm::ddmat3(
@@ -134,7 +110,6 @@ public:
 
 public:
 
-
     // world --> stage matrix
     glm::dmat3 m64 = glm::dmat3(1.0);
     glm::dmat3 inv_m64 = glm::dmat3(1.0);
@@ -145,39 +120,41 @@ public:
     double cos_64 = 1.0, sin_64 = 0.0;
     flt128 cos_128 = 1.0, sin_128 = 0.0;
 
-    void ddResetTransform()                 { m64 = glm::ddmat3(1.0);  m128 = glm::ddmat3(1.0); }
-    void ddTranslate(flt128 tx, flt128 ty)  { m128 = m128 * glm_dtranslate(tx, ty); m64 = static_cast<glm::ddmat3>(m128); }
-    void ddRotate(flt128 r)                 { m128 = m128 * glm_drotate(r);         m64 = static_cast<glm::ddmat3>(m128); }
-    void ddScale(flt128 sx, flt128 sy)      { m128 = m128 * glm_dscale(sx, sy);     m64 = static_cast<glm::ddmat3>(m128); }
+    void ddResetTransform()                 { m128 = glm::ddmat3(1.0);               }
+    void ddTranslate(flt128 tx, flt128 ty)  { m128 = m128 * glm_ddtranslate(tx, ty); }
+    void ddRotate(flt128 r)                 { m128 = m128 * glm_ddrotate(r);         }
+    void ddScale(flt128 sx, flt128 sy)      { m128 = m128 * glm_ddscale(sx, sy);     }
 
     void updateCameraMatrix()
     {
-        DVec2 origin_offset = originPixelOffset();
+        DDVec2 origin_offset = originPixelOffset();
 
         flt128 cam_stage_x = cam_x * zoom_x;
         flt128 cam_stage_y = cam_y * zoom_y;
 
         flt128 snapped_stage_cam_x = round(cam_stage_x / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
         flt128 snapped_stage_cam_y = round(cam_stage_y / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
-
+        
         flt128 snapped_cam_x = snapped_stage_cam_x / zoom_x;
         flt128 snapped_cam_y = snapped_stage_cam_y / zoom_y;
 
         ddResetTransform();
-
-        ddTranslate(origin_offset.x + pan_x, origin_offset.y + pan_y);
+        ddTranslate(origin_offset.x + flt128(pan_x), origin_offset.y + flt128(pan_y));
         ddRotate(cam_rotation);
         ddTranslate(-snapped_cam_x * zoom_x, -snapped_cam_y * zoom_y);
         ddScale(zoom_x, zoom_y);
 
-        cos_128 = m128[0][0] / zoom_x;
+        // m128 = single source of truth
+        m64 = static_cast<glm::dmat3>(m128);
+
+        inv_m128 = glm::inverse(m128);
+        inv_m64  = glm::inverse(m64);
+
+        cos_128 =  m128[0][0] / zoom_x;
         sin_128 = -m128[1][0] / zoom_x;
 
-        cos_64 = m64[0][0] / (double)zoom_x;
+        cos_64 =  m64[0][0] / (double)zoom_x;
         sin_64 = -m64[1][0] / (double)zoom_x;
-
-        inv_m64 = glm::inverse(m64);
-        inv_m128 = glm::inverse(m128);
     }
 
     void worldTransform();
@@ -193,22 +170,17 @@ public:
     void saveCameraTransform();
     void restoreCameraTransform();
 
-    //double stage_ox = 0;
-    //double stage_oy = 0;
-    //void setStageOffset(double ox, double oy);
-
-    void setCameraStageSnappingSize(int stage_pixels)
-    {
-        cam_pos_stage_snap_size = stage_pixels;
-    }
-
     void setOriginViewportAnchor(double ax, double ay);
     void setOriginViewportAnchor(Anchor anchor);
 
     constexpr double viewportWidth() const { return viewport_w; }
     constexpr double viewportHeight() const { return viewport_h; }
 
-    // flt128
+    void setCameraStageSnappingSize(int stage_pixels) {
+        cam_pos_stage_snap_size = stage_pixels;
+    }
+
+    // f128
     bool setX(flt128 _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
     bool setY(flt128 _y)               { if (cam_y  != _y)                          { cam_y = _y;                       updateCameraMatrix(); return true; } return false; }
     bool setZoomX(flt128 zx)           { if (zoom_x != zx)                          { zoom_x = zx;                      updateCameraMatrix(); return true; } return false; }
@@ -218,7 +190,7 @@ public:
     bool setZoom(flt128 zoom)          { if (zoom_x != zoom || zoom_y != zoom)      { zoom_x = zoom_y = zoom;           updateCameraMatrix(); return true; } return false; }
     bool setZoom(flt128 zx, flt128 zy) { if (zoom_x != zx   || zoom_y != zy)        { zoom_x = zx; zoom_y = zy;         updateCameraMatrix(); return true; } return false; }
                                                                                                                         
-    // double                                                                                                           
+    // f64                                                                                                           
     bool setX(double _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
     bool setY(double _y)               { if (cam_y  != _y)                          { cam_y = _y;                       updateCameraMatrix(); return true; } return false; }
     bool setZoomX(double zx)           { if (zoom_x != zx)                          { zoom_x = zx;                      updateCameraMatrix(); return true; } return false; }
@@ -240,7 +212,7 @@ public:
     [[nodiscard]] constexpr DVec2  pos()      const   { return {(double)cam_x, (double)cam_y }; }
     [[nodiscard]] constexpr double panX()     const   { return (double)pan_x; }
     [[nodiscard]] constexpr double panY()     const   { return (double)pan_y; }
-    [[nodiscard]] constexpr DVec2  zoom()      const   { return {(double)zoom_x, (double)zoom_y }; }
+    [[nodiscard]] constexpr DVec2  zoom()     const   { return {(double)zoom_x, (double)zoom_y }; }
     [[nodiscard]] constexpr double zoomX()    const   { return (double)zoom_x; }
     [[nodiscard]] constexpr double zoomY()    const   { return (double)zoom_y; }
     [[nodiscard]] constexpr double rotation() const   { return (double)cam_rotation; }
@@ -267,8 +239,7 @@ public:
     }
 
     // Set zoom (relative to the reference)
-    void setRelativeZoom(double relative_zoom)
-    {
+    void setRelativeZoom(double relative_zoom) {
         zoom_x = ref_zoom_x * relative_zoom;
         zoom_y = ref_zoom_y * relative_zoom;
         updateCameraMatrix();
@@ -282,8 +253,7 @@ public:
         updateCameraMatrix();
     }
 
-    void setRelativeZoom(flt128 relative_zoom)
-    {
+    void setRelativeZoom(flt128 relative_zoom) {
         zoom_x = ref_zoom_x * relative_zoom;
         zoom_y = ref_zoom_y * relative_zoom;
         updateCameraMatrix();
@@ -304,87 +274,135 @@ public:
 
     // ======== Camera controls ========
 
-    void cameraToViewport(double left, double top, double right, double bottom);
 
-    void originToCenterViewport();
-
-    [[nodiscard]] DDVec2 worldToStageOffset(const DDVec2& o) const
-    {
-        return {
-            (o.x * cos_128 - o.y * sin_128) * zoom_x,
-            (o.y * cos_128 + o.x * sin_128) * zoom_y
-        };
-    }
-    [[nodiscard]] DDVec2 stageToWorldOffset(const DDVec2& stage_offset) const
-    {
-        return {
-            (stage_offset.x * cos_128 + stage_offset.y * sin_128) / zoom_x,
-            (stage_offset.y * cos_128 - stage_offset.x * sin_128) / zoom_y
-        };
-    }
-
-    [[nodiscard]] DVec2 worldToStageOffset(const DVec2& o) const
-    {
-        return {
-            (o.x * cos_64 - o.y * sin_64) * (double)zoom_x,
-            (o.y * cos_64 + o.x * sin_64) * (double)zoom_y
-        };
-    }
-    [[nodiscard]] DVec2 stageToWorldOffset(const DVec2& stage_offset) const
-    {
-        return {
-            (stage_offset.x * cos_64 + stage_offset.y * sin_64) / (double)zoom_x,
-            (stage_offset.y * cos_64 - stage_offset.x * sin_64) / (double)zoom_y
-        };
-    }
-
-    [[nodiscard]] DVec2 worldAxisDirStage(bool isX) const
-    {
-        double c = std::cos(cam_rotation);
-        double s = std::sin(cam_rotation);
+    [[nodiscard]] DVec2 axisStageDirection(bool isX) const {
+        double c = cos_64; // std::cos(cam_rotation);
+        double s = sin_64; // std::sin(cam_rotation);
         return isX ? DVec2{ c, s } : DVec2{ -s, c };
     }
-    [[nodiscard]] DVec2 worldAxisPerpStage(bool isX) const
-    {
-        DVec2 d = worldAxisDirStage(isX).normalized();
+
+    [[nodiscard]] DVec2 axisStagePerpDirection(bool isX) const {
+        DVec2 d = axisStageDirection(isX).normalized();
         return { -d.y, d.x };
     }
 
-    [[nodiscard]] DVec2 worldToStageOffset(double ox, double oy)  const { return worldToStageOffset(DVec2{ ox, oy }); }
-    [[nodiscard]] DVec2 stageToWorldOffset(double ox, double oy)  const { return stageToWorldOffset(DVec2{ ox, oy }); }
-    [[nodiscard]] DDVec2 worldToStageOffset(flt128 ox, flt128 oy) const { return worldToStageOffset(DDVec2{ ox, oy }); }
-    [[nodiscard]] DDVec2 stageToWorldOffset(flt128 ox, flt128 oy) const { return stageToWorldOffset(DDVec2{ ox, oy }); }
+    // ----- viewport origin / pan -----
+
+    void cameraToViewport(double left, double top, double right, double bottom);
+    void originToCenterViewport();
 
     [[nodiscard]] DVec2 originPixelOffset() const;
     [[nodiscard]] DVec2 originWorldOffset() const;
     [[nodiscard]] DVec2 panPixelOffset() const;
 
-    [[nodiscard]] DVec2 toStage(double wx, double wy)  const { return static_cast<DVec2>(    m64 * glm::dvec3(wx, wy, 1)); }
-    [[nodiscard]] DVec2 toWorld(double sx, double sy)  const { return static_cast<DVec2>(inv_m64 * glm::dvec3(sx, sy, 1.0)); }
-    [[nodiscard]] DVec2 toStage(DVec2 p)               const { return static_cast<DVec2>(    m64 * glm::dvec3(p.x, p.y, 1.0)); }
-    [[nodiscard]] DVec2 toWorld(DVec2 p)               const { return static_cast<DVec2>(inv_m64 * glm::dvec3(p.x, p.y, 1)); }
+    // ----- toStage -----
 
-    [[nodiscard]] DDVec2 toStage(flt128 wx, flt128 wy) const { return static_cast<DDVec2>(    m128 * glm::ddvec3(wx, wy, 1)); }
-    [[nodiscard]] DDVec2 toWorld(flt128 sx, flt128 sy) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(sx, sy, 1.0)); }
-    [[nodiscard]] DDVec2 toStage(DDVec2 p)             const { return static_cast<DDVec2>(    m128 * glm::ddvec3(p.x, p.y, 1.0)); }
-    [[nodiscard]] DDVec2 toWorld(DDVec2 p)             const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(p.x, p.y, 1)); }
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    [[nodiscard]] DVec2 toStage(double wx, double wy)  const { return static_cast<DVec2>( m64 * glm::dvec3(wx, wy, 1.0)); }
+
+    template<class T2> requires std::is_same_v<T2, flt128>
+    [[nodiscard]] DVec2 toStage(flt128 wx, flt128 wy) const { return static_cast<DVec2>( m128 * glm::ddvec3(wx, wy, flt128{1})); }
+
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    DVec2 toStage(DVec2 p) const { return static_cast<DVec2>(m64 * glm::dvec3(p.x, p.y, 1.0)); }
+
+    template<class T2> requires std::is_same_v<T2, flt128>
+    DVec2 toStage(DDVec2 p) const { return static_cast<DVec2>(m128 * glm::ddvec3(p.x, p.y, flt128{ 1 })); }
+
+    // ----- toWorld -----
+
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    [[nodiscard]] Vec2<T2> toWorld(double sx, double sy) const { return static_cast<DVec2>(inv_m64 * glm::dvec3(sx, sy, 1.0)); }
+
+    template<class T2> requires std::is_same_v<T2, flt128>
+    [[nodiscard]] Vec2<T2> toWorld(double sx, double sy) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(flt128{ sx }, flt128{ sy }, flt128{ 1 })); }
+
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    [[nodiscard]] Vec2<T2> toWorld(DVec2 p) const { return static_cast<DVec2>(inv_m64 * glm::dvec3(p.x, p.y, 1.0)); }
+
+    template<class T2> requires std::is_same_v<T2, flt128>
+    [[nodiscard]] Vec2<T2> toWorld(DVec2 p) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(flt128{ p.x }, flt128{ p.y }, flt128{ 1 })); }
+
+
+
+    
+
+    /// TODO: cache f64 zoom_x/zoom_y for below
+
+    // ----- world (f64) => stage (f64) -----
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    [[nodiscard]] DVec2 worldToStageOffset(DVec2 o) const {
+        return {
+            (o.x * cos_64 - o.y * sin_64) * (double)zoom_x,
+            (o.y * cos_64 + o.x * sin_64) * (double)zoom_y
+        };
+    }
+
+    // ----- world (f128) => stage (f64) -----
+    template<class T2> requires std::is_same_v<T2, flt128>
+    [[nodiscard]] DVec2 worldToStageOffset(const DDVec2& o) const {
+        return DVec2{
+            (double)((o.x * cos_128 - o.y * sin_128) * zoom_x),
+            (double)((o.y * cos_128 + o.x * sin_128) * zoom_y)
+        };
+    }
+
+    // ----- stageToWorldOffset -----
+
+    /// --- stage (f64) => world (f64) ---
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    [[nodiscard]] DVec2 stageToWorldOffset(DVec2 o) const {
+        return {
+            (o.x * cos_64 + o.y * sin_64) / (double)zoom_x,
+            (o.y * cos_64 - o.x * sin_64) / (double)zoom_y
+        };
+    }
+    /// --- stage (f64) => world (f126) ---
+    template<class T2> requires std::is_same_v<T2, flt128>
+    [[nodiscard]] Vec2<T2> stageToWorldOffset(DVec2 o) const {
+        return {
+            (o.x * cos_128 + o.y * sin_128) / zoom_x,
+            (o.y * cos_128 - o.x * sin_128) / zoom_y
+        };
+    }
+
+    template<class T2 = double> requires std::is_same_v<T2, double>
+    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset({ sx, sy }); }
+
+    template<class T2> requires std::is_same_v<T2, flt128>
+    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset({ sx, sy }); }
+
+
+    // ----- toWorldRect -----
 
     [[nodiscard]] DRect toWorldRect(const DRect& r) const;
     [[nodiscard]] DRect toWorldRect(double x1, double y1, double x2, double y2) const;
 
-    [[nodiscard]] DQuad toWorldQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d) const;
+    // ----- toWorldQuad -----
+
+    [[nodiscard]] DQuad toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const;
     [[nodiscard]] DQuad toWorldQuad(const DQuad& quad) const;
     [[nodiscard]] DQuad toWorldQuad(const DRect& quad) const;
     [[nodiscard]] DQuad toWorldQuad(double x1, double y1, double x2, double y2) const;
 
+    [[nodiscard]] DDQuad toWorldQuad128(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const;
+    [[nodiscard]] DDQuad toWorldQuad128(const DQuad& quad) const;
+    [[nodiscard]] DDQuad toWorldQuad128(const DRect& quad) const;
+    [[nodiscard]] DDQuad toWorldQuad128(double x1, double y1, double x2, double y2) const;
+
+    // ----- toStageSize -----
+
     [[nodiscard]] DVec2 toStageSize(const DVec2& size) const;
     [[nodiscard]] DVec2 toStageSize(double w, double h) const;
-    [[nodiscard]] DRect toStageRect(double x0, double y0, double x1, double y1) const;
-    [[nodiscard]] DRect toStageRect(const DVec2& pt1, const DVec2& pt2) const;
-    [[nodiscard]] DQuad toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d) const;
 
-    //[[nodiscard]] DAngledRect toWorldRect(const DAngledRect& r);
-    //[[nodiscard]] DAngledRect toStageRect(const DAngledRect& r);
+    // ----- toStageRect -----
+
+    [[nodiscard]] DRect toStageRect(double x0, double y0, double x1, double y1) const;
+    [[nodiscard]] DRect toStageRect(DVec2 pt1, DVec2 pt2) const;
+
+    // ----- toStageQuad -----
+
+    [[nodiscard]] DQuad toStageQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const;
 
     void setDirectCameraPanning(bool b) { direct_cam_panning = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
@@ -424,7 +442,6 @@ public:
     [[nodiscard]] double panBegCamAngle()    const { return pan_beg_cam_angle; }
 
     bool handleWorldNavigation(Event e, bool single_touch_pan, bool zoom_anchor_mouse=false);
-	//void handleWorldNavigation(Event e, bool single_touch_pan);
 };
 
 class CameraViewController
@@ -541,12 +558,6 @@ public:
     }
 };
 
-//inline void Camera::setStageOffset(double ox, double oy)
-//{
-//    stage_ox = ox;
-//    stage_oy = oy;
-//}
-
 inline DVec2 Camera::originWorldOffset() const
 {
     // zoom_x/zoom_y refer to world zoom, not stage zoom? bug if camera rotated?
@@ -558,6 +569,7 @@ inline DVec2 Camera::panPixelOffset() const
     return DVec2(pan_x, pan_y);
 }
 
+// ----- f64 toWorldRect -----
 
 inline DRect Camera::toWorldRect(const DRect& r) const
 {
@@ -573,16 +585,9 @@ inline DRect Camera::toWorldRect(double x1, double y1, double x2, double y2) con
     return { tl.x, tl.y, br.x, br.y };
 }
 
-//inline DAngledRect Camera::toWorldRect(const DAngledRect& r)
-//{
-//    DAngledRect ret;
-//    ret.cen = toWorld(r.cen);
-//    ret.size = toWorldOffset(r.size);
-//    ret.angle = r.angle; // todo: toWorldAngle
-//    return ret;
-//}
+// ----- f64 toWorldQuad -----
 
-inline DQuad Camera::toWorldQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d) const
+inline DQuad Camera::toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const
 {
     DVec2 qA = toWorld(a);
     DVec2 qB = toWorld(b);
@@ -616,6 +621,40 @@ inline DQuad Camera::toWorldQuad(const DRect& r) const
     );
 }
 
+// ----- f64 => f128 toWorldQuad128 -----
+
+inline DDQuad Camera::toWorldQuad128(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const
+{
+    return { toWorld<flt128>(a), toWorld<flt128>(b), toWorld<flt128>(c), toWorld<flt128>(d) };
+}
+
+inline DDQuad Camera::toWorldQuad128(const DQuad& quad) const
+{
+    return toWorldQuad128(quad.a, quad.b, quad.c, quad.d);
+}
+
+inline DDQuad Camera::toWorldQuad128(double x1, double y1, double x2, double y2) const
+{
+    return toWorldQuad128(
+        DVec2{x1, y1},
+        DVec2{x2, y1},
+        DVec2{x2, y2},
+        DVec2{x1, y2}
+    );
+}
+
+inline DDQuad Camera::toWorldQuad128(const DRect& r) const
+{
+    return toWorldQuad128(
+        DVec2(r.x1, r.y1),
+        DVec2(r.x2, r.y1),
+        DVec2(r.x2, r.y2),
+        DVec2(r.x1, r.y2)
+    );
+}
+
+/// ----- f64 toStageSize -----
+
 inline DVec2 Camera::toStageSize(const DVec2& size) const
 {
     return DDVec2{ size.x * zoom_x, size.y * zoom_y };
@@ -633,27 +672,14 @@ inline DRect Camera::toStageRect(double x0, double y0, double x1, double y1) con
     return { p1.x, p1.y, p2.x, p2.y };
 }
 
-//inline DAngledRect Camera::toStageRect(const DAngledRect& r)
-//{
-//    DAngledRect ret;
-//    ret.cen = toStage(r.cen);
-//    ret.size = toStageOffset(r.size);
-//    ret.angle = r.angle; // todo: toStageAngle
-//    return ret;
-//}
-
-inline DRect Camera::toStageRect(const DVec2& pt1, const DVec2& pt2) const
+inline DRect Camera::toStageRect(DVec2 pt1, DVec2 pt2) const
 {
     return toStageRect(pt1.x, pt1.y, pt2.x, pt2.y);
 }
 
-inline DQuad Camera::toStageQuad(const DVec2& a, const DVec2& b, const DVec2& c, const DVec2& d) const
+inline DQuad Camera::toStageQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const
 {
-    DVec2 qA = toStage(a);
-    DVec2 qB = toStage(b);
-    DVec2 qC = toStage(c);
-    DVec2 qD = toStage(d);
-    return { qA, qB, qC, qD };
+    return { toStage(a), toStage(b), toStage(c), toStage(d) };
 }
 
 BL_END_NS

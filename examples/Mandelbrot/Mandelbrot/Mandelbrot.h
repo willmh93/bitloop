@@ -91,12 +91,12 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     EscapeField field_3x3 = EscapeField(1); // Processed over multiple frames
     EscapeField field_1x1 = EscapeField(2); // Processed over multiple frames
 
-    CanvasImage bmp_9x9;
-    CanvasImage bmp_3x3;
-    CanvasImage bmp_1x1;
+    CanvasImage128 bmp_9x9;
+    CanvasImage128 bmp_3x3;
+    CanvasImage128 bmp_1x1;
 
-    CanvasImage* pending_bmp = nullptr;
-    CanvasImage* active_bmp = nullptr;
+    CanvasImage128* pending_bmp = nullptr;
+    CanvasImage128* active_bmp = nullptr;
 
     EscapeField* pending_field = nullptr;
     EscapeField* active_field = nullptr;
@@ -107,7 +107,7 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     double log_color_cycle_iters = 0.0;
     int    iter_lim = 0; // Actual iter limit
     bool   colors_updated = false; // still needed?
-    DQuad  world_quad;
+    DDQuad  world_quad;
     int    current_row = 0;
 
     // 0 = 9x smaller
