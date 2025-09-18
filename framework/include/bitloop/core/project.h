@@ -333,7 +333,7 @@ public:
 
     [[nodiscard]] DVec2 Offset(double stage_offX, double stage_offY) const
     {
-        return camera->stageToWorldOffset(DVec2{ stage_offX, stage_offY });
+        return camera->stageToWorldOffset<double>(stage_offX, stage_offY);
     }
 
     void logMessage(std::string_view, ...);

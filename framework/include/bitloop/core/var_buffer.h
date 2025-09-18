@@ -197,10 +197,22 @@ struct VarBuffer
             if (!equals_any_fn || !value.has_value() || !mark_shadow.has_value()) return false;
             return !equals_any_fn(value, mark_shadow);
         }
-        std::string to_string() const {
+        std::string to_string_value() const {
             if (!value.has_value() || !print_fn) return {};
             std::ostringstream oss;
             print_fn(oss, value);
+            return oss.str();
+        }
+        std::string to_string_marked_shadow() const {
+            if (!value.has_value() || !print_fn) return {};
+            std::ostringstream oss;
+            print_fn(oss, mark_shadow);
+            return oss.str();
+        }
+        std::string to_string_marked_live() const {
+            if (!value.has_value() || !print_fn) return {};
+            std::ostringstream oss;
+            print_fn(oss, mark_live);
             return oss.str();
         }
     };
@@ -243,7 +255,7 @@ struct VarBuffer
         using Ops = TypeOps<T>;
         using Store = typename TypeOps<T>::Store;
 
-        if (!e.assign_fn)          e.assign_fn = +[](void* d, const std::any& a) { Ops::assign(d, a); };
+        if (!e.assign_fn)          e.assign_fn = +[](void* d, const std::any& a) { if (!Ops::equals(d, a)) Ops::assign(d, a); };
         if (!e.equals_fn)          e.equals_fn = +[](const void* d, const std::any& a) { return Ops::equals(d, a); };
         if (!e.store_from_live_fn) e.store_from_live_fn = +[](std::any& dst, const void* src) { Ops::store(dst, src); };
         if (!e.equals_any_fn)      e.equals_any_fn = +[](const std::any& a, const std::any& b) { return Ops::equals_any(a, b); };

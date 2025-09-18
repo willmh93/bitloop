@@ -64,13 +64,13 @@ struct MandelState
 
     bool operator==(const MandelState&) const = default;
 
-    inline DVec2  cam_pos() const { return cam_view.pos; }
-    inline double cam_zoom() const { return cam_view.zoom; }
+    inline DDVec2  cam_pos() const { return cam_view.pos; }
+    inline flt128 cam_zoom() const { return cam_view.zoom; }
     inline double cam_angle() const { return cam_view.angle; }
 
     std::string serialize() const
     {
-        constexpr bool COMPRESS_CONFIG = true;
+        constexpr bool COMPRESS_CONFIG = false;
 
         // Increment version each time the format changes
         uint32_t version = 0;
@@ -98,9 +98,9 @@ struct MandelState
             /// Mark JSON floats with "CLEANFLOAT()" to remove trailing zeros/rounding errors when serializing
 
             // View
-            info["x"] = JSON::markCleanFloat(cam_view.x, decimals);
-            info["y"] = JSON::markCleanFloat(cam_view.y, decimals);
-            info["z"] = JSON::markCleanFloat(cam_view.zoom, 2); /// todo: If you increase to 128 bit precision, be careful
+            info["x"] = to_string(cam_view.x, decimals);//JSON::markCleanFloat(cam_view.x, decimals);
+            info["y"] = to_string(cam_view.y, decimals);//JSON::markCleanFloat(cam_view.y, decimals);
+            info["z"] = to_string(cam_view.zoom, 32); /// todo: If you increase to 128 bit precision, be careful
             info["a"] = JSON::markCleanFloat(cam_view.zoom_xy.x, 3);
             info["b"] = JSON::markCleanFloat(cam_view.zoom_xy.y, 3);
             info["r"] = JSON::markCleanFloat(Math::toDegrees(cam_view.angle), 0);
@@ -204,9 +204,24 @@ private:
             use_smoothing               = flags & MANDEL_USE_SMOOTHING;
 
             // View
-            cam_view.x = info.value("x", 0.0);
-            cam_view.y = info.value("y", 0.0);
-            cam_view.zoom = info.value("z", 1.0);
+            if (info.contains("x") && info.find("x").value().is_string())
+                cam_view.x = from_string(info.value("x", "0").c_str()); 
+            else
+                cam_view.x = info.value("x", 0.0);
+
+            if (info.contains("y") && info.find("y").value().is_string())
+                cam_view.y = from_string(info.value("y", "0").c_str());
+            else
+                cam_view.y = info.value("y", 0.0);
+
+            if (info.contains("z") && info.find("z").value().is_string())
+                cam_view.zoom = from_string(info.value("z", "0").c_str());
+            else
+                cam_view.zoom = info.value("z", 0.0);
+
+            ///cam_view.x = info.value("x", flt128{ 0.0 });
+            ///cam_view.y = info.value("y", flt128{ 0.0 });
+            ///cam_view.zoom = info.value("z", flt128{ 1.0 });
             cam_view.zoom_xy.x = info.value("a", 1.0);
             cam_view.zoom_xy.y = info.value("b", 1.0);
             double angle_degrees = info.value("r", 0.0);

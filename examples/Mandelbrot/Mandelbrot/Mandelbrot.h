@@ -21,6 +21,9 @@ using namespace bl;
 
 struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 {
+   // flt128 test = flt128{ 0.123456789123456789123456789 } / flt128{ 0.0584168164368118574 };
+
+
     // ──────  Config ──────
     struct Config {};
     Mandelbrot_Scene(Config&) {}
@@ -38,18 +41,20 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     // ────── Tweening ──────
     bool   tweening = false;
     double tween_progress = 0.0; // 0..1
-    double tween_lift = 0.0;
+    flt128 tween_lift = 0.0;
     double tween_duration = 0.0;
 
     MandelState state_a;
     MandelState state_b;
-    DAngledRect tween_r1;
-    DAngledRect tween_r2;
+    DDAngledRect tween_r1;
+    DDAngledRect tween_r2;
 
-    DVec2 reference_zoom, ctx_stage_size;
-    DVec2 stageWorldSize() const { return ctx_stage_size / reference_zoom; }
-    DAngledRect getAngledRect(const MandelState& s) const {
-        return DAngledRect(s.cam_pos(), stageWorldSize() / s.cam_zoom(), s.cam_angle());
+    DDVec2 reference_zoom;
+    DDVec2 ctx_stage_size;
+
+    DDVec2 stageWorldSize() const { return ctx_stage_size / reference_zoom; }
+    DDAngledRect getAngledRect(const MandelState& s) const {
+        return DDAngledRect(s.cam_pos(), stageWorldSize() / s.cam_zoom(), (flt128)s.cam_angle());
     }
 
     // ────── Cardioid ──────
@@ -63,7 +68,7 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     void updateShiftedGradient();
 
     //void shadeBitmap();
-    void refreshFieldDepthNormalized();
+    //void refreshFieldDepthNormalized();
 
     // ────── Splines ──────
     ImSpline::Spline x_spline               = MandelSplines::x_spline;
@@ -126,7 +131,7 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     Math::MovingAverage::MA<DVec2> avg_vel_pos = Math::MovingAverage::MA<DVec2>(8);
     Math::MovingAverage::MA<double> avg_vel_zoom = Math::MovingAverage::MA<double>(8);
 
-    DVec2 camera_vel_pos{0, 0};
+    DDVec2 camera_vel_pos{0, 0};
     double camera_vel_zoom{1};
 
     // ────── User Interface ──────

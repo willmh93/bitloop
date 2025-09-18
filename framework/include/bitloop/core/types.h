@@ -119,6 +119,7 @@ struct Vec2
     [[nodiscard]] constexpr Vec2 operator*(T v) const { return { x * v, y * v }; }
     [[nodiscard]] constexpr Vec2 operator/(T v) const { return { x / v, y / v }; }
 
+    // todo: Make template T2 type? e.g. flt128*=double, avoid unnecessary conversion double->flt128
     constexpr void operator+=(Vec2 rhs) { x += rhs.x; y += rhs.y; }
     constexpr void operator-=(Vec2 rhs) { x -= rhs.x; y -= rhs.y; }
     constexpr void operator*=(Vec2 rhs) { x *= rhs.x; y *= rhs.y; }
@@ -667,12 +668,12 @@ struct AngledRect
         return { W, H };
     }
 
-    void fitTo(AngledRect a, AngledRect b, T fixed_aspect_ratio=0)
+    void fitTo(AngledRect<T> a, AngledRect<T> b, T fixed_aspect_ratio=0)
     {
-        cx = (a.cx + b.cx) / 2;
-        cy = (a.cy + b.cy) / 2;
-        angle = Math::avgAngle(a.angle, b.angle);
-        size = AngledRect::enclosingSize(a, b, angle, fixed_aspect_ratio);
+        cx = (a.cx + b.cx) * T{0.5};
+        cy = (a.cy + b.cy) * T{0.5};
+        angle = Math::avgAngle<T>(a.angle, b.angle);
+        size = AngledRect<T>::enclosingSize(a, b, angle, fixed_aspect_ratio);
     }
 };
 

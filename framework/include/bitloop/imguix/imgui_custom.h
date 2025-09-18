@@ -74,6 +74,9 @@ namespace bl
 std::ostream& operator<<(std::ostream& os, const ImSpline::Spline& spline);
 std::ostream& operator<<(std::ostream& os, const ImGradient& gradient);
 
+bool SliderBehavior_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_type, void* p_v, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags, ImRect* out_grab_bb);
+
+
 namespace ImGui
 {
     struct StartValue { void* initial; int size; };
@@ -91,6 +94,7 @@ namespace ImGui
 
     bool RevertableSliderDouble(const char* label, double* v, double* initial, double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool RevertableDragDouble(const char* label, double* v, double* initial, double v_speed, double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    bool RevertableDragFloat128(const char* label, flt128* v, flt128* initial, flt128 v_speed, flt128 v_min, flt128 v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool RevertableSliderDouble2(const char* label, double v[2], double initial[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     //bool RevertableSliderDouble2(const char* label, double v[2], double initial[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
 
@@ -98,11 +102,10 @@ namespace ImGui
     bool DragDouble(const char* label, double* v, double v_speed = 1.0, double v_min = 0.0, double v_max = 0.0, const char* format = "%.6f", ImGuiSliderFlags flags = 0);     // If v_min >= v_max we have no bound
     bool SliderDouble2(const char* label, double v[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool DragDouble2(const char* label, double v[2], double v_speed = 1.0f, double v_min = 0.0f, double v_max = 0.0f, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
+    bool SliderDouble_InvLog(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags = 0);
+    bool DragFloat128(const char* label, flt128* v, flt128 v_speed=1, flt128 v_min=0, flt128 v_max=0, const char* format = "%.32f", ImGuiSliderFlags flags = 0);
 
-
-    
-    bool SliderBehavior_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_type, void* p_v, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags, ImRect* out_grab_bb);
-    bool SliderDouble_InvLog(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags=0);
+    //bool SliderFloat128(const char* label, flt128* p_data, flt128 v_min, flt128 v_max, const char* format, ImGuiSliderFlags flags=0);
 
     void BeginPaddedRegion(float padding);
     void EndPaddedRegion();

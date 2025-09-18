@@ -11,6 +11,9 @@ BL_BEGIN_NS
 
 namespace Math
 {
+    template<class T> inline constexpr T pi_v = std::numbers::pi_v<T>;
+    template<> inline constexpr flt128 pi_v<flt128> = flt128(3.141592653589793116, 1.2246467991473532072e-16);
+
     // Numbers
     constexpr float FPI = (float)std::numbers::pi;
     constexpr float FTWO_PI = (float)std::numbers::pi * 2.0f;
@@ -213,17 +216,17 @@ namespace Math
     }
 
     // Angles
-    template<typename T> [[nodiscard]] constexpr T toRadians(T degrees) { return degrees * std::numbers::pi_v<T> / T{ 180 }; }
-    template<typename T> [[nodiscard]] constexpr T toDegrees(T radians) { return radians * T{ 180 } / std::numbers::pi_v<T>; }
+    template<typename T> [[nodiscard]] constexpr T toRadians(T degrees) { return degrees * pi_v<T> / T{ 180 }; }
+    template<typename T> [[nodiscard]] constexpr T toDegrees(T radians) { return radians * T{ 180 } / pi_v<T>; }
 
     template<typename T> [[nodiscard]] inline T closestAngleDifference(T angle, T target_angle)
     {
-        T diff = std::fmod((target_angle - angle) + std::numbers::pi_v<T>, std::numbers::pi_v<T>*2);
-        if (diff < 0) diff += std::numbers::pi_v<T>*2;
-        return diff - std::numbers::pi_v<T>;
+        T diff = fmod((target_angle - angle) + pi_v<T>, pi_v<T>*2);
+        if (diff < 0) diff += pi_v<T>*2;
+        return diff - pi_v<T>;
     }
-    template<typename T> [[nodiscard]] inline T wrapRadians(T a) noexcept { return std::remainder(a, std::numbers::pi_v<T>*2); }
-    template<typename T> [[nodiscard]] inline T wrapRadians2PI(T a) noexcept { return a - std::numbers::pi_v<T>*2 * std::floor(a * T{1}/(std::numbers::pi_v<T>*2)); }
+    template<typename T> [[nodiscard]] inline T wrapRadians(T a) noexcept { return remainder(a, pi_v<T>*2); }
+    template<typename T> [[nodiscard]] inline T wrapRadians2PI(T a) noexcept { return a - pi_v<T>*2 * floor(a * T{1}/(pi_v<T>*2)); }
     template<typename T> [[nodiscard]] inline T lerpAngle(T a, T b, T f) { return wrapRadians(a + f * closestAngleDifference(a, b)); }
     template<typename T> [[nodiscard]] inline T avgAngle(T a, T b) { return lerpAngle(a, b, T{ 0.5 }); }
 

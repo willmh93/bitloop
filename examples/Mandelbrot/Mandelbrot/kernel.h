@@ -154,7 +154,7 @@ FAST_INLINE void mandel_kernel(
     const T& y0,
     int iter_lim,
     float& depth,
-    float& dist,
+    T& dist,
     float& stripes ,
     StripeParams sp = {})
 {
@@ -189,9 +189,12 @@ FAST_INLINE void mandel_kernel(
         if constexpr (NEED_DIST)
             detail::step_d(z, dz);
 
+        cplx<T> z0 = z;
+
         // step
         detail::step(z, c);
         ++iter;
+
 
         // update radius^2
         r2 = detail::mag2(z);
@@ -214,7 +217,7 @@ FAST_INLINE void mandel_kernel(
         if (escaped) {
             const T r = sqrt(r2);
             const T dz_abs = sqrt(detail::mag2(dz));
-            dist = (dz_abs == zero) ? 0.0f : (float)(r * log(r) / dz_abs);
+            dist = (dz_abs == zero) ? 0 : (r * log(r) / dz_abs);
         }
         else {
             dist = INSIDE_MANDELBROT_SET;
@@ -244,18 +247,17 @@ FAST_INLINE void mandel_kernel(
     {
         float avg = (sum_samples > 0) ? (sum / (float)sum_samples) : 0.0f;
         float prev = (sum_samples > 1) ? ((sum - last_added) / (float)(sum_samples - 1)) : avg;
-
+        
         // stripeAC interpolation weight (fraction inside the last band)
         // frac = 1 + log2( log(ER^2) / log(|z|^2) ), clamped to [0,1]
         float frac = 1.0f + (float)std::log2((double)log(escape_r2) / std::max((double)log(r2), 1e-300));
         frac = clamp01(frac);
-
+        
         float mix = frac * avg + (1.0f - frac) * prev; // linear interpolation
         mix = 0.5f + 0.5f * std::tanh(sp.contrast * (mix - 0.5f)); // optional shaping
         stripes = clamp01(mix);
     }
 }
-
 
 
 template<bool smooth>
@@ -342,23 +344,28 @@ bool radialMandelbrot()
 };*/
 
 
+/// --------------------------------------------------------------
+/// Uses the bmp's CanvasObject::worldQuad to to loop over pixels,
+/// and calculates mandelbrot set for all pixels which don't already
+/// have a depth > 0 (i.e. Filling in the blanks)
+/// --------------------------------------------------------------
+
 template<typename T, MandelSmoothing Smoothing, bool flatten, bool Axis_Visible>
 bool mandelbrot(CanvasImage128* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row, StripeParams stripe_params={})
 {
     bool frame_complete = bmp->forEachWorldPixel<T>(current_row, [&](int x, int y, T wx, T wy)
     {
         EscapeFieldPixel& field_pixel = field->at(x, y);
-
-        // Pixel already calculated/forwarded from previous phase? Return early
         float depth = field_pixel.depth;
         if (depth >= 0) return;
 
-        float dist, stripe;
+        T dist;
+        float stripe;
         mandel_kernel<T, Smoothing>(wx, wy, iter_lim, depth, dist, stripe, stripe_params);
 
-        field_pixel.depth = depth;
-        field_pixel.dist = dist;
-        field_pixel.stripe = stripe;
+        field_pixel.depth = depth;    // not likely not need more than float precision
+        field_pixel.stripe = stripe;  // not likely not need more than float precision
+        field_pixel.setDist(dist);    // store dist with appropriate precision
 
     }, threads, timeout);
 

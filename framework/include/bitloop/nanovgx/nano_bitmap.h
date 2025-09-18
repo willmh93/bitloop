@@ -69,13 +69,7 @@ public:
     void setStagePos(double sx, double sy) { pos = toWorld(sx, sy); }
     void setStageRect(double sx, double sy, double sw, double sh)
     {
-        blPrint() << "old_sx: " << sx << " old_sy: " << sy;
-
         pos = toWorld(sx, sy) - worldAlignOffset();
-
-        DVec2 orig = toStage(pos);
-        blPrint() << "new_sx: " << orig.x << " new_sy: " << orig.y;
-
         u = toWorld(sx + sw, sy) - pos;
         v = toWorld(sx, sy + sh) - pos;
     }

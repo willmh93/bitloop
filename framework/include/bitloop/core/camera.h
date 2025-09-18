@@ -129,19 +129,20 @@ public:
     {
         DDVec2 origin_offset = originPixelOffset();
 
-        flt128 cam_stage_x = cam_x * zoom_x;
-        flt128 cam_stage_y = cam_y * zoom_y;
-
-        flt128 snapped_stage_cam_x = round(cam_stage_x / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
-        flt128 snapped_stage_cam_y = round(cam_stage_y / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
-        
-        flt128 snapped_cam_x = snapped_stage_cam_x / zoom_x;
-        flt128 snapped_cam_y = snapped_stage_cam_y / zoom_y;
+        //flt128 cam_stage_x = cam_x * zoom_x;
+        //flt128 cam_stage_y = cam_y * zoom_y;
+        //
+        //flt128 snapped_stage_cam_x = round(cam_stage_x / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
+        //flt128 snapped_stage_cam_y = round(cam_stage_y / cam_pos_stage_snap_size) * cam_pos_stage_snap_size;
+        //
+        //flt128 snapped_cam_x = snapped_stage_cam_x / zoom_x;
+        //flt128 snapped_cam_y = snapped_stage_cam_y / zoom_y;
 
         ddResetTransform();
         ddTranslate(origin_offset.x + flt128(pan_x), origin_offset.y + flt128(pan_y));
         ddRotate(cam_rotation);
-        ddTranslate(-snapped_cam_x * zoom_x, -snapped_cam_y * zoom_y);
+        ddTranslate(-cam_x * zoom_x, -cam_y * zoom_y);
+        //ddTranslate(-snapped_cam_x * zoom_x, -snapped_cam_y * zoom_y);
         ddScale(zoom_x, zoom_y);
 
         // m128 = single source of truth
@@ -189,6 +190,7 @@ public:
     bool setPos(flt128 _x, flt128 _y)  { if (cam_x  != _x   || cam_y  != _y)        { cam_x = _x; cam_y = _y;           updateCameraMatrix(); return true; } return false; }
     bool setZoom(flt128 zoom)          { if (zoom_x != zoom || zoom_y != zoom)      { zoom_x = zoom_y = zoom;           updateCameraMatrix(); return true; } return false; }
     bool setZoom(flt128 zx, flt128 zy) { if (zoom_x != zx   || zoom_y != zy)        { zoom_x = zx; zoom_y = zy;         updateCameraMatrix(); return true; } return false; }
+    bool setZoom(DDVec2 zoom)          { if (zoom_x != zoom.x || zoom_y != zoom.y)  { zoom_x = zoom.x; zoom_y = zoom.y; updateCameraMatrix(); return true; } return false; }
                                                                                                                         
     // f64                                                                                                           
     bool setX(double _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
@@ -205,17 +207,22 @@ public:
     bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)            { pan_x = px; pan_y = py;           updateCameraMatrix(); return true; } return false; }
     bool setRotation(double angle)     { if (cam_rotation != angle)                 { cam_rotation = angle;             updateCameraMatrix(); return true; } return false; }
 
-    [[nodiscard]] constexpr bool isPanning()  const   { return panning; }
+    [[nodiscard]] constexpr bool isPanning()    const   { return panning; }
 
-    [[nodiscard]] constexpr double x()        const   { return (double)cam_x; }
-    [[nodiscard]] constexpr double y()        const   { return (double)cam_y; }
-    [[nodiscard]] constexpr DVec2  pos()      const   { return {(double)cam_x, (double)cam_y }; }
-    [[nodiscard]] constexpr double panX()     const   { return (double)pan_x; }
-    [[nodiscard]] constexpr double panY()     const   { return (double)pan_y; }
-    [[nodiscard]] constexpr DVec2  zoom()     const   { return {(double)zoom_x, (double)zoom_y }; }
-    [[nodiscard]] constexpr double zoomX()    const   { return (double)zoom_x; }
-    [[nodiscard]] constexpr double zoomY()    const   { return (double)zoom_y; }
-    [[nodiscard]] constexpr double rotation() const   { return (double)cam_rotation; }
+    [[nodiscard]] constexpr double x()          const   { return (double)cam_x; }
+    [[nodiscard]] constexpr double y()          const   { return (double)cam_y; }
+    [[nodiscard]] constexpr double panX()       const   { return (double)pan_x; }
+    [[nodiscard]] constexpr double panY()       const   { return (double)pan_y; }
+    [[nodiscard]] constexpr double zoomX()      const   { return (double)zoom_x; }
+    [[nodiscard]] constexpr double zoomY()      const   { return (double)zoom_y; }
+    [[nodiscard]] constexpr double rotation()   const   { return (double)cam_rotation; }
+    [[nodiscard]] constexpr DVec2  pos()        const   { return {(double)cam_x, (double)cam_y }; }
+    [[nodiscard]] constexpr DVec2  zoom()       const   { return {(double)zoom_x, (double)zoom_y }; }
+
+    [[nodiscard]] constexpr flt128 x128()       const { return cam_x; }
+    [[nodiscard]] constexpr flt128 y128()       const { return cam_y; }
+    [[nodiscard]] constexpr DDVec2 pos128()     const { return {cam_x, cam_y}; }
+    [[nodiscard]] constexpr DDVec2 zoom128()    const { return {zoom_x, zoom_y }; }
 
     // ======== World rect focusing ========
     void focusWorldRect(flt128 left, flt128 top, flt128 right, flt128 bottom, bool stretch = false);
@@ -225,11 +232,12 @@ public:
       /// Once world rect focused, use it as a "reference" for scaling relative to that reference zoom, e.g.
       /// > setRelativeZoom(2)  will zoom 2x relative to that focused rect
 
-    [[nodiscard]] DVec2 getReferenceZoom() const  { return { (double)ref_zoom_x, (double)ref_zoom_y }; }               // Cached zoom set by focusWorldRect()
+    template<typename T> [[nodiscard]]
+    [[nodiscard]] Vec2<T> getReferenceZoom() const  { return { (T)ref_zoom_x, (T)ref_zoom_y }; }               // Cached zoom set by focusWorldRect()
     //[[nodiscard]] DDVec2 getRelativeZoom_f128() { return { zoom_x / ref_zoom_x, zoom_y / ref_zoom_y }; } // Current relative scale factor
     //[[nodiscard]] DVec2 getRelativeZoom() { return { zoom_x / ref_zoom_x, zoom_y / ref_zoom_y }; } // Current relative scale factor
 
-    template<typename T=double> [[nodiscard]]
+    template<typename T> [[nodiscard]]
     Vec2<T> getRelativeZoom() const noexcept
     {
         return {
@@ -270,7 +278,14 @@ public:
     // Clamp the relative zoom range (relative to the reference)
     void restrictRelativeZoomRange(double min, double max);
 
-    DVec2 getViewportFocusedWorldSize() const;
+    ///template<typename T>
+    ///DVec2 getViewportFocusedWorldSize() const
+    ///{
+    ///    // You want to know how big the viewport is (in world size) at the reference zoom
+    ///    DVec2 ctx_size = viewport->viewportRect().size();
+    ///    Vec2<T> focused_size = Vec2<T>(ctx_size) / getReferenceZoom<T>();
+    ///    return focused_size;
+    ///};
 
     // ======== Camera controls ========
 
@@ -352,11 +367,21 @@ public:
     /// --- stage (f64) => world (f64) ---
     template<class T2 = double> requires std::is_same_v<T2, double>
     [[nodiscard]] DVec2 stageToWorldOffset(DVec2 o) const {
-        return {
+        return Vec2<T2>{
             (o.x * cos_64 + o.y * sin_64) / (double)zoom_x,
             (o.y * cos_64 - o.x * sin_64) / (double)zoom_y
         };
     }
+
+    /// --- stage (f64) => world (f64) ---
+    template<class T2> requires std::is_same_v<T2, float>
+    [[nodiscard]] DVec2 stageToWorldOffset(DVec2 o) const {
+        return Vec2<T2>{
+            (float)((o.x* cos_64 + o.y * sin_64) / (double)zoom_x),
+            (float)((o.y* cos_64 - o.x * sin_64) / (double)zoom_y)
+        };
+    }
+
     /// --- stage (f64) => world (f126) ---
     template<class T2> requires std::is_same_v<T2, flt128>
     [[nodiscard]] Vec2<T2> stageToWorldOffset(DVec2 o) const {
@@ -367,10 +392,13 @@ public:
     }
 
     template<class T2 = double> requires std::is_same_v<T2, double>
-    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset({ sx, sy }); }
+    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset<T2>({ sx, sy }); }
+
+    template<class T2> requires std::is_same_v<T2, float>
+    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset<float>({ sx, sy }); }
 
     template<class T2> requires std::is_same_v<T2, flt128>
-    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset({ sx, sy }); }
+    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset<flt128>({ sx, sy }); }
 
 
     // ----- toWorldRect -----
@@ -446,34 +474,37 @@ public:
 
 class CameraViewController
 {
+public:
+    union
+    {
+        struct {
+            flt128 x;
+            flt128 y;
+        };
+        Vec2<flt128> pos{ flt128{0}, flt128{0} };
+    };
+
+private:
+
     double angle_degrees = 0.0;
     double avg_real_zoom = 1.0;
 
-    double init_cam_x = x;
-    double init_cam_y = y;
+    flt128 init_cam_x = x;
+    flt128 init_cam_y = y;
     double init_degrees = angle_degrees;
-    double init_cam_zoom = 1.0;
-    DVec2 init_cam_zoom_xy = zoom_xy;
+    flt128 init_cam_zoom = 1.0;
+    DVec2  init_cam_zoom_xy = zoom_xy;
 
-    double old_x = 0;
-    double old_y = 0.0;
+    flt128 old_x = 0;
+    flt128 old_y = 0.0;
     double old_angle = 0.0;
-    double old_zoom = 1.0;
+    flt128 old_zoom = 1.0;
     DVec2  old_zoom_xy = DVec2(1, 1);
 
 public:
 
-    union
-    {
-        struct {
-            double x;
-            double y;
-        };
-        DVec2 pos{ 0, 0 };
-    };
-
     double angle = 0.0;
-    double zoom = 1.0;
+    flt128 zoom = 1.0;
     DVec2  zoom_xy = DVec2(1, 1);
 
     void populateUI(DRect cam_area = DRect::infinite());
@@ -490,9 +521,9 @@ public:
         return 1 + Math::countWholeDigits(zoom * 5);
     }
 
-    double getPositionPrecision() const
+    flt128 getPositionPrecision() const
     {
-        return Math::precisionFromDecimalPlaces<double>(getPositionDecimalPlaces());
+        return Math::precisionFromDecimalPlaces<flt128>(getPositionDecimalPlaces());
     }
 
     void read(const Camera* camera)
@@ -500,7 +531,7 @@ public:
         x = camera->x();
         y = camera->y();
         angle = camera->rotation();
-        zoom = (camera->getRelativeZoom().x / zoom_xy.x);
+        zoom = (camera->getRelativeZoom<flt128>().x / zoom_xy.x);
         avg_real_zoom = camera->zoom().magnitude();
     }
     void read(const Camera& camera)
@@ -523,7 +554,7 @@ public:
         }
         else
         {
-            zoom = (camera->getRelativeZoom().x / zoom_xy.x);
+            zoom = (camera->getRelativeZoom<flt128>().x / zoom_xy.x);
         }
 
         avg_real_zoom = camera->zoom().magnitude();

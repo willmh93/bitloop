@@ -3,14 +3,14 @@
 
 SIM_BEG;
 
-double tweenDistance(
+flt128 tweenDistance(
     MandelState& a,
     MandelState& b)
 {
-    double dh = toHeight(b.cam_view.zoom) - toHeight(a.cam_view.zoom);
-    double dx = b.cam_view.x - a.cam_view.x;
-    double dy = b.cam_view.y - a.cam_view.y;
-    double d = sqrt(dx * dx + dy * dy + dh * dh);
+    flt128 dh = toHeight(b.cam_view.zoom) - toHeight(a.cam_view.zoom);
+    flt128 dx = b.cam_view.x - a.cam_view.x;
+    flt128 dy = b.cam_view.y - a.cam_view.y;
+    flt128 d = sqrt(dx * dx + dy * dy + dh * dh);
     return d;
 }
 
@@ -29,14 +29,14 @@ void startTween(Mandelbrot_Scene &scene)
     scene.tween_r1 = scene.getAngledRect(scene.state_a);
     scene.tween_r2 = scene.getAngledRect(scene.state_b);
 
-    DAngledRect encompassing;
+    DDAngledRect encompassing;
     encompassing.fitTo(scene.tween_r1, scene.tween_r2, scene.tween_r1.aspectRatio());
 
-    double encompassing_zoom = (scene.stageWorldSize() / encompassing.size).average();
-    double encompassing_height = std::min(1.0, toHeight(encompassing_zoom)); // Cap at max height
+    flt128 encompassing_zoom = (scene.stageWorldSize() / encompassing.size).average();
+    flt128 encompassing_height = std::min((flt128)1.0, toHeight(encompassing_zoom)); // Cap at max height
     scene.tween_lift = encompassing_height - std::max(toHeight(scene.state_a.cam_view.zoom), toHeight(scene.state_b.cam_view.zoom));
 
-    double max_lift = 1.0 - toHeight(scene.state_b.cam_view.zoom);
+    flt128 max_lift = flt128{ 1.0 } - toHeight(scene.state_b.cam_view.zoom);
     if (max_lift < 0) max_lift = 0;
     if (scene.tween_lift > max_lift)
         scene.tween_lift = max_lift;
@@ -67,14 +67,14 @@ void lerpState(
 
     // === Lerp Camera View and normalized zoom from "height" ===
     double lift_weight = (double)scene.tween_zoom_lift_spline((float)f);
-    double lift_height = scene.tween_lift * lift_weight;
-    double a_height = toHeight(a.cam_view.zoom);
-    double b_height = toHeight(b.cam_view.zoom);
+    flt128 lift_height = scene.tween_lift * lift_weight;
+    flt128 a_height = toHeight(a.cam_view.zoom);
+    flt128 b_height = toHeight(b.cam_view.zoom);
 
     double base_zoom_f = scene.tween_base_zoom_spline((float)f);
-    double dst_height = Math::lerp(a_height, b_height, base_zoom_f) + lift_height;
+    flt128 dst_height = Math::lerp(a_height, b_height, base_zoom_f) + lift_height;
     dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
-    dst.cam_view.zoom = fromHeight(dst_height); // override zoom from computed "height"
+    dst.cam_view.zoom = (double)fromHeight(dst_height); // override zoom from computed "height"
 
     // === Quality ===
     dst.quality = Math::lerp(a.quality, dst_iter_lim, pos_f);

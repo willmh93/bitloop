@@ -142,7 +142,7 @@ void Painter::drawWorldAxis(
             const double step = isX ? stepX : stepY;
             const double coarse = isX ? coarseX : coarseY;
             const double fade = isX ? fadeX : fadeY;
-            DVec2 perpDir = camera.worldAxisPerpStage(isX);
+            DVec2 perpDir = camera.axisStagePerpDirection(isX);
             const double wStart = isX ? wMinX : wMinY;
             const double wEnd = isX ? wMaxX : wMaxY;
             double txt_sample_angle = isX ? angle : (angle + Math::HALF_PI);

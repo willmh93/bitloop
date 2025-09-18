@@ -45,11 +45,24 @@ struct StripeParams
 struct EscapeFieldPixel
 {
     float depth;
-    float dist;
     float stripe;
+    union
+    {
+        float dist_32;
+        double dist_64;
+        flt128 dist_128;
+    };
 
     float final_depth;
     float final_dist;
+
+    inline void setDist(float d32)   { dist_32 = d32; }
+    inline void setDist(double d64)  { dist_64 = d64; }
+    inline void setDist(flt128 d128) { dist_128 = d128; }
+
+    template<typename T> requires std::same_as<T, float> constexpr T getDist() { return dist_32; }
+    template<typename T> requires std::same_as<T, double> constexpr T getDist() { return dist_64; }
+    template<typename T> requires std::same_as<T, flt128> constexpr T getDist() { return dist_128; }
 };
 
 struct EscapeField : public std::vector<EscapeFieldPixel>

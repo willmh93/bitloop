@@ -3,35 +3,37 @@
 
 SIM_BEG;
 
-inline double toNormalizedZoom(double zoom)
+using namespace bl;
+
+inline flt128 toNormalizedZoom(flt128 zoom)
 {
     return log(zoom) + 1.0;
 }
-inline double fromNormalizedZoom(double normalized_zoom)
+inline flt128 fromNormalizedZoom(flt128 normalized_zoom)
 {
     return exp(normalized_zoom - 1.0);
 }
 
-inline double toHeight(double zoom)
+inline flt128 toHeight(flt128 zoom)
 {
     return 1.0 / toNormalizedZoom(zoom);
 }
 
-inline double fromHeight(double height)
+inline flt128 fromHeight(flt128 height)
 {
-    return fromNormalizedZoom(1.0 / height);
+    return fromNormalizedZoom(flt128{ 1.0 } / height);
 }
 
-inline int mandelbrotIterLimit(double zoom)
+inline int mandelbrotIterLimit(flt128 zoom)
 {
-    const double l = std::log10(zoom * 400.0);
+    const flt128 l = log10(zoom * 400.0);
     int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - 1841.0);
     return (100 + (std::max(0, iters))) * 3;
 }
 
-inline double qualityFromIterLimit(int iter_lim, double zoom_x)
+inline double qualityFromIterLimit(int iter_lim, flt128 zoom)
 {
-    const int base = mandelbrotIterLimit(zoom_x);   // always >= 100
+    const int base = mandelbrotIterLimit(zoom);   // always >= 100
     if (base == 0) return 0.0;                      // defensive, though impossible here
     return static_cast<double>(iter_lim) / base;    // <= true quality by < 1/base
 }

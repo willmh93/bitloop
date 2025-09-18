@@ -32,11 +32,11 @@ void Mandelbrot_Project::projectPrepare(Layout& layout)
 
 void Mandelbrot_Scene::UI::populate()
 {
-    #ifdef BL_DEBUG
-    bl_pull(tween_pos_spline);
-    bl_pull(tween_zoom_lift_spline);
-    bl_pull(tween_base_zoom_spline);
-    #endif
+    ///#ifdef BL_DEBUG
+    ///bl_pull(tween_pos_spline);
+    ///bl_pull(tween_zoom_lift_spline);
+    ///bl_pull(tween_base_zoom_spline);
+    ///#endif
 
     bl_pull(config_buf);
     bl_pull(tweening);
@@ -78,12 +78,21 @@ void Mandelbrot_Scene::UI::populate()
     bl_pull(flatten_amount);
     bl_pull(show_period2_bulb);
     bl_pull(interactive_cardioid);
-    bl_pull(x_spline);
-    bl_pull(y_spline);
+    ///bl_pull(x_spline);
+    ///bl_pull(y_spline);
 
     bool is_tweening = tweening;
     if (is_tweening)
         ImGui::BeginDisabled();
+
+    //bl_pull(test);
+    //static flt128 inc = flt128{ 0.0000000000000000000000001 };
+    //static double test2 = (double)test;
+    //static double inc2 = (double)inc;
+    //
+    //ImGui::DragFloat128("Test", &test, inc, static_cast<flt128>(-100), static_cast<flt128>(100), "%.25f", ImGuiSliderFlags_NoRoundToFormat);
+    //ImGui::DragDouble("Test2", &test2, inc2, -100, 100, "%.25f", ImGuiSliderFlags_NoRoundToFormat);
+    //bl_push(test);
 
     if (ImGui::Section("Saving & Loading", true, 0))
     {
@@ -586,29 +595,29 @@ void Mandelbrot_Scene::UI::populate()
         ImGui::EndDisabled();
 
     // ======== Developer ========
-    #ifdef BL_DEBUG
-    static ImRect vr = { 0.0f, 1.0f, 1.0f, 0.0f };
+    ///#ifdef BL_DEBUG
+    ///static ImRect vr = { 0.0f, 1.0f, 1.0f, 0.0f };
+    ///
+    ///ImGui::SeparatorText("Position Tween");
+    ///ImSpline::SplineEditor("tween_pos", &tween_pos_spline, &vr);
+    ///ImSpline::SplineEditor("tween_zoom_lift", &tween_zoom_lift_spline, &vr);
+    ///ImSpline::SplineEditor("tween_base_zoom", &tween_base_zoom_spline, &vr);
+    ///
+    /////ImGui::InputTextMultiline("###pos_buf", pos_tween_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput));
+    ///if (ImGui::Button("Copy position spline")) ImGui::SetClipboardText(tween_pos_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
+    ///
+    /////ImGui::InputTextMultiline("###pos_buf", zoom_tween_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput));
+    ///if (ImGui::Button("Copy lift spline")) ImGui::SetClipboardText(tween_zoom_lift_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
+    ///
+    ///if (ImGui::Button("Copy base zoom spline")) ImGui::SetClipboardText(tween_base_zoom_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
+    ///#endif
 
-    ImGui::SeparatorText("Position Tween");
-    ImSpline::SplineEditor("tween_pos", &tween_pos_spline, &vr);
-    ImSpline::SplineEditor("tween_zoom_lift", &tween_zoom_lift_spline, &vr);
-    ImSpline::SplineEditor("tween_base_zoom", &tween_base_zoom_spline, &vr);
 
-    //ImGui::InputTextMultiline("###pos_buf", pos_tween_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput));
-    if (ImGui::Button("Copy position spline")) ImGui::SetClipboardText(tween_pos_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
-
-    //ImGui::InputTextMultiline("###pos_buf", zoom_tween_buf, 1024, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput));
-    if (ImGui::Button("Copy lift spline")) ImGui::SetClipboardText(tween_zoom_lift_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
-
-    if (ImGui::Button("Copy base zoom spline")) ImGui::SetClipboardText(tween_base_zoom_spline.serialize(SplineSerializationMode::CPP_ARRAY, 3).c_str());
-    #endif
-
-
-    #ifdef BL_DEBUG
-    bl_push(tween_pos_spline);
-    bl_push(tween_zoom_lift_spline);
-    bl_push(tween_base_zoom_spline);
-    #endif
+    ///#ifdef BL_DEBUG
+    ///bl_push(tween_pos_spline);
+    ///bl_push(tween_zoom_lift_spline);
+    ///bl_push(tween_base_zoom_spline);
+    ///#endif
 
     bl_push(config_buf);
     bl_push(tweening);
@@ -652,8 +661,8 @@ void Mandelbrot_Scene::UI::populate()
     bl_push(flatten_amount);
     bl_push(show_period2_bulb);
     bl_push(interactive_cardioid);
-    bl_push(x_spline);
-    bl_push(y_spline);
+    ///bl_push(x_spline);
+    ///bl_push(y_spline);
 }
 
 void Mandelbrot_Scene::updateConfigBuffer()
@@ -691,14 +700,23 @@ void Mandelbrot_Scene::updateShiftedGradient()
 }
 
 
-
-void Mandelbrot_Scene::refreshFieldDepthNormalized()
+template<typename T>
+void refreshFieldDepthNormalized(
+    EscapeField* pending_field,
+    CanvasImage128* pending_bmp,
+    MandelSmoothing smoothing_type,
+    bool   cycle_dist_invert,
+    double cycle_dist_sharpness,
+    bool   cycle_iter_normalize_depth,
+    float  cycle_iter_log1p_weight,
+    int threads
+)
 {
     pending_field->min_depth = std::numeric_limits<float>::max();
     pending_field->max_depth = std::numeric_limits<float>::lowest();
 
     // Redetermine minimum depth for entire visible field
-    pending_bmp->forEachPixel([&, this](int x, int y)
+    pending_bmp->forEachPixel([&](int x, int y)
     {
         EscapeFieldPixel& field_pixel = pending_field->at(x, y);
         float depth = field_pixel.depth;
@@ -712,31 +730,35 @@ void Mandelbrot_Scene::refreshFieldDepthNormalized()
 
 
     // Calculate normalized depth/dist
-    double dist_min_pixel_ratio = (100.0 - cycle_dist_sharpness) / 100.0 + 0.00001;
-    flt128 stable_min_raw_dist = camera->stageToWorldOffset<flt128>(DVec2{ dist_min_pixel_ratio, 0 }).magnitude(); // quarter pixel
-    flt128 stable_max_raw_dist = pending_bmp->worldSize().magnitude() / 2.0; // half diagonal world viewport size
+    double dist_min_pixel_ratio = ((100.0 - cycle_dist_sharpness) / 100.0 + 0.00001);
+    T stable_min_raw_dist = Camera::active->stageToWorldOffset<T>(dist_min_pixel_ratio, 0.0).magnitude(); // fraction of a pixel
+    T stable_max_raw_dist = (T)(pending_bmp->worldSize().magnitude()) / 2;                                 // half diagonal world viewport size
 
     // @@ todo: Use downgraded type from: stable_min_raw_dist?
-    float stable_min_dist = (cycle_dist_invert ? -1 : 1) * (float)log(stable_min_raw_dist);
-    float stable_max_dist = (cycle_dist_invert ? -1 : 1) * (float)log(stable_max_raw_dist);
+    T stable_min_dist = (cycle_dist_invert ? -1 : 1) * log(stable_min_raw_dist);
+    T stable_max_dist = (cycle_dist_invert ? -1 : 1) * log(stable_max_raw_dist);
+
+    blPrint() << "stable_min_dist: " << stable_min_dist << "   stable_max_raw_dist: " << stable_max_raw_dist;
 
     pending_bmp->forEachPixel([&](int x, int y)
     {
         EscapeFieldPixel& field_pixel = pending_field->at(x, y);
 
         float depth = field_pixel.depth;
-        float raw_dist = field_pixel.dist;
-        if (raw_dist < std::numeric_limits<float>::epsilon())
-            raw_dist = std::numeric_limits<float>::epsilon();
+        T raw_dist = field_pixel.getDist<T>();
+        if (raw_dist < std::numeric_limits<T>::epsilon())
+            raw_dist = std::numeric_limits<T>::epsilon();
 
-        // "dist" is highest next to mandelbrot set
-        float dist = (smoothing_type & (int)MandelSmoothing::DIST) ?
+        // raw_dist is highest next to mandelbrot set
+        T dist = ((int)smoothing_type & (int)MandelSmoothing::DIST) ?
             ((cycle_dist_invert ? -1 : 1) * log(raw_dist))
             : 0;
 
-        float dist_factor = cycle_dist_invert ?
-            (0 - Math::lerpFactor(dist, stable_min_dist, stable_max_dist)) :
-            Math::lerpFactor(dist, stable_min_dist, stable_max_dist);
+        // 
+        float dist_factor = (float)(cycle_dist_invert ?
+             -Math::lerpFactor(dist, stable_min_dist, stable_max_dist) :
+              Math::lerpFactor(dist, stable_min_dist, stable_max_dist)
+        );
 
         float floor_depth = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
 
@@ -753,7 +775,7 @@ void Mandelbrot_Scene::refreshFieldDepthNormalized()
 
         field_pixel.final_depth = final_depth;
         field_pixel.final_dist = final_dist;
-    }, numThreads());
+    }, threads);
 }
 
 // ==== Scene overrides ====
@@ -781,7 +803,7 @@ void Mandelbrot_Scene::sceneMounted(Viewport* ctx)
     cam_view.read(camera);
     cam_view.setCurrentAsDefault();
 
-    reference_zoom = camera->getReferenceZoom();
+    reference_zoom = camera->getReferenceZoom<flt128>();
     ctx_stage_size = ctx->size();
 
     #ifdef __EMSCRIPTEN__
@@ -866,7 +888,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         {
             if (flatten) flatten_amount = 0.0;
             camera->focusWorldRect(-2, -1, 2, 1);
-            cam_view.zoom = camera->getRelativeZoom().x;
+            cam_view.zoom = (double)camera->getRelativeZoom<flt128>().x;
         }
 
         if (Changed(flatten_amount))
@@ -880,11 +902,15 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
             else              r = lerp(DRect(-1.5,-0.2,4.0,3.5), DRect( 0.0,-1.5,4.5,0.5), lerpFactor(t,0.7,1.0));
 
             camera->focusWorldRect(r, false);
-            cam_view.zoom = camera->getRelativeZoom().x;
+            cam_view.zoom = (double)camera->getRelativeZoom<flt128>().x;
         }
     }
 
     // ======== Camera View ========
+
+    //blPrint() << "-------------------";
+    //blPrint() << "old: " << cam_view;
+
     cam_view.apply(camera);
     
 	// Process camera velocity
@@ -898,15 +924,23 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     }
     else
     {
-        double threshold = 0.001 / cam_view.zoom;
-        if (camera_vel_pos.magnitude() > threshold) camera->setPos(camera->pos() + camera_vel_pos);
-        if (std::abs(camera_vel_zoom-1.0) > 0.001) camera->setZoom(camera->zoom() * camera_vel_zoom);
+        flt128 threshold = cam_view.zoom / 1000.0;
+        if (camera_vel_pos.magnitude() > threshold)
+            camera->setPos(camera->pos128() + camera_vel_pos);
+        else
+            camera_vel_pos = DDVec2{ 0,0 };
+
+        if (fabs(camera_vel_zoom - 1.0) > 0.01)
+            camera->setZoom(camera->zoom128() * camera_vel_zoom);
+        else
+            camera_vel_zoom = 1.0;
     
         camera_vel_pos *= 0.8;
-        camera_vel_zoom += (1 - camera_vel_zoom) * 0.2;
+        camera_vel_zoom += (1.0 - camera_vel_zoom) * 0.2;
     }
-    
+
     cam_view.read(camera);
+    /*blPrint() << "new: " << cam_view;*/
 
     // Ensure size divisble by 9 for perfect result forwarding from: [9x9] to [3x3] to [1x1]
     int iw = (int)(ceil(ctx->width() / 9)) * 9;
@@ -953,6 +987,7 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     /// }
 
     smoothing_type = (int)MandelSmoothing::MIX;
+    MandelSmoothing smoothing = static_cast<MandelSmoothing>(smoothing_type);
 
     // Presented Mandelbrot *actually* changed? Restart on 9x9 bmp (phase 0)
     if (mandel_changed)
@@ -1010,6 +1045,24 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
 
     finished_compute = false;
 
+    
+    double MAX_ZOOM_FLOAT;
+    double MAX_DOUBLE_ZOOM;
+
+    if (smoothing_type & (int)MandelSmoothing::DIST)
+    {
+        MAX_ZOOM_FLOAT = 10000;
+        MAX_DOUBLE_ZOOM = 2e12;
+    }
+    else
+    {
+        MAX_ZOOM_FLOAT = 40;// 100;
+        MAX_DOUBLE_ZOOM = 2e10;
+    }
+
+    bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
+    bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
+
     // ======== Computing Mandelbrot Depth-Field ========
     if (do_compute)
     {
@@ -1017,32 +1070,19 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
         {
             // Standard
             ///bool linear = x_spline.isSimpleLinear() && y_spline.isSimpleLinear();
-            MandelSmoothing smoothing = static_cast<MandelSmoothing>(smoothing_type);
+            
 
             ///if (!use_smoothing && smoothing == MandelSmoothing::ITER)
             ///    smoothing = MandelSmoothing::NONE;
 
-            double MAX_ZOOM_FLOAT;
-            double MAX_DOUBLE_ZOOM;
-
-            if (smoothing != MandelSmoothing::DIST)
-            {
-                MAX_ZOOM_FLOAT = 10000;
-                MAX_DOUBLE_ZOOM = 2e12;
-            }
-            else
-            {
-                MAX_ZOOM_FLOAT = 40;// 100;
-                MAX_DOUBLE_ZOOM = 2e10;
-            }
+            
 
             //const DQuad wq = camera->toWorldQuad({ 0, 0, ctx->width(), ctx->height() });
 
             DQuad quad = ctx->worldQuad();
             bool x_axis_visible = quad.intersects({ {quad.minX(), 0}, {quad.maxX(), 0} });
 
-            bool b32 = (cam_view.zoom < MAX_ZOOM_FLOAT);// && (smoothing != MandelSmoothing::DIST);
-            bool b64 = (cam_view.zoom < MAX_DOUBLE_ZOOM);
+            
 
             int timeout;
             switch (computing_phase)
@@ -1057,6 +1097,18 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                     build_table(mandelbrot, [&], pending_bmp, pending_field, iter_lim, numThreads(), timeout, current_row, stripe_params),
                     smoothing, flatten, x_axis_visible
                 );
+                if (finished_compute)
+                {
+                    refreshFieldDepthNormalized<float>(
+                        pending_field,
+                        pending_bmp,
+                        smoothing,
+                        cycle_dist_invert,
+                        cycle_dist_sharpness,
+                        cycle_iter_normalize_depth,
+                        (float)cycle_iter_log1p_weight,
+                        numThreads());
+                }
             }
             else if (b64)
             {
@@ -1064,6 +1116,18 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                     build_table(mandelbrot, [&], pending_bmp, pending_field, iter_lim, numThreads(), timeout, current_row, stripe_params),
                     smoothing, flatten, x_axis_visible
                 );
+                if (finished_compute)
+                {
+                    refreshFieldDepthNormalized<double>(
+                        pending_field,
+                        pending_bmp,
+                        smoothing,
+                        cycle_dist_invert,
+                        cycle_dist_sharpness,
+                        cycle_iter_normalize_depth,
+                        (float)cycle_iter_log1p_weight,
+                        numThreads());
+                }
             }
             else
             {
@@ -1071,10 +1135,21 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
                     build_table(mandelbrot, [&], pending_bmp, pending_field, iter_lim, numThreads(), timeout, current_row, stripe_params),
                     smoothing, flatten, x_axis_visible
                 );
+                if (finished_compute)
+                {
+                    refreshFieldDepthNormalized<flt128>(
+                        pending_field,
+                        pending_bmp,
+                        smoothing,
+                        cycle_dist_invert,
+                        cycle_dist_sharpness,
+                        cycle_iter_normalize_depth,
+                        (float)cycle_iter_log1p_weight,
+                        numThreads());
+                }
             }
             
-            if (finished_compute)
-                refreshFieldDepthNormalized();
+            
 
             //else          finished_compute = table_invoke<flt128>(build_table(mandelbrot, [&]), smoothing, flatten);
         }
@@ -1149,7 +1224,54 @@ void Mandelbrot_Scene::viewportProcess(Viewport* ctx, double dt)
     if (colors_updated)
     {
         if (frame_complete) // check the data is ready to be displayed (but first needs normalizing)
-            refreshFieldDepthNormalized();
+        {
+            if (b32)
+            {
+                if (finished_compute)
+                {
+                    refreshFieldDepthNormalized<float>(
+                        pending_field,
+                        pending_bmp,
+                        smoothing,
+                        cycle_dist_invert,
+                        cycle_dist_sharpness,
+                        cycle_iter_normalize_depth,
+                        (float)cycle_iter_log1p_weight,
+                        numThreads());
+                }
+            }
+            else if (b64)
+            {
+                if (finished_compute)
+                {
+                    refreshFieldDepthNormalized<double>(
+                        pending_field,
+                        pending_bmp,
+                        smoothing,
+                        cycle_dist_invert,
+                        cycle_dist_sharpness,
+                        cycle_iter_normalize_depth,
+                        (float)cycle_iter_log1p_weight,
+                        numThreads());
+                }
+            }
+            else
+            {
+                if (finished_compute)
+                {
+                    refreshFieldDepthNormalized<flt128>(
+                        pending_field,
+                        pending_bmp,
+                        smoothing,
+                        cycle_dist_invert,
+                        cycle_dist_sharpness,
+                        cycle_iter_normalize_depth,
+                        (float)cycle_iter_log1p_weight,
+                        numThreads());
+                }
+            }
+        }
+            //refreshFieldDepthNormalized();
 
 
         // ======== Update Color Cycle iterations ========
@@ -1370,11 +1492,13 @@ void Mandelbrot_Scene::viewportDraw(Viewport* ctx) const
       // uiOverlay(ctx) for both nanovg and imgui (on gui main thread)
 
     //ctx->print() << "camera_vel: " << camera_vel_pos << "\n";
-    /*for (auto pair : ui_stage)
-    {
-        auto entry = pair.second;
-        ctx->print() << entry.name << ": " << entry.to_string() << "\n";
-    }*/
+    ///for (auto pair : ui_stage)
+    ///{
+    ///    auto entry = pair.second;
+    ///    ctx->print() << entry.name << " live value: " << entry.to_string_value() << "\n";
+    ///    ctx->print() << entry.name << " live mrked: " << entry.to_string_marked_live() << "\n";
+    ///    ctx->print() << entry.name << " shdw mrked: " << entry.to_string_marked_shadow() << "\n";
+    ///}
 }
 
 void Mandelbrot_Scene::viewportOverlay(Viewport* ctx) const
