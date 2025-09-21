@@ -102,10 +102,10 @@ void Camera::cameraToViewport(
     double port_h = viewport_h;
 
     cam_rotation = 0;
-    zoom_x = port_w / world_w;
-    zoom_y = port_h / world_h;
-    cam_x = (port_w / 2) / zoom_x;
-    cam_y = (port_h / 2) / zoom_y;
+    zoom_x = f128(port_w / world_w);
+    zoom_y = f128(port_h / world_h);
+    cam_x  = f128(port_w / 2) / zoom_x;
+    cam_y  = f128(port_h / 2) / zoom_y;
 }
 
 void Camera::focusWorldRect(
@@ -121,49 +121,49 @@ void Camera::focusWorldRect(
 
     if (stretch)
     {
-        zoom_x = (viewport_w / world_w);
-        zoom_y = (viewport_h / world_h);
+        zoom_x = f128(viewport_w) / world_w;
+        zoom_y = f128(viewport_h) / world_h;
 
         DVec2 _originWorldOffset = originWorldOffset();
-        cam_x = left + _originWorldOffset.x;
-        cam_y = top + _originWorldOffset.y;
+        cam_x = left + f128(_originWorldOffset.x);
+        cam_y = top  + f128(_originWorldOffset.y);
     }
     else
     {
         double aspect_view = viewport_w / viewport_h;
         flt128 aspect_rect = world_w / world_h;
 
-        if (aspect_rect > aspect_view)
+        if (aspect_rect > f128(aspect_view))
         {
             // Shrink Height, gap top and bottom
-            zoom_x = zoom_y = (viewport_w / world_w);
+            zoom_x = zoom_y = (f128(viewport_w) / world_w);
 
-            assert(zoom_x > 0.0);
-            assert(zoom_y > 0.0);
+            assert(zoom_x > f128(0.0));
+            assert(zoom_y > f128(0.0));
 
             DVec2 _originWorldOffset = originWorldOffset();
 
-            flt128 world_ox = 0;
-            flt128 world_oy = ((viewport_h - (world_h * zoom_y)) / 2.0) / zoom_y;
+            flt128 world_ox{ 0 };
+            flt128 world_oy = ((f128(viewport_h) - (world_h * zoom_y)) / f128(2.0)) / zoom_y;
 
-            cam_x = _originWorldOffset.x + left - world_ox;
-            cam_y = _originWorldOffset.y + top - world_oy;
+            cam_x = f128(_originWorldOffset.x) + left - world_ox;
+            cam_y = f128(_originWorldOffset.y) + top - world_oy;
         }
         else
         {
             // Shrink Width, gap left and right
-            zoom_x = zoom_y = (viewport_h / world_h);
+            zoom_x = zoom_y = (f128(viewport_h) / world_h);
 
-            assert(zoom_x > 0.0);
-            assert(zoom_y > 0.0);
+            assert(zoom_x > f128(0.0));
+            assert(zoom_y > f128(0.0));
 
             DVec2 _originWorldOffset = originWorldOffset();
 
-            flt128 world_ox = ((viewport_w - (world_w * zoom_x)) / 2.0) / zoom_x;
-            flt128 world_oy = 0;
+            flt128 world_ox = ((f128(viewport_w) - (world_w * zoom_x)) / f128(2.0)) / zoom_x;
+            flt128 world_oy{ 0 };
 
-            cam_x = _originWorldOffset.x + left - world_ox;
-            cam_y = _originWorldOffset.y + top - world_oy;
+            cam_x = f128(_originWorldOffset.x) + left - world_ox;
+            cam_y = f128(_originWorldOffset.y) + top - world_oy;
         }
     }
 
@@ -180,8 +180,8 @@ void Camera::originToCenterViewport()
 
 void Camera::restrictRelativeZoomRange(double min, double max)
 {
-    min_zoom = min;
-    max_zoom = max;
+    min_zoom = f128(min);
+    max_zoom = f128(max);
     panZoomProcess();
 }
 
@@ -207,12 +207,12 @@ void Camera::panBegin(int _x, int _y, double touch_dist, double touch_angle)
         pan_beg_cam_zoom_y = zoom_y;
         pan_beg_cam_angle = cam_rotation;
 
-        last_pan_snapped_cam_grid_pos = DDVec2(cam_x * zoom_x, cam_y * zoom_y).snapped(cam_pos_stage_snap_size);
+        last_pan_snapped_cam_grid_pos = DDVec2(cam_x * zoom_x, cam_y * zoom_y).snapped(f128(cam_pos_stage_snap_size));
     }
     else
     {
-        pan_beg_cam_x = pan_x;
-        pan_beg_cam_y = pan_y;
+        pan_beg_cam_x = f128(pan_x);
+        pan_beg_cam_y = f128(pan_y);
     }
     panning = true;
 
@@ -294,8 +294,8 @@ bool Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
             int dy = _y - pan_down_touch_y;
 
             changed |= setPan(
-                (double)(pan_beg_cam_x + (double)(dx/*/ zoom_x*/) /* * pan_mult*/),
-                (double)(pan_beg_cam_y + (double)(dy/*/ zoom_y*/) /* * pan_mult*/)
+                (double)(pan_beg_cam_x + f128(dx/*/ zoom_x*/) /* * pan_mult*/),
+                (double)(pan_beg_cam_y + f128(dy/*/ zoom_y*/) /* * pan_mult*/)
             );
         }
     }
@@ -307,10 +307,10 @@ bool Camera::panDrag(int _x, int _y, double touch_dist, double touch_angle)
 bool Camera::panZoomProcess()
 {
     bool changed = false;
-    if (zoomX() < ref_zoom_x * min_zoom) changed |= setZoomX(ref_zoom_x * min_zoom);
-    if (zoomX() > ref_zoom_x * max_zoom) changed |= setZoomX(ref_zoom_x * max_zoom);
-    if (zoomY() < ref_zoom_y * min_zoom) changed |= setZoomX(ref_zoom_y * min_zoom);
-    if (zoomY() > ref_zoom_y * max_zoom) changed |= setZoomY(ref_zoom_y * max_zoom);
+    if (zoom_x < ref_zoom_x * min_zoom) changed |= setZoomX(ref_zoom_x * min_zoom);
+    if (zoom_x > ref_zoom_x * max_zoom) changed |= setZoomX(ref_zoom_x * max_zoom);
+    if (zoom_y < ref_zoom_y * min_zoom) changed |= setZoomX(ref_zoom_y * min_zoom);
+    if (zoom_y > ref_zoom_y * max_zoom) changed |= setZoomY(ref_zoom_y * max_zoom);
 
     if (fingers.size() == 1)
     {
@@ -539,9 +539,9 @@ void CameraViewController::populateUI(DRect cam_area)
 
 
     ImGui::SetNextItemWidthForSpace(required_space);
-    ImGui::RevertableDragFloat128("X", &x, &init_cam_x, 1 / avg_real_zoom, cam_area.x1, cam_area.x2, format);
+    ImGui::RevertableDragFloat128("X", &x, &init_cam_x, f128(1 / avg_real_zoom), f128(cam_area.x1), f128(cam_area.x2), format);
     ImGui::SetNextItemWidthForSpace(required_space);
-    ImGui::RevertableDragFloat128("Y", &y, &init_cam_y, 1 / avg_real_zoom, cam_area.y1, cam_area.y2, format);
+    ImGui::RevertableDragFloat128("Y", &y, &init_cam_y, f128(1 / avg_real_zoom), f128(cam_area.y1), f128(cam_area.y2), format);
 
     ImGui::SetNextItemWidthForSpace(required_space);
     if (ImGui::RevertableSliderDouble("Rotation", &angle_degrees, &init_degrees, 0.0, 360.0, "%.0f\xC2\xB0"))
@@ -550,10 +550,10 @@ void CameraViewController::populateUI(DRect cam_area)
     }
 
     // 1e16 = double limit before preicions loss
-    flt128 zoom_speed = zoom / 100.0;
+    flt128 zoom_speed = zoom / f128(100.0);
     ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("Zoom", &zoom, &init_cam_zoom, zoom_speed, 0.1, flt128{1e32}, "%.5f"))
-        zoom_speed = zoom / 100.0;
+    if (ImGui::RevertableDragFloat128("Zoom", &zoom, &init_cam_zoom, zoom_speed, f128(0.1), flt128{1e32}, "%.5f"))
+        zoom_speed = zoom / f128(100.0);
 
     ImGui::SetNextItemWidthForSpace(required_space);
     ImGui::RevertableSliderDouble2("Zoom X/Y", zoom_xy.asArray(), init_cam_zoom_xy.asArray(), 0.1, 10.0, "%.2fx");

@@ -90,9 +90,9 @@ struct Vec2
 
     // constructors
     Vec2() = default;
-    constexpr Vec2(T _x, T _y) : x(_x), y(_y) {}
-    constexpr Vec2(const ImVec2 rhs) : x(rhs.x), y(rhs.y) {}
-    constexpr Vec2(const GlmVec2<T>& rhs) : x(rhs.x), y(rhs.y) {}
+    constexpr Vec2(T _x, T _y) : x{ _x }, y{ _y } {}
+    constexpr Vec2(const ImVec2 rhs) : x{ rhs.x }, y{ rhs.y } {}
+    constexpr Vec2(const GlmVec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
 
     template<typename T2>
     constexpr explicit Vec2(const GlmVec3<T2>& rhs) : x((T)rhs.x), y((T)rhs.y) {} // discards z for 2D
@@ -151,6 +151,23 @@ struct Vec2
         return os << "(x: " << v.x << ", y: " << v.y << ")";
     }
 };
+
+
+// run for all T that get instantiated
+template<class T>
+inline void _vec2_layout_checks() {
+    static_assert(std::is_standard_layout_v<Vec2<T>>, "Vec2<T> must be standard layout");
+    static_assert(sizeof(Vec2<T>) == 2 * sizeof(T), "Vec2<T> must be exactly two Ts");
+    static_assert(offsetof(Vec2<T>, x) == 0);
+    static_assert(offsetof(Vec2<T>, y) == sizeof(T));
+}
+
+// Trigger checks for the types you actually use:
+inline void _instantiate_vec2_checks() {
+    _vec2_layout_checks<float>();
+    _vec2_layout_checks<double>();
+    _vec2_layout_checks<flt128>();
+}
 
 template<typename T>
 struct Vec3
@@ -647,7 +664,7 @@ struct AngledRect
         accumulate(B);
 
         T2 W, H;
-        if (fixedAspectRatio > 0)
+        if (fixedAspectRatio > T2{0})
         {
             const T2 Wraw = xmax - xmin;
             const T2 Hraw = ymax - ymin;
@@ -686,11 +703,12 @@ struct Quad
     union
     {
         struct { Pt a, b, c, d; };
-        Pt _data[4];
+        Pt _data[4]{};
     };
 
-    Quad() : a(0, 0), b(0, 0), c(0, 0), d(0, 0) {}
-    constexpr Quad(T ax, T ay, T bx, T by, T cx, T cy, T dx, T dy) : a(ax,ay), b(bx, by), c(cx, cy), d(dx, dy) {}
+    //Quad() : a(T{0}, T{0}), b(T{0}, T{0}), c(T{0}, T{0}), d(T{0}, T{0}) {}
+    Quad() = default;
+    constexpr Quad(T ax, T ay, T bx, T by, T cx, T cy, T dx, T dy) : a(T{ax},T{ay}), b(T{bx}, T{by}), c(T{cx}, T{cy}), d(T{dx}, T{dy}) {}
     constexpr Quad(const Pt& A, const Pt& B, const Pt& C, const Pt& D) : a(A), b(B), c(C), d(D) {}
     constexpr Quad(const Rect<T>& r)              { set(r.cx(), r.cy(), r.width(), r.height(), 0); }
     constexpr Quad(const AngledRect<T>& r)        { set(r.cx, r.cy, r.w, r.h, r.angle); }

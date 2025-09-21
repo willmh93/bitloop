@@ -27,13 +27,13 @@ class CanvasObjectBase
     Vec2<T> toWorldOffset(double sx, double sy) const { return Camera::active->stageToWorldOffset<T>(sx, sy); }
 
     // local basis vectors after all transforms
-    Vec2<T> u{ 1, 0 };   // width direction
-    Vec2<T> v{ 0, 1 };   // height direction
+    Vec2<T> u{ T{1}, T{0} };   // width direction
+    Vec2<T> v{ T{0}, T{1} };   // height direction
 
 public:
 
     union {
-        Vec2<T> pos = { 0, 0 };
+        Vec2<T> pos = { T{0}, T{0} };
         struct { T x, y; };
     };
     
@@ -42,7 +42,7 @@ public:
         struct { double align_x, align_y; };
     };
 
-    T rotation = 0;
+    T rotation = T{ 0 };
 
     ~CanvasObjectBase() {}
 

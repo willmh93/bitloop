@@ -6,14 +6,14 @@
 BL_BEGIN_NS
 
 inline glm::ddmat3 glm_ddtranslate(flt128 tx, flt128 ty) {
-    glm::ddmat3 m(1.0);
+    glm::ddmat3 m(f128(1.0));
     m[2][0] = tx; // column 2, row 0
     m[2][1] = ty; // column 2, row 1
     return m;
 }
 
 inline glm::ddmat3 glm_ddscale(flt128 sx, flt128 sy) {
-    glm::ddmat3 m(1.0);
+    glm::ddmat3 m(f128(1.0));
     m[0][0] = sx;
     m[1][1] = sy;
     return m;
@@ -47,11 +47,18 @@ class Camera
     friend class ProjectBase;
     friend class Viewport;
 
-    flt128 cam_x = 0;
-    flt128 cam_y = 0;
+    union {
+        struct { flt128 cam_x; flt128 cam_y; };
+        Vec2<flt128> cam_pos{};
+    };
+
+    union {
+        struct { flt128 zoom_x; flt128 zoom_y; };
+        Vec2<flt128> cam_zoom{ flt128{1.0, 0}, flt128{1.0, 0.0} };
+    };
+
+
     double cam_rotation = 0;
-    flt128 zoom_x = 1;
-    flt128 zoom_y = 1;
     double pan_x = 0;
     double pan_y = 0;
 
@@ -59,10 +66,10 @@ class Camera
     double focal_anchor_y = 0.0;
 
     // ======== Zoom/focus attributes ========
-    flt128 ref_zoom_x = 1;
-    flt128 ref_zoom_y = 1;
-    flt128 min_zoom = -1e+300; // Relative to "focused" rect
-    flt128 max_zoom = 1e+300; // Relative to "focused" rect
+    flt128 ref_zoom_x = f128(1);
+    flt128 ref_zoom_y = f128(1);
+    flt128 min_zoom = f128(-1e+300); // Relative to "focused" rect
+    flt128 max_zoom = f128(1e+300); // Relative to "focused" rect
 
     // ======== Pan attributes ========
     int    pan_down_touch_x = 0;
@@ -70,10 +77,10 @@ class Camera
     double pan_down_touch_dist = 0;
     double pan_down_touch_angle = 0;
 
-    flt128 pan_beg_cam_x = 0;
-    flt128 pan_beg_cam_y = 0;
-    flt128 pan_beg_cam_zoom_x = 0;
-    flt128 pan_beg_cam_zoom_y = 0;
+    flt128 pan_beg_cam_x = f128(0);
+    flt128 pan_beg_cam_y = f128(0);
+    flt128 pan_beg_cam_zoom_x = f128(0);
+    flt128 pan_beg_cam_zoom_y = f128(0);
     double pan_beg_cam_angle = 0;
 
     int cam_pos_stage_snap_size = 1;
@@ -114,13 +121,13 @@ public:
     glm::dmat3 m64 = glm::dmat3(1.0);
     glm::dmat3 inv_m64 = glm::dmat3(1.0);
 
-    glm::ddmat3 m128 = glm::ddmat3(1.0);
-    glm::ddmat3 inv_m128 = glm::ddmat3(1.0);
+    glm::ddmat3 m128 = glm::ddmat3(f128(1.0));
+    glm::ddmat3 inv_m128 = glm::ddmat3(f128(1.0));
 
     double cos_64 = 1.0, sin_64 = 0.0;
-    flt128 cos_128 = 1.0, sin_128 = 0.0;
+    flt128 cos_128 = f128(1.0), sin_128 = f128(0.0);
 
-    void ddResetTransform()                 { m128 = glm::ddmat3(1.0);               }
+    void ddResetTransform()                 { m128 = glm::ddmat3(f128(1.0)); }
     void ddTranslate(flt128 tx, flt128 ty)  { m128 = m128 * glm_ddtranslate(tx, ty); }
     void ddRotate(flt128 r)                 { m128 = m128 * glm_ddrotate(r);         }
     void ddScale(flt128 sx, flt128 sy)      { m128 = m128 * glm_ddscale(sx, sy);     }
@@ -140,7 +147,7 @@ public:
 
         ddResetTransform();
         ddTranslate(origin_offset.x + flt128(pan_x), origin_offset.y + flt128(pan_y));
-        ddRotate(cam_rotation);
+        ddRotate(f128(cam_rotation));
         ddTranslate(-cam_x * zoom_x, -cam_y * zoom_y);
         //ddTranslate(-snapped_cam_x * zoom_x, -snapped_cam_y * zoom_y);
         ddScale(zoom_x, zoom_y);
@@ -182,30 +189,30 @@ public:
     }
 
     // f128
-    bool setX(flt128 _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
-    bool setY(flt128 _y)               { if (cam_y  != _y)                          { cam_y = _y;                       updateCameraMatrix(); return true; } return false; }
-    bool setZoomX(flt128 zx)           { if (zoom_x != zx)                          { zoom_x = zx;                      updateCameraMatrix(); return true; } return false; }
-    bool setZoomY(flt128 zy)           { if (zoom_y != zy)                          { zoom_y = zy;                      updateCameraMatrix(); return true; } return false; }
-                                                                                                                        
-    bool setPos(flt128 _x, flt128 _y)  { if (cam_x  != _x   || cam_y  != _y)        { cam_x = _x; cam_y = _y;           updateCameraMatrix(); return true; } return false; }
-    bool setZoom(flt128 zoom)          { if (zoom_x != zoom || zoom_y != zoom)      { zoom_x = zoom_y = zoom;           updateCameraMatrix(); return true; } return false; }
-    bool setZoom(flt128 zx, flt128 zy) { if (zoom_x != zx   || zoom_y != zy)        { zoom_x = zx; zoom_y = zy;         updateCameraMatrix(); return true; } return false; }
-    bool setZoom(DDVec2 zoom)          { if (zoom_x != zoom.x || zoom_y != zoom.y)  { zoom_x = zoom.x; zoom_y = zoom.y; updateCameraMatrix(); return true; } return false; }
+    bool setX(flt128 _x)               { if (cam_x  != _x)                      { cam_x = _x;                updateCameraMatrix(); return true; } return false; }
+    bool setY(flt128 _y)               { if (cam_y  != _y)                      { cam_y = _y;                updateCameraMatrix(); return true; } return false; }
+    bool setZoomX(flt128 zx)           { if (zoom_x != zx)                      { zoom_x = zx;               updateCameraMatrix(); return true; } return false; }
+    bool setZoomY(flt128 zy)           { if (zoom_y != zy)                      { zoom_y = zy;               updateCameraMatrix(); return true; } return false; }
+                                                                                                             
+    bool setPos(flt128 _x, flt128 _y)  { if (cam_x  != _x   || cam_y  != _y)    { cam_x = _x; cam_y = _y;    updateCameraMatrix(); return true; } return false; }
+    bool setZoom(flt128 zoom)          { if (zoom_x != zoom || zoom_y != zoom)  { zoom_x = zoom_y = zoom;    updateCameraMatrix(); return true; } return false; }
+    bool setZoom(flt128 zx, flt128 zy) { if (zoom_x != zx   || zoom_y != zy)    { zoom_x = zx; zoom_y = zy;  updateCameraMatrix(); return true; } return false; }
+    bool setZoom(DDVec2 zoom)          { if (cam_zoom != zoom)                  { cam_zoom = zoom;           updateCameraMatrix(); return true; } return false; }
                                                                                                                         
     // f64                                                                                                           
-    bool setX(double _x)               { if (cam_x  != _x)                          { cam_x = _x;                       updateCameraMatrix(); return true; } return false; }
-    bool setY(double _y)               { if (cam_y  != _y)                          { cam_y = _y;                       updateCameraMatrix(); return true; } return false; }
-    bool setZoomX(double zx)           { if (zoom_x != zx)                          { zoom_x = zx;                      updateCameraMatrix(); return true; } return false; }
-    bool setZoomY(double zy)           { if (zoom_y != zy)                          { zoom_y = zy;                      updateCameraMatrix(); return true; } return false; }
+    bool setX(double _x)               { if (cam_x  != f128(_x))  { cam_x = f128(_x);   updateCameraMatrix(); return true; } return false; }
+    bool setY(double _y)               { if (cam_y  != f128(_y))  { cam_y = f128(_y);   updateCameraMatrix(); return true; } return false; }
+    bool setZoomX(double zx)           { if (zoom_x != f128(zx))  { zoom_x = f128(zx);  updateCameraMatrix(); return true; } return false; }
+    bool setZoomY(double zy)           { if (zoom_y != f128(zy))  { zoom_y = f128(zy);  updateCameraMatrix(); return true; } return false; }
                                                                                                                         
-    bool setPos(double _x, double _y)  { if (cam_x  != _x     || cam_y  != _y)      { cam_x = _x; cam_y = _y;           updateCameraMatrix(); return true; } return false; }
-    bool setPos(DVec2 pos)             { if (cam_x  != pos.x  || cam_y  != pos.y)   { cam_x = pos.x; cam_y = pos.y;     updateCameraMatrix(); return true; } return false; }
-    bool setZoom(double zoom)          { if (zoom_x != zoom   || zoom_y != zoom)    { zoom_x = zoom_y = zoom;           updateCameraMatrix(); return true; } return false; }
-    bool setZoom(DVec2 zoom)           { if (zoom_x != zoom.x || zoom_y != zoom.y)  { zoom_x = zoom.x; zoom_y = zoom.y; updateCameraMatrix(); return true; } return false; }
-    bool setZoom(double zx, double zy) { if (zoom_x != zx     || zoom_y != zy)      { zoom_x = zx; zoom_y = zy;         updateCameraMatrix(); return true; } return false; }
+    bool setPos(double _x, double _y)  { if (cam_x  != f128(_x)     || cam_y  != f128(_y))     { cam_x = f128(_x); cam_y = f128(_y);           updateCameraMatrix(); return true; } return false; }
+    bool setPos(DVec2 pos)             { if (cam_x  != f128(pos.x)  || cam_y  != f128(pos.y))  { cam_x = f128(pos.x); cam_y = f128(pos.y);     updateCameraMatrix(); return true; } return false; }
+    bool setZoom(double zoom)          { if (zoom_x != f128(zoom)   || zoom_y != f128(zoom))   { zoom_x = zoom_y = f128(zoom);                 updateCameraMatrix(); return true; } return false; }
+    bool setZoom(DVec2 zoom)           { if (zoom_x != f128(zoom.x) || zoom_y != f128(zoom.y)) { zoom_x = f128(zoom.x); zoom_y = f128(zoom.y); updateCameraMatrix(); return true; } return false; }
+    bool setZoom(double zx, double zy) { if (zoom_x != f128(zx)     || zoom_y != f128(zy))     { zoom_x = f128(zx); zoom_y = f128(zy);         updateCameraMatrix(); return true; } return false; }
                                                                                                                         
-    bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)            { pan_x = px; pan_y = py;           updateCameraMatrix(); return true; } return false; }
-    bool setRotation(double angle)     { if (cam_rotation != angle)                 { cam_rotation = angle;             updateCameraMatrix(); return true; } return false; }
+    bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)    { pan_x = px; pan_y = py;  updateCameraMatrix(); return true; } return false; }
+    bool setRotation(double angle)     { if (cam_rotation != angle)         { cam_rotation = angle;    updateCameraMatrix(); return true; } return false; }
 
     [[nodiscard]] constexpr bool isPanning()    const   { return panning; }
 
@@ -221,12 +228,15 @@ public:
 
     [[nodiscard]] constexpr flt128 x128()       const { return cam_x; }
     [[nodiscard]] constexpr flt128 y128()       const { return cam_y; }
-    [[nodiscard]] constexpr DDVec2 pos128()     const { return {cam_x, cam_y}; }
-    [[nodiscard]] constexpr DDVec2 zoom128()    const { return {zoom_x, zoom_y }; }
+    [[nodiscard]] constexpr DDVec2 pos128()     const { return cam_pos; }
+    [[nodiscard]] constexpr DDVec2 zoom128()    const { return cam_zoom; }
 
     // ======== World rect focusing ========
+    void focusWorldRect(double left, double top, double right, double bottom, bool stretch = false) {
+        focusWorldRect(f128(left), f128(top), f128(right), f128(bottom), stretch);
+    }
     void focusWorldRect(flt128 left, flt128 top, flt128 right, flt128 bottom, bool stretch = false);
-    void focusWorldRect(const DRect& r, bool stretch = false) { focusWorldRect(r.x1, r.y1, r.x2, r.y2, stretch); }
+    void focusWorldRect(const DRect& r, bool stretch = false) { focusWorldRect(f128(r.x1), f128(r.y1), f128(r.x2), f128(r.y2), stretch); }
     //void focusWorldRect();  // todo: Use current view as the focus rect
 
       /// Once world rect focused, use it as a "reference" for scaling relative to that reference zoom, e.g.
@@ -492,19 +502,19 @@ private:
     flt128 init_cam_x = x;
     flt128 init_cam_y = y;
     double init_degrees = angle_degrees;
-    flt128 init_cam_zoom = 1.0;
+    flt128 init_cam_zoom = f128(1.0);
     DVec2  init_cam_zoom_xy = zoom_xy;
 
-    flt128 old_x = 0;
-    flt128 old_y = 0.0;
+    flt128 old_x = f128(0);
+    flt128 old_y = f128(0.0);
     double old_angle = 0.0;
-    flt128 old_zoom = 1.0;
+    flt128 old_zoom = f128(1.0);
     DVec2  old_zoom_xy = DVec2(1, 1);
 
 public:
 
     double angle = 0.0;
-    flt128 zoom = 1.0;
+    flt128 zoom = f128(1.0);
     DVec2  zoom_xy = DVec2(1, 1);
 
     void populateUI(DRect cam_area = DRect::infinite());
@@ -528,10 +538,10 @@ public:
 
     void read(const Camera* camera)
     {
-        x = camera->x();
-        y = camera->y();
+        x = camera->x128();
+        y = camera->y128();
         angle = camera->rotation();
-        zoom = (camera->getRelativeZoom<flt128>().x / zoom_xy.x);
+        zoom = (camera->getRelativeZoom<flt128>().x / f128(zoom_xy.x));
         avg_real_zoom = camera->zoom().magnitude();
     }
     void read(const Camera& camera)
@@ -554,7 +564,7 @@ public:
         }
         else
         {
-            zoom = (camera->getRelativeZoom<flt128>().x / zoom_xy.x);
+            zoom = (camera->getRelativeZoom<flt128>().x / f128(zoom_xy.x));
         }
 
         avg_real_zoom = camera->zoom().magnitude();

@@ -56,6 +56,7 @@
 #include <cstring>
 #include <string>
 #include <sstream>
+#include <iomanip>
 #include <utility>
 #include <cstdint>
 
@@ -98,6 +99,20 @@ public:
 
     std::string serialize() const;
     void deserialize(std::string txt);
+
+    std::string to_cpp_marks()
+    {
+        std::stringstream ret;
+        ret << std::fixed << std::setprecision(2);
+        for (auto& mark : m_marks)
+        {
+            int r = (int)(mark.color[0] * 255.0f);
+            int g = (int)(mark.color[1] * 255.0f);
+            int b = (int)(mark.color[2] * 255.0f);
+            ret << "grad.addMark(" << mark.position << "f, ImColor(" << r << ", " << g << ", " << b << "));\n";
+        }
+        return ret.str();
+    }
 
     /* Comparison ------------------------------------------------------------ */
     bool operator==(const ImGradient& rhs) const;

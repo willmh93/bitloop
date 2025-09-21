@@ -68,7 +68,7 @@ namespace Math
     template<typename T>
     [[nodiscard]] inline T precisionFromDecimalPlaces(int count)
     {
-        return pow(T{10.0}, -count);
+        return pow(T{10.0}, f128(-count));
     }
 
     [[nodiscard]] inline int countDigits(int n)
@@ -89,7 +89,7 @@ namespace Math
         static_assert(bl::is_floating_point_v<Float>, "Float must be a floating-point type");
         if (!isfinite(x)) return 0;
         x = fabs(x);
-        if (x < 1) return 1;
+        if (x < Float{ 1 }) return 1;
         return static_cast<int>(floor(log10(x))) + 1;
     }
 
@@ -221,8 +221,8 @@ namespace Math
 
     template<typename T> [[nodiscard]] inline T closestAngleDifference(T angle, T target_angle)
     {
-        T diff = fmod((target_angle - angle) + pi_v<T>, pi_v<T>*2);
-        if (diff < 0) diff += pi_v<T>*2;
+        T diff = fmod((target_angle - angle) + pi_v<T>, pi_v<T>*T{2});
+        if (diff < T{0}) diff += pi_v<T>*T{2};
         return diff - pi_v<T>;
     }
     template<typename T> [[nodiscard]] inline T wrapRadians(T a) noexcept { return remainder(a, pi_v<T>*2); }
@@ -402,6 +402,53 @@ namespace Math
     template<typename T>
     [[nodiscard]] inline T lerpFactor(T value, T min, T max) {
         return ((value - min) / (max - min));
+    }
+
+    static constexpr float atan_01_poly(float z)
+    {
+        // Estrin evaluation to reduce dependency chain
+        const float z2 = z * z;
+        const float z4 = z2 * z2;
+        const float z8 = z4 * z4;
+        const float z6 = z4 * z2;
+
+        // Coeffs (single-precision)
+        const float c1 = 0.9998660f;
+        const float c3 = -0.3302995f;
+        const float c5 = 0.1801410f;
+        const float c7 = -0.0851330f;
+        const float c9 = 0.0208351f;
+
+        const float p = c1 + c3 * z2 + c5 * z4 + c7 * z6 + c9 * z8;
+        return z * p;
+    }
+
+    // ~1e-5 rad max error in practice. Branch-light
+    static inline float atan2f_fast(float y, float x)
+    {
+        if (x == 0.0f && y == 0.0f) return std::numeric_limits<float>::quiet_NaN();
+        if (x == 0.0f) return std::copysign(0.5f * float(pi_v<float>), y);
+
+        const float ax = std::fabs(x);
+        const float ay = std::fabs(y);
+
+        const float mn = (ax < ay) ? ax : ay;
+        const float mx = (ax > ay) ? ax : ay;
+        const float z = mn / mx;
+
+        // Base angle
+        float a = atan_01_poly(z);
+
+        // If |y| > |x|, atan(y/x) = pi/2 − atan(x/y)
+        a = (ay > ax) ? (0.5f * float(pi_v<float>) - a) : a;
+
+        // Restore quadrant, sign flip for y<0
+        a = std::copysign(a, y);
+
+        // if x<0, reflect across pi/2: angle = pi - angle (preserving sign of y)
+        if (x < 0.0f) a = (y >= 0.0f) ? (float(pi_v<float>) - a) : (-float(pi_v<float>) - a);
+
+        return a;
     }
 
     namespace MovingAverage

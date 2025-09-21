@@ -16,16 +16,13 @@ struct MandelState
 
     bool        dynamic_iter_lim               = true;
     double      quality                        = 0.5; // Used for UI (ignored during tween, represents iter_lim OR % of iter_lim)
+    int         maxdepth_optimize              = (int)MandelMaxDepthOptimization::MEDIUM;
                                                
     bool        use_smoothing                  = true;
 
-    double iter_weight = 1.0;
-    double dist_weight = 0.0;
-    double stripe_weight = 0.0;
-
-    //double iter_ratio = 1.0;
-    //double dist_ratio = 0.0;
-    //double stripe_ratio = 0.0;
+    double      iter_weight                    = 1.0;
+    double      dist_weight                    = 0.0;
+    double      stripe_weight                  = 0.0;
                                                
     double      cycle_iter_weight              = 0.0;
     bool        cycle_iter_dynamic_limit       = true;
@@ -70,7 +67,7 @@ struct MandelState
 
     std::string serialize() const
     {
-        constexpr bool COMPRESS_CONFIG = false;
+        constexpr bool COMPRESS_CONFIG = true;
 
         // Increment version each time the format changes
         uint32_t version = 0;
@@ -207,17 +204,17 @@ private:
             if (info.contains("x") && info.find("x").value().is_string())
                 cam_view.x = from_string(info.value("x", "0").c_str()); 
             else
-                cam_view.x = info.value("x", 0.0);
+                cam_view.x = f128(info.value("x", 0.0));
 
             if (info.contains("y") && info.find("y").value().is_string())
                 cam_view.y = from_string(info.value("y", "0").c_str());
             else
-                cam_view.y = info.value("y", 0.0);
+                cam_view.y = f128(info.value("y", 0.0));
 
             if (info.contains("z") && info.find("z").value().is_string())
                 cam_view.zoom = from_string(info.value("z", "0").c_str());
             else
-                cam_view.zoom = info.value("z", 0.0);
+                cam_view.zoom = f128(info.value("z", 0.0));
 
             ///cam_view.x = info.value("x", flt128{ 0.0 });
             ///cam_view.y = info.value("y", flt128{ 0.0 });

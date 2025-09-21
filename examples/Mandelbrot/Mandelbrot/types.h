@@ -5,7 +5,12 @@
 #include <cmath>
 #include <vector>
 
+#include "build_config.h"
+
 SIM_BEG;
+
+constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
+const double INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0f);
 
 enum MandelFlag : uint32_t
 {
@@ -26,7 +31,37 @@ enum MandelFlag : uint32_t
     MANDEL_VERSION_BITSHIFT = 24
 };
 
+enum MandelFloatQuality
+{
+    F32,
+    F64,
+    F128
+};
 
+enum MandelMaxDepthOptimization
+{
+    SLOWEST,
+    SLOW,
+    MEDIUM,
+    FAST,
+    COUNT
+};
+
+static inline const char* MandelMaxDepthOptimizationNames[MandelMaxDepthOptimization::COUNT] =
+{
+    "Slowest (Lossless)",
+    "Slow",
+    "Balanced",
+    "Fast (Loss at sharp angles)"
+};
+
+
+static inline const char* MandelFloatQualityNames[3] =
+{
+    "F32",
+    "F64",
+    "F128"
+};
 
 struct StripeParams
 {
@@ -44,7 +79,7 @@ struct StripeParams
 
 struct EscapeFieldPixel
 {
-    float depth;
+    double depth;
     float stripe;
     union
     {
@@ -56,6 +91,8 @@ struct EscapeFieldPixel
     float final_depth;
     float final_dist;
 
+    bool flag_for_skip;
+
     inline void setDist(float d32)   { dist_32 = d32; }
     inline void setDist(double d64)  { dist_64 = d64; }
     inline void setDist(flt128 d128) { dist_128 = d128; }
@@ -65,23 +102,65 @@ struct EscapeFieldPixel
     template<typename T> requires std::same_as<T, flt128> constexpr T getDist() { return dist_128; }
 };
 
+// ---- fast disk kernel (reuse between calls) ----
+struct DiskKernel {
+    int r = 0;
+    std::vector<std::pair<int, int>> ofs;
+    void set(int radius) {
+        if (radius == r) return;
+        r = radius; ofs.clear();
+        int r2 = r * r;
+        for (int dy = -r; dy <= r; ++dy)
+            for (int dx = -r; dx <= r; ++dx)
+                if (dx * dx + dy * dy <= r2) ofs.emplace_back(dx, dy);
+    }
+};
+
+static inline uint8_t sample(const std::vector<uint8_t>& a, int w, int h, int x, int y) {
+    return (x >= 0 && y >= 0 && x < w && y < h) ? a[(size_t)y * w + x] : 0;
+}
+
+// disk dilate/erode using the precomputed offsets
+static inline uint8_t dilate_at_disk(const std::vector<uint8_t>& in, int w, int h,
+    int x, int y, const DiskKernel& K)
+{
+    for (auto [dx, dy] : K.ofs) {
+        int xx = x + dx, yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < w && yy < h && in[(size_t)yy * w + xx]) return 1;
+    }
+    return 0;
+}
+static inline uint8_t erode_at_disk(const std::vector<uint8_t>& in, int w, int h,
+    int x, int y, const DiskKernel& K)
+{
+    for (auto [dx, dy] : K.ofs) {
+        int xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h || !in[(size_t)yy * w + xx]) return 0;
+    }
+    return 1;
+}
+
 struct EscapeField : public std::vector<EscapeFieldPixel>
 {
     int compute_phase;
 
-    float min_depth = 0.0;
-    float max_depth = 0.0;
-    //double min_dist = 0.0;
-    //double max_dist = 0.0;
+    double min_depth = 0.0;
+    double max_depth = 0.0;
 
     int w = 0, h = 0;
 
     EscapeField(int phase) : compute_phase(phase) {}
 
-    void setAllDepth(float value)
+    void setAllDepth(double value)
     {
         for (int i = 0; i < size(); i++)
-            std::vector<EscapeFieldPixel>::at(i) = { value, value };
+        {
+            EscapeFieldPixel &p = std::vector<EscapeFieldPixel>::at(i);
+            p.depth = value;
+            p.dist_128 = { value, value };
+            p.stripe = (float)value;
+            p.flag_for_skip = false;
+        }
     }
     void setDimensions(int _w, int _h)
     {
@@ -106,6 +185,142 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
         int i = y * w + x;
         if (i < 0 || i >= size()) return nullptr;
         return data() + i;
+    }
+
+    bool safe(int x, int y)
+    {
+        if (x < 0) return false;
+        if (y < 0) return false;
+        if (x >= w) return false;
+        if (y >= h) return false;
+        return true;
+    }
+
+    bool has_data(int x, int y)
+    {
+        if (safe(x, y))
+        {
+            EscapeFieldPixel& pixel = at(x, y);
+            if (pixel.depth < INSIDE_MANDELBROT_SET_SKIPPED) return true;
+        }
+        return false;
+    }
+
+    
+
+    void contractSkipFlags(int r = 1)
+    {
+        if (w <= 0 || h <= 0 || r <= 0) return;
+
+        auto idx = [this](int x, int y) { return y * w + x; };
+
+        // Snapshot current flags
+        std::vector<uint8_t> in(size_t(w) * size_t(h), 0);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+                in[idx(x, y)] = at(x, y).flag_for_skip ? 1 : 0;
+
+        // Erode
+        std::vector<uint8_t> out(size_t(w) * size_t(h), 0);
+        for (int y = 0; y < h; ++y)
+        {
+            for (int x = 0; x < w; ++x)
+            {
+                size_t i = idx(x, y);
+                if (!in[i]) { out[i] = 0; continue; }
+
+                bool inner = true;
+                for (int dy = -r; dy <= r && inner; ++dy)
+                    for (int dx = -r; dx <= r; ++dx)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+                        int nx = x + dx, ny = y + dy;
+                        if (!safe(nx, ny) || !in[idx(nx, ny)]) { inner = false; break; }
+                    }
+                
+                out[i] = inner ? 1 : 0;
+            }
+        }
+
+        // Write back
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+                at(x, y).flag_for_skip = (out[idx(x, y)] != 0);
+    }
+
+    void expandSkipFlags(int r = 1, bool overwrite = false)
+    {
+        if (w <= 0 || h <= 0) return;
+        const int W = w, H = h;
+        const size_t N = size_t(W) * size_t(H);
+
+        // read current mask
+        std::vector<uint8_t> mask(N, 0);
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x)
+                mask[y * W + x] = at(x, y).flag_for_skip ? 1 : 0;
+
+        // dilate
+        std::vector<uint8_t> dil(N, 0);
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x)
+                dil[y * W + x] = dilate_at(mask, W, H, x, y, r);
+
+        // outline = dilated AND NOT mask
+        std::vector<uint8_t> ring(N, 0);
+        for (size_t i = 0; i < N; ++i)
+            ring[i] = (dil[i] & (mask[i] ^ 1)); // 1 where new perimeter appears
+
+        // write back
+        for (int y = 0; y < H; ++y)
+        {
+            for (int x = 0; x < W; ++x) {
+                bool v = ring[y * W + x];
+                if (overwrite)
+                    at(x, y).flag_for_skip = v;
+                else
+                    at(x, y).flag_for_skip = at(x, y).flag_for_skip || v;
+            }
+        }
+    }
+
+private:
+
+
+    /*inline uint8_t erode_at(const std::vector<uint8_t>& in, int w, int h, int x, int y, int r)
+    {
+        const int r2 = r * r;
+        for (int dy = -r; dy <= r; ++dy)
+        {
+            int yy = y + dy;
+            for (int dx = -r; dx <= r; ++dx)
+            {
+                if (dx * dx + dy * dy > r2) continue;           // outside the disk
+                int xx = x + dx;
+                if (xx < 0 || yy < 0 || xx >= w || yy >= h) return 0; // treat OOB as 0
+    
+                if (!in[yy * w + xx]) return 0;
+            }
+        }
+        return 1;
+    }*/
+
+    inline uint8_t dilate_at(const std::vector<uint8_t>& in, int w, int h, int x, int y, int r)
+    {
+        const int r2 = r * r;
+        for (int dy = -r; dy <= r; ++dy)
+        {
+            int yy = y + dy;
+            if (yy < 0 || yy >= h) continue;
+            for (int dx = -r; dx <= r; ++dx)
+            {
+                if (dx * dx + dy * dy > r2) continue;           // outside the disk
+                int xx = x + dx;
+                if (xx < 0 || xx >= w) continue;
+                if (in[yy * w + xx]) return 1;
+            }
+        }
+        return 0;
     }
 };
 

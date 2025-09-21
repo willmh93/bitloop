@@ -4,32 +4,32 @@
 
 #include "Cardioid/Cardioid.h"
 
+
+// Mandelbrot includes
+#include "build_config.h"
+
 #include "types.h"
 #include "state.h"
-#include "kernel.h"
+#include "compute.h"
 #include "shading.h"
-#include "splines.h"
+#include "tween_splines.h"
 
 SIM_BEG;
 
 using namespace bl;
 
-///  Multiple layers of inheritance explained:
-///
-///  Additionally, we set up a 'start' / 'end' tween state, and lerp between them, saving
-///  the result into the inherited "live" MandelState state.
+
+//  ──────  MandelState inheritance  ────── 
+//  Lerp between 'state_a' --> 'state_b' => Save result in inherited "live" MandelState
 
 struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 {
-   // flt128 test = flt128{ 0.123456789123456789123456789 } / flt128{ 0.0584168164368118574 };
-
-
     // ──────  Config ──────
     struct Config {};
     Mandelbrot_Scene(Config&) {}
 
     // ────── Threads ──────
-    static constexpr int MAX_THREADS = 0;
+    static constexpr int MAX_THREADS = 0; // 0 = Use max threads
     inline int numThreads() const {
         if constexpr (MAX_THREADS > 0) return MAX_THREADS;
         return Thread::idealThreadCount();
@@ -41,7 +41,7 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     // ────── Tweening ──────
     bool   tweening = false;
     double tween_progress = 0.0; // 0..1
-    flt128 tween_lift = 0.0;
+    flt128 tween_lift = f128(0.0);
     double tween_duration = 0.0;
 
     MandelState state_a;
@@ -59,16 +59,17 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 
     // ────── Cardioid ──────
     bool show_period2_bulb = true;
+
+    #if MANDEL_FEATURE_INTERACTIVE_CARDIOID
     bool interactive_cardioid = false;
+    #endif
+
     double cardioid_lerp_amount = 1.0; // 1 - flatten
     Cardioid::CardioidLerper cardioid_lerper;
 
-    // ────── Shading ──────
+    // ────── Gradients ──────
     ImGradient gradient_shifted;
-    void updateShiftedGradient();
 
-    //void shadeBitmap();
-    //void refreshFieldDepthNormalized();
 
     // ────── Splines ──────
     ImSpline::Spline x_spline               = MandelSplines::x_spline;
@@ -78,13 +79,8 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     ImSpline::Spline tween_base_zoom_spline = MandelSplines::tween_base_zoom_spline;
     ImSpline::Spline tween_color_cycle      = MandelSplines::tween_color_cycle;
 
-    // ────── Quality calculations ──────
-    //inline int    mandelbrotIterLimit(double zoom) const;
-    //inline double qualityFromIterLimit(int iter_lim, double zoom_x) const;
-    //inline int    finalIterLimit() const;
-
-    // ────── Saving / loading / URL ──────
-    std::string config_buf = "";
+    // ────── Saving & loading / URL ──────
+    std::string config_buf = ""; // data for text box (save data / url)
     void updateConfigBuffer();
     void loadConfigBuffer();
 
@@ -108,30 +104,43 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 
 
     // ────── Dynamicly set at runtime ──────
-    bool   display_intro = true;
-    double log_color_cycle_iters = 0.0;
-    int    iter_lim = 0; // Actual iter limit
-    bool   colors_updated = false; // still needed?
-    DDQuad  world_quad;
-    int    current_row = 0;
+    bool    display_intro = true;
+    double  log_color_cycle_iters = 0.0;
+    int     iter_lim = 0; // Actual iter limit
+    bool    colors_updated = false; // still needed?
+    DDQuad  world_quad{};
+    int     current_row = 0;
 
-    // 0 = 9x smaller
-    // 1 = 3x smaller
-    // 2 = full resolution
+    // Phase 0 = 9x smaller
+    // Phase 1 = 3x smaller
+    // Phase 2 = full resolution
     int  computing_phase = 0;
-    bool finished_compute = false; // Whether a frame finished computing THIS frame
-    bool frame_complete = false;   // Similar to finished_compute, but not cleared each frame
+    bool frame_complete = false;  // Similar to finished_compute, but not cleared until next compute starts
     bool first_frame = true;
 
+    struct {
+        int c1 = 1, e1 = 0, c2 = 1, e2 = 0;
+    }  interior_phases_contract_expand;
+
+    bool maxdepth_show_optimized = false;
+
+    // ────── Computing / Shading ──────
+    bool compute_mandelbrot();
+    void normalize_field();
+    void normalize_shading_limits();
+
     // ────── Timers ──────
-    ///std::chrono::steady_clock::time_point compute_t0;
-    ///Math::MovingAverage::MA<double> timer_ma = Math::MovingAverage::MA<double>(10);
+    #ifdef MANDEL_DEV_PERFORMANCE_TIMERS
+    std::chrono::steady_clock::time_point compute_t0;
+    Math::MovingAverage::MA<double> timer_ma = Math::MovingAverage::MA<double>(1);
+    double dt_avg = 0;
+    #endif
 
     // ────── Camera navigation easing ──────
     Math::MovingAverage::MA<DVec2> avg_vel_pos = Math::MovingAverage::MA<DVec2>(8);
     Math::MovingAverage::MA<double> avg_vel_zoom = Math::MovingAverage::MA<double>(8);
 
-    DDVec2 camera_vel_pos{0, 0};
+    DDVec2 camera_vel_pos{};
     double camera_vel_zoom{1};
 
     // ────── User Interface ──────
@@ -173,5 +182,7 @@ struct Mandelbrot_Project : public BasicProject
 
     void projectPrepare(Layout& layout) override;
 };
+
+#undef DEV_MODE
 
 SIM_END;

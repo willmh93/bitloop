@@ -15,8 +15,8 @@ enum class MandelSmoothing
     ITER = 1,
     DIST = 2,
     STRIPES = 4,
-    MIX = 7, // ITER | DIST
-    //MIX = 3, // ITER | DIST
+    MIX_ALL = 7, // ITER | DIST
+    //MIX_ALL = 3, // ITER | DIST
     COUNT
 };
 
@@ -31,31 +31,42 @@ enum struct GradientPreset
     CLASSIC,
     RAINBOW,
     WAVES,
-    REFRACTION,
+    PHOTON,
+    CLOUDS,
     ///////////
     COUNT
 };
 
-enum MandelShaderFormula
+enum struct MandelShaderFormula
 {
     ITER_DIST_STRIPE,          // a+b+c
     ITER_DIST__MUL__STRIPE,   // (a+b)*c
     ITER__MUL__DIST_STRIPE,  // a*(b+c)
+    ITER_STRIPE__MULT__DIST,  // a*(b+c)
     COUNT
     //~ // todo: Always tween stripe weight to 0 before switching mode
+};
+
+static const char* MandelSmoothingNames[(int)MandelSmoothing::COUNT] = {
+    "NONE",
+    "ITER",
+    "DIST",
+    "STRIPE"
 };
 
 static const char* ColorGradientNames[(int)GradientPreset::COUNT] = {
     "CLASSIC",
     "RAINBOW",
     "WAVES",
-    "REFRACTION"
+    "REFRACTION",
+    "CLOUDS"
 };
 
 static const char* MandelFormulaNames[(int)MandelShaderFormula::COUNT] = {
     "iter + dist + stripe",
     "iter + (dist * stripe)",
-    "(iter * dist) + stripe"
+    "(iter * dist) + stripe",
+    "(iter * stripe) * dist"
 };
 
 template<GradientPreset type>
@@ -74,6 +85,20 @@ inline void colorGradientTemplate(double t, uint8_t& r, uint8_t& g, uint8_t& b)
         g = (uint8_t)(sin(a + 2.0944f) * sin(a + 2.0944f) * 255);
         b = (uint8_t)(sin(a + 4.1888f) * sin(a + 4.1888f) * 255);
     }
+}
+
+inline void transformGradient(ImGradient& dest, ImGradient& src, float gradient_shift, float hue_shift)
+{
+    auto& marks = src.getMarks();
+    auto& shifted_marks = dest.getMarks();
+    shifted_marks.resize(marks.size());
+    for (size_t i = 0; i < marks.size(); i++)
+    {
+        auto adjusted = Color(marks[i].color).adjustHue((float)hue_shift).vec4();
+        memcpy(shifted_marks[i].color, adjusted.asArray(), sizeof(float) * 4);
+        shifted_marks[i].position = Math::wrap(marks[i].position + (float)gradient_shift, 0.0f, 1.0f);
+    }
+    dest.refreshCache();
 }
 
 inline void colorGradientTemplate(GradientPreset type, double t, uint8_t& r, uint8_t& g, uint8_t& b)
@@ -118,12 +143,22 @@ inline void generateGradientFromPreset(
     }
     break;
 
-    case GradientPreset::REFRACTION:
+    case GradientPreset::PHOTON:
     {
         grad.addMark(0.0f, ImColor(0, 0, 0));
         grad.addMark(0.45f, ImColor(70, 70, 70));
         grad.addMark(0.5f, ImColor(255, 255, 255));
         grad.addMark(0.55f, ImColor(50, 50, 50));
+    }
+    break;
+
+    case GradientPreset::CLOUDS:
+    {
+        grad.addMark(0.00f, ImColor(255, 255, 255));
+        grad.addMark(0.27f, ImColor(39, 39, 214));
+        grad.addMark(0.40f, ImColor(0, 176, 255));
+        grad.addMark(0.60f, ImColor(255, 255, 255));
+        grad.addMark(0.80f, ImColor(255, 255, 255));
     }
     break;
 

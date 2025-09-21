@@ -47,14 +47,14 @@ public:
     double lo; // trailing error
 
     /// ======== Constructors ========
-    constexpr flt128() : hi(0.0), lo(0.0) {}
+    /*constexpr flt128() : hi(0.0), lo(0.0) {}
     constexpr flt128(double x) : hi(x), lo(0.0) {}
     constexpr flt128(double h, double l) : hi(h), lo(l) {}
     constexpr flt128(const flt128&) = default;
-    constexpr flt128(flt128&&) = default;
+    constexpr flt128(flt128&&) = default;*/
 
-    constexpr flt128& operator=(const flt128&) = default;
-    constexpr flt128& operator=(flt128&&) = default;
+    //constexpr flt128& operator=(const flt128&) = default;
+    //constexpr flt128& operator=(flt128&&) = default;
 
     /// ======== Basic helpers ========
 
@@ -139,7 +139,7 @@ public:
         flt128 y(approx);
         flt128 y_sq = y * y;
         flt128 r = a - y_sq;
-        flt128 half = 0.5;
+        flt128 half{ 0.5 };
         y += r * (half / y);
         return y;
     }
@@ -223,6 +223,8 @@ namespace std
     };
 }
 
+static constexpr flt128 f128(double x) noexcept { return { x, 0.0 }; }
+
 // comparisons
 constexpr FAST_INLINE bool operator<(const flt128& a, const flt128& b)  { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
 constexpr FAST_INLINE bool operator>(const flt128& a, const flt128& b)  { return b < a; }
@@ -244,6 +246,18 @@ inline flt128 log(const flt128& a)
     flt128 exp_log_hi(std::exp(log_hi)); // exp(guess)
     flt128 r = (a - exp_log_hi) / exp_log_hi; // (a - e^g) / e^g ≈ error
     return flt128(log_hi) + r; // refined log
+}
+inline double log_as_double(float a)
+{
+    return std::log(a);
+}
+inline double log_as_double(double a)
+{
+    return std::log(a);
+}
+inline double log_as_double(flt128 a)
+{
+    return std::log(a.hi) + std::log1p(a.lo / a.hi);
 }
 inline flt128 log2(const flt128& a)
 {
@@ -335,7 +349,7 @@ inline flt128 exp(const flt128& a)
 {
     /*  exp(a.hi + a.lo) ≈ exp(a.hi) * (1 + a.lo)   (|a.lo| < 1 ulp)  */
     flt128 y(std::exp(a.hi));
-    return y * (flt128(1.0) + a.lo);
+    return y * (flt128(1.0) + f128(a.lo));
 }
 inline flt128 pow(const flt128& x, const flt128& y) { return exp(y * log(x)); }
 

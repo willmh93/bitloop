@@ -7,16 +7,16 @@ using namespace bl;
 
 inline flt128 toNormalizedZoom(flt128 zoom)
 {
-    return log(zoom) + 1.0;
+    return log(zoom) + flt128{ 1.0 };
 }
 inline flt128 fromNormalizedZoom(flt128 normalized_zoom)
 {
-    return exp(normalized_zoom - 1.0);
+    return exp(normalized_zoom - flt128{ 1.0 });
 }
 
 inline flt128 toHeight(flt128 zoom)
 {
-    return 1.0 / toNormalizedZoom(zoom);
+    return flt128{ 1.0 } / toNormalizedZoom(zoom);
 }
 
 inline flt128 fromHeight(flt128 height)
@@ -27,7 +27,7 @@ inline flt128 fromHeight(flt128 height)
 inline int mandelbrotIterLimit(flt128 zoom)
 {
     const flt128 l = log10(zoom * 400.0);
-    int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - 1841.0);
+    int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - flt128{ 1841.0 });
     return (100 + (std::max(0, iters))) * 3;
 }
 

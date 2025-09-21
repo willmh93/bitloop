@@ -37,7 +37,7 @@ void startTween(Mandelbrot_Scene &scene)
     scene.tween_lift = encompassing_height - std::max(toHeight(scene.state_a.cam_view.zoom), toHeight(scene.state_b.cam_view.zoom));
 
     flt128 max_lift = flt128{ 1.0 } - toHeight(scene.state_b.cam_view.zoom);
-    if (max_lift < 0) max_lift = 0;
+    if (max_lift < flt128{ 0 }) max_lift = flt128{ 0 };
     if (scene.tween_lift > max_lift)
         scene.tween_lift = max_lift;
 
@@ -74,7 +74,7 @@ void lerpState(
     double base_zoom_f = scene.tween_base_zoom_spline((float)f);
     flt128 dst_height = Math::lerp(a_height, b_height, base_zoom_f) + lift_height;
     dst.cam_view = CameraViewController::lerp(a.cam_view, b.cam_view, pos_f);
-    dst.cam_view.zoom = (double)fromHeight(dst_height); // override zoom from computed "height"
+    dst.cam_view.zoom = fromHeight(dst_height); // override zoom from computed "height"
 
     // === Quality ===
     dst.quality = Math::lerp(a.quality, dst_iter_lim, pos_f);

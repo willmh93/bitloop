@@ -103,7 +103,7 @@ namespace ImGui
     bool SliderDouble2(const char* label, double v[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool DragDouble2(const char* label, double v[2], double v_speed = 1.0f, double v_min = 0.0f, double v_max = 0.0f, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool SliderDouble_InvLog(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags = 0);
-    bool DragFloat128(const char* label, flt128* v, flt128 v_speed=1, flt128 v_min=0, flt128 v_max=0, const char* format = "%.32f", ImGuiSliderFlags flags = 0);
+    bool DragFloat128(const char* label, flt128* v, flt128 v_speed=f128(0), flt128 v_min=f128(0), flt128 v_max=f128(0), const char* format = "%.32f", ImGuiSliderFlags flags = 0);
 
     //bool SliderFloat128(const char* label, flt128* p_data, flt128 v_min, flt128 v_max, const char* format, ImGuiSliderFlags flags=0);
 
