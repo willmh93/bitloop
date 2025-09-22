@@ -59,6 +59,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
             active_project->_projectStart();
 
             active_project->updateShadowBuffers();
+            main_window()->onStartProject();
         }
         break;
 
@@ -67,6 +68,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         {
             active_project->_projectDestroy();
             active_project->_projectStop();
+            main_window()->onStopProject();
         }
         break;
 
@@ -74,6 +76,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         if (active_project)
         {
             active_project->_projectPause();
+            main_window()->onPauseProject();
         }
         break;
     }
@@ -101,7 +104,7 @@ void ProjectWorker::worker_loop()
 
 
         /// ======== Do heavy work (while GUI thread redraws cached frame) ========
-        if (active_project) 
+        if (active_project && active_project->started) 
         {
             /// ======== Update live values ========
             {

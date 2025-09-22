@@ -147,6 +147,15 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
     double min_depth = 0.0;
     double max_depth = 0.0;
 
+    double assumed_iter_min = 0.0;
+    double assumed_iter_max = 0.0;
+
+    flt128 stable_min_dist{};
+    flt128 stable_max_dist{};
+
+    double log_color_cycle_iters;
+    double cycle_dist_value;
+
     int w = 0, h = 0;
 
     EscapeField(int phase) : compute_phase(phase) {}

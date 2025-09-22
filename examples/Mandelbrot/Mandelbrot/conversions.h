@@ -27,7 +27,7 @@ inline flt128 fromHeight(flt128 height)
 inline int mandelbrotIterLimit(flt128 zoom)
 {
     const flt128 l = log10(zoom * 400.0);
-    int iters = static_cast<int>(-19.35 * l * l + 741.0 * l - flt128{ 1841.0 });
+    int iters = static_cast<int>(flt128{ -19.35 } * l * l + flt128{ 741.0 } *l - flt128{ 1841.0 });
     return (100 + (std::max(0, iters))) * 3;
 }
 

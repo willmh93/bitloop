@@ -706,13 +706,16 @@ struct Quad
         Pt _data[4]{};
     };
 
-    //Quad() : a(T{0}, T{0}), b(T{0}, T{0}), c(T{0}, T{0}), d(T{0}, T{0}) {}
+
     Quad() = default;
-    constexpr Quad(T ax, T ay, T bx, T by, T cx, T cy, T dx, T dy) : a(T{ax},T{ay}), b(T{bx}, T{by}), c(T{cx}, T{cy}), d(T{dx}, T{dy}) {}
-    constexpr Quad(const Pt& A, const Pt& B, const Pt& C, const Pt& D) : a(A), b(B), c(C), d(D) {}
-    constexpr Quad(const Rect<T>& r)              { set(r.cx(), r.cy(), r.width(), r.height(), 0); }
-    constexpr Quad(const AngledRect<T>& r)        { set(r.cx, r.cy, r.w, r.h, r.angle); }
+    constexpr Quad(T ax, T ay, T bx, T by, T cx, T cy, T dx, T dy)  : a(ax, ay), b(bx, by), c(cx, cy), d(dx, dy) {}
+    constexpr Quad(T x1, T y1, T x2, T y2)        { set(x1, y1, x2, y2); }
     constexpr Quad(T cx, T cy, T w, T h, T angle) { set(cx, cy, w, h, angle); }
+
+    constexpr Quad(const Pt& A, const Pt& B, const Pt& C, const Pt& D) : a(A), b(B), c(C), d(D) {}
+    constexpr Quad(const Rect<T>& r)              { set(r.x1, r.y1, r.x2, r.y2); }
+    constexpr Quad(const AngledRect<T>& r)        { set(r.cx, r.cy, r.w, r.h, r.angle); }
+
 
     [[nodiscard]] constexpr Segment<T> ab() const { return Segment<T>(a, b); }
     [[nodiscard]] constexpr Segment<T> bc() const { return Segment<T>(b, c); }
@@ -725,14 +728,21 @@ struct Quad
     [[nodiscard]] constexpr T maxY() const { return std::max({ a.y, b.y, c.y, d.y }); }
 
     template<typename T2>
-    [[nodiscard]] constexpr operator Quad<T2>()
-    {
+    [[nodiscard]] constexpr operator Quad<T2>() {
         return Quad<T2>(
             static_cast<Vec2<T2>>(a),
             static_cast<Vec2<T2>>(b),
             static_cast<Vec2<T2>>(c),
             static_cast<Vec2<T2>>(d)
         );
+    }
+
+    constexpr void set(T x1, T y1, T x2, T y2)
+    {
+        a = { x1, y1 };
+        b = { x2, y1 };
+        c = { x2, y2 };
+        d = { x1, y2 };
     }
 
     void set(T cx, T cy, T w, T h, T angle)

@@ -211,8 +211,8 @@ public:
     bool setZoom(DVec2 zoom)           { if (zoom_x != f128(zoom.x) || zoom_y != f128(zoom.y)) { zoom_x = f128(zoom.x); zoom_y = f128(zoom.y); updateCameraMatrix(); return true; } return false; }
     bool setZoom(double zx, double zy) { if (zoom_x != f128(zx)     || zoom_y != f128(zy))     { zoom_x = f128(zx); zoom_y = f128(zy);         updateCameraMatrix(); return true; } return false; }
                                                                                                                         
-    bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)    { pan_x = px; pan_y = py;  updateCameraMatrix(); return true; } return false; }
-    bool setRotation(double angle)     { if (cam_rotation != angle)         { cam_rotation = angle;    updateCameraMatrix(); return true; } return false; }
+    bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)  { pan_x = px; pan_y = py;  updateCameraMatrix(); return true; } return false; }
+    bool setRotation(double angle)     { if (cam_rotation != angle)       { cam_rotation = angle;    updateCameraMatrix(); return true; } return false; }
 
     [[nodiscard]] constexpr bool isPanning()    const   { return panning; }
 
@@ -239,13 +239,12 @@ public:
     void focusWorldRect(const DRect& r, bool stretch = false) { focusWorldRect(f128(r.x1), f128(r.y1), f128(r.x2), f128(r.y2), stretch); }
     //void focusWorldRect();  // todo: Use current view as the focus rect
 
-      /// Once world rect focused, use it as a "reference" for scaling relative to that reference zoom, e.g.
-      /// > setRelativeZoom(2)  will zoom 2x relative to that focused rect
+    /// Once world rect focused, use it as a "reference" for scaling relative to that reference zoom, e.g.
+    /// > setRelativeZoom(2)  will zoom 2x relative to that focused rect
 
+    // Uses cached zoom ref, set by focusWorldRect()
     template<typename T> [[nodiscard]]
-    [[nodiscard]] Vec2<T> getReferenceZoom() const  { return { (T)ref_zoom_x, (T)ref_zoom_y }; }               // Cached zoom set by focusWorldRect()
-    //[[nodiscard]] DDVec2 getRelativeZoom_f128() { return { zoom_x / ref_zoom_x, zoom_y / ref_zoom_y }; } // Current relative scale factor
-    //[[nodiscard]] DVec2 getRelativeZoom() { return { zoom_x / ref_zoom_x, zoom_y / ref_zoom_y }; } // Current relative scale factor
+    [[nodiscard]] Vec2<T> getReferenceZoom() const  { return { (T)ref_zoom_x, (T)ref_zoom_y }; } 
 
     template<typename T> [[nodiscard]]
     Vec2<T> getRelativeZoom() const noexcept
@@ -288,21 +287,11 @@ public:
     // Clamp the relative zoom range (relative to the reference)
     void restrictRelativeZoomRange(double min, double max);
 
-    ///template<typename T>
-    ///DVec2 getViewportFocusedWorldSize() const
-    ///{
-    ///    // You want to know how big the viewport is (in world size) at the reference zoom
-    ///    DVec2 ctx_size = viewport->viewportRect().size();
-    ///    Vec2<T> focused_size = Vec2<T>(ctx_size) / getReferenceZoom<T>();
-    ///    return focused_size;
-    ///};
-
     // ======== Camera controls ========
 
-
     [[nodiscard]] DVec2 axisStageDirection(bool isX) const {
-        double c = cos_64; // std::cos(cam_rotation);
-        double s = sin_64; // std::sin(cam_rotation);
+        double c = cos_64;
+        double s = sin_64;
         return isX ? DVec2{ c, s } : DVec2{ -s, c };
     }
 
@@ -401,32 +390,41 @@ public:
         };
     }
 
-    template<class T2 = double> requires std::is_same_v<T2, double>
-    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset<T2>({ sx, sy }); }
-
-    template<class T2> requires std::is_same_v<T2, float>
-    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset<float>({ sx, sy }); }
-
-    template<class T2> requires std::is_same_v<T2, flt128>
-    [[nodiscard]] Vec2<T2> stageToWorldOffset(double sx, double sy) const { return stageToWorldOffset<flt128>({ sx, sy }); }
-
+    template<typename T=double>
+    [[nodiscard]] Vec2<T> stageToWorldOffset(double sx, double sy) const {
+        return stageToWorldOffset<T>({ sx, sy });
+    }
 
     // ----- toWorldRect -----
 
-    [[nodiscard]] DRect toWorldRect(const DRect& r) const;
-    [[nodiscard]] DRect toWorldRect(double x1, double y1, double x2, double y2) const;
+    [[nodiscard]] DRect toWorldRect(const DRect& r) const {
+        DVec2 tl = toWorld(r.x1, r.y1);
+        DVec2 br = toWorld(r.x2, r.y2);
+        return { tl.x, tl.y, br.x, br.y };
+    }
+
+    template<typename T = double>
+    [[nodiscard]] Rect<T> toWorldRect(double x1, double y1, double x2, double y2) const {
+        Vec2<T> tl = toWorld<T>(x1, y1);
+        Vec2<T> br = toWorld<T>(x2, y2);
+        return { tl.x, tl.y, br.x, br.y };
+    }
 
     // ----- toWorldQuad -----
 
-    [[nodiscard]] DQuad toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const;
-    [[nodiscard]] DQuad toWorldQuad(const DQuad& quad) const;
-    [[nodiscard]] DQuad toWorldQuad(const DRect& quad) const;
-    [[nodiscard]] DQuad toWorldQuad(double x1, double y1, double x2, double y2) const;
+    template<typename T=double>
+    Quad<T> toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const {
+        return Quad<T>(toWorld<T>(a), toWorld<T>(b), toWorld<T>(c), toWorld<T>(d));
+    }
 
-    [[nodiscard]] DDQuad toWorldQuad128(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const;
-    [[nodiscard]] DDQuad toWorldQuad128(const DQuad& quad) const;
-    [[nodiscard]] DDQuad toWorldQuad128(const DRect& quad) const;
-    [[nodiscard]] DDQuad toWorldQuad128(double x1, double y1, double x2, double y2) const;
+    template<typename T = double>
+    Quad<T> toWorldQuad(const DQuad& quad) const { return toWorldQuad<T>(quad.a, quad.b, quad.c, quad.d); }
+
+    template<typename T = double>
+    Quad<T> toWorldQuad(double x1, double y1, double x2, double y2) const { return toWorldQuad<T>(DQuad(x1, y1, x2, y2)); }
+
+    template<typename T = double>
+    Quad<T> toWorldQuad(const DRect& r) const { return toWorldQuad<T>(static_cast<DQuad>(r)); }
 
     // ----- toStageSize -----
 
@@ -452,16 +450,12 @@ public:
         return fingers;
     }
 
-    [[nodiscard]] double touchAngle() const
-    {
-        if (fingers.size() >= 2)
-            return atan2(fingers[1].y - fingers[0].y, fingers[1].x - fingers[0].x);
+    [[nodiscard]] double touchAngle() const {
+        if (fingers.size() >= 2) return atan2(fingers[1].y - fingers[0].y, fingers[1].x - fingers[0].x);
         return 0.0;
     }
-    [[nodiscard]] double touchDist() const
-    {
-        if (fingers.size() >= 2)
-        {
+    [[nodiscard]] double touchDist() const {
+        if (fingers.size() >= 2) {
             double dx = fingers[1].x - fingers[0].x;
             double dy = fingers[1].y - fingers[0].y;
             return sqrt(dx * dx + dy * dy);
@@ -608,90 +602,6 @@ inline DVec2 Camera::originWorldOffset() const
 inline DVec2 Camera::panPixelOffset() const
 {
     return DVec2(pan_x, pan_y);
-}
-
-// ----- f64 toWorldRect -----
-
-inline DRect Camera::toWorldRect(const DRect& r) const
-{
-    DVec2 tl = toWorld(r.x1, r.y1);
-    DVec2 br = toWorld(r.x2, r.y2);
-    return { tl.x, tl.y, br.x, br.y };
-}
-
-inline DRect Camera::toWorldRect(double x1, double y1, double x2, double y2) const
-{
-    DVec2 tl = toWorld(x1, y1);
-    DVec2 br = toWorld(x2, y2);
-    return { tl.x, tl.y, br.x, br.y };
-}
-
-// ----- f64 toWorldQuad -----
-
-inline DQuad Camera::toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const
-{
-    DVec2 qA = toWorld(a);
-    DVec2 qB = toWorld(b);
-    DVec2 qC = toWorld(c);
-    DVec2 qD = toWorld(d);
-    return DQuad(qA, qB, qC, qD);
-}
-
-inline DQuad Camera::toWorldQuad(const DQuad& quad) const
-{
-    return toWorldQuad(quad.a, quad.b, quad.c, quad.d);
-}
-
-inline DQuad Camera::toWorldQuad(double x1, double y1, double x2, double y2) const
-{
-    return toWorldQuad(
-        Vec2(x1, y1),
-        Vec2(x2, y1),
-        Vec2(x2, y2),
-        Vec2(x1, y2)
-    );
-}
-
-inline DQuad Camera::toWorldQuad(const DRect& r) const
-{
-    return toWorldQuad(
-        Vec2(r.x1, r.y1),
-        Vec2(r.x2, r.y1),
-        Vec2(r.x2, r.y2),
-        Vec2(r.x1, r.y2)
-    );
-}
-
-// ----- f64 => f128 toWorldQuad128 -----
-
-inline DDQuad Camera::toWorldQuad128(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const
-{
-    return { toWorld<flt128>(a), toWorld<flt128>(b), toWorld<flt128>(c), toWorld<flt128>(d) };
-}
-
-inline DDQuad Camera::toWorldQuad128(const DQuad& quad) const
-{
-    return toWorldQuad128(quad.a, quad.b, quad.c, quad.d);
-}
-
-inline DDQuad Camera::toWorldQuad128(double x1, double y1, double x2, double y2) const
-{
-    return toWorldQuad128(
-        DVec2{x1, y1},
-        DVec2{x2, y1},
-        DVec2{x2, y2},
-        DVec2{x1, y2}
-    );
-}
-
-inline DDQuad Camera::toWorldQuad128(const DRect& r) const
-{
-    return toWorldQuad128(
-        DVec2(r.x1, r.y1),
-        DVec2(r.x2, r.y1),
-        DVec2(r.x2, r.y2),
-        DVec2(r.x1, r.y2)
-    );
 }
 
 /// ----- f64 toStageSize -----

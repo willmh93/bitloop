@@ -165,6 +165,33 @@ bool MainWindow::isInteractingWithUI()
            (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
 }
 
+void MainWindow::onStartProject()
+{
+    play.active = false;
+    stop.active = true;
+    pause.active = true;
+}
+
+void MainWindow::onStopProject()
+{
+    stop.active = false;
+    pause.active = false;
+    play.active = true;
+
+    project_worker()->stopProject();
+
+    if (record.active)
+    {
+        record.active = false;
+    }
+}
+
+void MainWindow::onPauseProject()
+{
+    pause.active = false;
+    play.active = true;
+}
+
 /// ======== Toolbar ========
 
 void MainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color)
@@ -192,18 +219,22 @@ void MainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size
     }
 }
 
-bool MainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size)
+bool MainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size, float inactive_alpha)
 {
-    ImGui::PushStyleColor(ImGuiCol_Button, state.bgColor);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, state.bgColor);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, state.bgColor);
+    auto icon_col = state.active ? state.symbolColor : ImVec4(state.symbolColor.x, state.symbolColor.y, state.symbolColor.z, inactive_alpha);
+    auto bg_col   = state.active ? state.bgColor : ImVec4(state.bgColor.x, state.bgColor.y, state.bgColor.z, inactive_alpha);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, bg_col);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_col);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg_col);
     bool pressed = ImGui::Button(id, size);
     ImGui::PopStyleColor(3);
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetItemRectMin();
     ImVec2 sz = ImGui::GetItemRectSize();
-    drawToolbarButton(drawList, p, sz, symbol, ImGui::ColorConvertFloat4ToU32(state.symbolColor));
+
+    drawToolbarButton(drawList, p, sz, symbol, ImGui::ColorConvertFloat4ToU32(icon_col));
 
     return pressed;
 }
@@ -214,6 +245,9 @@ void MainWindow::populateToolbar()
         return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
+
+    ImGui::Spacing();
+    ImGui::Spacing();
 
     float size = scale_size(30.0f);
     ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -231,16 +265,35 @@ void MainWindow::populateToolbar()
         ImGuiWindowFlags_NoScrollWithMouse);
 
     // Layout the buttons inside the frame
-    toolbarButton("##play", "play", play, ImVec2(size, size));
+    if (toolbarButton("##play", "play", play, ImVec2(size, size)))
+    {
+        project_worker()->startProject();
+    }
     ImGui::SameLine();
-    toolbarButton("##stop", "stop", stop, ImVec2(size, size));
+    if (toolbarButton("##pause", "pause", pause, ImVec2(size, size)))
+    {
+        project_worker()->pauseProject();
+    }
     ImGui::SameLine();
-    toolbarButton("##pause", "pause", pause, ImVec2(size, size));
+    if (toolbarButton("##stop", "stop", stop, ImVec2(size, size)))
+    {
+        project_worker()->stopProject();
+    }
 
     if (platform()->is_desktop_native())
     {
         ImGui::SameLine();
-        toolbarButton("##record", "record", record, ImVec2(size, size));
+        if (toolbarButton("##record", "record", record, ImVec2(size, size)))
+        {
+            if (record.active)
+            {
+                record.active = false;
+            }
+            else
+            {
+                record.active = false;
+            }
+        }
     }
 
     ImGui::EndChild();
@@ -249,6 +302,8 @@ void MainWindow::populateToolbar()
     ImGui::PopStyleVar(2);
 
     ImGui::PopStyleVar();
+    ImGui::Spacing();
+    ImGui::Spacing();
 }
 
 /// ======== Project Tree ========
@@ -536,7 +591,7 @@ void MainWindow::populateCollapsedLayout()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6.0f, 6.0f));
         ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
-        //populateToolbar();
+        populateToolbar();
         //ImGui::Dummy(scale_size(0, 3));
 
         populateProjectTree(true);
@@ -582,7 +637,7 @@ void MainWindow::populateExpandedLayout()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
         ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
-        //populateToolbar();
+        populateToolbar();
         //ImGui::Dummy(ImVec2(0, 3));
 
         populateProjectTree(false);
@@ -608,7 +663,22 @@ void MainWindow::populateViewport()
         int width = static_cast<int>(size.x);
         int height = static_cast<int>(size.y);
 
-        bool resized = canvas.resize(width, height);
+
+        //~ // Resize canvas to right size when recording==true, draw shrinked canvas instead
+
+        int canvas_w, canvas_h;
+        if (record_manager.isRecording())
+        {
+            // switch to record resolution
+            canvas_w = 1280;
+            canvas_h = 900;
+        }
+        else
+        {
+            canvas_w = width;
+            canvas_h = height;
+        }
+        bool resized = canvas.resize(canvas_w, canvas_h);
         
 
         if (!done_first_size)
@@ -637,8 +707,12 @@ void MainWindow::populateViewport()
 
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
 
+                //if (record_manager.isRecording())
+                //record_canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+
                 //blPrint() << "projectDraw()";
                 project_worker()->draw();
+
                 canvas.end();
 
                 shared_sync.frame_ready = false;

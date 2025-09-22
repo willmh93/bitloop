@@ -430,9 +430,10 @@ public:
     [[nodiscard]] double height() const { return h; }
     [[nodiscard]] DVec2 size() const { return DVec2(w, h); }
     [[nodiscard]] DRect viewportRect() const { return DRect(x, y, x + w, y + h); }
-    [[nodiscard]] DVec2 worldSize() const { return camera.stageToWorldOffset(w, h); }
-    [[nodiscard]] DQuad worldQuad() const {
-        DRect r = DRect(DVec2(0.0,0.0), size());
+
+    template<typename T=double> [[nodiscard]] Vec2<T> worldSize() const { return camera.stageToWorldOffset<T>(w, h); }
+    template<typename T=double> [[nodiscard]] Quad<T> worldQuad() const {
+        Rect<T> r = Rect<T>(Vec2<T>(T{0},T{0}), Vec2<T>(size()));
         return camera.toWorldQuad(r);
     }
 
@@ -544,6 +545,7 @@ struct ProjectInfoNode
     }
 };
 
+
 class ProjectBase
 {
     Layout viewports;
@@ -574,6 +576,8 @@ protected:
     bool started = false;
     bool paused = false;
     bool done_single_process = false;
+
+    
 
     void configure(int sim_uid, Canvas* canvas, Canvas* overlay, ImDebugLog* project_log);
 

@@ -99,7 +99,7 @@ namespace detail
     {
         T xx = z.x * z.x;
         T yy = z.y * z.y;
-        T xy = z.x * z.y;
+        T xy = (z.x * z.y);
 
         z.x = xx - yy + c.x;
         z.y = (xy + xy) + c.y;           // 2*x*y + cy
@@ -168,6 +168,13 @@ template<class T> FAST_INLINE T clamp01(T v)
     return v < T(0) ? T(0) : (v > T(1) ? T(1) : v);
 }
 
+//if (interiorCheck(x0, y0)) {
+//    depth = INSIDE_MANDELBROT_SET_SKIPPED;
+//    if constexpr (((int)S & (int)MandelSmoothing::DIST) != 0) dist = T{ INSIDE_MANDELBROT_SET };
+//    if constexpr (((int)S & (int)MandelSmoothing::STRIPES) != 0) stripes = 0.0;
+//    return;
+//}
+
 template<class T, MandelSmoothing S>
 FAST_INLINE void mandel_kernel(
     const T& x0,
@@ -175,7 +182,7 @@ FAST_INLINE void mandel_kernel(
     int iter_lim,
     double& depth,
     T& dist,
-    float& stripes ,
+    float& stripes,
     StripeParams sp = {})
 {
     //if (interiorCheck(x0, y0)) {
@@ -268,17 +275,187 @@ FAST_INLINE void mandel_kernel(
     {
         float avg = (sum_samples > 0) ? (sum / (float)sum_samples) : 0.0f;
         float prev = (sum_samples > 1) ? ((sum - last_added) / (float)(sum_samples - 1)) : avg;
-        
+
         // stripeAC interpolation weight (fraction inside the last band)
         // frac = 1 + log2( log(ER^2) / log(|z|^2) ), clamped to [0,1]
         float frac = 1.0f + (float)std::log2(log_as_double(escape_r2) / std::max(log_as_double(r2), 1e-300));
         frac = clamp01(frac);
-        
+
         float mix = frac * avg + (1.0f - frac) * prev; // linear interpolation
         mix = 0.5f + 0.5f * std::tanh(sp.contrast * (mix - 0.5f)); // optional shaping
         stripes = clamp01(mix);
     }
 }
+
+
+/*
+template<class T, MandelSmoothing S>
+FAST_INLINE void mandel_kernel(
+    const T& x0,
+    const T& y0,
+    int iter_lim,
+    double& depth,
+    T& dist,
+    float& stripes,
+    StripeParams sp = {})
+{
+    using detail::cplx;
+    constexpr bool NEED_DIST = (bool)((int)S & (int)MandelSmoothing::DIST);
+    constexpr bool NEED_SMOOTH_ITER = (bool)((int)S & (int)MandelSmoothing::ITER);
+    constexpr bool NEED_STRIPES = (bool)((int)S & (int)MandelSmoothing::STRIPES);
+
+    constexpr T escape_r2 = T(escape_radius<S>());
+    constexpr T zero = T(0), one = T(1);
+
+    int iter = 0;
+    T r2 = T{ 0 };
+
+    cplx<T> z{ zero, zero };
+    cplx<T> c{ x0, y0 };
+    cplx<T> dz{ one, zero };      // for distance
+    cplx<T> z0;                 // previous z (optional)
+
+    // --- helpers ---
+    auto unwrap = [](float prev, float a)->float {
+        float d = a - prev;
+        while (d > 3.14159265f) d -= 6.28318531f;
+        while (d < -3.14159265f) d += 6.28318531f;
+        return prev + d;
+    };
+
+    // --- stripe angle tracking (unwrapped) ---
+    float theta_prev = 0.0f;    // θ at step n-1
+    float theta_curr = 0.0f;    // θ at step n
+    bool  have_theta = false;
+
+    float sum = 0.0, last_added = 0.0;
+    int sum_samples = 0;
+
+    float theta_u = 0.0f, theta_p = 0.0f;
+
+
+    // --- iterate ---
+    while (true)
+    {
+        if constexpr (NEED_DIST)
+            detail::step_d(z, dz);
+
+        z0 = z;
+
+        detail::step(z, c);
+        ++iter;
+
+        r2 = detail::mag2(z);
+
+        if constexpr (NEED_STRIPES) {
+            float a_raw = (float)Math::atan2f_fast((float)z.y, (float)z.x); // use same fn as in-loop
+            if (!have_theta) {
+                theta_p = theta_u = a_raw;
+                have_theta = true;
+            }
+            else
+            {
+                theta_p = theta_u;
+                theta_u = unwrap(theta_u, a_raw);
+            }
+        }
+
+        if (r2 > escape_r2 || iter >= iter_lim)
+            break;
+    }
+
+    const bool escaped = (r2 > escape_r2) && (iter < iter_lim);
+
+    // --- distance estimate (unchanged) ---
+    if constexpr (NEED_DIST)
+    {
+        if (escaped) {
+            const T r = sqrt(r2);
+            const T dz_abs = sqrt(detail::mag2(dz));
+            dist = (dz_abs == zero) ? T{ 0 } : (r * log(r) / dz_abs);
+        }
+        else {
+            dist = T{ -1 };
+        }
+    }
+
+    // inside? (no smooth iter / stripes)
+    if (!escaped)
+    {
+        depth = INSIDE_MANDELBROT_SET;
+        if constexpr (NEED_STRIPES) stripes = 0.0f;
+        return;
+    }
+
+    // --- smooth iteration depth (unchanged) ---
+    if constexpr (NEED_SMOOTH_ITER)
+    {
+        const double log_abs_z = 0.5 * (double)log(r2);
+        const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
+        depth = nu - mandelbrot_smoothing_offset<S>();
+    }
+    else
+    {
+        depth = (double)iter;
+    }
+
+    if constexpr (NEED_STRIPES)
+    {
+        auto arg_fn = [](float y, float x)->float { return (float)Math::atan2f_fast(y, x); };
+
+        // Smooth fractional iterate t. If we hit the cap without escape, treat as full step.
+        const double log_abs_z = 0.5 * (double)std::log(std::max((double)r2, 1e-300));
+        const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-300));
+        float t = (float)(nu - (double)iter);
+        if (iter >= iter_lim && !(r2 > escape_r2)) t = 1.0f;
+        if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+
+        // Angles at z_{n-1}, z_n using the SAME arg as in-loop
+        const float a0 = arg_fn((float)z0.y, (float)z0.x);
+        const float a1 = arg_fn((float)z.y, (float)z.x);
+
+        // Stable signed delta via cross/dot (consistent across neighbors)
+        const float u0x = (float)z0.x, u0y = (float)z0.y;
+        const float u1x = (float)z.x, u1y = (float)z.y;
+        const float inv0 = 1.0f / std::max(std::sqrt(u0x * u0x + u0y * u0y), 1e-30f);
+        const float inv1 = 1.0f / std::max(std::sqrt(u1x * u1x + u1y * u1y), 1e-30f);
+        const float x0 = u0x * inv0, y0 = u0y * inv0;
+        const float x1 = u1x * inv1, y1 = u1y * inv1;
+        const float dot = x0 * x1 + y0 * y1;
+        const float crs = x0 * y1 - y0 * x1;
+        const float dA = std::atan2(crs, dot);   // (-pi, pi]
+
+        // Tail-midpoint angle (anchored to the endpoint you sampled in-loop)
+        const float a_tail_mid = a1 - 0.5f * t * dA;
+
+        // Fractional micro-average (use midpoint; you can swap for 2–3 samples if you like)
+        const float frac_avg = 0.5f + 0.5f * std::sin(sp.freq * a_tail_mid + sp.phase);
+
+        // Replace the last FULL sample with a FRACTIONAL contribution and a FRACTIONAL denominator
+        const float S_prev = sum - last_added;           // remove the last full-sample you added
+        const float N_prev = (float)(sum_samples - 1);   // its count
+        const float mean = (sum_samples <= 1)
+            ? frac_avg
+            : (S_prev + t * frac_avg) / (N_prev + t);    // <-- critical: + t, not + 1
+
+        int n_int = (int)std::floor(nu);
+
+        // if you want this to respect your "Frequency" control for integer values:
+        int flip = (int)std::floor(sp.freq) * n_int;   // number of π flips
+        bool odd = (flip & 1) != 0;
+
+        // evaluate your stripe at the phase you already computed (a_tail_mid)
+        float s = std::sin(sp.freq * a_tail_mid + sp.phase);
+
+        // flip per layer if needed (removes the checkerboard fill)
+        if (odd) s = -s;
+
+        float val = 0.5f + 0.5f * s;
+        val = 0.5f + 0.5f * std::tanh(sp.contrast * (val - 0.5f)); // optional shaping
+        stripes = clamp01(val);
+    }
+}*/
+
 
 
 template<bool smooth>
@@ -404,40 +581,17 @@ void refreshFieldDepthNormalized(
     EscapeField* pending_field,
     CanvasImage128* pending_bmp,
     MandelSmoothing smoothing_type,
-    bool   cycle_dist_invert,
-    double cycle_dist_sharpness,
     bool   cycle_iter_normalize_depth,
-    double  cycle_iter_log1p_weight,
-    int threads
-)
+    double cycle_iter_log1p_weight,
+    bool   cycle_dist_invert,
+    //double cycle_dist_sharpness,
+    int threads)
 {
-    pending_field->min_depth = std::numeric_limits<double>::max();
-    pending_field->max_depth = std::numeric_limits<double>::lowest();
+    ///double assumed_iter_min = pending_field->assumed_iter_min;
+    ///double assumed_iter_max = pending_field->assumed_iter_max;
 
-    // Redetermine minimum depth for entire visible field
-    pending_bmp->forEachPixel([&](int x, int y)
-    {
-        EscapeFieldPixel& field_pixel = pending_field->at(x, y);
-        double depth = field_pixel.depth;
-
-        if (depth >= INSIDE_MANDELBROT_SET_SKIPPED || field_pixel.flag_for_skip) return;
-        if (depth < pending_field->min_depth) pending_field->min_depth = depth;
-        if (depth > pending_field->max_depth) pending_field->max_depth = depth;
-    }, 0);
-
-    if (pending_field->min_depth == std::numeric_limits<double>::max()) pending_field->min_depth = 0;
-
-
-    // Calculate normalized depth/dist
-    double dist_min_pixel_ratio = ((100.0 - cycle_dist_sharpness) / 100.0 + 0.00001);
-    T stable_min_raw_dist = Camera::active->stageToWorldOffset<T>(dist_min_pixel_ratio, 0.0).magnitude(); // fraction of a pixel
-    T stable_max_raw_dist = T{ (pending_bmp->worldSize().magnitude()) } / T{ 2.0 };                         // half diagonal world viewport size
-
-    // @@ todo: Use downgraded type from: stable_min_raw_dist?
-    T stable_min_dist = (cycle_dist_invert ? -1 : 1) * log(stable_min_raw_dist);
-    T stable_max_dist = (cycle_dist_invert ? -1 : 1) * log(stable_max_raw_dist);
-
-    blPrint() << "stable_min_dist: " << stable_min_dist << "   stable_max_raw_dist: " << stable_max_raw_dist;
+    T stable_min_dist = (T)pending_field->stable_min_dist;
+    T stable_max_dist = (T)pending_field->stable_max_dist;
 
     pending_bmp->forEachPixel([&](int x, int y)
     {
@@ -461,6 +615,7 @@ void refreshFieldDepthNormalized(
         );
 
         double floor_depth = cycle_iter_normalize_depth ? pending_field->min_depth : 0;
+        //double floor_depth = cycle_iter_normalize_depth ? assumed_iter_min : 0;
 
         float final_dist = dist_factor;
         float final_depth = (float)Math::linear_log1p_lerp(depth - floor_depth, cycle_iter_log1p_weight);
@@ -480,11 +635,11 @@ void refreshFieldDepthNormalized(
 
 template<MandelShaderFormula F, bool maxdepth_show_optimized>
 void shadeBitmap(
-    EscapeField* active_field,
+    EscapeField* field,
     CanvasImage128* bmp,
     ImGradient* gradient,
-    float max_final_depth,
-    float max_final_dist,
+    //float max_final_depth,
+    //float max_final_dist,
     float iter_weight,
     float dist_weight,
     float stripe_weight,
@@ -497,12 +652,15 @@ void shadeBitmap(
         iter_ratio, dist_ratio, stripe_ratio
     );
 
-    blPrint() << "max_final_depth: " << max_final_depth;
-    blPrint() << "max_final_dist: " << max_final_dist;
+    //blPrint() << "max_final_depth: " << max_final_depth;
+    //blPrint() << "max_final_dist: " << max_final_dist;
 
-    bmp->forEachPixel([&, active_field](int x, int y)
+    float max_final_depth = (float)field->log_color_cycle_iters;
+    float max_final_dist  = (float)field->cycle_dist_value;
+
+    bmp->forEachPixel([&, field](int x, int y)
     {
-        EscapeFieldPixel& field_pixel = active_field->at(x, y);
+        EscapeFieldPixel& field_pixel = field->at(x, y);
 
         if (field_pixel.depth >= INSIDE_MANDELBROT_SET_SKIPPED)
         {

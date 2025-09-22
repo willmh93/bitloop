@@ -231,7 +231,10 @@ private:
             {
                 // Mix ratio
                 //iter_dist_mix = info.value("m", iter_dist_mix);
-                iter_weight = info.value("m", iter_weight);
+
+                // old iter_dist_mix implied 0=full iter, 1=full dist
+
+                iter_weight = 1.0 - info.value("m", iter_weight);
                 dist_weight = info.value("n", 1.0 - iter_weight);
                 stripe_weight = info.value("o", 0.0);
 

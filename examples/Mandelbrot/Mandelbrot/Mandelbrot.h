@@ -126,8 +126,8 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 
     // ────── Computing / Shading ──────
     bool compute_mandelbrot();
-    void normalize_field();
-    void normalize_shading_limits();
+    //void normalize_shading_limits();
+    void normalize_field(EscapeField* field, CanvasImage128* bmp);
 
     // ────── Timers ──────
     #ifdef MANDEL_DEV_PERFORMANCE_TIMERS
