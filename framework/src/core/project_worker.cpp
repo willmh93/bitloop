@@ -1,6 +1,7 @@
 #include <bitloop/core/project_worker.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project.h>
+#include <bitloop/core/record_manager.h>
 
 BL_BEGIN_NS
 
@@ -59,7 +60,8 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
             active_project->_projectStart();
 
             active_project->updateShadowBuffers();
-            main_window()->onStartProject();
+
+            main_window()->addMainWindowCommand({ MainWindowCommandType::ON_STARTED_PROJECT });
         }
         break;
 
@@ -68,7 +70,8 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         {
             active_project->_projectDestroy();
             active_project->_projectStop();
-            main_window()->onStopProject();
+
+            main_window()->addMainWindowCommand({ MainWindowCommandType::ON_STOPPED_PROJECT });
         }
         break;
 
@@ -76,7 +79,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         if (active_project)
         {
             active_project->_projectPause();
-            main_window()->onPauseProject();
+            main_window()->addMainWindowCommand({ MainWindowCommandType::ON_PAUSED_PROJECT });
         }
         break;
     }
@@ -89,14 +92,20 @@ void ProjectWorker::worker_loop()
     while (!shared_sync.quitting.load())
     {
         /// ======== Safe place to control project changes ========
-        if (!project_command_queue.empty())
+        // We don't call populateAttributes() if holding shadow_buffer_mutex,
+        // meaning we won't loop over scenes here while processing project commands
         {
-            // We don't call populateAttributes() if holding shadow_buffer_mutex,
-            // meaning we won't loop over scenes here while processing project commands
-            std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+            std::vector<ProjectCommandEvent> commands;
+            {
+                std::lock_guard<std::mutex> lock(command_mutex);
+                commands = std::move(project_command_queue);
+            }
 
-            for (auto& e : project_command_queue) handleProjectCommands(e);
-            project_command_queue.clear();
+            if (!commands.empty())
+            {
+                std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+                for (auto& e : commands) handleProjectCommands(e);
+            }
         }
 
         // Wait for GUI to consume the freshly-rendered previous frame
@@ -152,6 +161,12 @@ void ProjectWorker::worker_loop()
                 //blPrint() << "";
             }
         }
+
+        // If recording, don't wake GUI until record_manager is ready to encode a new frame,
+        // otherwise the main GUI thread would need to block while it waits for the last frame to encode.
+        // We intentionally avoid a frame queue so video encoding stays in sync with simulation.
+        if (record_manager->isRecording() && main_window()->capturingNextFrame())
+            record_manager->waitUntilReadyForNewFrame();
 
         /// ======== Flag ready to draw ========
         shared_sync.flag_ready_to_draw();

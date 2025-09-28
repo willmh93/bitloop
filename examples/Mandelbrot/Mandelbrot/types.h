@@ -1,13 +1,14 @@
 #pragma once
 #include <bitloop.h>
 
-#include <math.h>
 #include <cmath>
 #include <vector>
 
 #include "build_config.h"
 
 SIM_BEG;
+
+using namespace bl;
 
 constexpr double INSIDE_MANDELBROT_SET = std::numeric_limits<double>::max();
 const double INSIDE_MANDELBROT_SET_SKIPPED = std::nextafter(INSIDE_MANDELBROT_SET, 0.0f);
@@ -65,9 +66,16 @@ static inline const char* MandelFloatQualityNames[3] =
 
 struct StripeParams
 {
-    float freq = 8.0;    // stripes per 2π
+    float freq = 3.0;    // stripes per 2π
     float phase = 0.0;    // radians
     float contrast = 3.0;  // tanh shaping
+
+    //float kappa = 0.85f;  // log-spiral coupling (θ + κ ln r)
+    //float legacy = 0.35f;  // 0..1: more = more low-zoom “vine” character
+    float L_short = 24.0f;  // effective short window (tail)
+    //float L_long = 160.0f; // effective long window (shape memory)
+    //float p_mag = 1.0f;   // down-weight far field: w ∝ (ER²/|z|²)^p
+    float p = 0.5f;  // effective short window (tail)
 
     StripeParams(float _freq = 8.0f, float _phase = 0.0f, float _contrast = 3.0f)
         : freq(_freq), phase(_phase), contrast(_contrast)

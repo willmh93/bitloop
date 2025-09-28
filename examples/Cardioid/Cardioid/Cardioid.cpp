@@ -44,7 +44,7 @@ void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments,
         // Big blue circle
         double r1 = 0.5;
         ctx->setStrokeStyle(255, 0, 255);
-        ctx->strokeEllipse(ox, 0, r1);
+        ctx->strokeEllipse(ox, 0.0, r1);
 
 
         // p1 dot
@@ -65,20 +65,20 @@ void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments,
 
         // draw p1 dot
         ctx->setFillStyle(255, 0, 255);
-        ctx->fillEllipse(p1_x, p1_y, 8);
+        ctx->fillEllipse(p1_x, p1_y, 8.0);
         ctx->fillText("p1", p1_x + off.x, p1_y + off.y);
 
         // draw p2 dot
         double p2_x = c2_x - r2 * cos(angle2);
         double p2_y = c2_y - r2 * sin(angle2);
         ctx->setFillStyle(255, 0, 255);
-        ctx->fillEllipse(p2_x, p2_y, 8);
+        ctx->fillEllipse(p2_x, p2_y, 8.0);
         ctx->fillText("p2", p2_x + off.x, p2_y + off.y);
 
         // draw tangent arrow
         double tangent_head_x = p2_x + cos(ta) * 0.2;
         double tangent_head_y = p2_y + sin(ta) * 0.2;
-        ctx->drawArrow({ p2_x, p2_y }, { tangent_head_x, tangent_head_y }, Color(255, 255, 255));
+        ctx->drawArrow(DVec2{ p2_x, p2_y }, DVec2{ tangent_head_x, tangent_head_y }, Color(255, 255, 255));
         //ctx->beginPath();
         //ctx->arrowMoveTo(p2_x, p2_y);
         //ctx->arrowDrawTo(tangent_head_x, tangent_head_y);
@@ -93,7 +93,7 @@ void plot(const SceneBase *scene, Viewport* ctx, bool interactive, int segments,
         //ctx->arrowMoveTo(tx1, ty1);
         //ctx->arrowDrawTo(tx2, ty2);
         //ctx->stroke();
-        ctx->drawArrow({ tx1, ty1 }, { tx2, ty2 }, Color(255, 255, 255));
+        ctx->drawArrow(DVec2{ tx1, ty1 }, DVec2{ tx2, ty2 }, Color(255, 255, 255));
     }
     ctx->camera.restoreCameraTransform();
 }
@@ -107,7 +107,7 @@ void Cardioid_Project::projectPrepare(Layout& layout)
 
 /// Scene ///
 
-void Cardioid_Scene::UI::populate()
+void Cardioid_Scene::UI::sidebar()
 {
     bl_pull(flatten);
     bl_pull(interactive);
@@ -232,14 +232,14 @@ void Cardioid_Scene::viewportDraw(Viewport* ctx) const
                 // Draw red projected dot
                 DVec2 p = cumulative_cardioid_lookup.project(interact_angle, interact_dist, interact_spin_mult);
                 ctx->setFillStyle(255, 0, 0);
-                ctx->fillEllipse(p.x, p.y, 5);
+                ctx->fillEllipse(p.x, p.y, 5.0);
 
                 // Mouse project test (should follow mouse)
                 DVec2 p2 = cumulative_cardioid_lookup.originalPolarCoordinate(mouse->world_x, mouse->world_y, interact_spin_mult);
                 DVec2 p3 = cumulative_cardioid_lookup.project(p2.x, p2.y, interact_spin_mult);
 
                 ctx->setFillStyle(255, 0, 0);
-                ctx->fillEllipse(p3.x, p3.y, 5);
+                ctx->fillEllipse(p3.x, p3.y, 5.0);
             }
         }
     }
@@ -267,7 +267,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
     // Big blue circle
     double r1 = scale * 0.5;
     ctx->setStrokeStyle(80, 80, 255);
-    ctx->strokeEllipse(ox * scale, 0, r1);
+    ctx->strokeEllipse(ox * scale, 0.0, r1);
 
     // p1 dot
     double p1_x = r1 * cos(orig_angle) + ox * scale;
@@ -287,14 +287,14 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
 
     // draw p1 dot
     ctx->setFillStyle(0, 255, 255);
-    ctx->fillEllipse(p1_x, p1_y, 5);
+    ctx->fillEllipse(p1_x, p1_y, 5.0);
     ctx->fillText("p1", p1_x + off.x, p1_y + off.y);
 
     // draw p2 dot
     double p2_x = c2_x - r2 * cos(angle2);
     double p2_y = c2_y - r2 * sin(angle2);
     ctx->setFillStyle(0, 255, 255);
-    ctx->fillEllipse(p2_x, p2_y, 5);
+    ctx->fillEllipse(p2_x, p2_y, 5.0);
     ctx->fillText("p2", p2_x + off.x, p2_y + off.y);
 
     double tangent_angle = 1.5 * orig_angle;
@@ -302,7 +302,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
     // draw tangent arrow
     double tangent_head_x = p2_x + cos(tangent_angle) * 0.2;
     double tangent_head_y = p2_y + sin(tangent_angle) * 0.2;
-    ctx->drawArrow({ p2_x, p2_y }, { tangent_head_x, tangent_head_y }, Color(255, 255, 255));
+    ctx->drawArrow(DVec2{ p2_x, p2_y }, DVec2{ tangent_head_x, tangent_head_y }, Color(255, 255, 255));
     //ctx->beginPath();
     //ctx->arrowMoveTo(p2_x, p2_y);
     //ctx->arrowDrawTo(tangent_head_x, tangent_head_y);
@@ -325,7 +325,7 @@ void Cardioid_Scene::animatePlot(Viewport* ctx, double scale, double ox, double 
     //ctx->arrowDrawTo(tx2, ty2);
     //ctx->stroke();
 
-    ctx->drawArrow({ tx1, ty1 }, { tx2, ty2 }, Color(255, 255, 255));
+    ctx->drawArrow(DVec2{ tx1, ty1 }, DVec2{ tx2, ty2 }, Color(255, 255, 255));
 
     ///ctx->print() << "p1 angle: " << QString::asprintf("%.0f deg", oa * 180.0 / M_PI);
     ///ctx->print() << "\np2 tangent angle: " << QString::asprintf("%.0f deg", ta * 180.0 / M_PI);
@@ -459,6 +459,7 @@ void Cardioid_Graph_Scene::sceneMounted(Viewport*)
 
 void Cardioid_Graph_Scene::viewportProcess(Viewport* ctx, double)
 {
+
     int iw = static_cast<int>(ctx->width() / 2);
     int ih = static_cast<int>(ctx->height() / 2);
 

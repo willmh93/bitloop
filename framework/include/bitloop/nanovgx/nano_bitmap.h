@@ -95,7 +95,7 @@ public:
         return pos + offset;
     }
 
-    [[nodiscard]] Vec2<T> worldAlignOffset()   { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
+    [[nodiscard]] Vec2<T> worldAlignOffset() { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
     [[nodiscard]] T worldAlignOffsetX() { return -(align_x + 1) * 0.5 * worldWidth(); }
     [[nodiscard]] T worldAlignOffsetY() { return -(align_y + 1) * 0.5 * worldHeight(); }
 
@@ -271,7 +271,8 @@ protected:
         if (pending_resize)
         {
             if (nano_img) nvgDeleteImage(vg, nano_img);
-            nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, NVG_IMAGE_NEAREST, pixels.data());
+            //nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, NVG_IMAGE_NEAREST, pixels.data());
+            nano_img = nvgCreateImageRGBA(vg, bmp_width, bmp_height, NVG_IMAGE_GENERATE_MIPMAPS, pixels.data());
             pending_resize = false;
         }
         else

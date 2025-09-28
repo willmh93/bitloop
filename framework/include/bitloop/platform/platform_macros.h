@@ -91,3 +91,16 @@ constexpr T bl_infinity() {
 #else
 #define blBreak() ((void)0)  // fallback: no-op
 #endif
+
+
+
+// Returns true if the compiler enabled a "fast math" mode for this TU.
+constexpr bool fast_math_enabled() {
+#if defined(__FAST_MATH__)                 // GCC/Clang: -ffast-math
+    return true;
+#elif defined(_MSC_VER) && defined(_M_FP_FAST)  // MSVC: /fp:fast
+    return true;
+#else
+    return false;
+#endif
+}

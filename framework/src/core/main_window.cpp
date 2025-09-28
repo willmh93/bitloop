@@ -37,7 +37,7 @@ void MainWindow::checkChangedDPR()
     platform()->update();
 
     static float last_dpr = -1.0f;
-    if (fabs(platform()->dpr() - last_dpr) > 0.01f)
+    if (std::fabs(platform()->dpr() - last_dpr) > 0.01f)
     {
         // DPR changed
         last_dpr = platform()->dpr();
@@ -165,31 +165,42 @@ bool MainWindow::isInteractingWithUI()
            (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
 }
 
-void MainWindow::onStartProject()
+void MainWindow::beginRecording()
 {
-    play.active = false;
-    stop.active = true;
-    pause.active = true;
+    addMainWindowCommand({ MainWindowCommandType::ON_STARTED_PROJECT });
 }
 
-void MainWindow::onStopProject()
+void MainWindow::endRecording()
 {
-    stop.active = false;
-    pause.active = false;
-    play.active = true;
+    addMainWindowCommand({ MainWindowCommandType::ON_STOPPED_PROJECT });
+}
 
-    project_worker()->stopProject();
 
-    if (record.active)
+void MainWindow::handleCommand(MainWindowCommandEvent e)
+{
+    switch (e.type)
     {
-        record.active = false;
-    }
-}
+    case MainWindowCommandType::ON_STARTED_PROJECT:
+        play.enabled = false;
+        stop.enabled = true;
+        pause.enabled = true;
+        break;
 
-void MainWindow::onPauseProject()
-{
-    pause.active = false;
-    play.active = true;
+    case MainWindowCommandType::ON_STOPPED_PROJECT:
+        if (record_manager.isRecording())
+            record_manager.finalizeRecording();
+
+        stop.enabled = false;
+        pause.enabled = false;
+        play.enabled = true;
+        record.enabled = true;
+        break;
+
+    case MainWindowCommandType::ON_PAUSED_PROJECT:
+        pause.enabled = false;
+        play.enabled = true;
+        break;
+    }
 }
 
 /// ======== Toolbar ========
@@ -221,8 +232,8 @@ void MainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size
 
 bool MainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size, float inactive_alpha)
 {
-    auto icon_col = state.active ? state.symbolColor : ImVec4(state.symbolColor.x, state.symbolColor.y, state.symbolColor.z, inactive_alpha);
-    auto bg_col   = state.active ? state.bgColor : ImVec4(state.bgColor.x, state.bgColor.y, state.bgColor.z, inactive_alpha);
+    auto icon_col = state.enabled ? state.symbolColor : ImVec4(state.symbolColor.x, state.symbolColor.y, state.symbolColor.z, inactive_alpha);
+    auto bg_col   = state.enabled ? state.bgColor : ImVec4(state.bgColor.x, state.bgColor.y, state.bgColor.z, inactive_alpha);
 
     ImGui::PushStyleColor(ImGuiCol_Button, bg_col);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_col);
@@ -236,7 +247,10 @@ bool MainWindow::toolbarButton(const char* id, const char* symbol, const Toolbar
 
     drawToolbarButton(drawList, p, sz, symbol, ImGui::ColorConvertFloat4ToU32(icon_col));
 
-    return pressed;
+    if (state.enabled)
+        return pressed;
+
+    return false;
 }
 
 void MainWindow::populateToolbar()
@@ -269,11 +283,13 @@ void MainWindow::populateToolbar()
     {
         project_worker()->startProject();
     }
+
     ImGui::SameLine();
     if (toolbarButton("##pause", "pause", pause, ImVec2(size, size)))
     {
         project_worker()->pauseProject();
     }
+
     ImGui::SameLine();
     if (toolbarButton("##stop", "stop", stop, ImVec2(size, size)))
     {
@@ -285,13 +301,18 @@ void MainWindow::populateToolbar()
         ImGui::SameLine();
         if (toolbarButton("##record", "record", record, ImVec2(size, size)))
         {
-            if (record.active)
+            if (record.enabled)
             {
-                record.active = false;
+                // Start recording
+                record.enabled = false;
+                //record_manager.startRecording("vid.mp4", { 400, 300 }, 60, true);
+                //record_manager.startRecording("vid.mp4", { 1920, 1080 }, 60, true);
+                record_manager.startRecording("vid.mp4", { 3840, 2160 }, 60, true); // 4K
             }
             else
             {
-                record.active = false;
+                record.enabled = true;
+                record_manager.finalizeRecording();
             }
         }
     }
@@ -605,7 +626,6 @@ void MainWindow::populateCollapsedLayout()
         ImGui::PopStyleVar();
     }
     ImGui::End();
-
     
     if (ImGui::Begin("Active", nullptr, window_flags))
     {
@@ -656,6 +676,22 @@ void MainWindow::populateExpandedLayout()
 
 void MainWindow::populateViewport()
 {
+    if (!command_queue.empty())
+    {
+        // We don't call populateAttributes() if holding shadow_buffer_mutex,
+        // meaning we won't loop over scenes here while processing project commands
+        std::vector<MainWindowCommandEvent> commands;
+        {
+            std::lock_guard<std::mutex> lock(command_mutex);
+            commands = std::move(command_queue);
+        }
+
+        if (!commands.empty()) {
+            for (auto& e : commands)
+                handleCommand(e);
+        }
+    }
+
     // Always process viewport, even if not visible
     ImGui::Begin("Viewport");
     {
@@ -666,19 +702,18 @@ void MainWindow::populateViewport()
 
         //~ // Resize canvas to right size when recording==true, draw shrinked canvas instead
 
-        int canvas_w, canvas_h;
+        IVec2 canvas_size;
         if (record_manager.isRecording())
         {
             // switch to record resolution
-            canvas_w = 1280;
-            canvas_h = 900;
+            canvas_size = record_manager.getResolution();
         }
         else
         {
-            canvas_w = width;
-            canvas_h = height;
+            canvas_size = { width, height };
         }
-        bool resized = canvas.resize(canvas_w, canvas_h);
+
+        /*bool resized = */canvas.resize(canvas_size.x, canvas_size.y);
         
 
         if (!done_first_size)
@@ -701,46 +736,57 @@ void MainWindow::populateViewport()
 
         if (need_draw)
         {
-            // Stop the worker and draw the fresh frame
+            // Draw the fresh frame
             {
                 std::unique_lock<std::mutex> lock(shared_sync.state_mutex);
 
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-
-                //if (record_manager.isRecording())
-                //record_canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-
-                //blPrint() << "projectDraw()";
                 project_worker()->draw();
-
                 canvas.end();
 
-                shared_sync.frame_ready = false;
+                // Even if not recording, behave as though we are for testing purposes
+                captured_last_frame = encode_next_sim_frame;
+
+                if (record_manager.isRecording())
+                {
+                    if (encode_next_sim_frame)
+                    {
+                        canvas.readPixels(frame_data);
+                        record_manager.encodeFrame(frame_data.data());
+                    }
+
+
+                }
+
+                // Capture next frame by default, unless manually set back to false
+                encode_next_sim_frame = true;
+
+                shared_sync.frame_ready_to_draw = false;
                 shared_sync.frame_consumed = true;
             }
 
             // Let worker continue
             shared_sync.cv.notify_one();
         }
-        else if (resized)
-        {
-            canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-            canvas.setFillStyle(0, 0, 0);
-            canvas.fillRect(0, 0, (float)canvas.fboWidth(), (float)canvas.fboHeight());
-            canvas.end();
-        }
 
-        ImVec2 canvas_size((float)canvas.fboWidth(), (float)canvas.fboHeight());
+        ///else if (resized)
+        ///{
+        ///    canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+        ///    canvas.setFillStyle(0, 0, 0);
+        ///    canvas.fillRect(0, 0, (float)canvas.fboWidth(), (float)canvas.fboHeight());
+        ///    canvas.end();
+        ///}
+
+        ImVec2 client_size((float)width, (float)height);
         ImVec2 start = ImGui::GetCursorScreenPos();
 
         // Draw cached (or freshly generated) frame
-        ImGui::Image(canvas.texture(), canvas_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        ImGui::Image(canvas.texture(), client_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         ImGui::SetItemAllowOverlap();              // allow next item to overlap this one
-        ImGui::SetCursorScreenPos(start);
-        ImGui::Image(overlay.texture(), canvas_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
-        //viewport_rect.Min = ImVec2(0, 0);
-        //viewport_rect.Max = size;
+        ImGui::SetCursorScreenPos(start);
+        ImGui::Image(overlay.texture(), client_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+
         viewport_hovered = ImGui::IsWindowHovered();
     }
     ImGui::End();
@@ -763,7 +809,7 @@ void MainWindow::populateUI()
     // Determine if we are ready to draw *before* populating simulation imgui attributes
     {
         std::lock_guard<std::mutex> g(shared_sync.state_mutex);
-        need_draw = shared_sync.frame_ready;
+        need_draw = shared_sync.frame_ready_to_draw;
     }
 
     bool collapse_layout = vertical_layout || platform()->max_char_rows() < 40.0f;
@@ -773,8 +819,6 @@ void MainWindow::populateUI()
 
 
     // ==== Allow project to populate UI / draw nanovg overlay ====
-
-
 
 
     // Shadow buffer is now up-to-date and free to access (while worker does processing)
@@ -797,7 +841,7 @@ void MainWindow::populateUI()
 
             if (done_first_size)
             {
-                overlay.begin(0, 0, 0, 0);
+                overlay.begin(255, 0, 0, 0);
                 project_worker()->drawOverlay();
                 //overlay.setFillStyle(255, 0, 0, 255);
                 //overlay.fillRoundedRect(10, 10, 150, 50, 8);
@@ -822,28 +866,6 @@ void MainWindow::populateUI()
 
             populateViewport();
         }
-
-        //// Draw overlay
-        //{
-        //    // Stall until we've finishing copying the shadow buffer to the live buffer (on worker thread)
-        //    shared_sync.wait_until_live_buffer_updated();
-        //    std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-        //
-        //    
-        //
-        //   
-        //
-        //    //ImGui::Image(overlay.texture(), ImVec2(
-        //    //    static_cast<float>(overlay.fboWidth()),
-        //    //    static_cast<float>(overlay.fboHeight())),
-        //    //    ImVec2(0.0f, 1.0f),   // UV top-left (flipped)
-        //    //    ImVec2(1.0f, 0.0f)    // UV bottom-right);
-        //    //);
-        //
-        //    //ImGui::Begin("Test Overlay");
-        //    //ImGui::Text("Hello from BSL!");
-        //    //ImGui::End();
-        //}
     }
 
     #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS

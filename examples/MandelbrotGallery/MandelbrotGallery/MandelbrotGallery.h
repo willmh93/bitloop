@@ -1,16 +1,18 @@
 #pragma once
 #include <bitloop.h>
 
+#include "Mandelbrot/Mandelbrot.h"
+
 SIM_BEG;
 
 using namespace bl;
 
-struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
+struct MandelbrotGallery_Scene : public Scene<MandelbrotGallery_Scene>
 {
     /// ─────── Default launch config (overridable by Project) ───────
     struct Config { /* double gravity = 9.8; */ };
 
-    {SIM_NAME}_Scene(Config& info [[maybe_unused]])
+    MandelbrotGallery_Scene(Config& info [[maybe_unused]])
         // : gravity(info.gravity)
     {}
 
@@ -18,7 +20,7 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
     struct UI : Interface
     {
         using Interface::Interface;
-        void populate();
+        void sidebar();
 
         /// ─────── Your UI-only variables ───────
         // bool test_popup_open = false;
@@ -52,16 +54,18 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
     // void onKeyUp(KeyEvent e) override;
 };
 
-struct {SIM_NAME}_Project : public Project<{SIM_NAME}_Project>
+struct MandelbrotGallery_Project : public Project<MandelbrotGallery_Project>
 {
-    static ProjectInfo info() {
+    static ProjectInfo info()
+    {
         // Categorize your project
-        return ProjectInfo({ "New Projects", "{SIM_NAME}" });
+        return ProjectInfo({ "Fractal", "Mandelbrot", "Gallery Composite" });
     }
 
-    struct UI : Interface {
+    struct UI : Interface
+    {
         using Interface::Interface;
-        void populate();
+        void sidebar();
     };
 
     int viewport_count = 1;

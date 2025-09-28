@@ -39,7 +39,7 @@ struct Test1_Scene : public Scene<Test1_Scene>
     struct UI : Interface
     {
         using Interface::Interface;
-        void populate();
+        void sidebar();
     };
 
     // Scene management
@@ -65,14 +65,19 @@ struct Test1_Scene : public Scene<Test1_Scene>
     //void onKeyUp(KeyEvent e) override;
 };
 
-struct Test1_Project : public Project
+struct Test1_Project : public Project<Test1_Project>
 {
-    int viewport_count = 1;
-
-    static ProjectInfo info()
-    {
+    static ProjectInfo info() {
         return ProjectInfo({ "Framework Tests", "Test A" });
     }
+
+    struct UI : Interface
+    {
+        using Interface::Interface;
+        void sidebar();
+    };
+
+    int viewport_count = 1;
 
     void projectPrepare(Layout& layout) override;
 };

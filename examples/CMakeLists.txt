@@ -9,6 +9,7 @@ endif()
 bitloop_new_project(examples)
 
 bitloop_add_dependency(examples "./Mandelbrot")
+bitloop_add_dependency(examples "./MandelbrotGallery")
 bitloop_add_dependency(examples "./Tiger")
 #bitloop_add_dependency(examples "./ExampleText")
 bitloop_add_dependency(examples "./Test1")

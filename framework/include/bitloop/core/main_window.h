@@ -3,17 +3,11 @@
 #include <vector>
 #include <bitloop/core/threads.h>
 #include <bitloop/core/project.h>
+#include <bitloop/core/record_manager.h>
 #include <bitloop/imguix/imgui_custom.h>
 #include <bitloop/nanovgx/nano_canvas.h>
 
-#ifndef __EMSCRIPTEN__
-extern "C" {
-    #include <libavcodec/avcodec.h>
-    #include <libavformat/avformat.h>
-    #include <libswscale/swscale.h>
-    #include <libavutil/avutil.h>
-}
-#endif
+
 
 BL_BEGIN_NS;
 
@@ -21,73 +15,38 @@ struct ToolbarButtonState
 {
     ImVec4 bgColor;
     ImVec4 symbolColor;
-    bool active;
+
+    bool enabled = false;
+    bool stuck = false;
+
+    int  blink_timer = 0;
+    bool blinking = false;
 };
 
 extern ImDebugLog project_log;
 extern ImDebugLog debug_log;
 
-
-
-
-class RecordManager
+enum struct MainWindowCommandType
 {
-    std::thread ffmpeg_worker;
-
-    bool recording = false;
-    bool encoder_busy = false;
-
-public:
-
-    ~RecordManager() {}
-
-    bool isRecording()
-    {
-        return recording;
-    }
-
-    bool isInitialized();
-
-    bool encoderBusy()
-    {
-        return encoder_busy;
-    }
-
-    bool attachingEncoder()
-    {
-        return (isRecording() && !isInitialized());
-    }
-
-    bool startRecording(
-        std::string filename,
-        IVec2 record_resolution,
-        int record_fps,
-        bool flip);
-
-    void finalizeRecording()
-    {
-        //emit endRecording();
-    }
-
-    bool encodeFrame(uint8_t* data)
-    {
-        encoder_busy = true;
-        //emit frameReady(data);
-        return true;
-    }
-
-    void onFinalized() {}
-
-    void frameReady(uint8_t* data) {}
-    void workerReady() {}
-    void endRecording(){}
+    ON_STARTED_PROJECT,
+    ON_STOPPED_PROJECT,
+    ON_PAUSED_PROJECT
 };
 
 
+struct MainWindowCommandEvent
+{
+    MainWindowCommandType type;
+};
 
 class MainWindow
 {
     static MainWindow* singleton;
+
+    std::mutex command_mutex;
+    std::vector<MainWindowCommandEvent> command_queue;
+
+    void handleCommand(MainWindowCommandEvent e);
 
     ImFont* main_font = nullptr;
     ImFont* mono_font = nullptr;
@@ -110,10 +69,11 @@ class MainWindow
 
     // Recording states
     RecordManager record_manager;
-    bool allow_start_recording = true;
-    bool record_on_start = false;
-    bool window_capture = false;
-    bool encode_next_paint = false;
+    std::vector<uint8_t> frame_data;
+
+    ///bool window_capture = false;
+    bool encode_next_sim_frame = false;
+    bool captured_last_frame = false;
 
 
     Canvas canvas;
@@ -144,6 +104,17 @@ public:
         return &overlay;
     }
 
+    [[nodiscard]] RecordManager* getRecordManager() {
+        return &record_manager;
+    }
+
+    void beginRecording();
+    void endRecording();
+
+    void captureFrame(bool b) { encode_next_sim_frame = b; }
+    bool capturingNextFrame() const { return encode_next_sim_frame; }
+    bool capturedLastFrame() const { return captured_last_frame; }
+
     void init();
     void checkChangedDPR();
 
@@ -158,9 +129,11 @@ public:
     //ImRect viewportRect() { return viewport_rect; }
     bool viewportHovered() { return viewport_hovered; }
 
-    void onStartProject();
-    void onStopProject();
-    void onPauseProject();
+    void addMainWindowCommand(MainWindowCommandEvent e)
+    {
+        std::lock_guard<std::mutex> lock(command_mutex);
+        command_queue.push_back(e);
+    }
 
     /// Toolbar
     void drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size, const char* symbol, ImU32 color);

@@ -139,6 +139,31 @@ double SceneBase::project_dt(int average_samples) const
     return ma.push(project->dt_projectProcess);
 }
 
+bool SceneBase::isRecording() const
+{
+    return main_window()->getRecordManager()->isRecording();
+}
+
+void SceneBase::beginRecording()
+{
+    main_window()->beginRecording();
+}
+
+void SceneBase::endRecording()
+{
+    main_window()->endRecording();
+}
+
+void SceneBase::captureFrame(bool b)
+{
+    main_window()->captureFrame(b);
+}
+
+bool SceneBase::capturedLastFrame()
+{
+    return main_window()->capturedLastFrame();
+}
+
 /// ==========================
 /// ======== Viewport ========
 /// ==========================
@@ -201,7 +226,7 @@ void Viewport::draw()
     int line_index = 0;
     std::string line;
     while (std::getline(print_stream, line, '\n'))
-        fillText(line, 5, 5 + (line_index++ * getGlobalScale() * 16.0f));
+        fillText(line, 5.0, 5.0 + (line_index++ * getGlobalScale() * 16.0f));
 
     camera.restoreCameraTransform();
     restore();
@@ -236,7 +261,7 @@ void Viewport::overlay()
     int line_index = 0;
     std::string line;
     while (std::getline(print_stream, line, '\n'))
-        fillText(line, 5, 5 + (line_index++ * getGlobalScale() * 16.0f));
+        fillText(line, 5.0, 5.0 + (line_index++ * getGlobalScale() * 16.0f));
 
     camera.restoreCameraTransform();
     restore();
@@ -305,20 +330,20 @@ void Layout::resize(size_t viewport_count)
     if (targ_viewports_x <= 0 || targ_viewports_y <= 0)
     {
         // Spread proportionally
-        rows = static_cast<int>(sqrt(viewport_count));
+        rows = static_cast<int>(std::sqrt(viewport_count));
         cols = static_cast<int>(viewport_count) / rows;
     }
     else if (targ_viewports_y <= 0)
     {
         // Expand down
         cols = targ_viewports_x;
-        rows = (int)ceil((float)viewport_count / (float)cols);
+        rows = (int)std::ceil((float)viewport_count / (float)cols);
     }
     else if (targ_viewports_x <= 0)
     {
         // Expand right
         rows = targ_viewports_y;
-        cols = (int)ceil((float)viewport_count / (float)rows);
+        cols = (int)std::ceil((float)viewport_count / (float)rows);
     }
 
     // Expand rows down by default if not perfect fit
@@ -465,7 +490,11 @@ void ProjectBase::_projectStart()
     // Mount to viewports
     for (Viewport* viewport : viewports)
     {
+        viewport->usePainter(canvas->getPainterContext());
+
+        Camera::active = &viewport->camera;
         viewport->scene->camera = &viewport->camera;
+
         viewport->scene->sceneMounted(viewport);
     }
 
@@ -560,6 +589,10 @@ void ProjectBase::_projectProcess()
         // Allow panning/zooming, even when paused
         for (Viewport* viewport : viewports)
         {
+            viewport->usePainter(canvas->getPainterContext());
+            Camera::active = &viewport->camera;
+            viewport->scene->camera = &viewport->camera;
+
             double viewport_mx = mouse.client_x - viewport->x;
             double viewport_my = mouse.client_y - viewport->y;
 
@@ -609,14 +642,23 @@ void ProjectBase::_projectProcess()
             for (Viewport* viewport : viewports)
             {
                 //viewport->camera.panZoomProcess();
-                viewport->scene->camera = &viewport->camera;
+
+                viewport->usePainter(canvas->getPainterContext());
+
                 Camera::active = &viewport->camera;
+                viewport->scene->camera = &viewport->camera;
 
                 viewport->just_resized =
                     (viewport->w != viewport->old_w) ||
                     (viewport->h != viewport->old_h);
 
-                viewport->scene->viewportProcess(viewport, dt_frameProcess/1000.0);
+                double dt;
+                if (main_window()->getRecordManager()->isRecording())
+                    dt = 1.0 / main_window()->getRecordManager()->fps();
+                else
+                    dt = dt_frameProcess / 1000.0;
+
+                viewport->scene->viewportProcess(viewport, dt);
 
                 viewport->old_w = viewport->w;
                 viewport->old_h = viewport->h;
@@ -656,6 +698,7 @@ void ProjectBase::_projectDraw()
     //Canvas* ctx = canvas;
     DVec2 surface_size = surfaceSize();
 
+    // Draw background
     canvas->setFillStyle(10, 10, 15);
     canvas->fillRect(0, 0, surface_size.x, surface_size.y);
 
@@ -670,20 +713,21 @@ void ProjectBase::_projectDraw()
     for (Viewport* viewport : viewports)
     {
         // Reuse derived painter for the primary canvas context
-        viewport->setPainterContext(canvas->getPainterContext());
+        viewport->usePainter(canvas->getPainterContext());
+
+        Camera::active = &viewport->camera;
+        viewport->scene->camera = &viewport->camera;
 
         canvas->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
         canvas->save();
 
         // Starting viewport position
-        canvas->translate(floor(viewport->x), floor(viewport->y));
+        canvas->translate(std::floor(viewport->x), std::floor(viewport->y));
 
         // Set default transform to "World"
         viewport->camera.worldTransform();
 
         // Draw Scene to Viewport
-        Camera::active = &viewport->camera;
-        viewport->scene->camera = &viewport->camera;
 
         viewport->draw();
 
@@ -704,7 +748,7 @@ void ProjectBase::_projectDraw()
         // Draw vert line
         if (viewport->viewport_grid_x < viewports.cols - 1)
         {
-            double line_x = floor(viewport->x + viewport->w) + 0.5;
+            double line_x = std::floor(viewport->x + viewport->w) + 0.5;
             canvas->moveTo(line_x, viewport->y);
             canvas->lineTo(line_x, viewport->y + viewport->h + 1);
         }
@@ -712,7 +756,7 @@ void ProjectBase::_projectDraw()
         // Draw horiz line
         if (viewport->viewport_grid_y < viewports.rows - 1)
         {
-            double line_y = floor(viewport->y + viewport->h) + 0.5;
+            double line_y = std::floor(viewport->y + viewport->h) + 0.5;
             canvas->moveTo(viewport->x + viewport->w + 1, line_y);
             canvas->lineTo(viewport->x, line_y);
         }
@@ -723,6 +767,8 @@ void ProjectBase::_projectDraw()
 
 void ProjectBase::_projectOverlay()
 {
+    return;
+
     if (!done_single_process) return;
     if (!started) return;
 
@@ -742,21 +788,21 @@ void ProjectBase::_projectOverlay()
     for (Viewport* viewport : viewports)
     {
         // Reuse derived painter for the overlay context
-        viewport->setPainterContext(overlay->getPainterContext());
+        viewport->usePainter(overlay->getPainterContext());
+
+        Camera::active = &viewport->camera;
+        viewport->scene->camera = &viewport->camera;
 
         overlay->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
         overlay->save();
 
         // Starting viewport position
-        overlay->translate(floor(viewport->x), floor(viewport->y));
+        overlay->translate(std::floor(viewport->x), std::floor(viewport->y));
 
         // Set default transform to "World"
         viewport->camera.stageTransform();
 
         // Draw Scene to Viewport
-        Camera::active = &viewport->camera;
-        viewport->scene->camera = &viewport->camera;
-
         viewport->overlay();
 
         // Restore initial canvas transform
@@ -840,6 +886,10 @@ void ProjectBase::_onEvent(SDL_Event& e)
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
+                ctx->usePainter(canvas->getPainterContext());
+                Camera::active = &ctx->camera;
+                ctx->scene->camera = &ctx->camera;
+
                 if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
                 {
                     ctx_focused = ctx;
@@ -859,6 +909,10 @@ void ProjectBase::_onEvent(SDL_Event& e)
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
+                ctx->usePainter(canvas->getPainterContext());
+                Camera::active = &ctx->camera;
+                ctx->scene->camera = &ctx->camera;
+
                 if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
                 {
                     ctx_hovered = ctx;
@@ -1046,6 +1100,11 @@ Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
     viewports.setSize(targ_viewports_x, targ_viewports_y);
 
     return viewports;
+}
+
+bool ProjectBase::isRecording() const
+{
+    return main_window()->getRecordManager()->isRecording();
 }
 
 void SceneBase::logMessage(std::string_view fmt, ...)

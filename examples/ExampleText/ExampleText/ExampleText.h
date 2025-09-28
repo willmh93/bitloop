@@ -5,38 +5,27 @@ SIM_BEG;
 
 using namespace bl;
 
-struct ExampleText_Scene_Data : VarBuffer
+struct ExampleText_Scene : public Scene<ExampleText_Scene>
 {
-    CameraViewController cam_view;
-    
-    bool transform_coordinates = true;
-    bool scale_lines = true;
-    bool scale_sizes = true;
-    bool scale_text  = true;
-    bool rotate_text = true;
-
-    void registerSynced() override
-    {
-        // auto-synced between worker/GUI thread
-        sync(cam_view);
-
-        sync(transform_coordinates);
-        sync(scale_lines);
-        sync(scale_sizes);
-        sync(scale_text);
-        sync(rotate_text);
-    }
-    void populateUI() override;
-};
-
-struct ExampleText_Scene : public Scene<ExampleText_Scene_Data >
-{
-    /// ─────── Provide default Scene launch config ─────── 
+    /// ─────── Default Scene launch config ─────── 
     struct Config {};
     ExampleText_Scene(Config& info [[maybe_unused]]) {}
 
+    struct UI : Interface {
+        using Interface::Interface;
+        void sidebar();
+    };
+
     /// ─────── Scene variables ───────
     std::vector<std::shared_ptr<NanoFont>> fonts;
+
+    CameraViewController cam_view;
+
+    bool transform_coordinates = true;
+    bool scale_lines = true;
+    bool scale_sizes = true;
+    bool scale_text = true;
+    bool rotate_text = true;
 
     /// ─────── Scene methods ───────
     void sceneStart() override;
@@ -63,24 +52,18 @@ struct ExampleText_Scene : public Scene<ExampleText_Scene_Data >
     // void customMethod();
 };
 
-struct ExampleText_Project_Data : public VarBuffer
+struct ExampleText_Project : public Project<ExampleText_Project>
 {
-    int viewport_count = 1;
-
-    void populateUI();
-    void registerSynced()
-    {
-        sync(viewport_count);
-    }
-};
-
-struct ExampleText_Project : public Project<ExampleText_Project_Data>
-{
-    static ProjectInfo info()
-    {
-        // Categorize your project
+    static ProjectInfo info() {
         return ProjectInfo({ "Tests", "Draw Text" });
     }
+
+    struct UI : Interface {
+        using Interface::Interface;
+        void sidebar();
+    };
+
+    int viewport_count = 1;
 
     void projectPrepare(Layout& layout) override;
 };

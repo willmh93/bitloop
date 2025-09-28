@@ -401,7 +401,7 @@ struct Cardioid_Scene : public Scene<Cardioid_Scene>
     struct UI : Interface
     {
         using Interface::Interface;
-        void populate();
+        void sidebar();
     };
     
     void sceneStart() override;

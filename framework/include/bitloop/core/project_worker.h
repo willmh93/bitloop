@@ -6,6 +6,7 @@ BL_BEGIN_NS
 
 class ProjectBase;
 class Canvas;
+class RecordManager;
 struct ImDebugLog;
 
 enum struct ProjectCommandType
@@ -34,20 +35,18 @@ struct ProjectCommandEvent
     ProjectID project_uid = ProjectID::CURRENT_PROJECT;
 };
 
-class ProjectBase;
 
 class ProjectWorker
 {
     static ProjectWorker* singleton;
 
+    RecordManager* record_manager = nullptr; // Owned by MainWindow
 
+    std::vector<ProjectCommandEvent> project_command_queue;
     std::mutex event_queue_mutex;
-
     std::thread worker_thread;
 
     ProjectBase* active_project = nullptr;
-
-    std::vector<ProjectCommandEvent> project_command_queue;
 
     void _destroyActiveProject();
 
@@ -73,7 +72,10 @@ public:
         return singleton;
     }
 
-    ProjectWorker(SharedSync& _shared_sync) : shared_sync(_shared_sync) {
+    ProjectWorker(SharedSync& _shared_sync, RecordManager* _record_manager) :
+        shared_sync(_shared_sync),
+        record_manager(_record_manager)
+    {
         singleton = this;
     }
 
@@ -94,10 +96,17 @@ public:
     // ======== Project Control ========
     [[nodiscard]] ProjectBase* getActiveProject() { return active_project; }
 
-    void setActiveProject(int uid)  { project_command_queue.push_back({ ProjectCommandType::PROJECT_SET,   uid }); }
-    void startProject()             { project_command_queue.push_back({ ProjectCommandType::PROJECT_START, ProjectID::CURRENT_PROJECT }); }
-    void stopProject()              { project_command_queue.push_back({ ProjectCommandType::PROJECT_STOP,  ProjectID::CURRENT_PROJECT }); }
-    void pauseProject()             { project_command_queue.push_back({ ProjectCommandType::PROJECT_PAUSE, ProjectID::CURRENT_PROJECT }); }
+    std::mutex command_mutex;
+    void addProjectCommand(ProjectCommandEvent e)
+    {
+        std::lock_guard<std::mutex> lock(command_mutex);
+        project_command_queue.push_back(e);
+    }
+
+    void setActiveProject(int uid)  { addProjectCommand({ ProjectCommandType::PROJECT_SET,   uid }); }
+    void startProject()             { addProjectCommand({ ProjectCommandType::PROJECT_START, ProjectID::CURRENT_PROJECT }); }
+    void stopProject()              { addProjectCommand({ ProjectCommandType::PROJECT_STOP,  ProjectID::CURRENT_PROJECT }); }
+    void pauseProject()             { addProjectCommand({ ProjectCommandType::PROJECT_PAUSE, ProjectID::CURRENT_PROJECT }); }
 };
 
 [[nodiscard]] constexpr ProjectWorker* project_worker()

@@ -25,7 +25,8 @@
         "BUILD_FLAVOR": "ninja-debug",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -36,7 +37,8 @@
         "BUILD_FLAVOR": "ninja-release",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -47,7 +49,8 @@
         "BUILD_FLAVOR": "ninja-release-debug-info",
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -65,7 +68,8 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
-        "VCPKG_BUILD_STATIC": "ON"
+        "VCPKG_BUILD_STATIC": "ON",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -81,7 +85,8 @@
         "BUILD_FLAVOR": "vs2022",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -94,7 +99,8 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/framework/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -109,7 +115,8 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
-        "CMAKE_SUPPRESS_REGENERATION": "ON"
+        "CMAKE_SUPPRESS_REGENERATION": "ON",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -124,7 +131,8 @@
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
-        "CMAKE_SUPPRESS_REGENERATION": "ON"
+        "CMAKE_SUPPRESS_REGENERATION": "ON",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -139,7 +147,8 @@
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/framework/triplets",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
         "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
-        "CMAKE_SUPPRESS_REGENERATION": "ON"
+        "CMAKE_SUPPRESS_REGENERATION": "ON",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     }
   ],

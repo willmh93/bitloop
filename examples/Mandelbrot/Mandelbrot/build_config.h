@@ -3,10 +3,10 @@
 /// ──────  Dev Mode ON/OFF ──────
 #define MANDEL_DEV_MODE 1
 
-#if MANDEL_DEV_MODE && defined(BL_DEBUG)
+#if MANDEL_DEV_MODE //&& defined(BL_DEBUG)
 
     /// ──────  Enabled Dev Options ──────
-#define MANDEL_DEV_PRINT_ACTIVE_FLOAT_TYPE          0
+#define MANDEL_DEV_PRINT_ACTIVE_FLOAT_TYPE          1
 #define MANDEL_DEV_PRINT_ACTIVE_COMPUTE_FEATURES    1
 #define MANDEL_DEV_EDIT_TWEEN_SPLINES               0
 #define MANDEL_DEV_PERFORMANCE_TIMERS               1

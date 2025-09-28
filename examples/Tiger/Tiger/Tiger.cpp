@@ -7,10 +7,11 @@ using namespace bl;
 
 /// ─────────────────────── Project ───────────────────────
 
-//void Tiger_Project_Data::populateUI()
-//{
-//    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
-//}
+void Tiger_Project::UI::sidebar()
+{
+    bl_scoped(viewport_count);
+    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
+}
 
 void Tiger_Project::projectPrepare(Layout& layout)
 {
@@ -19,43 +20,31 @@ void Tiger_Project::projectPrepare(Layout& layout)
 
 /// ─────────────────────── Scene ───────────────────────
 
-void Tiger_Scene::UI::populate()
+void Tiger_Scene::UI::sidebar()
 {
-    bl_pull(transform_coordinates);
-    bl_pull(scale_lines);
-    bl_pull(scale_sizes);
-    bl_pull(rotate_text);
-    bl_pull(cam_view);
+    bl_scoped(transform_coordinates);
+    bl_scoped(scale_lines);
+    bl_scoped(scale_sizes);
+    bl_scoped(rotate_text);
 
     ImGui::Checkbox("Transform coordinates", &transform_coordinates);
     ImGui::Checkbox("Scale Lines", &scale_lines);
     ImGui::Checkbox("Scale Sizes", &scale_sizes);
     ImGui::Checkbox("Rotate Text", &rotate_text);
 
-    if (ImGui::Button("Bark"))
+    if (ImGui::Button("Roar"))
     {
-        //scene._schedule([](Tiger_Scene& scene)
-        //{
-        //    scene.woof("WOOF!");
-        //});
-
-        //bl_schedule([](Tiger_Scene& scene)
-        //{
-        //    scene.woof("WOOF!");
-        //});
+        bl_schedule([](Tiger_Scene& scene) {
+            scene.woof("ROAR!");
+        });
     }
 
     if (ImGui::Section("View", true)) 
     {
         // imgui camera controls
+        bl_scoped(cam_view);
         cam_view.populateUI();
     }
-
-    bl_push(transform_coordinates);
-    bl_push(scale_lines);
-    bl_push(scale_sizes);
-    bl_push(rotate_text);
-    bl_push(cam_view);
 }
 
 void Tiger_Scene::sceneStart()

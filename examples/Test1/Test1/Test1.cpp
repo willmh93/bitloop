@@ -8,10 +8,12 @@ using namespace bl;
 /// ======== Project ========
 /// =========================
 
-//void Test1_Project_Vars::populateUI()
-//{
-//    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
-//}
+void Test1_Project::UI::sidebar()
+{
+    bl_pull(viewport_count);
+    ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
+    bl_push(viewport_count);
+}
 
 void Test1_Project::projectPrepare(Layout& layout)
 {
@@ -34,7 +36,7 @@ void Test1_Project::projectPrepare(Layout& layout)
    
 }*/
 
-void Test1_Scene::UI::populate()
+void Test1_Scene::UI::sidebar()
 {
     bl_pull(transform_coordinates);
     bl_pull(scale_lines);

@@ -12,30 +12,30 @@ BL_BEGIN_NS
 constexpr double nice_steps[] = { 1.0, 2.0, 5.0, 10.0 };
 constexpr int    nice_steps_count = 4;
 
-inline double niceStepDivisible(double ideal, double& coarse, double& fade)
+inline flt128 niceStepDivisible(flt128 ideal, flt128& coarse, flt128& fade)
 {
-    if (ideal <= 0) 
+    if (ideal <= flt128{ 0.0 })
     {
-        coarse = fade = 0; 
-        return 0; 
+        coarse = fade = flt128{ 0.0 };
+        return flt128{ 0.0 };
     }
 
-    const double exp10 = std::floor(std::log10(ideal));
+    const flt128 exp10 = floor(log10(ideal));
 
     // Collect nice numbers for current decade and one above
     constexpr int span_count = 2; // exp10 and exp10+1 are enough to contain ideal
-    std::array<double, nice_steps_count * span_count> candidates{};
+    std::array<flt128, nice_steps_count * span_count> candidates{};
     int n = 0;
     for (int d = 0; d <= 1; ++d) 
     {
-        const double v = std::pow(10.0, exp10 + d);
+        const flt128 v = pow(flt128{ 10.0 }, exp10 + flt128{ (double)d });
         for (int i = 0; i < nice_steps_count; ++i)
             candidates[n++] = nice_steps[i] * v;
     }
     std::sort(candidates.begin(), candidates.begin() + n);
 
     // Fine step: largest candidate <= ideal
-    double step = candidates[0];
+    flt128 step = candidates[0];
     for (int i = 0; i < n && candidates[i] <= ideal; ++i) 
         step = candidates[i];
 
@@ -51,7 +51,7 @@ inline double niceStepDivisible(double ideal, double& coarse, double& fade)
     }
 
     // Calculate fade (how far ideal lies between step and coarse)
-    fade = std::clamp((ideal - step) / (coarse - step), 0.0, 1.0);
+    fade = clamp((ideal - step) / (coarse - step), flt128{ 0.0 }, flt128{ 1.0 });
     return step;
 }
 
@@ -64,25 +64,26 @@ void Painter::drawWorldAxis(
     camera.saveCameraTransform();
 
     Viewport* ctx = camera.viewport;
-    double angle = camera.rotation();
+    const double angle = camera.rotation();
+    const DDVec2 zoom = camera.zoom<flt128>();
 
     // ======== viewport world bounds ========
-    const DVec2 TL = camera.toWorld(0, 0);
-    const DVec2 TR = camera.toWorld(ctx->width(), 0);
-    const DVec2 BR = camera.toWorld(ctx->width(), ctx->height());
-    const DVec2 BL = camera.toWorld(0, ctx->height());
+    const DDVec2 TL = camera.toWorld<flt128>(0, 0);
+    const DDVec2 TR = camera.toWorld<flt128>(ctx->width(), 0);
+    const DDVec2 BR = camera.toWorld<flt128>(ctx->width(), ctx->height());
+    const DDVec2 BL = camera.toWorld<flt128>(0, ctx->height());
 
     // ======== min/max of world bounds ========
-    const double wMinX = std::min({ TL.x, TR.x, BR.x, BL.x });
-    const double wMaxX = std::max({ TL.x, TR.x, BR.x, BL.x });
-    const double wMinY = std::min({ TL.y, TR.y, BR.y, BL.y });
-    const double wMaxY = std::max({ TL.y, TR.y, BR.y, BL.y });
+    const flt128 wMinX = std::min({ TL.x, TR.x, BR.x, BL.x });
+    const flt128 wMaxX = std::max({ TL.x, TR.x, BR.x, BL.x });
+    const flt128 wMinY = std::min({ TL.y, TR.y, BR.y, BL.y });
+    const flt128 wMaxY = std::max({ TL.y, TR.y, BR.y, BL.y });
 
     // ======== Step calculation ========
-    const double targetPx = scale_size(140.0);
-    double coarseX, coarseY, fadeX, fadeY;
-    const double stepX = niceStepDivisible(targetPx / camera.zoomX(), coarseX, fadeX);
-    const double stepY = niceStepDivisible(targetPx / camera.zoomY(), coarseY, fadeY);
+    const flt128 targetPx = flt128{ scale_size(140.0) };
+    flt128 coarseX, coarseY, fadeX, fadeY;
+    const flt128 stepX = niceStepDivisible(targetPx / zoom.x, coarseX, fadeX);
+    const flt128 stepY = niceStepDivisible(targetPx / zoom.y, coarseY, fadeY);
 
     camera.worldHudTransform();
 
@@ -90,24 +91,24 @@ void Painter::drawWorldAxis(
     if (grid_opacity > 0.0) 
     {
         setLineWidth(1);
-        constexpr double kMinorFactor = 0.25;// 0.25; // opacity for fine lines
+        constexpr flt128 kMinorFactor = flt128{ 0.25 }; // opacity for fine lines
 
         auto gridPass = [&](bool isX)
         {
-            const double step   = isX ? stepX : stepY;
-            const double coarse = isX ? coarseX : coarseY;
-            const double a0     = isX ? wMinX : wMinY;
-            const double a1     = isX ? wMaxX : wMaxY;
+            const flt128 step   = isX ? stepX : stepY;
+            const flt128 coarse = isX ? coarseX : coarseY;
+            const flt128 a0     = isX ? wMinX : wMinY;
+            const flt128 a1     = isX ? wMaxX : wMaxY;
 
             // Loop over each gridline
-            for (double w = Math::roundUp(a0, step); w < a1; w += step) 
+            for (flt128 w = Math::roundUp(a0, step); w < a1; w += step)
             {
-                const bool major = std::abs((w / coarse) - std::round(w / coarse)) < 1e-9;
-                const double alpha = major ? 1.0 : kMinorFactor;
+                const bool major = abs((w / coarse) - round(w / coarse)) < flt128::eps();
+                const flt128 alpha = major ? flt128{ 1.0 } : kMinorFactor;
 
                 setStrokeStyle(255, 255, 255, static_cast<int>(grid_opacity * alpha * 255));
-                if (isX) strokeLineSharp({w, wMinY}, {w, wMaxY});
-                else     strokeLineSharp({wMinX, w}, {wMaxX, w});
+                if (isX) strokeLineSharp<flt128>({w, wMinY}, {w, wMaxY});
+                else     strokeLineSharp<flt128>({wMinX, w}, {wMaxX, w});
             }
         };
 
@@ -120,8 +121,8 @@ void Painter::drawWorldAxis(
     {
         setStrokeStyle(255, 255, 255, static_cast<int>(axis_opacity * 255.0));
         setLineWidth(1);
-        strokeLineSharp({wMinX, 0}, {wMaxX, 0});
-        strokeLineSharp({0, wMinY}, {0, wMaxY});
+        strokeLineSharp<flt128>({wMinX, f128(0)}, {wMaxX, f128(0)});
+        strokeLineSharp<flt128>({f128(0), wMinY}, {f128(0), wMaxY});
     }
 
     // ======== Tick marks and labels ========
@@ -139,27 +140,27 @@ void Painter::drawWorldAxis(
         DVec2 standard_txt_size = boundingBox("W").size() / 2.0;
         auto tickPass = [&](bool isX) 
         {
-            const double step = isX ? stepX : stepY;
-            const double coarse = isX ? coarseX : coarseY;
-            const double fade = isX ? fadeX : fadeY;
+            const flt128 step = isX ? stepX : stepY;
+            const flt128 coarse = isX ? coarseX : coarseY;
+            const flt128 fade = isX ? fadeX : fadeY;
             DVec2 perpDir = camera.axisStagePerpDirection(isX);
-            const double wStart = isX ? wMinX : wMinY;
-            const double wEnd = isX ? wMaxX : wMaxY;
+            const flt128 wStart = isX ? wMinX : wMinY;
+            const flt128 wEnd = isX ? wMaxX : wMaxY;
             double txt_sample_angle = isX ? angle : (angle + Math::HALF_PI);
             double txt_size_weight_x = std::abs(std::cos(txt_sample_angle));
             double txt_size_weight_y = std::abs(std::sin(txt_sample_angle));
 
-            for (double w = Math::roundUp(wStart, step); w < wEnd; w += step)
+            for (flt128 w = Math::roundUp(wStart, step); w < wEnd; w += step)
             {
-                if (std::abs(w) < 1e-12) continue;
-                const bool major = std::abs((w / coarse) - std::round(w / coarse)) < 1e-9;
-                const double alphaL = (major ? 1.0 : (1.0 - fade));
+                if (abs(w) < flt128::eps()) continue;
+                const bool major = abs((w / coarse) - round(w / coarse)) < flt128::eps();
+                const flt128 alphaL = major ? flt128{ 1.0 } : (flt128{ 1.0 } - fade);
                 const int aTick = static_cast<int>(axis_opacity * alphaL * 255.0);
                 const int txt_alpha = static_cast<int>(text_opacity * alphaL * 255.0);
 
-                const DVec2 stage_pos = isX ? camera.toStage(w, 0) : camera.toStage(0, w);
+                const DVec2 stage_pos = isX ? camera.toStage<flt128>(w, f128(0)) : camera.toStage<flt128>(f128(0), w);
                 setStrokeStyle(255, 255, 255, aTick);
-                strokeLineSharp({stage_pos - perpDir * tick_length}, {stage_pos + perpDir * tick_length});
+                strokeLineSharp(DVec2{stage_pos - perpDir * tick_length}, DVec2{stage_pos + perpDir * tick_length});
 
                 if (txt_alpha > 0)
                 {
@@ -177,7 +178,7 @@ void Painter::drawWorldAxis(
         tickPass(true);  // x axis
         tickPass(false); // y axis
     }
-
+    
     restore();
     camera.restoreCameraTransform();
 }
@@ -189,7 +190,7 @@ void Canvas::create(double _global_scale)
     #else
     context.vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     #endif
-    setPainterContext(&context);
+    usePainter(&context);
     
     setGlobalScale(_global_scale);
 
@@ -254,6 +255,21 @@ void Canvas::end()
 {
     nvgEndFrame(context.vg);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+bool Canvas::readPixels(std::vector<uint8_t>& out_rgba)
+{
+    if (!fbo || fbo_width <= 0 || fbo_height <= 0) return false;
+    const size_t bytes = (size_t)fbo_width * fbo_height * 4;
+    out_rgba.resize(bytes);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+    glReadPixels(0, 0, fbo_width, fbo_height, GL_RGBA, GL_UNSIGNED_BYTE, out_rgba.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    return true;
 }
 
 BL_END_NS

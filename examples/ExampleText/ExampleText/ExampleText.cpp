@@ -5,7 +5,7 @@ using namespace bl;
 
 /// ─────────────────────── Project ───────────────────────
 
-void ExampleText_Project_Data::populateUI()
+void ExampleText_Project_Data::UI::sidebar()
 {
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
 }
@@ -23,23 +23,28 @@ void ExampleText_Project::projectPrepare(Layout& layout)
 
 /// ─────────────────────── Scene ───────────────────────
 
-void ExampleText_Scene_Data::populateUI()
+void ExampleText_Scene::UI:sidebar()
 {
     if (ImGui::Section("View", true))
     {
-        // imgui camera controls
-        cam_view.populateUI();
+        bl_scoped(cam_view);
+        cam_view.populateUI(); // imgui camera controls
     }
+    
     if (ImGui::Section("Options", true))
     {
+        bl_scoped(transform_coordinates);
+        bl_scoped(scale_lines);
+        bl_scoped(scale_sizes);
+        bl_scoped(scale_text);
+        bl_scoped(rotate_text);
+
         ImGui::Checkbox("Transform coordinates", &transform_coordinates);
         ImGui::Checkbox("Scale Lines", &scale_lines);
         ImGui::Checkbox("Scale Sizes", &scale_sizes);
         ImGui::Checkbox("Scale Text",  &scale_text);
         ImGui::Checkbox("Rotate Text", &rotate_text);
     }
-    //ImGui::Checkbox("option", &option);
-    //ImGui::SliderDouble("value", &value, 0.0, 1.0);
 }
 
 void ExampleText_Scene::sceneStart()

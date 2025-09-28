@@ -70,62 +70,76 @@ struct TypeOps<E[N], void>
     }
 };
 
-template<typename SceneType>
-class Scene_UI
+template<class TargetType, typename T>
+struct __PushGuard
+{
+    const TargetType& target;
+    const T& target_ref;
+    const T& staged_ref;
+
+    __PushGuard(const TargetType& t, const T& v, const T& s) : target(t), target_ref(v), staged_ref(s) {}
+    ~__PushGuard() { target._commit(target_ref, staged_ref); }
+};
+
+template<typename TargetType>
+class VarBufferInterface
 {
 public:
 
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
     std::remove_const_t<T>& _pull(const T& member, bool temp = false, const char* name = nullptr) const
     {
-        return __scene._pull(member, temp, name);
+        return __target._pull(member, temp, name);
     }
 
     template<class T, std::size_t N>
     std::array<std::remove_const_t<T>, N>& _pull(const T(&arr)[N], bool temp = false, const char* name = nullptr) const
     {
-        return __scene._pull(arr, temp, name);
+        return __target._pull(arr, temp, name);
     }
 
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
     std::remove_const_t<T>& _temp_pull(const T& member, bool /*ignored*/ = true, const char* name = nullptr) const
     {
-        return __scene._pull(member, true, name);
+        return __target._pull(member, true, name);
     }
     template<class T, std::size_t N>
     auto& _temp_pull(const T(&arr)[N], bool /*ignored*/ = true, const char* name = nullptr) const
     {
-        return __scene._pull(arr, true, name);
+        return __target._pull(arr, true, name);
     }
 
     // todo: Force a crash/debug break when committing the same member twice before syncing
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
     void _commit(const T& member, const T& staged) const
     {
-        __scene._commit(member, staged);
+        __target._commit(member, staged);
     }
 
     // todo: Force a crash/debug break when committing the same member twice before syncing
     template<class T, std::size_t N>
     void _commit(const T(&member)[N], const std::array<T, N>& staged) const
     {
-        __scene._commit(member, staged);
+        __target._commit(member, staged);
     }
 
     template<class F>
     void _schedule(F&& f) const
     {
-        __scene._schedule(std::forward<F>(f));
+        __target._schedule(std::forward<F>(f));
     }
 
-    const SceneType& __scene;
+    const TargetType& __target;
 
-    Scene_UI(const SceneType* _scene) : __scene(*_scene) {}
-    virtual void populate() = 0;
+    VarBufferInterface(const TargetType* _target) : __target(*_target) {}
+    virtual void sidebar() = 0;
 
-    #define bl_pull(name)       auto& name = _pull(__scene.name, false, #name)
-    #define bl_pull_temp(name)  auto& name = _temp_pull(__scene.name, true, #name)
-    #define bl_push(name)       _commit(__scene.name, name)
+    
+
+    #define bl_pull(name)       auto& name = _pull(__target.name, false, #name)
+    #define bl_pull_temp(name)  auto& name = _temp_pull(__target.name, true, #name)
+    #define bl_push(name)       _commit(__target.name, name)
+    #define bl_scoped(name)     auto& name = _pull(__target.name, false, #name); __PushGuard __push_guard_##name(__target, __target.name, name) 
     #define bl_schedule         _schedule
 };
 
@@ -137,7 +151,7 @@ template<class T> struct is_std_array : std::false_type {};
 template<class U, std::size_t N> struct is_std_array<std::array<U, N>> : std::true_type {};
 template<class T> inline constexpr bool is_std_array_v = is_std_array<T>::value;
 
-template<class SceneT>
+template<class TargetType>
 struct VarBuffer
 {
     VarBuffer() = default;
@@ -219,23 +233,23 @@ struct VarBuffer
 
 
     // post-commit (after UI->Live) task queue
-    using Task = std::function<void(SceneT&)>;
+    using Task = std::function<void(TargetType&)>;
     mutable std::mutex m_tasks;
     mutable std::vector<Task> post_commit_tasks;
 
     template<class F>
     void _schedule(F&& f) const
     {
-        static_assert(std::is_invocable_v<F&, SceneT&>, "_schedule expects a callable(SceneT&)");
+        static_assert(std::is_invocable_v<F&, TargetType&>, "_schedule expects a callable(TargetType&)");
         post_commit_tasks.emplace_back(std::forward<F>(f));
     }
 
-    void run_scheduled_after_ui_to_live()
+    void runScheduledCalls()
     {
         std::vector<Task> tasks;
         tasks.swap(post_commit_tasks);
 
-        SceneT& self = static_cast<SceneT&>(*this);
+        TargetType& self = static_cast<TargetType&>(*this);
         for (auto& task : tasks)
             task(self);
     }

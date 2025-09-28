@@ -149,7 +149,7 @@ function(_apply_root_exe_name target)
 endfunction()
 
 function(_bitloop_set_visibility name value)
-	message(STATUS "Setting ${name} visibility: " ${value})
+	#message(STATUS "Setting ${name} visibility: " ${value})
 	set_property(GLOBAL PROPERTY "BL_PROJECT_VISIBILITY_${name}" "${value}")
 
 	get_property(_is_set GLOBAL PROPERTY "BL_PROJECT_VISIBILITY_${name}" SET)

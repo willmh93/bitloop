@@ -92,7 +92,6 @@ public:
 
     NanoFontInternal(const char* virtual_path)
     {
-        //blPrint("NanoFont() called");
         path = platform()->path(virtual_path);
     }
 
@@ -115,30 +114,9 @@ struct NanoFont : std::shared_ptr<NanoFontInternal>
         : std::shared_ptr<NanoFontInternal>(f)
     {}
 };
-struct BLFontInteral
-{
-
-};
-
-struct BLFont : std::shared_ptr<BLFontInteral>
-{
-    static BLFont create()
-    {
-        return std::make_shared<BLFontInteral>();
-    }
-
-    BLFont(std::shared_ptr<BLFontInteral> f)
-        : std::shared_ptr<BLFontInteral>(f)
-    {}
-};
 
 struct PainterContext
 {
-    int a()
-    {
-        BLFont font = BLFont::create();
-    }
-
     NVGcontext* vg = nullptr;
     double global_scale = 1.0;
 
@@ -172,10 +150,13 @@ protected:
 public:
 
 
-    void setPainterContext(PainterContext* target)
+    void usePainter(PainterContext* target)
     {
         paint_ctx = target;
         vg = target->vg;
+
+        // Necessary? Project should be resetting them each frame anyway
+        setFontSize(target->font_size);
     }
 
     // ======== Context getter/setters ========
@@ -349,13 +330,13 @@ class Painter : private SimplePainter
     friend class Viewport;
 
     double _avgZoom() const {
-        return (fabs(camera.zoomX()) + fabs(camera.zoomY())) * 0.5;
+        return (std::fabs(camera.zoomX()) + std::fabs(camera.zoomY())) * 0.5;
     }
 
-    DVec2 align_full(DVec2 p)              { return DVec2{ floor(p.x), floor(p.y) }; }
-    DVec2 align_full(double px, double py) { return DVec2{ floor(px),  floor(py) }; }
-    DVec2 align_half(DVec2 p)              { return DVec2{ floor(p.x) + 0.5, floor(p.y) + 0.5 }; }
-    DVec2 align_half(double px, double py) { return DVec2{ floor(px)  + 0.5, floor(py)  + 0.5 }; }
+    DVec2 align_full(DVec2 p)              { return DVec2{ std::floor(p.x), std::floor(p.y) }; }
+    DVec2 align_full(double px, double py) { return DVec2{ std::floor(px),  std::floor(py) }; }
+    DVec2 align_half(DVec2 p)              { return DVec2{ std::floor(p.x) + 0.5, std::floor(p.y) + 0.5 }; }
+    DVec2 align_half(double px, double py) { return DVec2{ std::floor(px)  + 0.5, std::floor(py)  + 0.5 }; }
 
     glm::mat3 default_viewport_transform;
     double line_width = 1;
@@ -377,16 +358,19 @@ public:
 
     // ======== Position/Size wrappers (applies only enabled camera transforms) ========
 
-    DVec2 PT(double x, double y)      const { return camera.transform_coordinates ? camera.toStage(x, y) : DVec2{ x, y }; }
-    DVec2 PT(DVec2 p)                 const { return camera.transform_coordinates ? camera.toStage(p.x, p.y) : p; }
-    DQuad QUAD(DQuad q)               const { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
-    DVec2 SIZE(double w, double h)    const { return camera.scale_sizes ? DVec2{w*camera.zoomX(), h* camera.zoomY()} : DVec2{w, h}; }
-    DVec2 SIZE(DVec2 s)               const { return camera.scale_sizes ? DVec2{s.x*camera.zoomX(), s.y*camera.zoomY()} : s; }
-    double SIZE(double radius)        const { return camera.scale_sizes ? (radius*_avgZoom()) : radius; }
+    // if (transform_coordinates)    Input = World (double/flt128),   Output = Stage (double)
+    // if (!transform_coordinates)   Input = Stage (double/flt128),   Output = Stage (double)
 
-    void ROTATE(double r)                { if (r != 0.0) rotate(r); }
-    void TRANSLATE(double x, double y)   { translate(PT(x, y)); }
-    DVec2 TRANSFORMED(double x, double y, double w, double h, double rotation) {
+    template<typename T> DVec2  PT(T x, T y)           const { return camera.transform_coordinates ? camera.toStage<T>(x, y) : DVec2{ (double)x, (double)y }; }
+    template<typename T> DVec2  PT(Vec2<T> p)          const { return camera.transform_coordinates ? camera.toStage<T>(p) : DVec2(p); }
+    template<typename T> DQuad  QUAD(const Quad<T>& q) const { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
+    template<typename T> DVec2  SIZE(T w, T h)         const { return camera.scale_sizes ? Vec2{w*camera.zoomX(), h* camera.zoomY()} : DVec2{ (double)w, (double)h }; }
+    template<typename T> DVec2  SIZE(Vec2<T> s)        const { return camera.scale_sizes ? Vec2{s.x*camera.zoomX(), s.y*camera.zoomY()} : s; }
+    template<typename T> double SIZE(T radius)         const { return camera.scale_sizes ? (radius*_avgZoom()) : radius; }
+
+    template<typename T> void ROTATE(T r)           { if (r != 0.0) rotate(r); }
+    template<typename T> void TRANSLATE(T x, T y)   { translate(PT(x, y)); }
+    template<typename T> DVec2 TRANSFORMED(T x, T y, T w, T h, double rotation) {
         translate(PT(x, y));
         if (rotation != 0.0)
             rotate(rotation);
@@ -407,33 +391,33 @@ public:
 
     // ======== Paths (overrides) ========
 
-    void moveTo(double px, double py)                      { SimplePainter::moveTo(PT(px, py)); }
-    void lineTo(double px, double py)                      { SimplePainter::lineTo(PT(px, py)); }
-    void moveTo(DVec2 p)                                   { SimplePainter::moveTo(PT(p)); }
-    void lineTo(DVec2 p)                                   { SimplePainter::lineTo(PT(p)); }
+    template<typename T> void moveTo(T px, T py)    { SimplePainter::moveTo(PT(px, py)); }
+    template<typename T> void lineTo(T px, T py)    { SimplePainter::lineTo(PT(px, py)); }
+    template<typename T> void moveTo(Vec2<T> p)     { SimplePainter::moveTo(PT(p)); }
+    template<typename T> void lineTo(Vec2<T> p)     { SimplePainter::lineTo(PT(p)); }
 
-    void circle(double cx, double cy, double r)            { SimplePainter::circle(PT(cx, cy), SIZE(r)); }
-    void circle(DVec2 cen, double r)                       { SimplePainter::circle(PT(cen), SIZE(r)); }
-    void ellipse(double x, double y, double rx, double ry) { SimplePainter::ellipse(PT(x, y), SIZE(rx, ry)); }
-    void ellipse(DVec2 cen, DVec2 size)                    { SimplePainter::ellipse(PT(cen), SIZE(size)); }
+    template<typename T> void circle(T cx, T cy, T r)            { SimplePainter::circle(PT(cx, cy), SIZE(r)); }
+    template<typename T> void circle(Vec2<T> cen, T r)           { SimplePainter::circle(PT(cen),    SIZE(r)); }
+    template<typename T> void ellipse(T x, T y, T rx, T ry)      { SimplePainter::ellipse(PT(x, y),  SIZE(rx, ry)); }
+    template<typename T> void ellipse(Vec2<T> cen, Vec2<T> size) { SimplePainter::ellipse(PT(cen),   SIZE(size)); }
 
-    void arc(double cx, double cy, double r, double a0, double a1, PathWinding winding = PathWinding::WINDING_CCW) {
+    template<typename T> void arc(T cx, T cy, T r, T a0, T a1, PathWinding winding = PathWinding::WINDING_CCW) {
         SimplePainter::arc(PT(cx, cy), SIZE(r), a0, a1, winding);
     }
-    void arc(DVec2 cen, double r, double a0, double a1, PathWinding winding = PathWinding::WINDING_CCW) {
+    template<typename T> void arc(DVec2 cen, T r, T a0, T a1, PathWinding winding = PathWinding::WINDING_CCW) {
         SimplePainter::arc(PT(cen), SIZE(r), a0, a1, winding);
     }
-    void arcTo(double x0, double y0, double x1, double y1, double r) {
+    template<typename T> void arcTo(T x0, T y0, T x1, T y1, T r) {
         SimplePainter::arcTo(PT(x0, y0), PT(x1, y1), SIZE(r));
     }
-    void arcTo(DVec2 p0, DVec2 p1, double r) {
+    template<typename T> void arcTo(Vec2<T> p0, Vec2<T> p1, T r) {
         SimplePainter::arcTo(PT(p0), PT(p1), SIZE(r));
     }
 
-    void bezierTo(double x1, double y1, double x2, double y2, double x3, double y3) {
+    template<typename T> void bezierTo(T x1, T y1, T x2, T y2, T x3, T y3) {
         SimplePainter::bezierTo(PT(x1, y1), PT(x2, y2), PT(x3, y3));
     }
-    void quadraticTo(double cx, double cy, double x, double y) {
+    template<typename T> void quadraticTo(T cx, T cy, T x, T y) {
         SimplePainter::quadraticTo(PT(cx, cy), PT(x, y));
     }
 
@@ -445,18 +429,14 @@ public:
         for (size_t i = 1; i < len; i++)
             lineTo(path[i]);
     }
-
-    template<typename PointT, size_t N>
-    void drawPath(const PointT(&path)[N])
+    template<typename PointT, size_t N> void drawPath(const PointT(&path)[N])
     {
         if constexpr (N < 2) return;
         moveTo(path[0]);
         for (size_t i = 1; i < N; ++i)
             lineTo(path[i]);
     }
-
-    template<typename PointT, size_t N>
-    void drawClosedPath(const PointT(&path)[N])
+    template<typename PointT, size_t N> void drawClosedPath(const PointT(&path)[N])
     {
         if constexpr (N < 2) return;
         moveTo(path[0]);
@@ -469,30 +449,30 @@ public:
 
     
 
-    void strokeRect(double x, double y, double w, double h)
+    template<typename T> void strokeRect(T x, T y, T w, T h)
     {
         ScopedTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::strokeRect(0, 0, s.x, s.y);
     }
-    void fillRect(double x, double y, double w, double h)
+    template<typename T> void fillRect(T x, T y, T w, T h)
     {
         ScopedTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::fillRect(0, 0, s.x, s.y);
     }
-    void strokeRoundedRect(double x, double y, double w, double h, double r) {
+    template<typename T> void strokeRoundedRect(T x, T y, T w, T h, T r) {
         ScopedTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::strokeRoundedRect(0, 0, s.x, s.y, SIZE(r));
     }
-    void fillRoundedRect(double x, double y, double w, double h, double r)
+    template<typename T> void fillRoundedRect(T x, T y, T w, T h, T r)
     {
         ScopedTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, camera.rotation());
         SimplePainter::fillRoundedRect(0, 0, s.x, s.y, SIZE(r));
     }
-    void strokeEllipse(double cx, double cy, double rx, double ry)
+    template<typename T> void strokeEllipse(T cx, T cy, T rx, T ry)
     {
         ScopedTransform t(this);
         DVec2 s = TRANSFORMED(cx, cy, rx, ry, camera.rotation());
@@ -500,7 +480,7 @@ public:
         SimplePainter::ellipse(0, 0, s.x, s.y);
         SimplePainter::stroke();
     }
-    void fillEllipse(double cx, double cy, double rx, double ry)
+    template<typename T> void fillEllipse(T cx, T cy, T rx, T ry)
     {
         ScopedTransform t(this);
         DVec2 s = TRANSFORMED(cx, cy, rx, ry, camera.rotation());
@@ -510,19 +490,19 @@ public:
     }
 
     // Overloads
-    template<typename T> void strokeQuad(const Quad<T>& q)                       { beginPath(); drawClosedPath(q._data); stroke(); }
-    template<typename T> void strokeRect(const Rect<T>& r)                       { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    template<typename T> void fillRect(const Rect<T>& r)                         { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    template<typename T> void strokeRoundedRect(const Rect<T>& r, double radius) { strokeRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
-    template<typename T> void fillRoundedRect(const Rect<T>& r, double radius)   { fillRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
-    void strokeEllipse(double cx, double cy, double r)                           { strokeEllipse(cx, cy, r, r); }
-    void fillEllipse(double cx, double cy, double r)                             { fillEllipse(cx, cy, r, r); }
+    template<typename T> void strokeQuad(const Quad<T>& q)                  { beginPath(); drawClosedPath(q._data); stroke(); }
+    template<typename T> void strokeRect(const Rect<T>& r)                  { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void fillRect(const Rect<T>& r)                    { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void strokeRoundedRect(const Rect<T>& r, T radius) { strokeRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
+    template<typename T> void fillRoundedRect(const Rect<T>& r, T radius)   { fillRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
+    template<typename T> void strokeEllipse(T cx, T cy, T r)                { strokeEllipse(cx, cy, r, r); }
+    template<typename T> void fillEllipse(T cx, T cy, T r)                  { fillEllipse(cx, cy, r, r); }
 
-    void drawArrow(DVec2 a, DVec2 b, Color color=Color(255,255,255), double tip_angle=35, double tip_scale=1.0, bool fill_tip=true)
+    template<typename T> void drawArrow(Vec2<T> a, Vec2<T> b, Color color=Color(255,255,255), double tip_angle=35, double tip_scale=1.0, bool fill_tip=true)
     {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
-        double angle = atan2(dy, dx);
+        double angle = std::atan2(dy, dx);
         const double tip_sharp_angle = Math::toRadians(180.0 - tip_angle);// 145.0 * Math::PI / 180.0;
         double arrow_size;// = (line_width * 4) / (camera.scale_lines ? _avgZoom() : 1);
 
@@ -537,10 +517,10 @@ public:
 
         DVec2 c = b - (b - a).normalized() * arrow_size * 0.7;
 
-        double rx1 = b.x + cos(angle + tip_sharp_angle) * arrow_size;
-        double ry1 = b.y + sin(angle + tip_sharp_angle) * arrow_size;
-        double rx2 = b.x + cos(angle - tip_sharp_angle) * arrow_size;
-        double ry2 = b.y + sin(angle - tip_sharp_angle) * arrow_size;
+        double rx1 = b.x + std::cos(angle + tip_sharp_angle) * arrow_size;
+        double ry1 = b.y + std::sin(angle + tip_sharp_angle) * arrow_size;
+        double rx2 = b.x + std::cos(angle - tip_sharp_angle) * arrow_size;
+        double ry2 = b.y + std::sin(angle - tip_sharp_angle) * arrow_size;
 
         if (fill_tip)
         {
@@ -573,22 +553,17 @@ public:
         }
     }
 
-    double arrow_x0 = 0, arrow_y0 = 0;
-    void arrowMoveTo(double px, double py) { arrow_x0 = px; arrow_y0 = py; }
-    void arrowDrawTo(double px, double py, Color color = Color(255, 255, 255)) { drawArrow({ arrow_x0, arrow_y0 }, { px, py }, color); }
-
     // ======== Image ========
 
     //void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) {
     //    SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
     //}
 
-    template<typename T>
-    void drawImage(Image& bmp, Quad<T> q)
+    template<typename T> void drawImage(Image& bmp, Quad<T> q)
     {
-        auto _PT = [&](const DDVec2& p) { return camera.transform_coordinates ? camera.toStage<flt128>(p.x, p.y) : DVec2(p); };
+        //auto _PT = [&](const DDVec2& p) { return camera.transform_coordinates ? camera.toStage<flt128>(p.x, p.y) : DVec2(p); };
 
-        Quad<T> quad = { _PT(q.a), _PT(q.b), _PT(q.c), _PT(q.d) };
+        DQuad quad = { PT(q.a), PT(q.b), PT(q.c), PT(q.d) };
 
         DVec2 a = quad.a;
         DVec2 u = quad.b - quad.a;
@@ -606,9 +581,7 @@ public:
 
         nvgRestore(vg);
     }
-
-    template<typename T>
-    void drawImage(CanvasImageBase<T>& bmp)
+    template<typename T> void drawImage(CanvasImageBase<T>& bmp)
     {
         drawImage(bmp, bmp.worldQuad());
     }
@@ -616,7 +589,7 @@ public:
 
     // ======== Text ========
 
-    void fillText(std::string_view txt, double px, double py)
+    template<typename T> void fillText(std::string_view txt, T px, T py)
     {
         //DVec2 p = PT(px, py);
 
@@ -636,12 +609,11 @@ public:
 
         SimplePainter::fillText(txt, 0, 0);
     }
-
-    void fillText(std::string_view txt, const DVec2& p) {
+    template<typename T> void fillText(std::string_view txt, const Vec2<T>& p) {
         fillText(txt, p.x, p.y);
     }
 
-    [[nodiscard]] DRect boundingBox(std::string_view txt)
+    template<typename T=double> [[nodiscard]] Rect<T> boundingBox(std::string_view txt)
     {
         save();
         resetTransform();
@@ -651,6 +623,7 @@ public:
         return r;
     }
 
+private:
     [[nodiscard]] std::string format_number(double v) {
         char buffer[32];
         double abs_v = std::abs(v);
@@ -669,6 +642,40 @@ public:
         // Trim trailing zeros (both fixed and scientific cases)
         size_t dot_pos = s.find('.');
         if (dot_pos != std::string::npos) {
+            size_t end = s.find_first_of("eE", dot_pos); // handle scientific part separately
+            size_t trim_end = (end == std::string::npos) ? s.size() : end;
+
+            // Trim zeros in the fractional part
+            size_t last_nonzero = s.find_last_not_of('0', trim_end - 1);
+            if (last_nonzero != std::string::npos && s[last_nonzero] == '.') {
+                last_nonzero--; // also remove the decimal point
+            }
+
+            s.erase(last_nonzero + 1, trim_end - last_nonzero - 1);
+        }
+
+        return s;
+    }
+    [[nodiscard]] std::string format_number(flt128 v)
+    {
+        flt128 abs_v = abs(v);
+
+        std::string s;
+        if ((abs_v != f128(0.0) && abs_v < f128(1e-3)) || abs_v >= f128(1e4))
+        {
+            // Use scientific notation
+            s = to_string(abs_v, 5, true);
+        }
+        else {
+            // Use fixed-point
+            s = to_string(abs_v, 5, false);
+        }
+
+
+        // Trim trailing zeros (both fixed and scientific cases)
+        size_t dot_pos = s.find('.');
+        if (dot_pos != std::string::npos)
+        {
             size_t end = s.find_first_of("eE", dot_pos); // handle scientific part separately
             size_t trim_end = (end == std::string::npos) ? s.size() : end;
 
@@ -715,39 +722,34 @@ public:
         return mantissa + exponent;
     }*/
 
-    const float exponent_font_scale = 0.85f;
-    const float exponent_spacing_x = 0.06f;
-    const float exponent_spacing_y = -0.3f;
+    const double exponent_font_scale = 0.85;
+    const double exponent_spacing_x = 0.06;
+    const double exponent_spacing_y = -0.3;
 
-    void fillNumberScientific(double v, DVec2 pos, float fontSize = 12)
+public:
+    template<typename PosT=double, typename ValT> void fillNumberScientific(ValT v, Vec2<PosT> pos, double fontSize = 12)
     {
         std::string txt = format_number(v);
 
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
         {
-            const int  exponent = std::stoi(txt.substr(ePos + 1));
-            std::string mantissa_txt = txt.substr(0, ePos) + "e";// "x10";
+            const int exponent = std::stoi(txt.substr(ePos + 1));
+            std::string mantissa_txt = txt.substr(0, ePos) + "e";
             std::string exponent_txt = std::to_string(exponent);
 
-            //setFont(active_font);
-            //active_font.setPixelSize(fontSize);
-
-            pos.x = floor(pos.x);
-            pos.y = floor(pos.y);
-
-            double mantissaWidth = boundingBox(mantissa_txt).x2 + exponent_spacing_x;
+            double mantissaWidth = boundingBox<PosT>(mantissa_txt).x2 + exponent_spacing_x;
 
             /// todo: Take whatever alignment you're given and adjust right bound
             setTextAlign(TextAlign::ALIGN_CENTER);
             setFontSize(fontSize);
+
+            pos = pos.floored();
             fillTextSharp(mantissa_txt.c_str(), pos);
 
-            pos.x += mantissaWidth/2.0f + (fontSize * exponent_spacing_x);
-            pos.y -= (int)(fontSize * (exponent_font_scale + exponent_spacing_y));
+            pos.x += PosT{ mantissaWidth } / PosT{ 2 } + PosT{ fontSize * exponent_spacing_x };
+            pos.y -= PosT{ fontSize * (exponent_font_scale + exponent_spacing_y) };
 
-            //font.setPixelSize((int)(fontSize * 0.85));
-            //painter->setFont(font);
             setTextAlign(TextAlign::ALIGN_LEFT);
             setFontSize(fontSize * exponent_font_scale);
 
@@ -755,47 +757,30 @@ public:
 
             setFontSize(fontSize);
             setTextAlign(TextAlign::ALIGN_CENTER);
-
-            //font.setPixelSize(fontSize);
-            //painter->setFont(font);
         }
         else
         {
-            //font.setPixelSize(fontSize);
-            //painter->setFont(font);
             setFontSize(fontSize);
             fillTextSharp(txt.c_str(), pos);
         }
     }
-
-    [[nodiscard]] DRect boundingBoxScientific(double v, float fontSize = 12)
+    template<typename PosT=double, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(ValT v, double fontSize = 12)
     {
         std::string txt = format_number(v);
-
 
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
         {
             const int  exponent = std::stoi(txt.substr(ePos + 1));
-            std::string mantissa_txt = txt.substr(0, ePos) + "e";// "x10";
+            std::string mantissa_txt = txt.substr(0, ePos) + "e";
             std::string exponent_txt = std::to_string(exponent);
 
-            //font.setPixelSize(fontSize);
-            //painter->setFont(font);
+            Rect<PosT> mantissaRect = boundingBox<PosT>(mantissa_txt);
+            Rect<PosT> exponentRect = boundingBox<PosT>(exponent_txt);
+            Rect<PosT> ret = mantissaRect;
 
-            DRect mantissaRect = boundingBox(mantissa_txt);
-
-            //font.setPixelSize((int)(fontSize * 0.85));
-            //painter->setFont(font);
-
-            DRect exponentRect = boundingBox(exponent_txt);
-            DRect ret = mantissaRect;
-
-            ret.x2 += exponentRect.width() + (fontSize * exponent_spacing_x);
-            ret.y1 -= (int)(fontSize * (exponent_font_scale + exponent_spacing_y));
-
-            //font.setPixelSize(fontSize);
-            //painter->setFont(font);
+            ret.x2 += exponentRect.width() + PosT{ fontSize * exponent_spacing_x };
+            ret.y1 -= PosT{ fontSize * (exponent_font_scale + exponent_spacing_y) };
 
             return ret;
         }
@@ -805,24 +790,21 @@ public:
         }
     }
 
-   
-
     // ======== Sharp variants ========
 
-    void moveToSharp(double px, double py)  { SimplePainter::moveTo(align_half(PT(px, py))); }
-    void moveToSharp(DVec2 p)               { SimplePainter::moveTo(align_half(PT(p))); }
-    void lineToSharp(double px, double py)  { SimplePainter::lineTo(align_half(PT(px, py))); }
-    void lineToSharp(DVec2 p)               { SimplePainter::lineTo(align_half(PT(p.x, p.y))); }
+    template<typename T> void moveToSharp(T px, T py)  { SimplePainter::moveTo(align_half(PT(px, py))); }
+    template<typename T> void moveToSharp(Vec2<T> p)   { SimplePainter::moveTo(align_half(PT(p))); }
+    template<typename T> void lineToSharp(T px, T py)  { SimplePainter::lineTo(align_half(PT(px, py))); }
+    template<typename T> void lineToSharp(Vec2<T> p)   { SimplePainter::lineTo(align_half(PT(p.x, p.y))); }
 
-    void strokeLine(DVec2 p1, DVec2 p2)
+    template<typename T> void strokeLine(Vec2<T> p1, Vec2<T> p2)
     {
         beginPath();
         moveTo(p1);
         lineTo(p2);
         stroke();
     }
-
-    void strokeLineSharp(DVec2 p1, DVec2 p2)
+    template<typename T> void strokeLineSharp(Vec2<T> p1, Vec2<T> p2)
     {
         beginPath();
         moveToSharp(p1);
@@ -830,7 +812,7 @@ public:
         stroke();
     }
 
-    void fillTextSharp(std::string_view txt, const DVec2& pos)
+    template<typename T> void fillTextSharp(std::string_view txt, Vec2<T> pos)
     {
         SimplePainter::fillText(txt, align_full(PT(pos)));
     }
@@ -844,7 +826,7 @@ public:
 
     // ======== Expose unchanged methods ========
 
-    using SimplePainter::setPainterContext;
+    using SimplePainter::usePainter;
     using SimplePainter::setGlobalScale;
     using SimplePainter::getGlobalScale;
     //
@@ -885,7 +867,19 @@ class Canvas : public SimplePainter
     int fbo_width = 0, fbo_height = 0;
     bool has_fbo = false;
 
+    // The default painter which draws to this canvas
     PainterContext context;
+
+    // Later, individual viewports get given their own Painters for the same canvas.
+    // PainterContext contains the nanovg target and other info to use (line width, font size, etc)
+    // todo: On switch context, auto call all those same base nanovg methods to instantly switch back?
+    // ... like the matrix transform?
+    // or is it because you do process(), process(), process(), then draw(), draw(), draw()
+    // so it doesn't use the correct painter variables if process() modifies the context and draw() hasn't updated nanovg yet
+    // but this bug isn't nanovg, it's the matricies right? So is it necessary to reset them?
+    //
+    // PainterContext exists so that each sim can have it's own resource (e.g. font) placeholder
+    // otherwise overlay will struggle?
 
 public:
 
@@ -900,6 +894,8 @@ public:
     [[nodiscard]] int fboWidth() { return fbo_width; }
     [[nodiscard]] int fboHeight() { return fbo_height; }
     [[nodiscard]] int fboExists() { return has_fbo; }
+
+    bool readPixels(std::vector<uint8_t>& out_rgba);
 };
 
 GLuint loadSVG(const char* path, int outputWidth, int outputHeight);

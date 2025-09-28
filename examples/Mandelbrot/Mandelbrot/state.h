@@ -70,7 +70,7 @@ struct MandelState
         constexpr bool COMPRESS_CONFIG = true;
 
         // Increment version each time the format changes
-        uint32_t version = 0;
+        uint32_t version = 1;
         uint32_t flags = 0;
 
         if (dynamic_iter_lim)           flags |= MANDEL_DYNAMIC_ITERS;
@@ -234,7 +234,8 @@ private:
 
                 // old iter_dist_mix implied 0=full iter, 1=full dist
 
-                iter_weight = 1.0 - info.value("m", iter_weight);
+                
+                iter_weight = 1.0 - info.value("m", iter_weight); // recover new weights from old format
                 dist_weight = info.value("n", 1.0 - iter_weight);
                 stripe_weight = info.value("o", 0.0);
 
@@ -265,8 +266,13 @@ private:
             if (info.contains("p"))
                 gradient.deserialize(info.value("p", ""));
         }
-        else if (version >= 1)
+
+        if (version >= 1)
         {
+            iter_weight = info.value("m", iter_weight);
+            dist_weight = info.value("n", dist_weight);
+            stripe_weight = info.value("o", stripe_weight);
+
             //if (info.contains("A")) x_spline.deserialize(info["A"].get<std::string>());
             //if (info.contains("B")) y_spline.deserialize(info["B"].get<std::string>());
         }

@@ -23,13 +23,39 @@
 #define BL_BEGIN_NS namespace bl {
 #define BL_END_NS   }
 
+namespace bl
+{
+    using std::abs;
+    using std::fabs;
+    using std::floor;
+    using std::ceil;
+    using std::round;
+    using std::sin;
+    using std::cos;
+    using std::tan;
+    using std::atan;
+    using std::atan2;
+    using std::sqrt;
+    using std::pow;
+    using std::exp;
+    using std::log;
+    using std::log2;
+    using std::log10;
+    using std::trunc;
+    using std::remainder;
+    using std::fmod;
+    using std::isnan;
+    using std::isinf;
+
+}
+
 // Extend GLM types for flt128
 
 namespace glm {
-    typedef mat<3, 3, flt128, glm::defaultp>	ddmat3;
-    typedef vec<2, flt128, defaultp>		    ddvec2;
-    typedef vec<3, flt128, defaultp>		    ddvec3;
-    typedef vec<4, flt128, defaultp>		    ddvec4;
+    typedef mat<3, 3, bl::flt128, glm::defaultp>	ddmat3;
+    typedef vec<2, bl::flt128, defaultp>		    ddvec2;
+    typedef vec<3, bl::flt128, defaultp>		    ddvec3;
+    typedef vec<4, bl::flt128, defaultp>		    ddvec4;
 }
 
 BL_BEGIN_NS
@@ -449,8 +475,8 @@ struct Ray : public Vec2<T> // todo: Some methods maybe aren't ideal for inherit
 
     [[nodiscard]] constexpr Vec2<T> project(T dist) const {
         return {
-            Vec2<T>::x + cos(angle) * dist,
-            Vec2<T>::y + sin(angle) * dist,
+            Vec2<T>::x + std::cos(angle) * dist,
+            Vec2<T>::y + std::sin(angle) * dist,
         };
     }
 };
@@ -878,15 +904,10 @@ inline constexpr std::size_t index_of_v = index_of_impl<T, Ts...>::value;
 // ----- lazy machinery to avoid instantiating the "discarded" branch -----
 template<class T> struct type_identity { using type = T; };
 
-template<bool, class Then, class Else>
-struct lazy_cond;
-template<class Then, class Else>
-struct lazy_cond<true, Then, Else> { using type = typename Then::type; };
-template<class Then, class Else>
-struct lazy_cond<false, Then, Else> { using type = typename Else::type; };
-
-template<std::size_t N, class... Ts>
-struct lazy_nth { using type = typename nth_type<N, Ts...>::type; };
+template<bool, class Then, class Else> struct lazy_cond;
+template<class Then, class Else>     struct lazy_cond<true,  Then, Else> { using type = typename Then::type; };
+template<class Then, class Else>     struct lazy_cond<false, Then, Else> { using type = typename Else::type; };
+template<std::size_t N, class... Ts> struct lazy_nth { using type = typename nth_type<N, Ts...>::type; };
 
 // ================= upgrade / downgrade =================
 

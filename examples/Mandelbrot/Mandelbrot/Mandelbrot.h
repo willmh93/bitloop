@@ -13,6 +13,7 @@
 #include "compute.h"
 #include "shading.h"
 #include "tween_splines.h"
+#include "examples.h"
 
 SIM_BEG;
 
@@ -25,8 +26,12 @@ using namespace bl;
 struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 {
     // ──────  Config ──────
-    struct Config {};
-    Mandelbrot_Scene(Config&) {}
+    struct Config { std::string load_example_name; };
+    Mandelbrot_Scene(Config& config) : load_example_name(config.load_example_name) {}
+
+    static inline std::map<std::string, std::string> mandel_presets = generateMandelPresets();
+
+    std::string load_example_name;
 
     // ────── Threads ──────
     static constexpr int MAX_THREADS = 0; // 0 = Use max threads
@@ -118,6 +123,7 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     bool frame_complete = false;  // Similar to finished_compute, but not cleared until next compute starts
     bool first_frame = true;
 
+    // ────── Expensive Interior "forwarding" optimization ──────
     struct {
         int c1 = 1, e1 = 0, c2 = 1, e2 = 0;
     }  interior_phases_contract_expand;
@@ -143,15 +149,25 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
     DDVec2 camera_vel_pos{};
     double camera_vel_zoom{1};
 
+    // ────── Deep Zoom Animation (temporary until timeline feature added) ──────
+    bool steady_zoom = false;
+    flt128 steady_zoom_mult_speed{ 0.01 };
+    int tween_frames_elapsed = 0;
+    int tween_expected_frames = 0;
+    Math::MovingAverage::MA<double> expected_time_left_ma = Math::MovingAverage::MA<double>(5);
+
+
     // ────── User Interface ──────
     struct UI : Interface
     {
         using Interface::Interface;
-        void populate();
+        void sidebar();
 
         bool show_save_dialog = false;
         bool show_load_dialog = false;
         bool show_share_dialog = false;
+
+        std::string url;
 
         #ifdef __EMSCRIPTEN__
         bool opening_load_popup = false;

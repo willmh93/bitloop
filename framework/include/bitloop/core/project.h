@@ -215,6 +215,7 @@ class SceneBase : public ChangeTracker
     mutable size_t dt_process_call_index = 0;
     //size_t dt_draw_call_index = 0;
 
+
 protected:
 
     friend class Viewport;
@@ -316,6 +317,14 @@ public:
 
     [[nodiscard]] double fps(int average_samples = 1) const { return 1000.0 / frame_dt(average_samples); }
 
+    [[nodiscard]] bool isRecording() const;
+    [[nodiscard]] bool capturedLastFrame();
+
+    void beginRecording();
+    void endRecording();
+    void captureFrame(bool b);
+    
+
     ///FRect combinedViewportsRect()
     ///{
     ///    FRect ret{};
@@ -347,7 +356,7 @@ class Scene : public SceneBase, public VarBuffer<SceneType>
 
 public:
 
-    using Interface = Scene_UI<SceneType>;
+    using Interface = VarBufferInterface<SceneType>;
     Interface* ui = nullptr;
 
     Scene() : SceneBase()
@@ -365,12 +374,12 @@ protected:
 
     virtual void _sceneAttributes() override 
     {
-        ui->populate();
+        ui->sidebar();
     }
 
 private:
 
-    void updateLiveBuffers() override final   { VarBuffer<SceneType>::updateLive(); VarBuffer<SceneType>::run_scheduled_after_ui_to_live(); }
+    void updateLiveBuffers() override final   { VarBuffer<SceneType>::updateLive(); VarBuffer<SceneType>::runScheduledCalls(); }
     void updateShadowBuffers() override final { VarBuffer<SceneType>::updateShadow(); }
     void markLiveValues() override final      { VarBuffer<SceneType>::markLiveValue(); }
     void markShadowValues() override final    { VarBuffer<SceneType>::markShadowValue(); }
@@ -584,10 +593,12 @@ protected:
     [[nodiscard]] DVec2 surfaceSize(); // Dimensions of canvas (or FBO if recording)
     void updateViewportRects();
 
-    // -------- Data Buffers --------
-    bool has_var_buffer = false;
+    // -------- Populating Project/Scene ImGui attributes --------
     void _populateAllAttributes();
     virtual void _projectAttributes() {}
+
+    // -------- Data Buffers --------
+    bool has_var_buffer = false;
     virtual void updateProjectLiveBuffer() {}
     virtual void updateProjectShadowBuffer() {}
 
@@ -607,7 +618,6 @@ protected:
         for (SceneBase* scene : viewports.all_scenes)
             scene->updateShadowBuffers();
     }
-
     virtual bool changedLive()
     {
         for (SceneBase* scene : viewports.all_scenes) {
@@ -616,7 +626,6 @@ protected:
         }
         return false;
     }
-
     virtual bool changedShadow()
     {
         for (SceneBase* scene : viewports.all_scenes) {
@@ -625,13 +634,11 @@ protected:
         }
         return false;
     }
-
     virtual void markLiveValues()
     {
         for (SceneBase* scene : viewports.all_scenes)
             scene->markLiveValues();
     }
-
     virtual void markShadowValues()
     {
         for (SceneBase* scene : viewports.all_scenes)
@@ -841,8 +848,9 @@ public:
         return viewports;
     }
 
-    [[nodiscard]] int fboWidth() { return canvas->fboWidth(); }
-    [[nodiscard]] int fboHeight() { return canvas->fboHeight(); }
+    [[nodiscard]] int fboWidth() const { return canvas->fboWidth(); }
+    [[nodiscard]] int fboHeight() const { return canvas->fboHeight(); }
+    [[nodiscard]] bool isRecording() const;
 
     virtual std::vector<std::string> categorize()
     {
@@ -864,49 +872,65 @@ public:
     void logClear();
 };
 
-class Project : public ProjectBase
+template<typename ProjectType>
+class Project : public ProjectBase, public VarBuffer<ProjectType>
 {
     friend class ProjectBase;
 
 public:
 
+    using Interface = VarBufferInterface<ProjectType>;
+    Interface* ui = nullptr;
+
     Project() : ProjectBase()
     {
         has_var_buffer = true;
+        ui = new ProjectType::UI((const ProjectType*)this);
+    }
+
+    ~Project()
+    {
+        delete ui;
+    }
+
+    virtual void _projectAttributes() override
+    {
+        ui->sidebar();
     }
 
 protected:
 
-    /*virtual void _projectAttributes() override
+    void updateLiveBuffers() override final
     {
-        DoubleBuffer<VarBufferType>::shadow_attributes.populateUI();
+        ProjectBase::updateLiveBuffers();
+        VarBuffer<ProjectType>::updateLive();
+        VarBuffer<ProjectType>::runScheduledCalls();
     }
-
-    void updateLiveBuffers() override
+    void updateShadowBuffers() override final
     {
-        ProjectBase::updateLiveBuffers(); // call on Scenes
-        DoubleBuffer<VarBufferType>::updateLiveBuffer();
+        ProjectBase::updateShadowBuffers();
+        VarBuffer<ProjectType>::updateShadow();
     }
-    void updateShadowBuffers() override
+    void markLiveValues() override final
     {
-        ProjectBase::updateShadowBuffers(); // call on Scenes
-        DoubleBuffer<VarBufferType>::updateShadowBuffer();
+        ProjectBase::markLiveValues();
+        VarBuffer<ProjectType>::markLiveValue();
     }
-    void markLiveValues() override
+    void markShadowValues() override final
     {
-        ProjectBase::markLiveValues(); // call on Scenes
-        DoubleBuffer<VarBufferType>::markLiveValues();
+        ProjectBase::markShadowValues();
+        VarBuffer<ProjectType>::markShadowValue();
     }
-    void markShadowValues() override
-    { 
-        ProjectBase::markShadowValues(); // call on Scenes
-        DoubleBuffer<VarBufferType>::markShadowValues();
+    bool changedLive() override final
+    {
+        if (ProjectBase::changedLive()) return true;
+        return VarBuffer<ProjectType>::liveChanged();
     }
-    bool changedShadow() override
-    { 
-        if (ProjectBase::changedShadow()) return true; // call on Scenes
-        return DoubleBuffer<VarBufferType>::changedShadow();
-    }*/
+    bool changedShadow() override final
+    {
+        if (ProjectBase::changedShadow()) return true;
+        return VarBuffer<ProjectType>::shadowChanged();
+    }
 };
 
 typedef ProjectBase BasicProject;

@@ -79,6 +79,9 @@ bool SliderBehavior_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_t
 
 namespace ImGui
 {
+    using bl::flt128;
+    using bl::f128;
+
     struct StartValue { void* initial; int size; };
     static std::unordered_map<void*, StartValue> starting_map;
     static void updatePointerValues()

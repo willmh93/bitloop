@@ -244,8 +244,8 @@ int bitloop_main(int, char* [])
     }
 
     auto _platform_manager = std::make_unique<PlatformManager>(window);
-    auto _project_worker = std::make_unique<ProjectWorker>(shared_sync);
-    auto _main_window = std::make_unique<MainWindow>(shared_sync);
+    auto _main_window      = std::make_unique<MainWindow>(shared_sync);
+    auto _project_worker   = std::make_unique<ProjectWorker>(shared_sync, _main_window->getRecordManager());
 
     // ======== ImGui setup ========
     {

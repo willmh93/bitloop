@@ -785,6 +785,9 @@ static bool SliderBehaviorFloat128(const ImRect& bb, ImGuiID id, flt128* v, flt1
 
 */
 
+using bl::flt128;
+using bl::f128;
+
 static const float DRAG_MOUSE_THRESHOLD_FACTOR = 0.50f;
 
 static inline flt128 ImAbs128(flt128 x) { return x < flt128(0) ? -x : x; }

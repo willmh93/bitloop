@@ -86,20 +86,15 @@ namespace Thread
     template<typename sizeT>
     [[nodiscard]] inline std::pair<sizeT, sizeT> splitRange(sizeT totalSize, sizeT numParts, sizeT blockIndex)
     {
-        // Preconditions (replace with your own error handling if desired)
-        if (numParts == 0)          throw std::invalid_argument("numParts must be > 0");
+        if (numParts == 0) throw std::invalid_argument("numParts must be > 0");
         if (blockIndex >= numParts) throw std::out_of_range("blockIndex out of range");
 
-        const sizeT base = totalSize / numParts;   // size of every block before distributing the remainder
-        const sizeT extra = totalSize % numParts;   // how many blocks get one extra element
+        const sizeT base = totalSize / numParts;
+        const sizeT extra = totalSize % numParts;
 
-        // Blocks [0, extra) have size base + 1. The rest have size base.
         const bool hasExtra = blockIndex < extra;
         const sizeT size = base + (hasExtra ? 1 : 0);
 
-        // Start index is:
-        //   * blockIndex * (base + 1)          for the first 'extra' blocks
-        //   * extra * (base + 1) + (blockIndex - extra) * base  otherwise
         const sizeT start = hasExtra
             ? blockIndex * (base + 1)
             : extra * (base + 1) + (blockIndex - extra) * base;
@@ -111,7 +106,6 @@ namespace Thread
 struct SharedSync
 {
     std::atomic<bool> quitting{ false };
-    //std::atomic<bool> editing_ui{ false };
     std::atomic<bool> updating_live_buffer{ false };
 
     std::mutex live_buffer_mutex;
@@ -122,9 +116,8 @@ struct SharedSync
     std::condition_variable cv_updating_live_buffer;
 
     bool project_thread_started = false;
-    bool frame_ready = false;
+    bool frame_ready_to_draw = false;
     bool frame_consumed = false;
-    
 
     void wait_until_gui_consumes_frame()
     {
@@ -137,7 +130,7 @@ struct SharedSync
     void flag_ready_to_draw()
     {
         std::lock_guard<std::mutex> lock(state_mutex);
-        frame_ready = true;
+        frame_ready_to_draw = true;
         frame_consumed = false;
     }
 

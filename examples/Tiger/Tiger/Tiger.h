@@ -18,14 +18,15 @@ struct Tiger_Scene : public Scene<Tiger_Scene>
     struct Config { 
         // double speed = 10;
     };
+
     Tiger_Scene(Config& info [[maybe_unused]])
-        // : speed(info.speed)  /// Initialize variables below from config
+        // : speed(info.speed)  /// Initialize your Scene variables below from config
     {}
 
     struct UI : Interface
     {
         using Interface::Interface;
-        void populate();
+        void sidebar();
     };
 
     /// ─────── Scene variables ─────── 
@@ -56,11 +57,17 @@ struct Tiger_Scene : public Scene<Tiger_Scene>
 };
 
 
-struct Tiger_Project : public Project
+struct Tiger_Project : public Project<Tiger_Project>
 {
     static ProjectInfo info() {
         return ProjectInfo({ "Tests", "Draw Tiger (vector graphics)" });
     }
+
+    struct UI : Interface
+    {
+        using Interface::Interface;
+        void sidebar();
+    };
 
     int viewport_count = 1;
 

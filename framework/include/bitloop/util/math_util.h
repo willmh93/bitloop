@@ -1,5 +1,4 @@
 #pragma once
-#include <math.h>
 #include <numbers>
 #include <sstream>
 #include <iomanip>
@@ -26,13 +25,13 @@ namespace Math
     constexpr double INV_TWO_PI = 1.0 / TWO_PI;
 
 
-    template<typename T> [[nodiscard]] inline T roundDown(T v, T step) { return std::floor(v / step) * step; }
-    template<typename T> [[nodiscard]] inline T roundUp(T v, T step) { return std::ceil(v / step) * step; }
+    template<typename T> [[nodiscard]] inline T roundDown(T v, T step) { return floor(v / step) * step; }
+    template<typename T> [[nodiscard]] inline T roundUp(T v, T step) { return ceil(v / step) * step; }
     template<typename T> [[nodiscard]] inline bool divisible(T _big, T _small)
     {
         static_assert(bl::is_arithmetic_v<T>, "divisible() only supports arithmetic types");
         if constexpr (bl::is_floating_point_v<T>)
-            return std::abs(std::fmod(_big, _small)) <= std::abs(_small) * (std::numeric_limits<T>::epsilon() * 10);
+            return abs(fmod(_big, _small)) <= abs(_small) * (std::numeric_limits<T>::epsilon() * 10);
         else if constexpr (bl::is_integral_v<T>)
             return _small != 0 && (_big % _small == 0);
         return false;
@@ -151,8 +150,8 @@ namespace Math
     // Coordinate offset rotation
     [[nodiscard]] inline DVec2 rotateOffset(double dx, double dy, double rotation)
     {
-        double _cos = cos(rotation);
-        double _sin = sin(rotation);
+        double _cos = std::cos(rotation);
+        double _sin = std::sin(rotation);
         return {
             (dx * _cos - dy * _sin),
             (dy * _cos + dx * _sin)
@@ -167,8 +166,8 @@ namespace Math
     }
     [[nodiscard]] inline DVec2 rotateOffset(const DVec2& offset, double rotation)
     {
-        double _cos = cos(rotation);
-        double _sin = sin(rotation);
+        double _cos = std::cos(rotation);
+        double _sin = std::sin(rotation);
         return {
             (offset.x * _cos - offset.y * _sin),
             (offset.y * _cos + offset.x * _sin)
@@ -184,8 +183,8 @@ namespace Math
 
     [[nodiscard]] inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
     {
-        double _cos = cos(rotation);
-        double _sin = sin(rotation);
+        double _cos = std::cos(rotation);
+        double _sin = std::sin(rotation);
         return {
             (dx * _cos + dy * _sin),
             (dy * _cos - dx * _sin)
@@ -200,8 +199,8 @@ namespace Math
     }
     [[nodiscard]] inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
     {
-        double _cos = cos(rotation);
-        double _sin = sin(rotation);
+        double _cos = std::cos(rotation);
+        double _sin = std::sin(rotation);
         return {
             (offset.x * _cos + offset.y * _sin),
             (offset.y * _cos - offset.x * _sin)
@@ -243,8 +242,8 @@ namespace Math
     inline bool lineEqIntersect(DVec2* targ, const DRay& ray1, const DRay& ray2, bool bidirectional)
     {
         // Unit direction vectors for each ray
-        double d1x = cos(ray1.angle), d1y = sin(ray1.angle);
-        double d2x = cos(ray2.angle), d2y = sin(ray2.angle);
+        double d1x = std::cos(ray1.angle), d1y = std::sin(ray1.angle);
+        double d2x = std::cos(ray2.angle), d2y = std::sin(ray2.angle);
 
         // Origins
         double x1 = ray1.x, y1 = ray1.y;
@@ -254,7 +253,7 @@ namespace Math
         double denom = d1x * d2y - d1y * d2x;
 
         // Are rays parallel?
-        if (fabs(denom) < 1e-9)
+        if (std::fabs(denom) < 1e-9)
             return false;
 
         // Compute t and u such that:  ray1.origin + t*d1 = ray2.origin + u*d2
@@ -285,8 +284,8 @@ namespace Math
         // DRay origin and direction
         double rx = ray.x;
         double ry = ray.y;
-        double dx = cos(ray.angle);
-        double dy = sin(ray.angle);
+        double dx = std::cos(ray.angle);
+        double dy = std::sin(ray.angle);
 
         // Aaccumulate candidate intersections as (t, point) pairs
         struct IntersectionCandidate
@@ -456,20 +455,20 @@ namespace Math
         template<typename T>
         class MA
         {
-            int ma_count = 0;
-            T sum{};
+            int ma_length = 0;
+
             std::vector<T> samples;
+            T sum{};
 
         public:
-            MA(int ma_count) : ma_count(ma_count)
-            {}
+            MA(int length) : ma_length(length) {}
 
             T push(T v)
             {
                 sum += v;
                 samples.push_back(v);
 
-                if (samples.size() > ma_count)
+                if (samples.size() > ma_length)
                 {
                     sum -= samples[0];
                     samples.erase(samples.begin());
@@ -480,11 +479,11 @@ namespace Math
 
             void clear()
             {
-                sum -= sum; // reset to "null" by cancelling out current value
+                sum = T{};
                 samples.clear();
             }
 
-            [[nodiscard]] T average()
+            [[nodiscard]] T average() const
             {
                 return (sum / (double)samples.size());
             }

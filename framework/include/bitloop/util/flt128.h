@@ -1,8 +1,4 @@
 #pragma once
-///#ifdef _MSC_VER
-///#pragma float_control(precise, off)
-///#endif
-
 #include <cmath>
 #include <limits>
 #include <string>
@@ -11,150 +7,44 @@
 #include <type_traits>
 
 #include <bitloop/platform/platform_macros.h>
+#include <bitloop/core/debug.h>
 
-///
+namespace bl {
 
-BL_PUSH_PRECISE
+#if defined(__FMA__) || defined(__FMA4__) || defined(_MSC_VER) || defined(__clang__) || defined(__GNUC__)
+#define FMA_AVAILABLE 
+#endif
 
-FAST_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e) 
+struct flt128;
+
+constexpr flt128 operator+(const flt128& a, const flt128& b);
+constexpr flt128 operator-(const flt128& a, const flt128& b);
+#ifdef FMA_AVAILABLE
+flt128 operator*(const flt128& a, const flt128& b);
+flt128 operator/(const flt128& a, const flt128& b);
+#else
+constexpr flt128 operator*(const flt128& a, const flt128& b);
+constexpr flt128 operator/(const flt128& a, const flt128& b);
+#endif
+
+struct flt128
 {
-    s = a + b;
-    double bv = s - a;
-    e = (a - (s - bv)) + (b - bv);
-}
-
-FAST_INLINE constexpr void two_prod_precise(double a, double b, double& p, double& err) 
-{
-    constexpr double split = 134217729.0;
-
-    double a_c = a * split;
-    double a_hi = a_c - (a_c - a);
-    double a_lo = a - a_hi;
-
-    double b_c = b * split;
-    double b_hi = b_c - (b_c - b);
-    double b_lo = b - b_hi;
-
-    p = a * b; // rounded product
-    err = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo;
-}
-
-BL_POP_PRECISE
-
-class flt128 {
-public:
     double hi; // leading component
     double lo; // trailing error
-
-    /// ======== Constructors ========
-    /*constexpr flt128() : hi(0.0), lo(0.0) {}
-    constexpr flt128(double x) : hi(x), lo(0.0) {}
-    constexpr flt128(double h, double l) : hi(h), lo(l) {}
-    constexpr flt128(const flt128&) = default;
-    constexpr flt128(flt128&&) = default;*/
-
-    //constexpr flt128& operator=(const flt128&) = default;
-    //constexpr flt128& operator=(flt128&&) = default;
-
-    /// ======== Basic helpers ========
-
-    static FAST_INLINE constexpr flt128 quick_two_sum(double a, double b)
-    {
-        double s = a + b;
-        double err = b - (s - a);
-        return { s, err };
-    }
-
-    friend FAST_INLINE constexpr flt128 recip(flt128 b)
-    {
-        flt128 y = flt128(1.0 / b.hi);
-        flt128 one = flt128(1.0);
-        flt128 e = one - b * y;
-
-        y += y * e;
-        e = one - b * y;
-        y += y * e;
-
-        return y;
-    }
-
-    /// ======== Normalisation (ensure |lo| <= 0.5 ulp(hi)) ========
-    static FAST_INLINE constexpr flt128 renorm(double hi, double lo)
-    {
-        double s, e;
-        two_sum_precise(hi, lo, s, e);
-        return { s, e };
-    }
-
-    /// ======== Arithmetic operators ========
-    friend FAST_INLINE constexpr flt128 operator*(flt128 a, double b)
-    {
-        return a * flt128(b);
-    }
-    friend FAST_INLINE constexpr flt128 operator*(double a, flt128 b)
-    {
-        return flt128(a) * b;
-    }
-    friend FAST_INLINE constexpr flt128 operator+(flt128 a, flt128 b)
-    {
-        double s1, e1;
-        two_sum_precise(a.hi, b.hi, s1, e1);
-        double s2, e2;
-        two_sum_precise(a.lo, b.lo, s2, e2);
-        double lo = e1 + s2;
-        double result_hi, result_lo;
-        two_sum_precise(s1, lo, result_hi, result_lo);
-        result_lo += e2;
-        return renorm(result_hi, result_lo);
-    }
-    friend FAST_INLINE constexpr flt128 operator-(flt128 a, flt128 b)
-    {
-        b.hi = -b.hi;
-        b.lo = -b.lo;
-        return a + b;
-    }
-    friend FAST_INLINE constexpr flt128 operator*(flt128 a, flt128 b)
-    {
-        double p1, e1;
-        two_prod_precise(a.hi, b.hi, p1, e1);
-        e1 += a.hi * b.lo + a.lo * b.hi;
-        return renorm(p1, e1);
-    }
-
-    friend FAST_INLINE constexpr flt128 operator/(flt128 a, flt128 b)
-    {
-        return a * recip(b);
-    }
-
-    /// ======== compound assignments ========
-    FAST_INLINE constexpr flt128& operator+=(flt128 rhs) { *this = *this + rhs; return *this; }
-    FAST_INLINE constexpr flt128& operator-=(flt128 rhs) { *this = *this - rhs; return *this; }
+    
+    #ifdef FMA_AVAILABLE
+    /// FMA versions (not constexpr)
+    FAST_INLINE flt128& operator*=(flt128 rhs) { *this = *this * rhs; return *this; }
+    FAST_INLINE flt128& operator/=(flt128 rhs) { *this = *this / rhs; return *this; }
+    #else
     FAST_INLINE constexpr flt128& operator*=(flt128 rhs) { *this = *this * rhs; return *this; }
     FAST_INLINE constexpr flt128& operator/=(flt128 rhs) { *this = *this / rhs; return *this; }
+    #endif
 
-    /// ======== [sqrt, sin, cos] Dekker/Bailey refinement ========
-    friend FAST_INLINE flt128 sqrt(flt128 a)
-    {
-        double approx = std::sqrt(a.hi);
-        flt128 y(approx);
-        flt128 y_sq = y * y;
-        flt128 r = a - y_sq;
-        flt128 half{ 0.5 };
-        y += r * (half / y);
-        return y;
-    }
-    friend FAST_INLINE flt128 sin(flt128 a)
-    {
-        double s = std::sin(a.hi);
-        double c = std::cos(a.hi);
-        return flt128(s) + flt128(c) * a.lo;
-    }
-    friend FAST_INLINE flt128 cos(flt128 a)
-    {
-        double c = std::cos(a.hi);
-        double s = std::sin(a.hi);
-        return flt128(c) - flt128(s) * a.lo;
-    }
+
+    FAST_INLINE constexpr flt128& operator+=(flt128 rhs) { *this = *this + rhs; return *this; }
+    FAST_INLINE constexpr flt128& operator-=(flt128 rhs) { *this = *this - rhs; return *this; }
+
 
     /// ======== Conversions ========
     explicit constexpr operator double() const { return hi + lo; }
@@ -162,7 +52,7 @@ public:
     explicit constexpr operator int() const { return static_cast<int>(hi + lo); }
 
     constexpr flt128 operator+() const { return *this; }
-    constexpr flt128 operator-() const { return (*this) * -1; }
+    constexpr flt128 operator-() const noexcept { return flt128{ -hi, -lo }; }
 
     /// ======== Utility ========
     static constexpr flt128 eps()
@@ -171,8 +61,12 @@ public:
     }
 };
 
+} // end bl
+
 namespace std
 {
+    using bl::flt128;
+
     template<> struct numeric_limits<flt128>
     {
         static constexpr bool is_specialized = true;
@@ -223,98 +117,226 @@ namespace std
     };
 }
 
+namespace bl {
+
 static constexpr flt128 f128(double x) noexcept { return { x, 0.0 }; }
 
+static constexpr double DD_PI = 3.141592653589793238462643383279502884;
+static constexpr double DD_PI2 = 1.570796326794896619231321691639751442;
+
 // comparisons
-constexpr FAST_INLINE bool operator<(const flt128& a, const flt128& b)  { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
-constexpr FAST_INLINE bool operator>(const flt128& a, const flt128& b)  { return b < a; }
+constexpr FAST_INLINE bool operator <(const flt128& a, const flt128& b) { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
+constexpr FAST_INLINE bool operator >(const flt128& a, const flt128& b) { return b < a; }
 constexpr FAST_INLINE bool operator<=(const flt128& a, const flt128& b) { return (a < b) || (a.hi == b.hi && a.lo == b.lo); }
 constexpr FAST_INLINE bool operator>=(const flt128& a, const flt128& b) { return b <= a; }
 constexpr FAST_INLINE bool operator==(const flt128& a, const flt128& b) { return a.hi == b.hi && a.lo == b.lo; }
 constexpr FAST_INLINE bool operator!=(const flt128& a, const flt128& b) { return !(a == b); }
 
-static constexpr double DD_PI = 3.141592653589793238462643383279502884;
-static constexpr double DD_PI2 = 1.570796326794896619231321691639751442;
+BL_PUSH_PRECISE
+FAST_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e)
+{
+    s = a + b;
+    double bv = s - a;
+    e = (a - (s - bv)) + (b - bv);
+}
+BL_POP_PRECISE
 
-static inline bool is_nan128(const flt128& x) { return std::isnan(x.hi); }
-static inline bool is_inf128(const flt128& x) { return std::isinf(x.hi); }
-static inline bool is_zero128(const flt128& x) { return x.hi == 0.0 && x.lo == 0.0; }
+#ifdef FMA_AVAILABLE
 
-inline flt128 log(const flt128& a)
+static FAST_INLINE double fma1(double a, double b, double c)
+{
+    return std::fma(a, b, c);
+}
+
+FAST_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err)
+{
+    p = a * b;
+    err = fma1(a, b, -p);
+}
+
+#endif
+
+FAST_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p, double& err)
+{
+    constexpr double split = 134217729.0;
+
+    double a_c = a * split;
+    double a_hi = a_c - (a_c - a);
+    double a_lo = a - a_hi;
+
+    double b_c = b * split;
+    double b_hi = b_c - (b_c - b);
+    double b_lo = b - b_hi;
+
+    p = a * b; // rounded product
+    err = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo;
+}
+
+
+/// ======== Helpers ========
+
+FAST_INLINE constexpr flt128 renorm(double hi, double lo)
+{
+    double s, e;
+    two_sum_precise(hi, lo, s, e);
+    return { s, e };
+}
+FAST_INLINE constexpr flt128 quick_two_sum(double a, double b)
+{
+    double s = a + b;
+    double err = b - (s - a);
+    return { s, err };
+}
+FAST_INLINE constexpr flt128 recip(flt128 b)
+{
+    flt128 y = flt128(1.0 / b.hi);
+    flt128 one = flt128(1.0);
+    flt128 e = one - b * y;
+
+    y += y * e;
+    e = one - b * y;
+    y += y * e;
+
+    return y;
+}
+
+/// ======== Arithmetic operators ========
+FAST_INLINE constexpr flt128 operator+(const flt128& a, const flt128& b)
+{
+    double s1, e1;
+    two_sum_precise(a.hi, b.hi, s1, e1);
+    double s2, e2;
+    two_sum_precise(a.lo, b.lo, s2, e2);
+    double lo = e1 + s2;
+    double result_hi, result_lo;
+    two_sum_precise(s1, lo, result_hi, result_lo);
+    result_lo += e2;
+    return renorm(result_hi, result_lo);
+}
+FAST_INLINE constexpr flt128 operator-(const flt128& a, const flt128& b)
+{
+    return operator+(a, flt128{ -b.hi, -b.lo });
+}
+#ifdef FMA_AVAILABLE
+FAST_INLINE           flt128 operator*(const flt128& a, const flt128& b) {
+    double p, e;
+    two_prod_precise_fma(a.hi, b.hi, p, e);
+    e += a.hi * b.lo + a.lo * b.hi;
+    return renorm(p, e);
+}
+FAST_INLINE           flt128 operator/(const flt128& a, const flt128& b) { return a * recip(b); }
+#else
+FAST_INLINE constexpr flt128 operator*(const flt128& a, const flt128& b) {
+    double p, e;
+    two_prod_precise_dekker(a.hi, b.hi, p, e);
+    e += a.hi * b.lo + a.lo * b.hi;
+    return renorm(p, e);
+}
+FAST_INLINE constexpr flt128 operator/(const flt128& a, const flt128& b) { return a * recip(b); }
+#endif
+
+/// 'double' support
+#ifdef FMA_AVAILABLE
+FAST_INLINE           flt128 operator*(const flt128& a, double b) { return a * flt128{ b }; }
+FAST_INLINE           flt128 operator*(double a, const flt128& b) { return flt128{ a } * b; }
+FAST_INLINE           flt128 operator/(const flt128& a, double b) { return a / flt128{ b }; }
+FAST_INLINE           flt128 operator/(double a, const flt128& b) { return flt128{ a } / b; }
+#else
+FAST_INLINE constexpr flt128 operator*(const flt128& a, double b) { return a / flt128{ b }; }
+FAST_INLINE constexpr flt128 operator*(double a, const flt128& b) { return flt128{ a } / b; }
+FAST_INLINE constexpr flt128 operator/(const flt128& a, double b) { return a / flt128{ b }; }
+FAST_INLINE constexpr flt128 operator/(double a, const flt128& b) { return flt128{ a } / b; }
+#endif
+FAST_INLINE constexpr flt128 operator+(const flt128& a, double b) { return a + flt128{ b }; }
+FAST_INLINE constexpr flt128 operator+(double a, const flt128& b) { return flt128{ a } + b; }
+FAST_INLINE constexpr flt128 operator-(const flt128& a, double b) { return a - flt128{ b }; }
+FAST_INLINE constexpr flt128 operator-(double a, const flt128& b) { return flt128{ a } - b; }
+
+FAST_INLINE bool isnan(const flt128& x) { return std::isnan(x.hi); }
+FAST_INLINE bool isinf(const flt128& x) { return std::isinf(x.hi); }
+FAST_INLINE bool iszero(const flt128& x) { return x.hi == 0.0 && x.lo == 0.0; }
+
+FAST_INLINE double log_as_double(float a)
+{
+    return std::log(a);
+}
+FAST_INLINE double log_as_double(double a)
+{
+    return std::log(a);
+}
+FAST_INLINE double log_as_double(flt128 a)
+{
+    return std::log(a.hi) + std::log1p(a.lo / a.hi);
+}
+FAST_INLINE flt128 log(const flt128& a)
 {
     double log_hi = std::log(a.hi); // first guess
     flt128 exp_log_hi(std::exp(log_hi)); // exp(guess)
     flt128 r = (a - exp_log_hi) / exp_log_hi; // (a - e^g) / e^g ≈ error
     return flt128(log_hi) + r; // refined log
 }
-inline double log_as_double(float a)
-{
-    return std::log(a);
-}
-inline double log_as_double(double a)
-{
-    return std::log(a);
-}
-inline double log_as_double(flt128 a)
-{
-    return std::log(a.hi) + std::log1p(a.lo / a.hi);
-}
-inline flt128 log2(const flt128& a)
+FAST_INLINE flt128 log2(const flt128& a)
 {
     constexpr flt128 LOG2_RECIPROCAL(1.442695040888963407359924681001892137); // 1/log(2)
     return log(a) * LOG2_RECIPROCAL;
 }
-inline flt128 log10(const flt128& x)
+FAST_INLINE flt128 log10(const flt128& x)
 {
     // 1 / ln(10) to full-double accuracy
     static constexpr double INV_LN10 = 0.434294481903251827651128918916605082;
     return log(x) * flt128(INV_LN10);   // log(x) already returns float128
 }
-inline flt128 abs(const flt128& a)
+FAST_INLINE flt128 clamp(const flt128& v, const flt128& lo, const flt128& hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+FAST_INLINE flt128 abs(const flt128& a)
 {
     return (a.hi < 0.0) ? -a : a;
 }
-inline flt128 fabs(const flt128& a) 
+FAST_INLINE flt128 fabs(const flt128& a) 
 {
     return (a.hi < 0.0) ? -a : a;
 }
-inline flt128 floor(const flt128& a)
+FAST_INLINE flt128 floor(const flt128& a)
 {
     double f = std::floor(a.hi);
     /*     hi already integral ?  trailing part < 0  →  round one below   */
     if (f == a.hi && a.lo < 0.0) f -= 1.0;
     return { f, 0.0 };
 }
-inline flt128 ceil(const flt128& a)
+FAST_INLINE flt128 ceil(const flt128& a)
 {
     double c = std::ceil(a.hi);
     if (c == a.hi && a.lo > 0.0) c += 1.0;
     return { c, 0.0 };
 }
-inline flt128 trunc(const flt128& a)
+FAST_INLINE flt128 trunc(const flt128& a)
 {
     return (a.hi < 0.0) ? ceil(a) : floor(a);
 }
-inline flt128 round(const flt128& a)
+FAST_INLINE flt128 round(const flt128& a)
 {
     flt128 t = floor(a + flt128(0.5));
     /* halfway cases: round to even like std::round */
     if (((t.hi - a.hi) == 0.5) && (std::fmod(t.hi, 2.0) != 0.0)) t -= flt128(1.0);
     return t;
 }
-inline flt128 fmod(const flt128& x, const flt128& y)
+FAST_INLINE flt128 fmod(const flt128& x, const flt128& y)
 {
     if (y.hi == 0.0 && y.lo == 0.0)
         return std::numeric_limits<flt128>::quiet_NaN();
     return x - trunc(x / y) * y;
 }
-inline flt128 remainder(const flt128& x, const flt128& y)
+FAST_INLINE flt128 remainder(const flt128& x, const flt128& y)
 {
     // Domain checks (match std::remainder)
-    if (is_nan128(x) || is_nan128(y)) return std::numeric_limits<flt128>::quiet_NaN();
-    if (is_zero128(y))                return std::numeric_limits<flt128>::quiet_NaN();
-    if (is_inf128(x))                 return std::numeric_limits<flt128>::quiet_NaN();
-    if (is_inf128(y))                 return x; // remainder(x, ±inf) = x
+    if (isnan(x) || isnan(y)) return std::numeric_limits<flt128>::quiet_NaN();
+    if (iszero(y))            return std::numeric_limits<flt128>::quiet_NaN();
+    if (isinf(x))             return std::numeric_limits<flt128>::quiet_NaN();
+    if (isinf(y))             return x;
 
     // n = nearest integer to q = x/y, ties to even
     const flt128 q = x / y;
@@ -336,7 +358,7 @@ inline flt128 remainder(const flt128& x, const flt128& y)
     flt128 r = x - n * y;
 
     // If result is zero, sign should match x (std::remainder semantics)
-    if (is_zero128(r))
+    if (iszero(r))
         return flt128(std::signbit(x.hi) ? -0.0 : 0.0);
 
     return r;
@@ -344,18 +366,89 @@ inline flt128 remainder(const flt128& x, const flt128& y)
 
 /*------------ transcendentals -------------------------------------------*/
 
-inline flt128 tan(const flt128& a) { return sin(a) / cos(a); }
-inline flt128 exp(const flt128& a)
+#ifdef FMA_AVAILABLE
+FAST_INLINE flt128 sqrt(flt128 a)
 {
-    /*  exp(a.hi + a.lo) ≈ exp(a.hi) * (1 + a.lo)   (|a.lo| < 1 ulp)  */
+    double approx = std::sqrt(a.hi);
+    flt128 y{ approx };
+    flt128 y_sq = y * y;
+    flt128 r = a - y_sq;
+    flt128 half{ 0.5 };
+    // y = y + r*(0.5/y)
+    double t = 0.5 / y.hi;
+    // fold hi updates with fma; lo correction comes via renorm in ops
+    y.hi = fma1(r.hi, t, y.hi);
+    // keep the original structure for lo through normal ops
+    return y;
+}
+FAST_INLINE flt128 sin(flt128 a)
+{
+    double s = std::sin(a.hi);
+    double c = std::cos(a.hi);
+    // s + c * a.lo with single rounding in the leading component
+    double hi = fma1(c, a.lo, s);
+    return flt128(hi); // trailing error is small; DD normalize occurs in ops
+}
+FAST_INLINE flt128 cos(flt128 a)
+{
+    double c = std::cos(a.hi);
+    double s = std::sin(a.hi);
+    double hi = fma1(-s, a.lo, c); // c - s * a.lo
+    return flt128(hi);
+}
+FAST_INLINE flt128 exp(const flt128& a)
+{
+    double yh = std::exp(a.hi);
+    double hi = fma1(yh, a.lo, yh); // yh*(1 + a.lo)
+    return flt128{ hi };
+}
+FAST_INLINE flt128 atan2(const flt128& y, const flt128& x)
+{
+    if (x.hi == 0.0 && x.lo == 0.0) {
+        if (y.hi == 0.0 && y.lo == 0.0) return flt128(std::numeric_limits<double>::quiet_NaN());
+        return (y.hi > 0.0 || (y.hi == 0.0 && y.lo > 0.0)) ? flt128(DD_PI2) : flt128(-DD_PI2);
+    }
+    flt128 v{ std::atan2(y.hi, x.hi) };
+    flt128 sv = sin(v);
+    flt128 cv = cos(v);
+
+    double f_hi = fma1(x.hi, (double)sv, -(y.hi * (double)cv)); // f = x*sv - y*cv
+    double fp_hi = fma1(x.hi, (double)cv, (y.hi * (double)sv)); // fp = x*cv + y*sv
+
+    flt128 f{ f_hi }, fp{ fp_hi };
+    v = v - f / fp;
+    return v;
+}
+#else
+FAST_INLINE flt128 sqrt(flt128 a)
+{
+    double approx = std::sqrt(a.hi);
+    flt128 y{ approx };
+    flt128 y_sq = y * y;
+    flt128 r = a - y_sq;
+    flt128 half{ 0.5 };
+    y += r * (half / y);
+    return y;
+}
+FAST_INLINE flt128 sin(flt128 a)
+{
+    double s = std::sin(a.hi);
+    double c = std::cos(a.hi);
+    return flt128{ s } + flt128{ c } * a.lo;
+}
+FAST_INLINE flt128 cos(flt128 a)
+{
+    double c = std::cos(a.hi);
+    double s = std::sin(a.hi);
+    return flt128{ c } - flt128{ s } * a.lo;
+}
+FAST_INLINE flt128 exp(const flt128& a)
+{
+    //  exp(a.hi + a.lo) ≈ exp(a.hi) * (1 + a.lo)   (|a.lo| < 1 ulp) 
     flt128 y(std::exp(a.hi));
     return y * (flt128(1.0) + f128(a.lo));
 }
-inline flt128 pow(const flt128& x, const flt128& y) { return exp(y * log(x)); }
-
-/*------------ atan/atan2 --------------------------------------------------*/
-
-inline flt128 atan2(const flt128& y, const flt128& x)
+FAST_INLINE flt128 atan2(const flt128& y, const flt128& x)
 {
     /*  Special cases first (match IEEE / std::atan2)  */
     if (x.hi == 0.0 && x.lo == 0.0) {
@@ -377,140 +470,28 @@ inline flt128 atan2(const flt128& y, const flt128& x)
 
     return v;
 }
-inline flt128 atan(const flt128& x) { return atan2(x, flt128(1.0)); }
+#endif
+
+FAST_INLINE flt128 tan(const flt128& a) { return sin(a) / cos(a); }
+FAST_INLINE flt128 pow(const flt128& x, const flt128& y) { return exp(y * log(x)); }
+FAST_INLINE flt128 atan(const flt128& x) { return atan2(x, flt128(1.0)); }
 
 /*------------ printing --------------------------------------------------*/
 
 
-/*inline std::string to_string(const flt128& x)
-{
-    if (x.hi == 0.0 && x.lo == 0.0)
-        return "0";
-
-    flt128 v = x;
-    bool neg = false;
-    if (v.hi < 0) { neg = true; v.hi = -v.hi; v.lo = -v.lo; }
-
-    // estimate decimal exponent
-    int exp10 = static_cast<int>(std::floor(std::log10(v.hi)));
-    flt128 scale = std::pow(10.0, -exp10);
-    v *= scale; // normalized to [1,10)
-
-    constexpr int max_digits = 32; // double-double: ~106 bits ≈ 31–32 decimal digits
-
-    std::string digits;
-    digits.reserve(max_digits);
-    for (int i = 0; i < max_digits; ++i) {
-        int d = static_cast<int>(v.hi);
-        digits.push_back(static_cast<char>('0' + d));
-        v -= flt128(d);
-        v *= 10.0;
-    }
-
-    int pointPos = exp10 + 1;
-    std::string s;
-    if (neg) s.push_back('-');
-
-    if (pointPos <= 0) {
-        s += "0.";
-        s.append(-pointPos, '0');
-        s += digits;
-    }
-    else if (pointPos >= (int)digits.size()) {
-        s += digits;
-        s.append(pointPos - (int)digits.size(), '0');
-    }
-    else {
-        s.append(digits.begin(), digits.begin() + pointPos);
-        s.push_back('.');
-        s.append(digits.begin() + pointPos, digits.end());
-    }
-
-    return s;
-}*/
-
-/*
-inline std::ostream& operator<<(std::ostream& os, const flt128& x)
-{
-    // Special cases
-    //if (x.hi == 0.0)
-    //    return os << "0";
-
-    flt128 v = x;
-    bool neg = false;
-    if (v.hi < 0.0) { neg = true; v.hi = -v.hi; v.lo = -v.lo; }
-
-    // get precision from the stream
-    std::streamsize prec = os.precision();
-    if (prec <= 0) prec = 6; // C++ default
-
-    // scale into [1,10) and get exponent
-    int exp10 = static_cast<int>(std::floor(std::log10(v.hi)));
-    flt128 scale = std::pow(10.0, -exp10);
-    v *= scale;
-
-    std::string digits;
-    digits.reserve(prec + 1);
-
-    for (int i = 0; i < prec; ++i) {
-        int d = static_cast<int>(v.hi);
-        digits.push_back(char('0' + d));
-        v -= flt128(d);
-        v *= 10.0;
-    }
-
-    // Decide format: fixed vs scientific
-    std::ios_base::fmtflags f = os.flags();
-    bool fixed = (f & std::ios_base::fixed) != 0;
-    bool scientific = (f & std::ios_base::scientific) != 0;
-
-    if (fixed && !scientific)
-    {
-        // fixed: put decimal point after first digit + all others
-        os << (neg ? "-" : "");
-        os << digits[0];
-        if (prec > 1) {
-            os << ".";
-            os.write(&digits[1], prec - 1);
-        }
-        // scale back exponent if != 0
-        if (exp10 != 0)
-            os << "e" << exp10;
-    }
-    else
-    {
-        // default or scientific: one digit then '.' then rest + 'e'
-        os << (neg ? "-" : "");
-        os << digits[0];
-        if (prec > 1) {
-            os << ".";
-            os.write(&digits[1], prec - 1);
-        }
-        os << "e" << exp10;
-    }
-
-    return os;
-}
-
-*/
-
-// ---------- helpers (safe, no long double) ----------
-static inline flt128 abs128(flt128 x) { return x < flt128(0) ? -x : x; }
-
-static inline flt128 pow10_128(int k)
+static FAST_INLINE flt128 pow10_128(int k)
 {
     flt128 r = flt128(1), ten = flt128(10);
     int n = (k >= 0) ? k : -k;
     for (int i = 0; i < n; ++i) r = r * ten;
     return (k >= 0) ? r : (flt128(1) / r);
 }
-
-// x = m * 10^exp10 with m in [1,10)   (seed from binary exponent, then correct)
-static inline void normalize10(const flt128& x, flt128& m, int& exp10)
+static FAST_INLINE void normalize10(const flt128& x, flt128& m, int& exp10)
 {
+    // x = m * 10^exp10 with m in [1,10)   (seed from binary exponent, then correct)
     if (x.hi == 0.0) { m = flt128(0); exp10 = 0; return; }
 
-    flt128 ax = abs128(x);
+    flt128 ax = abs(x);
 
     int e2 = 0;
     (void)std::frexp(ax.hi, &e2);             // ax.hi = f * 2^(e2-1)
@@ -522,8 +503,7 @@ static inline void normalize10(const flt128& x, flt128& m, int& exp10)
     exp10 = e10;
 }
 
-// ---------- digit emitters using flt128::floor to avoid negative-digit artifacts ----------
-static inline void emit_scientific(std::ostream& os, const flt128& x, std::streamsize prec)
+static FAST_INLINE void emit_scientific(std::ostream& os, const flt128& x, std::streamsize prec)
 {
     if (x.hi == 0.0) { os << "0"; return; }
 
@@ -533,7 +513,7 @@ static inline void emit_scientific(std::ostream& os, const flt128& x, std::strea
     flt128 m; int e;
     normalize10(v, m, e);                 // m in [1,10)
 
-    const flt128 ten = flt128(10);
+    constexpr flt128 ten = flt128(10);
 
     // first digit
     int d0 = (int)floor(m).hi;            // safe 0..9
@@ -542,10 +522,13 @@ static inline void emit_scientific(std::ostream& os, const flt128& x, std::strea
     if (neg) os.put('-');
     os.put(char('0' + d0));
 
-    if (prec > 1) {
+    if (prec > 1)
+    {
         os.put('.');
-        for (int i = 0; i < prec - 1; ++i) {
+        for (int i = 0; i < prec - 1; ++i)
+        {
             frac = frac * ten;
+
             // next digit = floor(frac) (handles tiny negative drift)
             int di = (int)floor(frac).hi;
             if (di < 0) di = 0; if (di > 9) di = 9;
@@ -558,78 +541,122 @@ static inline void emit_scientific(std::ostream& os, const flt128& x, std::strea
     os << e;
 }
 
-static inline void emit_fixed(std::ostream& os, const flt128& x, std::streamsize prec)
-{
-    // true fixed: integer '.' fractional(prec)
-    bool neg = (x.hi < 0.0);
-    flt128 v = neg ? flt128(-x.hi, -x.lo) : x;
-    const flt128 ten = flt128(10);
+// round x to an integer at scale = 10^prec (ties-to-even)
+static inline bl::flt128 round_scaled(bl::flt128 x, int prec) noexcept {
+    if (prec <= 0) return x;
+    const bl::flt128 scale = pow10_128(prec);
+    bl::flt128 y = x * scale;
 
-    // integer part via repeated div-by-10 using floor (robust with dd)
-    std::string int_rev;
-    flt128 t = v;
-    if (t < flt128(1)) {
-        int_rev.push_back('0');
+    bl::flt128 n = floor(y);          // integer below
+    bl::flt128 f = y - n;             // fraction in [0,1)
+
+    const bl::flt128 half(0.5);
+    bool tie = (f == half);
+    if (f > half || (tie && fmod(n, bl::flt128(2)) != bl::flt128(0)))
+        n = n + bl::flt128(1);
+
+    return n; // integer at the scaled grid
+}
+
+// emit integer 'n' (n >= 0) in base-10 into buffer (reversed)
+static inline void emit_uint_rev(std::string& out, bl::flt128 n) {
+    const bl::flt128 ten(10);
+    if (n < bl::flt128(10)) {
+        out.push_back(char('0' + int(floor(n).hi)));
+        return;
+    }
+    while (n >= bl::flt128(10)) {
+        bl::flt128 q = floor(n / ten);
+        bl::flt128 r = n - q * ten;                 // exact digit 0..9
+        int d = (int)floor(r).hi;
+        out.push_back(char('0' + d));
+        n = q;
+    }
+    out.push_back(char('0' + int(floor(n).hi)));
+}
+
+// print x with exactly 'prec' decimals after rounding to grid.
+// if strip_trailing_zeros==true, remove trailing zeros in the fraction
+// and drop the '.' if nothing remains. Guarantees "-0" -> "0".
+static inline void emit_fixed_dec(std::ostream& os,
+    bl::flt128 x,
+    int prec,
+    bool strip_trailing_zeros)
+{
+    // handle sign and -0
+    bool neg = (x.hi < 0.0);
+    if (neg) x = bl::flt128(-x.hi, -x.lo);
+
+    // scale-and-round to an integer
+    bl::flt128 n = round_scaled(x, prec); // integer at 10^prec grid
+
+    // split into integer/fractional by decimal placement
+    // we emit all digits of n, then insert dot prec-from-right
+    std::string rev; rev.reserve(64);
+    emit_uint_rev(rev, n); // digits in reverse order
+
+    // ensure we have at least prec+1 digits to place the dot
+    if (prec > 0 && (int)rev.size() <= prec) {
+        // pad leading zeros on the left of integer part
+        int need = prec + 1 - (int)rev.size();
+        rev.append(need, '0');
+    }
+
+    // build forward string
+    std::string s; s.reserve(rev.size() + 2);
+    if (neg) s.push_back('-');
+
+    if (prec <= 0) {
+        // just the integer
+        for (auto it = rev.rbegin(); it != rev.rend(); ++it) s.push_back(*it);
     }
     else {
-        while (t >= flt128(1)) {
-            flt128 q = floor(t / ten);           // q = floor(t/10)
-            flt128 r = t - q * ten;              // r in [0,10)
-            int d = (int)floor(r).hi;            // digit 0..9
-            if (d < 0) d = 0; if (d > 9) d = 9;
-            int_rev.push_back(char('0' + d));
-            t = q;
+        // integer part: everything beyond last 'prec' digits
+        int total = (int)rev.size();
+
+        // write integer part
+        for (int i = total - 1; i >= prec; --i) s.push_back(rev[i]);
+
+        // decimal point + fractional part
+        s.push_back('.');
+        for (int i = prec - 1; i >= 0; --i) s.push_back(rev[i]);
+
+        if (strip_trailing_zeros) {
+            // strip trailing zeros in fraction
+            int end = (int)s.size() - 1;
+            while (end >= 0 && s[end] == '0') --end;
+
+            if (end >= 0 && s[end] == '.') {
+                // remove '.' too
+                --end;
+            }
+
+            s.resize(size_t(std::max(end + 1, neg ? 1 : 0)));
+            // if all digits stripped after '-', ensure we still have at least "0"
+            if (s.empty() || (neg && s.size() == 1))
+                s = neg ? "-0" : "0";
         }
     }
 
-    if (neg) os.put('-');
-    for (auto it = int_rev.rbegin(); it != int_rev.rend(); ++it) os.put(*it);
+    // normalize "-0" to "0"
+    if (s == "-0") s = "0";
 
-    if (prec > 0) {
-        os.put('.');
-        // frac = v - integer_value (recompute exactly from digits)
-        flt128 int_val = flt128(0);
-        for (auto it = int_rev.rbegin(); it != int_rev.rend(); ++it)
-            int_val = int_val * ten + flt128(*it - '0');
-        flt128 frac = v - int_val;
-
-        for (int i = 0; i < prec; ++i) {
-            frac = frac * ten;
-            int di = (int)floor(frac).hi;        // digit 0..9 (handles tiny negatives)
-            if (di < 0) di = 0; if (di > 9) di = 9;
-            os.put(char('0' + di));
-            frac = frac - flt128(di);
-        }
-    }
+    os << s;
 }
 
 // ---------- the ostream operator (uses stream flags/precision) ----------
-inline std::ostream& operator<<(std::ostream& os, const flt128& x)
-{
-    std::streamsize prec = os.precision();
-    if (prec <= 0) prec = 6;
 
-    const auto f = os.flags();
-    const bool fixed = (f & std::ios_base::fixed) != 0;
-    const bool scientific = (f & std::ios_base::scientific) != 0;
-
-    if (fixed && !scientific)
-        emit_fixed(os, x, prec);
-    else
-        emit_scientific(os, x, prec);
-
-    return os;
-}
-
-
-static inline std::string to_string(const flt128& x, int precision)
+static inline std::string to_string(const flt128& x, int precision, bool scientific=true)
 {
     std::stringstream ss;
-    emit_scientific(ss, x, precision);
+    if (scientific)
+        emit_scientific(ss, x, precision);
+    else
+        emit_fixed_dec(ss, x, precision, true);
+
     return ss.str();
 }
-
-static inline bool parse_flt128(const char* s, flt128& out, const char** endptr = nullptr)
+static inline bool   parse_flt128(const char* s, flt128& out, const char** endptr = nullptr)
 {
     const char* p = s;
 
@@ -761,7 +788,6 @@ static inline bool parse_flt128(const char* s, flt128& out, const char** endptr 
     if (endptr) *endptr = p;
     return true;
 }
-
 static inline flt128 from_string(const char* s)
 {
     flt128 ret;
@@ -769,3 +795,22 @@ static inline flt128 from_string(const char* s)
         return ret;
     return flt128{ 0 };
 }
+
+inline std::ostream& operator<<(std::ostream& os, const flt128& x)
+{
+    int prec = (int)os.precision();
+    if (prec <= 0) prec = 6;
+
+    const auto f = os.flags();
+    const bool fixed = (f & std::ios_base::fixed) != 0;
+    const bool scientific = (f & std::ios_base::scientific) != 0;
+
+    if (fixed && !scientific)
+        emit_fixed_dec(os, x, prec, true);
+    else
+        emit_scientific(os, x, prec);
+
+    return os;
+}
+
+} // end bl

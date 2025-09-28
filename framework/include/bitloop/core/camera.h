@@ -41,37 +41,46 @@ struct FingerInfo
     double y;
 };
 
+template<class T> concept is_f32 = std::is_same_v<T, float>;
+template<class T> concept is_f64 = std::is_same_v<T, double>;
+template<class T> concept is_f128 = std::is_same_v<T, flt128>;
+
 class Camera
 {
+
     friend class Painter;
     friend class ProjectBase;
     friend class Viewport;
 
-    union {
-        struct { flt128 cam_x; flt128 cam_y; };
-        Vec2<flt128> cam_pos{};
-    };
+    // ────── world <-> stage (128 bit versions - single souce of truth) ──────
+    union { struct { flt128 cam_x;  flt128 cam_y; };  Vec2<flt128> cam_pos{}; };
+    union { struct { flt128 zoom_x; flt128 zoom_y; }; Vec2<flt128> cam_zoom{ f128(1), f128(1) }; };
+    glm::ddmat3 m128 = glm::ddmat3(f128(1.0));
+    glm::ddmat3 inv_m128 = glm::ddmat3(f128(1.0));
+    flt128 cos_128 = f128(1.0);
+    flt128 sin_128 = f128(0.0);
 
-    union {
-        struct { flt128 zoom_x; flt128 zoom_y; };
-        Vec2<flt128> cam_zoom{ flt128{1.0, 0}, flt128{1.0, 0.0} };
-    };
-
+    // ────── world <-> stage (cached 64-bit versions for performance) ──────
+    union { struct { double cam_x_64;  double cam_y_64;  }; DVec2 cam_pos_64{}; };
+    union { struct { double zoom_x_64; double zoom_y_64; }; DVec2 cam_zoom_64{ 1.0, 1.0 }; };
+    glm::dmat3 m64 = glm::dmat3(1.0);
+    glm::dmat3 inv_m64 = glm::dmat3(1.0);
+    double cos_64 = 1.0;
+    double sin_64 = 0.0;
 
     double cam_rotation = 0;
     double pan_x = 0;
     double pan_y = 0;
-
     double focal_anchor_x = 0.0;
     double focal_anchor_y = 0.0;
 
-    // ======== Zoom/focus attributes ========
+    // ────── zoom/focus attributes ──────
     flt128 ref_zoom_x = f128(1);
     flt128 ref_zoom_y = f128(1);
     flt128 min_zoom = f128(-1e+300); // Relative to "focused" rect
     flt128 max_zoom = f128(1e+300); // Relative to "focused" rect
 
-    // ======== Pan attributes ========
+    // ────── Pan attributes ──────
     int    pan_down_touch_x = 0;
     int    pan_down_touch_y = 0;
     double pan_down_touch_dist = 0;
@@ -89,7 +98,7 @@ class Camera
     bool panning = false;
     bool direct_cam_panning = true;
 
-protected:
+//protected:
 
     Viewport* viewport = nullptr;
     double viewport_w = 0;
@@ -116,16 +125,6 @@ public:
     static inline Camera* active = nullptr;
 
 public:
-
-    // world --> stage matrix
-    glm::dmat3 m64 = glm::dmat3(1.0);
-    glm::dmat3 inv_m64 = glm::dmat3(1.0);
-
-    glm::ddmat3 m128 = glm::ddmat3(f128(1.0));
-    glm::ddmat3 inv_m128 = glm::ddmat3(f128(1.0));
-
-    double cos_64 = 1.0, sin_64 = 0.0;
-    flt128 cos_128 = f128(1.0), sin_128 = f128(0.0);
 
     void ddResetTransform()                 { m128 = glm::ddmat3(f128(1.0)); }
     void ddTranslate(flt128 tx, flt128 ty)  { m128 = m128 * glm_ddtranslate(tx, ty); }
@@ -158,11 +157,15 @@ public:
         inv_m128 = glm::inverse(m128);
         inv_m64  = glm::inverse(m64);
 
+        // Cached values
+        cam_pos_64 = static_cast<DVec2>(cam_pos);
+        cam_zoom_64 = static_cast<DVec2>(cam_zoom);
+
         cos_128 =  m128[0][0] / zoom_x;
         sin_128 = -m128[1][0] / zoom_x;
 
-        cos_64 =  m64[0][0] / (double)zoom_x;
-        sin_64 = -m64[1][0] / (double)zoom_x;
+        cos_64 =  m64[0][0] / zoom_x_64;
+        sin_64 = -m64[1][0] / zoom_x_64;
     }
 
     void worldTransform();
@@ -184,121 +187,80 @@ public:
     constexpr double viewportWidth() const { return viewport_w; }
     constexpr double viewportHeight() const { return viewport_h; }
 
-    void setCameraStageSnappingSize(int stage_pixels) {
-        cam_pos_stage_snap_size = stage_pixels;
-    }
+    [[nodiscard]] constexpr bool   isPanning()  const   { return panning; }
+    [[nodiscard]] constexpr double panX()       const   { return (double)pan_x; }
+    [[nodiscard]] constexpr double panY()       const   { return (double)pan_y; }
+    [[nodiscard]] constexpr double rotation()   const   { return cam_rotation; }
 
-    // f128
-    bool setX(flt128 _x)               { if (cam_x  != _x)                      { cam_x = _x;                updateCameraMatrix(); return true; } return false; }
-    bool setY(flt128 _y)               { if (cam_y  != _y)                      { cam_y = _y;                updateCameraMatrix(); return true; } return false; }
-    bool setZoomX(flt128 zx)           { if (zoom_x != zx)                      { zoom_x = zx;               updateCameraMatrix(); return true; } return false; }
-    bool setZoomY(flt128 zy)           { if (zoom_y != zy)                      { zoom_y = zy;               updateCameraMatrix(); return true; } return false; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] constexpr double x() const { return cam_x_64; }
+    template<class T>          requires is_f128<T> [[nodiscard]] constexpr flt128 x() const { return cam_x; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] constexpr double y() const { return cam_y_64; }
+    template<class T>          requires is_f128<T> [[nodiscard]] constexpr flt128 y() const { return cam_y; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] constexpr DVec2  pos() const { return cam_pos_64; }
+    template<class T>          requires is_f128<T> [[nodiscard]] constexpr DDVec2 pos() const { return cam_pos; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] constexpr DVec2  zoom() const { return cam_zoom_64; }
+    template<class T>          requires is_f128<T> [[nodiscard]] constexpr DDVec2 zoom() const { return cam_zoom; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] constexpr double zoomX() const { return zoom_x_64; }
+    template<class T>          requires is_f128<T> [[nodiscard]] constexpr flt128 zoomX() const { return zoom_x; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] constexpr double zoomY() const { return zoom_y_64; }
+    template<class T>          requires is_f128<T> [[nodiscard]] constexpr flt128 zoomY() const { return zoom_y; }
+
+    //void setCameraStageSnappingSize(int stage_pixels) { cam_pos_stage_snap_size = stage_pixels; } // todo: Unstable at deep flt128 zooms while panning
+
+    // ────── f128 setters ──────
+    bool setX(flt128 _x)               { if (cam_x  != _x)  { cam_x = _x;    updateCameraMatrix(); return true; } return false; }
+    bool setY(flt128 _y)               { if (cam_y  != _y)  { cam_y = _y;    updateCameraMatrix(); return true; } return false; }
+    bool setZoomX(flt128 zx)           { if (zoom_x != zx)  { zoom_x = zx;   updateCameraMatrix(); return true; } return false; }
+    bool setZoomY(flt128 zy)           { if (zoom_y != zy)  { zoom_y = zy;   updateCameraMatrix(); return true; } return false; }
                                                                                                              
     bool setPos(flt128 _x, flt128 _y)  { if (cam_x  != _x   || cam_y  != _y)    { cam_x = _x; cam_y = _y;    updateCameraMatrix(); return true; } return false; }
     bool setZoom(flt128 zoom)          { if (zoom_x != zoom || zoom_y != zoom)  { zoom_x = zoom_y = zoom;    updateCameraMatrix(); return true; } return false; }
     bool setZoom(flt128 zx, flt128 zy) { if (zoom_x != zx   || zoom_y != zy)    { zoom_x = zx; zoom_y = zy;  updateCameraMatrix(); return true; } return false; }
     bool setZoom(DDVec2 zoom)          { if (cam_zoom != zoom)                  { cam_zoom = zoom;           updateCameraMatrix(); return true; } return false; }
                                                                                                                         
-    // f64                                                                                                           
-    bool setX(double _x)               { if (cam_x  != f128(_x))  { cam_x = f128(_x);   updateCameraMatrix(); return true; } return false; }
-    bool setY(double _y)               { if (cam_y  != f128(_y))  { cam_y = f128(_y);   updateCameraMatrix(); return true; } return false; }
-    bool setZoomX(double zx)           { if (zoom_x != f128(zx))  { zoom_x = f128(zx);  updateCameraMatrix(); return true; } return false; }
-    bool setZoomY(double zy)           { if (zoom_y != f128(zy))  { zoom_y = f128(zy);  updateCameraMatrix(); return true; } return false; }
+    // ────── f64 setters (always updates f128 versions so we have a single source of truth) ──────
+    bool setX(double _x)               { if (cam_x_64  != _x) { cam_x  = f128(_x);  updateCameraMatrix(); return true; } return false; }
+    bool setY(double _y)               { if (cam_y_64  != _y) { cam_y  = f128(_y);  updateCameraMatrix(); return true; } return false; }
+    bool setZoomX(double zx)           { if (zoom_x_64 != zx) { zoom_x = f128(zx);  updateCameraMatrix(); return true; } return false; }
+    bool setZoomY(double zy)           { if (zoom_y_64 != zy) { zoom_y = f128(zy);  updateCameraMatrix(); return true; } return false; }
                                                                                                                         
-    bool setPos(double _x, double _y)  { if (cam_x  != f128(_x)     || cam_y  != f128(_y))     { cam_x = f128(_x); cam_y = f128(_y);           updateCameraMatrix(); return true; } return false; }
-    bool setPos(DVec2 pos)             { if (cam_x  != f128(pos.x)  || cam_y  != f128(pos.y))  { cam_x = f128(pos.x); cam_y = f128(pos.y);     updateCameraMatrix(); return true; } return false; }
-    bool setZoom(double zoom)          { if (zoom_x != f128(zoom)   || zoom_y != f128(zoom))   { zoom_x = zoom_y = f128(zoom);                 updateCameraMatrix(); return true; } return false; }
-    bool setZoom(DVec2 zoom)           { if (zoom_x != f128(zoom.x) || zoom_y != f128(zoom.y)) { zoom_x = f128(zoom.x); zoom_y = f128(zoom.y); updateCameraMatrix(); return true; } return false; }
-    bool setZoom(double zx, double zy) { if (zoom_x != f128(zx)     || zoom_y != f128(zy))     { zoom_x = f128(zx); zoom_y = f128(zy);         updateCameraMatrix(); return true; } return false; }
+    bool setPos(double _x, double _y)  { if (cam_x_64  != _x     || cam_y_64  != _y)     { cam_pos = {f128(_x), f128(_y)};   updateCameraMatrix(); return true; } return false; }
+    bool setPos(DVec2 pos)             { if (cam_x_64  != pos.x  || cam_y_64  != pos.y)  { cam_pos = pos;                    updateCameraMatrix(); return true; } return false; }
+    bool setZoom(double zoom)          { if (zoom_x_64 != zoom   || zoom_y_64 != zoom)   { zoom_x = zoom_y = f128(zoom);     updateCameraMatrix(); return true; } return false; }
+    bool setZoom(DVec2 zoom)           { if (zoom_x_64 != zoom.x || zoom_y_64 != zoom.y) { cam_zoom = zoom;                  updateCameraMatrix(); return true; } return false; }
+    bool setZoom(double zx, double zy) { if (zoom_x_64 != zx     || zoom_y_64 != zy)     { cam_zoom = {f128(zx), f128(zy)};  updateCameraMatrix(); return true; } return false; }
                                                                                                                         
     bool setPan(double px, double py)  { if (pan_x != px || pan_y != py)  { pan_x = px; pan_y = py;  updateCameraMatrix(); return true; } return false; }
     bool setRotation(double angle)     { if (cam_rotation != angle)       { cam_rotation = angle;    updateCameraMatrix(); return true; } return false; }
 
-    [[nodiscard]] constexpr bool isPanning()    const   { return panning; }
-
-    [[nodiscard]] constexpr double x()          const   { return (double)cam_x; }
-    [[nodiscard]] constexpr double y()          const   { return (double)cam_y; }
-    [[nodiscard]] constexpr double panX()       const   { return (double)pan_x; }
-    [[nodiscard]] constexpr double panY()       const   { return (double)pan_y; }
-    [[nodiscard]] constexpr double zoomX()      const   { return (double)zoom_x; }
-    [[nodiscard]] constexpr double zoomY()      const   { return (double)zoom_y; }
-    [[nodiscard]] constexpr double rotation()   const   { return (double)cam_rotation; }
-    [[nodiscard]] constexpr DVec2  pos()        const   { return {(double)cam_x, (double)cam_y }; }
-    [[nodiscard]] constexpr DVec2  zoom()       const   { return {(double)zoom_x, (double)zoom_y }; }
-
-    [[nodiscard]] constexpr flt128 x128()       const { return cam_x; }
-    [[nodiscard]] constexpr flt128 y128()       const { return cam_y; }
-    [[nodiscard]] constexpr DDVec2 pos128()     const { return cam_pos; }
-    [[nodiscard]] constexpr DDVec2 zoom128()    const { return cam_zoom; }
-
     // ======== World rect focusing ========
-    void focusWorldRect(double left, double top, double right, double bottom, bool stretch = false) {
-        focusWorldRect(f128(left), f128(top), f128(right), f128(bottom), stretch);
-    }
-    void focusWorldRect(flt128 left, flt128 top, flt128 right, flt128 bottom, bool stretch = false);
-    void focusWorldRect(const DRect& r, bool stretch = false) { focusWorldRect(f128(r.x1), f128(r.y1), f128(r.x2), f128(r.y2), stretch); }
+    void focusWorldRect(flt128 x0, flt128 y0, flt128 x1, flt128 y1, bool stretch = false);
+    void focusWorldRect(double x0, double y0, double x1, double y1, bool stretch = false) { focusWorldRect(f128(x0),   f128(y0),   f128(x1),   f128(y1),   stretch); }
+    void focusWorldRect(const DRect& r, bool stretch = false)                             { focusWorldRect(f128(r.x1), f128(r.y1), f128(r.x2), f128(r.y2), stretch); }
     //void focusWorldRect();  // todo: Use current view as the focus rect
 
-    /// Once world rect focused, use it as a "reference" for scaling relative to that reference zoom, e.g.
+    /// Once focusWorldRect called, use it as a "reference" for scaling relative to that reference zoom, e.g.
     /// > setRelativeZoom(2)  will zoom 2x relative to that focused rect
 
     // Uses cached zoom ref, set by focusWorldRect()
-    template<typename T> [[nodiscard]]
-    [[nodiscard]] Vec2<T> getReferenceZoom() const  { return { (T)ref_zoom_x, (T)ref_zoom_y }; } 
-
-    template<typename T> [[nodiscard]]
-    Vec2<T> getRelativeZoom() const noexcept
-    {
-        return {
-            static_cast<T>(zoom_x) / static_cast<T>(ref_zoom_x),
-            static_cast<T>(zoom_y) / static_cast<T>(ref_zoom_y)
-        };
-    }
+    template<typename T> [[nodiscard]] Vec2<T> getReferenceZoom() const { return { T{ref_zoom_x}, T{ref_zoom_y} }; }
+    template<typename T> [[nodiscard]] Vec2<T> getRelativeZoom() const noexcept { return {T{zoom_x / ref_zoom_x}, T{zoom_y / ref_zoom_y} }; }
 
     // Set zoom (relative to the reference)
-    void setRelativeZoom(double relative_zoom) {
-        zoom_x = ref_zoom_x * relative_zoom;
-        zoom_y = ref_zoom_y * relative_zoom;
-        updateCameraMatrix();
-    }
-    void setRelativeZoomX(double relative_zoom_x) {
-        zoom_x = ref_zoom_x * relative_zoom_x;
-        updateCameraMatrix();
-    }
-    void setRelativeZoomY(double relative_zoom_y) {
-        zoom_y = ref_zoom_y * relative_zoom_y;
-        updateCameraMatrix();
-    }
-
-    void setRelativeZoom(flt128 relative_zoom) {
-        zoom_x = ref_zoom_x * relative_zoom;
-        zoom_y = ref_zoom_y * relative_zoom;
-        updateCameraMatrix();
-    }
-    void setRelativeZoomX(flt128 relative_zoom_x) {
-        zoom_x = ref_zoom_x * relative_zoom_x;
-        updateCameraMatrix();
-    }
-    void setRelativeZoomY(flt128 relative_zoom_y) {
-        zoom_y = ref_zoom_y * relative_zoom_y;
-        updateCameraMatrix();
-    }
+    void setRelativeZoom(double rel_zoom)  { zoom_x = ref_zoom_x * rel_zoom; zoom_y = ref_zoom_y * rel_zoom; updateCameraMatrix(); }
+    void setRelativeZoom(flt128 rel_zoom)  { zoom_x = ref_zoom_x * rel_zoom; zoom_y = ref_zoom_y * rel_zoom; updateCameraMatrix(); }
+    void setRelativeZoomX(double rel_zx)   { zoom_x = ref_zoom_x * rel_zx; updateCameraMatrix(); }
+    void setRelativeZoomX(flt128 rel_zx)   { zoom_x = ref_zoom_x * rel_zx; updateCameraMatrix(); }
+    void setRelativeZoomY(double rel_zy)   { zoom_y = ref_zoom_y * rel_zy; updateCameraMatrix(); }
+    void setRelativeZoomY(flt128 rel_zy)   { zoom_y = ref_zoom_y * rel_zy; updateCameraMatrix(); }
 
     // Clamp the relative zoom range (relative to the reference)
     void restrictRelativeZoomRange(double min, double max);
 
     // ======== Camera controls ========
 
-    [[nodiscard]] DVec2 axisStageDirection(bool isX) const {
-        double c = cos_64;
-        double s = sin_64;
-        return isX ? DVec2{ c, s } : DVec2{ -s, c };
-    }
-
-    [[nodiscard]] DVec2 axisStagePerpDirection(bool isX) const {
-        DVec2 d = axisStageDirection(isX).normalized();
-        return { -d.y, d.x };
-    }
+    [[nodiscard]] DVec2 axisStageDirection(bool isX) const { return isX ? DVec2{ cos_64, sin_64 } : DVec2{ -sin_64, cos_64 }; }
+    [[nodiscard]] DVec2 axisStagePerpDirection(bool isX) const { DVec2 d = axisStageDirection(isX).normalized(); return { -d.y, d.x }; }
 
     // ----- viewport origin / pan -----
 
@@ -311,49 +273,29 @@ public:
 
     // ----- toStage -----
 
-    template<class T2 = double> requires std::is_same_v<T2, double>
-    [[nodiscard]] DVec2 toStage(double wx, double wy)  const { return static_cast<DVec2>( m64 * glm::dvec3(wx, wy, 1.0)); }
-
-    template<class T2> requires std::is_same_v<T2, flt128>
-    [[nodiscard]] DVec2 toStage(flt128 wx, flt128 wy) const { return static_cast<DVec2>( m128 * glm::ddvec3(wx, wy, flt128{1})); }
-
-    template<class T2 = double> requires std::is_same_v<T2, double>
-    DVec2 toStage(DVec2 p) const { return static_cast<DVec2>(m64 * glm::dvec3(p.x, p.y, 1.0)); }
-
-    template<class T2> requires std::is_same_v<T2, flt128>
-    DVec2 toStage(DDVec2 p) const { return static_cast<DVec2>(m128 * glm::ddvec3(p.x, p.y, flt128{ 1 })); }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] DVec2 toStage(double wx, double wy) const { return DVec2{ m64  * glm::dvec3(wx, wy, 1.0) }; }
+    template<class T>          requires is_f128<T> [[nodiscard]] DVec2 toStage(flt128 wx, flt128 wy) const { return DVec2{ m128 * glm::ddvec3(wx, wy, f128(1)) }; }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] DVec2 toStage(DVec2 p)  const { return DVec2(m64  * glm::dvec3(p.x, p.y, 1.0)); }
+    template<class T>          requires is_f128<T> [[nodiscard]] DVec2 toStage(DDVec2 p) const { return DVec2(m128 * glm::ddvec3(p.x, p.y, f128(1))); }
 
     // ----- toWorld -----
 
-    template<class T2 = double> requires std::is_same_v<T2, double>
-    [[nodiscard]] Vec2<T2> toWorld(double sx, double sy) const { return static_cast<DVec2>(inv_m64 * glm::dvec3(sx, sy, 1.0)); }
-
-    template<class T2> requires std::is_same_v<T2, flt128>
-    [[nodiscard]] Vec2<T2> toWorld(double sx, double sy) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(flt128{ sx }, flt128{ sy }, flt128{ 1 })); }
-
-    template<class T2 = double> requires std::is_same_v<T2, double>
-    [[nodiscard]] Vec2<T2> toWorld(DVec2 p) const { return static_cast<DVec2>(inv_m64 * glm::dvec3(p.x, p.y, 1.0)); }
-
-    template<class T2> requires std::is_same_v<T2, flt128>
-    [[nodiscard]] Vec2<T2> toWorld(DVec2 p) const { return static_cast<DDVec2>(inv_m128 * glm::ddvec3(flt128{ p.x }, flt128{ p.y }, flt128{ 1 })); }
-
-
-
-    
-
-    /// TODO: cache f64 zoom_x/zoom_y for below
+    template<class T = double> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(double sx, double sy) const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(sx, sy, 1.0) ); }
+    template<class T>          requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(double sx, double sy) const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(f128(sx), f128(sy), f128(1)) ); }
+    template<class T = double> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)              const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(p.x, p.y, 1.0) ); }
+    template<class T>          requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(DVec2 p)              const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(f128(p.x), f128(p.y), f128(1)) ); }
 
     // ----- world (f64) => stage (f64) -----
-    template<class T2 = double> requires std::is_same_v<T2, double>
+    template<class T = double> requires is_f64<T>
     [[nodiscard]] DVec2 worldToStageOffset(DVec2 o) const {
         return {
-            (o.x * cos_64 - o.y * sin_64) * (double)zoom_x,
-            (o.y * cos_64 + o.x * sin_64) * (double)zoom_y
+            (o.x * cos_64 - o.y * sin_64) * zoom_x_64,
+            (o.y * cos_64 + o.x * sin_64) * zoom_y_64
         };
     }
 
     // ----- world (f128) => stage (f64) -----
-    template<class T2> requires std::is_same_v<T2, flt128>
+    template<class T> requires is_f128<T>
     [[nodiscard]] DVec2 worldToStageOffset(const DDVec2& o) const {
         return DVec2{
             (double)((o.x * cos_128 - o.y * sin_128) * zoom_x),
@@ -363,27 +305,27 @@ public:
 
     // ----- stageToWorldOffset -----
 
-    /// --- stage (f64) => world (f64) ---
-    template<class T2 = double> requires std::is_same_v<T2, double>
+        /// --- stage (f64) => world (f32) ---
+    template<class T> requires is_f32<T>
     [[nodiscard]] DVec2 stageToWorldOffset(DVec2 o) const {
-        return Vec2<T2>{
-            (o.x * cos_64 + o.y * sin_64) / (double)zoom_x,
-            (o.y * cos_64 - o.x * sin_64) / (double)zoom_y
+        return Vec2<T>{
+            (float)((o.x * cos_64 + o.y * sin_64) / zoom_x_64),
+            (float)((o.y * cos_64 - o.x * sin_64) / zoom_y_64)
         };
     }
 
     /// --- stage (f64) => world (f64) ---
-    template<class T2> requires std::is_same_v<T2, float>
+    template<class T = double> requires is_f64<T>
     [[nodiscard]] DVec2 stageToWorldOffset(DVec2 o) const {
-        return Vec2<T2>{
-            (float)((o.x* cos_64 + o.y * sin_64) / (double)zoom_x),
-            (float)((o.y* cos_64 - o.x * sin_64) / (double)zoom_y)
+        return Vec2<T>{
+            (o.x * cos_64 + o.y * sin_64) / zoom_x_64,
+            (o.y * cos_64 - o.x * sin_64) / zoom_y_64
         };
     }
 
     /// --- stage (f64) => world (f126) ---
-    template<class T2> requires std::is_same_v<T2, flt128>
-    [[nodiscard]] Vec2<T2> stageToWorldOffset(DVec2 o) const {
+    template<class T> requires is_f128<T>
+    [[nodiscard]] Vec2<T> stageToWorldOffset(DVec2 o) const {
         return {
             (o.x * cos_128 + o.y * sin_128) / zoom_x,
             (o.y * cos_128 - o.x * sin_128) / zoom_y
@@ -412,33 +354,24 @@ public:
 
     // ----- toWorldQuad -----
 
-    template<typename T=double>
-    Quad<T> toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const {
-        return Quad<T>(toWorld<T>(a), toWorld<T>(b), toWorld<T>(c), toWorld<T>(d));
-    }
-
-    template<typename T = double>
-    Quad<T> toWorldQuad(const DQuad& quad) const { return toWorldQuad<T>(quad.a, quad.b, quad.c, quad.d); }
-
-    template<typename T = double>
-    Quad<T> toWorldQuad(double x1, double y1, double x2, double y2) const { return toWorldQuad<T>(DQuad(x1, y1, x2, y2)); }
-
-    template<typename T = double>
-    Quad<T> toWorldQuad(const DRect& r) const { return toWorldQuad<T>(static_cast<DQuad>(r)); }
+    template<typename T = double> Quad<T> toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const { return Quad<T>(toWorld<T>(a), toWorld<T>(b), toWorld<T>(c), toWorld<T>(d)); }
+    template<typename T = double> Quad<T> toWorldQuad(const DQuad& quad) const { return toWorldQuad<T>(quad.a, quad.b, quad.c, quad.d); }
+    template<typename T = double> Quad<T> toWorldQuad(double x1, double y1, double x2, double y2) const { return toWorldQuad<T>(DQuad(x1, y1, x2, y2)); }
+    template<typename T = double> Quad<T> toWorldQuad(const DRect& r) const { return toWorldQuad<T>(static_cast<DQuad>(r)); }
 
     // ----- toStageSize -----
 
-    [[nodiscard]] DVec2 toStageSize(const DVec2& size) const;
-    [[nodiscard]] DVec2 toStageSize(double w, double h) const;
+    [[nodiscard]] DVec2 toStageSize(const DVec2& size) const { return DDVec2{ size.x * zoom_x, size.y * zoom_y }; }
+    [[nodiscard]] DVec2 toStageSize(double w, double h) const { return DDVec2{ w * zoom_x, h * zoom_y }; }
 
     // ----- toStageRect -----
 
-    [[nodiscard]] DRect toStageRect(double x0, double y0, double x1, double y1) const;
-    [[nodiscard]] DRect toStageRect(DVec2 pt1, DVec2 pt2) const;
+    [[nodiscard]] DRect toStageRect(double x0, double y0, double x1, double y1) const { return { toStage(x0, y0), toStage(x1, y1) }; }
+    [[nodiscard]] DRect toStageRect(DVec2 pt1, DVec2 pt2)                       const { return { toStage(pt1), toStage(pt2) }; }
 
     // ----- toStageQuad -----
 
-    [[nodiscard]] DQuad toStageQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const;
+    [[nodiscard]] DQuad toStageQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const { return { toStage(a), toStage(b), toStage(c), toStage(d) }; }
 
     void setDirectCameraPanning(bool b) { direct_cam_panning = b; }
     void panBegin(int _x, int _y, double touch_dist, double touch_angle);
@@ -451,14 +384,14 @@ public:
     }
 
     [[nodiscard]] double touchAngle() const {
-        if (fingers.size() >= 2) return atan2(fingers[1].y - fingers[0].y, fingers[1].x - fingers[0].x);
+        if (fingers.size() >= 2) return std::atan2(fingers[1].y - fingers[0].y, fingers[1].x - fingers[0].x);
         return 0.0;
     }
     [[nodiscard]] double touchDist() const {
         if (fingers.size() >= 2) {
             double dx = fingers[1].x - fingers[0].x;
             double dy = fingers[1].y - fingers[0].y;
-            return sqrt(dx * dx + dy * dy);
+            return std::sqrt(dx * dx + dy * dy);
         }
         return 0.0;
     }
@@ -479,12 +412,8 @@ public:
 class CameraViewController
 {
 public:
-    union
-    {
-        struct {
-            flt128 x;
-            flt128 y;
-        };
+    union {
+        struct { flt128 x; flt128 y; };
         Vec2<flt128> pos{ flt128{0}, flt128{0} };
     };
 
@@ -532,8 +461,8 @@ public:
 
     void read(const Camera* camera)
     {
-        x = camera->x128();
-        y = camera->y128();
+        x = camera->x<flt128>();
+        y = camera->y<flt128>();
         angle = camera->rotation();
         zoom = (camera->getRelativeZoom<flt128>().x / f128(zoom_xy.x));
         avg_real_zoom = camera->zoom().magnitude();
@@ -604,33 +533,5 @@ inline DVec2 Camera::panPixelOffset() const
     return DVec2(pan_x, pan_y);
 }
 
-/// ----- f64 toStageSize -----
-
-inline DVec2 Camera::toStageSize(const DVec2& size) const
-{
-    return DDVec2{ size.x * zoom_x, size.y * zoom_y };
-}
-
-inline DVec2 Camera::toStageSize(double w, double h) const
-{
-    return DDVec2{ w * zoom_x, h * zoom_y };
-}
-
-inline DRect Camera::toStageRect(double x0, double y0, double x1, double y1) const
-{
-    DVec2 p1 = toStage(DVec2{ x0, y0 });
-    DVec2 p2 = toStage(DVec2{ x1, y1 });
-    return { p1.x, p1.y, p2.x, p2.y };
-}
-
-inline DRect Camera::toStageRect(DVec2 pt1, DVec2 pt2) const
-{
-    return toStageRect(pt1.x, pt1.y, pt2.x, pt2.y);
-}
-
-inline DQuad Camera::toStageQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const
-{
-    return { toStage(a), toStage(b), toStage(c), toStage(d) };
-}
 
 BL_END_NS

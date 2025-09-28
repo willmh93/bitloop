@@ -134,6 +134,14 @@ constexpr float escape_radius()
 }
 
 template<MandelSmoothing Smooth_Iter>
+FAST_INLINE double log_escape_radius_squared()
+{
+    static double log_escape_r2 = log_as_double(escape_radius<Smooth_Iter>());
+    return log_escape_r2;
+}
+
+
+template<MandelSmoothing Smooth_Iter>
 constexpr float mandelbrot_smoothing_offset()
 {
     constexpr float r2 = escape_radius<Smooth_Iter>();
@@ -175,6 +183,9 @@ template<class T> FAST_INLINE T clamp01(T v)
 //    return;
 //}
 
+template<class T> inline constexpr bool is_flt128_v = false;
+template<> inline constexpr bool is_flt128_v<flt128> = true;
+/*
 template<class T, MandelSmoothing S>
 FAST_INLINE void mandel_kernel(
     const T& x0,
@@ -234,7 +245,6 @@ FAST_INLINE void mandel_kernel(
             sum += last_added;
             ++sum_samples;
         }
-
         if (r2 > escape_r2 || iter >= iter_lim) break;
     }
 
@@ -262,8 +272,9 @@ FAST_INLINE void mandel_kernel(
     // smooth iteration depth
     if constexpr (NEED_SMOOTH_ITER)
     {
-        const double log_abs_z = 0.5 * (double)log(r2);
-        const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
+        const double log_abs_z = 0.5 * log_as_double(r2);// (double)log(r2);
+        //const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
+        const double nu = (double)iter + 1.0 - std::log2(log_abs_z);
         depth = nu - mandelbrot_smoothing_offset<S>();
     }
     else
@@ -275,16 +286,186 @@ FAST_INLINE void mandel_kernel(
     {
         float avg = (sum_samples > 0) ? (sum / (float)sum_samples) : 0.0f;
         float prev = (sum_samples > 1) ? ((sum - last_added) / (float)(sum_samples - 1)) : avg;
-
+    
         // stripeAC interpolation weight (fraction inside the last band)
         // frac = 1 + log2( log(ER^2) / log(|z|^2) ), clamped to [0,1]
-        float frac = 1.0f + (float)std::log2(log_as_double(escape_r2) / std::max(log_as_double(r2), 1e-300));
+        float frac = 1.0f + (float)std::log2(log_escape_radius_squared<S>() / std::max(log_as_double(r2), 1e-300));
         frac = clamp01(frac);
-
+    
         float mix = frac * avg + (1.0f - frac) * prev; // linear interpolation
         mix = 0.5f + 0.5f * std::tanh(sp.contrast * (mix - 0.5f)); // optional shaping
         stripes = clamp01(mix);
     }
+}
+*/
+
+template<class T, MandelSmoothing S>
+FAST_INLINE void mandel_kernel(
+    const T& x0,
+    const T& y0,
+    int iter_lim,
+    double& depth,
+    T& dist,
+    float& stripes,
+    StripeParams sp = {})
+{
+    //if (interiorCheck(x0, y0)) {
+    //    depth = INSIDE_MANDELBROT_SET_SKIPPED;
+    //    if constexpr (((int)S & (int)MandelSmoothing::DIST) != 0) dist = T{ INSIDE_MANDELBROT_SET };
+    //    if constexpr (((int)S & (int)MandelSmoothing::STRIPES) != 0) stripes = 0.0;
+    //    return;
+    //}
+
+    using detail::cplx;
+    constexpr bool NEED_DIST = (bool)((int)S & (int)MandelSmoothing::DIST);
+    constexpr bool NEED_SMOOTH_ITER = (bool)((int)S & (int)MandelSmoothing::ITER);
+    constexpr bool NEED_STRIPES = (bool)((int)S & (int)MandelSmoothing::STRIPES);
+
+    constexpr T escape_r2 = T(escape_radius<S>());
+    constexpr T zero = T(0), one = T(1);
+
+    int iter = 0;
+    T r2 = T{ 0 };
+
+    cplx<T> z{ zero, zero };
+    cplx<T> c{ x0, y0 };
+    cplx<T> dz{ one, zero };
+
+    // stripe accumulators
+    float sum = 0.0, last_added = 0.0;
+    int sum_samples = 0;
+
+    float mean_s = 0.5f, m2_s = 0.0f, sum_w = 0.0f;
+
+    while (true)
+    {
+        if constexpr (NEED_DIST)
+            detail::step_d(z, dz);
+
+        cplx<T> z0 = z;
+
+        // step
+        detail::step(z, c);
+        ++iter;
+
+
+        // update radius^2
+        r2 = detail::mag2(z);
+
+        //if constexpr (NEED_STRIPES)
+        //{
+        //    //float a = (float)atan2(z.y, z.x);
+        //    float a = (float)Math::atan2f_fast((float)z.y, (float)z.x);
+        //    last_added = 0.5f + 0.5f * std::sin(sp.freq * a + sp.phase);
+        //    sum += last_added;
+        //    ++sum_samples;
+        //}
+        if constexpr (NEED_STRIPES)
+        {
+            float a = (float)Math::atan2f_fast((float)z.y, (float)z.x);
+            float s = 0.5f + 0.5f * std::sin(sp.freq * a + sp.phase);
+
+            // Tail-emphasis EMA (effective window ~ L)
+            // Choose L ~ 16..32. alpha = 2/(L+1). You can expose this via sp.
+            float L = sp.L_short;
+            float alpha = 2.0f / (L + 1.0f);
+
+            // Optional magnitude weighting to suppress far-field dilution
+            // Set p in [0.5, 2.0]; p=1 is a good start
+            float p = sp.p;
+            float w_mag = 1.0f;
+            if constexpr (true) { // set to false to disable |z|-weighting
+                // w_mag ≈ (ER^2 / r2)^p, clamped to avoid INF/NaN
+                double ratio = std::max(1e-30, (double)escape_r2 / std::max((double)r2, 1e-30));
+                w_mag = (float)std::pow(ratio, p);
+            }
+
+            float w = alpha * w_mag;
+
+            // Keep a few accumulators outside the loop (init to 0 before the loop)
+            // sum_w, mean_s, m2_s (for variance)
+            // Update running weighted mean/variance (Welford with weights)
+            float prev_sum_w = sum_w;
+            sum_w = sum_w + w;
+            float delta = s - mean_s;
+            float R = (sum_w > 0.0f) ? (w / sum_w) : 0.0f;
+            mean_s = mean_s + R * delta;
+            float delta2 = s - mean_s;
+            m2_s = m2_s + w * delta * delta2; // weighted second moment
+        }
+        if (r2 > escape_r2 || iter >= iter_lim) break;
+    }
+
+    const bool escaped = (r2 > escape_r2) && (iter < iter_lim);
+
+    if constexpr (NEED_DIST)
+    {
+        if (escaped) {
+            const T r = sqrt(r2);
+            const T dz_abs = sqrt(detail::mag2(dz));
+            dist = (dz_abs == zero) ? T{ 0 } : (r * log(r) / dz_abs); // log_as_double?
+        }
+        else {
+            dist = T{ -1 };// T{ INSIDE_MANDELBROT_SET };
+        }
+    }
+
+    if (!escaped)
+    {
+        depth = INSIDE_MANDELBROT_SET;
+        if constexpr (NEED_STRIPES) stripes = 0.0;
+        return;
+    }
+
+    // smooth iteration depth
+    if constexpr (NEED_SMOOTH_ITER)
+    {
+        const double log_abs_z = 0.5 * log_as_double(r2);// (double)log(r2);
+        //const double nu = (double)iter + 1.0 - std::log2(std::max(log_abs_z, 1e-30));
+        const double nu = (double)iter + 1.0 - std::log2(log_abs_z);
+        depth = nu - mandelbrot_smoothing_offset<S>();
+    }
+    else
+    {
+        depth = (double)iter;
+    }
+
+    if constexpr (NEED_STRIPES)
+    {
+        // mean
+        float mu = (sum_w > 0.0f) ? mean_s : 0.5f;
+
+        // Optional variance normalization for consistent contrast
+        // Comment out if you prefer just the mean.
+        float var = (sum_w > 0.0f) ? (m2_s / sum_w) : 0.0f;
+        float sigma = std::sqrt(std::max(var, 1e-8f));
+
+        // Use smooth-iteration "frac" as a final temporal blend if you like
+        float frac = 1.0f + (float)std::log2(log_as_double(escape_r2) / std::max(log_as_double(r2), 1e-300));
+        frac = clamp01(frac);
+
+        float value = mu; // or (0.5f + 0.5f * (mu - 0.5f) / (k*sigma + eps)) for variance normalization
+        // Simple variance normalization with gain k:
+        // constexpr float k = 1.2f; value = 0.5f + 0.5f * clamp((mu - 0.5f) / (k*sigma + 1e-6f), -1.0f, 1.0f);
+
+        value = 0.5f + 0.5f * std::tanh(sp.contrast * (value - 0.5f));
+        stripes = clamp01(value);
+    }
+
+    //if constexpr (NEED_STRIPES)
+    //{
+    //    float avg = (sum_samples > 0) ? (sum / (float)sum_samples) : 0.0f;
+    //    float prev = (sum_samples > 1) ? ((sum - last_added) / (float)(sum_samples - 1)) : avg;
+    //
+    //    // stripeAC interpolation weight (fraction inside the last band)
+    //    // frac = 1 + log2( log(ER^2) / log(|z|^2) ), clamped to [0,1]
+    //    float frac = 1.0f + (float)std::log2(log_as_double(escape_r2) / std::max(log_as_double(r2), 1e-300));
+    //    frac = clamp01(frac);
+    //
+    //    float mix = frac * avg + (1.0f - frac) * prev; // linear interpolation
+    //    mix = 0.5f + 0.5f * std::tanh(sp.contrast * (mix - 0.5f)); // optional shaping
+    //    stripes = clamp01(mix);
+    //}
 }
 
 
@@ -454,9 +635,8 @@ FAST_INLINE void mandel_kernel(
         val = 0.5f + 0.5f * std::tanh(sp.contrast * (val - 0.5f)); // optional shaping
         stripes = clamp01(val);
     }
-}*/
-
-
+}
+*/
 
 template<bool smooth>
 inline double mandelbrot_spline_iter(double x0, double y0, int iter_lim, ImSpline::Spline& x_spline, ImSpline::Spline& y_spline)
@@ -551,6 +731,7 @@ bool radialMandelbrot()
 template<typename T, MandelSmoothing Smoothing, bool flatten>
 bool mandelbrot(CanvasImage128* bmp, EscapeField* field, int iter_lim, int threads, int timeout, int& current_row, StripeParams stripe_params={})
 {
+    blPrint() << "@@@@@@@@@@@@@@@@@@@@@@ Begin Mandelbrot frame @@@@@@@@@@@@@@@@@@@@@@";
     bool frame_complete = bmp->forEachWorldPixel<T>(current_row, [&](int x, int y, T wx, T wy)
     {
         EscapeFieldPixel& field_pixel = field->at(x, y);
@@ -572,6 +753,8 @@ bool mandelbrot(CanvasImage128* bmp, EscapeField* field, int iter_lim, int threa
         field_pixel.setDist(dist);    // store dist with appropriate precision
 
     }, threads, timeout);
+    blPrint() << "@@@@@@@@@@@@@@@@@@@@@@ End Mandelbrot frame @@@@@@@@@@@@@@@@@@@@@@";
+    
 
     return frame_complete;
 };
