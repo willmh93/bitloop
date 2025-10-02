@@ -22,12 +22,27 @@ BL_BEGIN_NS;
 
 typedef std::vector<uint8_t> bytebuf;
 
+enum struct VideoEncoding
+{
+    x264,
+    x265
+};
+
+struct BitrateRange
+{
+    double min_mbps;
+    double max_mbps;
+};
+
 struct VideoConfig
 {
     std::string filename;
     IVec2 resolution;
     int  fps = 0;
     bool flip = true;
+    int64_t bitrate = 0;
+    VideoEncoding encoding = VideoEncoding::x264;
+    bool ten_bit = true;
 
     size_t numBytes() const { return (size_t)resolution.x * (size_t)resolution.y * 4; }
 };
@@ -110,7 +125,10 @@ public:
     bool startRecording(
         std::string filename,
         IVec2 resolution,
-        int fps, bool flip);
+        int fps,
+        int64_t bitrate,
+        VideoEncoding encoding,
+        bool flip);
 
     void waitUntilReadyForNewFrame(); // sim worker calls this avoid avoid drawing a frame until ffmpeg worker is ready for it
     bool encodeFrame(const uint8_t* data);

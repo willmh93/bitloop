@@ -1,6 +1,10 @@
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
+#include <SDL3/SDL_dialog.h>
+#include <imgui_stdlib.h>
+#include <webp/encode.h>
+#include <filesystem>
 
 BL_BEGIN_NS
 
@@ -9,12 +13,131 @@ MainWindow* MainWindow::singleton = nullptr;
 ImDebugLog project_log;
 ImDebugLog debug_log;
 
+constexpr const char* codecs[] = { "x264", "x265" };
+
 void ImDebugPrint(const char* fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
     debug_log.vlog(fmt, ap);
     va_end(ap);
+}
+
+std::string getPreferredCapturesDirectory()
+{
+    std::filesystem::path path = platform()->executable_dir();
+    std::filesystem::path trimmed;
+
+    // todo: Make sure this is threadsafe
+    // 
+    // should be name of root CMake project, not the launched project?
+    // They're usually the same on startup, so it should work in practice
+
+    if (!project_worker()->getActiveProject())
+    {
+        DebugBreak();
+    }
+
+    std::string active_sim_name = project_worker()->getActiveProject()->getProjectInfo()->name;
+       
+    for (const auto& part : path) {
+        trimmed /= part;
+        if (!active_sim_name.empty() && part == active_sim_name) break;
+        if (part == "bitloop") break;
+    }
+    if (!trimmed.empty() && trimmed.filename() == "bitloop")
+        path = trimmed;
+
+    path /= "captures";
+
+    return path.lexically_normal().string();
+}
+
+static int find_max_clip_index(const std::filesystem::path& directory_path)
+{
+    int max_clip_index = 0;
+    std::error_code io_error;
+    std::regex filename_pattern("^clip(\\d+)\\.mp4$", std::regex::icase);
+
+    for (const auto& dir_entry : std::filesystem::directory_iterator(
+        directory_path, std::filesystem::directory_options::skip_permission_denied, io_error))
+    {
+        if (io_error) break; // stop on catastrophic error
+        if (!dir_entry.is_regular_file()) continue;
+
+        const std::string filename = dir_entry.path().filename().string();
+        std::smatch match;
+        if (std::regex_match(filename, match, filename_pattern)) {
+            try {
+                const int clip_index = std::stoi(match[1].str());
+                if (clip_index > max_clip_index) max_clip_index = clip_index;
+            }
+            catch (...) {
+                // ignore invalid numbers
+            }
+        }
+    }
+    return max_clip_index;
+}
+
+static std::filesystem::path make_next_clip_path(const std::filesystem::path& capture_dir)
+{
+    std::error_code io_error;
+    std::filesystem::create_directories(capture_dir, io_error); // no-op if exists
+    const int next_index = find_max_clip_index(capture_dir) + 1;
+    return capture_dir / ("clip" + std::to_string(next_index) + ".mp4");
+}
+
+static bool ensure_parent_directories_exist(const std::filesystem::path& file_path, std::error_code& ec)
+{
+    ec.clear();
+    const std::filesystem::path parent = file_path.parent_path();
+    if (parent.empty()) return true; // nothing to create
+    return std::filesystem::create_directories(parent, ec);
+}
+
+static inline bool is_x265(const char* s)
+{
+    if (!s) return false;
+    std::string t(s); for (auto& c : t) c = (char)tolower(c);
+    return (t == "x265" || t == "hevc" || t == "h265");
+}
+
+static inline double lerp_log(double a, double b, double t) {
+    return std::exp(std::log(a) + t * (std::log(b) - std::log(a)));
+}
+
+// Range depends ONLY on resolution, fps, codec
+static inline BitrateRange recommended_bitrate_range_mbps(IVec2 res, int fps, const char* codec)
+{
+    int w = std::max(16, res.x);
+    int h = std::max(16, res.y);
+    fps = std::clamp(fps, 1, 120);
+
+    // Broad coverage band for simple->extreme screen content
+    // (bppf = bits per pixel per frame)
+    const double bppf_min = 0.006; // very simple scenes
+    const double bppf_max = 0.70;  // near-lossless-ish, extreme detail/motion
+
+    // Codec efficiency: x265 typically ~30% less for same quality
+    const double eff = is_x265(codec) ? 0.70 : 1.00;
+
+    const double ppf = (double)w * (double)h * (double)fps;
+    double min_bps = ppf * bppf_min * eff;
+    double max_bps = ppf * bppf_max * eff;
+
+    BitrateRange r;
+    r.min_mbps = std::clamp(min_bps / 1e6, 0.05, 1000.0);
+    r.max_mbps = std::clamp(max_bps / 1e6, r.min_mbps, 1000.0);
+    return r;
+}
+
+// Use quality (1..10) to pick FROM the range
+static inline double choose_bitrate_mbps_from_range(const BitrateRange& r, int quality_1_to_10)
+{
+    int q = (int)std::clamp(quality_1_to_10, 1, 20);
+    double t = (q - 1) / 9.0;                 // 0..1
+    return lerp_log(r.min_mbps, r.max_mbps, t); // log scale feels natural
 }
 
 void MainWindow::init()
@@ -30,6 +153,9 @@ void MainWindow::init()
 
     canvas.create(platform()->dpr());
     overlay.create(platform()->dpr());
+
+    bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, codecs[record_encoding]);
+    record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
 }
 
 void MainWindow::checkChangedDPR()
@@ -148,43 +274,72 @@ void MainWindow::populateProjectUI()
     ImGui::EndPaddedRegion();
 }
 
-bool MainWindow::isInteractingWithUI()
+void MainWindow::queueBeginRecording()
 {
-    ImGuiID active_id = ImGui::GetActiveID();
+    queueMainWindowCommand({ MainWindowCommandType::BEGIN_RECORDING });
+}
 
-    static ImGuiID old_active_id = 0;
-    ImGuiID lagged_active_id = active_id ? active_id : old_active_id;
-
-    old_active_id = active_id;
-
-    if (lagged_active_id == 0)
-        return false;
-
-    static ImGuiID viewport_id = ImHashStr("Viewport");
-    return (old_active_id != ImGui::FindWindowByID(viewport_id)->MoveId) ||
-           (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
+void MainWindow::queueEndRecording()
+{
+    queueMainWindowCommand({ MainWindowCommandType::END_RECORDING });
 }
 
 void MainWindow::beginRecording()
 {
-    addMainWindowCommand({ MainWindowCommandType::ON_STARTED_PROJECT });
+    if (!record_manager.isRecording())
+    {
+        std::filesystem::path capture_dir = getPreferredCapturesDirectory();
+
+        std::string active_sim_name = project_worker()->getActiveProject()->getProjectInfo()->name;
+
+        // Organize by project name
+        capture_dir /= active_sim_name;
+        capture_dir /= "video";
+        capture_dir /= make_next_clip_path(capture_dir);
+
+        std::error_code ec;
+        ensure_parent_directories_exist(capture_dir, ec);
+
+        record_manager.startRecording(
+            capture_dir.string(),
+            record_resolution,
+            record_fps,
+            record_bitrate,
+            (VideoEncoding)record_encoding,
+            true);
+    }
 }
 
 void MainWindow::endRecording()
 {
-    addMainWindowCommand({ MainWindowCommandType::ON_STOPPED_PROJECT });
+    if (record_manager.isRecording())
+        record_manager.finalizeRecording();
 }
 
 
 void MainWindow::handleCommand(MainWindowCommandEvent e)
 {
+    // Handle commands which can be initiated by both GUI thread & project-worker thread
     switch (e.type)
     {
     case MainWindowCommandType::ON_STARTED_PROJECT:
+    {
+        // received from project-worker once project succesfully started
         play.enabled = false;
         stop.enabled = true;
         pause.enabled = true;
-        break;
+        snapshot.enabled = true;
+
+        static bool first = true;
+        if (first)
+        {
+            // set initial preferred folder once
+            record_folder = getPreferredCapturesDirectory();
+
+            first = false;
+        }
+    }
+    break;
 
     case MainWindowCommandType::ON_STOPPED_PROJECT:
         if (record_manager.isRecording())
@@ -193,12 +348,23 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         stop.enabled = false;
         pause.enabled = false;
         play.enabled = true;
-        record.enabled = true;
+        record.toggled = false;
+        snapshot.enabled = false;
+
         break;
 
     case MainWindowCommandType::ON_PAUSED_PROJECT:
         pause.enabled = false;
         play.enabled = true;
+        break;
+
+
+    case MainWindowCommandType::BEGIN_RECORDING:
+        beginRecording();
+        break;
+
+    case MainWindowCommandType::END_RECORDING:
+        endRecording();
         break;
     }
 }
@@ -228,12 +394,56 @@ void MainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size
     else if (strcmp(symbol, "record") == 0) {
         drawList->AddCircleFilled(ImVec2(cx, cy), r, color);
     }
+    else if (strcmp(symbol, "snapshot") == 0) {
+        cy += r * 0.2f;
+
+        // Scales with the button rect
+        float u = ImMin(size.x, size.y);
+        float t = ImClamp(u * 0.06f, 1.0f, 3.0f);   // stroke thickness
+        float round = u * 0.10f;                    // body corner radius
+
+        // Camera body
+        float body_w = u * 0.62f;
+        float body_h = u * 0.46f;
+        ImVec2 body_min(cx - body_w * 0.5f, cy - body_h * 0.5f);
+        ImVec2 body_max(cx + body_w * 0.5f, cy + body_h * 0.5f);
+        drawList->AddRect(body_min, body_max, color, round, 0, t);
+
+        // Top hump (viewfinder housing)
+        float hump_w = u * 0.26f;
+        float hump_h = u * 0.12f;
+        ImVec2 hump_min(body_min.x + u * 0.06f, body_min.y - hump_h + t * 0.5f);
+        ImVec2 hump_max(hump_min.x + hump_w, body_min.y + t * 0.5f);
+        drawList->AddRect(hump_min, hump_max, color, round * 0.5f, 0, t);
+
+        // Lens (outer ring)
+        float lens_r = u * 0.14f;
+        drawList->AddCircle(ImVec2(cx, cy), lens_r, color, 0, t);
+
+        // Lens inner accent (tiny dot)
+        drawList->AddCircleFilled(ImVec2(cx + lens_r * 0.35f, cy - lens_r * 0.35f),
+            ImMax(1.0f, u * 0.02f), color);
+
+        // Shutter button nub (small filled circle on top-right)
+        ImVec2 nub(hump_max.x + u * 0.04f, hump_min.y + (hump_h * 0.35f));
+        drawList->AddCircleFilled(nub, ImMax(1.0f, u * 0.02f), color);
+    }
 }
 
 bool MainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size, float inactive_alpha)
 {
-    auto icon_col = state.enabled ? state.symbolColor : ImVec4(state.symbolColor.x, state.symbolColor.y, state.symbolColor.z, inactive_alpha);
-    auto bg_col   = state.enabled ? state.bgColor : ImVec4(state.bgColor.x, state.bgColor.y, state.bgColor.z, inactive_alpha);
+    auto icon_col =
+        state.enabled ?
+        state.symbolColor :
+        ImVec4(state.symbolColor.x, state.symbolColor.y, state.symbolColor.z, inactive_alpha);
+
+    auto bg_col =
+        state.enabled ?
+        state.bgColor :
+        ImVec4(state.bgColor.x, state.bgColor.y, state.bgColor.z, inactive_alpha);
+
+    if (state.toggled)
+        bg_col = state.bgColorToggled;
 
     ImGui::PushStyleColor(ImGuiCol_Button, bg_col);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_col);
@@ -281,18 +491,36 @@ void MainWindow::populateToolbar()
     // Layout the buttons inside the frame
     if (toolbarButton("##play", "play", play, ImVec2(size, size)))
     {
+        // immediately disable play button, handle other button states in handleCommand(..)
+        // in response to the project-worker succesfully switching project.
+        play.enabled = false;
+
+        // begin recording immediately if record button "on" so we start capturing
+        // from the very first frame
+        if (record.toggled)
+            beginRecording();
+
         project_worker()->startProject();
     }
 
     ImGui::SameLine();
     if (toolbarButton("##pause", "pause", pause, ImVec2(size, size)))
     {
+        // immediately disable pause button, handle other button states in handleCommand(..)
+        // in response to the project-worker succesfully switching project.
+        pause.enabled = false;
+
         project_worker()->pauseProject();
     }
 
     ImGui::SameLine();
     if (toolbarButton("##stop", "stop", stop, ImVec2(size, size)))
     {
+        // immediately disable stop/pause buttons, handle other button states in handleCommand(..)
+        // in response to the project-worker succesfully switching project.
+        stop.enabled = false;
+        pause.enabled = false;
+
         project_worker()->stopProject();
     }
 
@@ -301,20 +529,33 @@ void MainWindow::populateToolbar()
         ImGui::SameLine();
         if (toolbarButton("##record", "record", record, ImVec2(size, size)))
         {
-            if (record.enabled)
+            if (!play.enabled)
             {
-                // Start recording
-                record.enabled = false;
-                //record_manager.startRecording("vid.mp4", { 400, 300 }, 60, true);
-                //record_manager.startRecording("vid.mp4", { 1920, 1080 }, 60, true);
-                record_manager.startRecording("vid.mp4", { 3840, 2160 }, 60, true); // 4K
+                // sim already running
+                if (!record.toggled)
+                {
+                    // Start recording
+                    record.toggled = true;
+                    beginRecording();
+                }
+                else
+                {
+                    record.toggled = false;
+                    record_manager.finalizeRecording();
+                }
             }
             else
             {
-                record.enabled = true;
-                record_manager.finalizeRecording();
+                // sim not started yet, but toggle state so it auto-begins
+                // recording on project started
+                record.toggled = !record.toggled;
             }
         }
+    }
+
+    ImGui::SameLine();
+    if (toolbarButton("##snapshot", "snapshot", snapshot, ImVec2(size, size)))
+    {
     }
 
     ImGui::EndChild();
@@ -478,6 +719,7 @@ bool MainWindow::manageDockingLayout()
         //ImGui::DockBuilderDockWindow("Debug Log",   dock_sidebar);  // dock to sidebar
         //ImGui::DockBuilderDockWindow("Project Log", dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Debug",       dock_sidebar);  // dock to sidebar
+        ImGui::DockBuilderDockWindow("Settings",    dock_sidebar);  // dock to sidebar
         ImGui::DockBuilderDockWindow("Viewport",    dock_main_id);  // dock to window
         
         ImGui::DockBuilderFinish(dockspace_id);
@@ -693,28 +935,26 @@ void MainWindow::populateViewport()
     }
 
     // Always process viewport, even if not visible
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin("Viewport");
     {
-        ImVec2 size = ImGui::GetContentRegionAvail();
-        int width = static_cast<int>(size.x);
-        int height = static_cast<int>(size.y);
+        ImVec2 client_size = ImGui::GetContentRegionAvail();
 
+        // set canvas size to viewport size by default
+        IVec2 canvas_size(client_size);
 
-        //~ // Resize canvas to right size when recording==true, draw shrinked canvas instead
-
-        IVec2 canvas_size;
+        // switch to record resolution if recording
         if (record_manager.isRecording())
-        {
-            // switch to record resolution
             canvas_size = record_manager.getResolution();
-        }
-        else
-        {
-            canvas_size = { width, height };
-        }
 
-        /*bool resized = */canvas.resize(canvas_size.x, canvas_size.y);
-        
+        bool resized = canvas.resize(canvas_size.x, canvas_size.y);
+        if (resized)
+        {
+            canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+            canvas.setFillStyle(0, 0, 0);
+            canvas.fillRect(0, 0, (float)canvas.fboWidth(), (float)canvas.fboHeight());
+            canvas.end();
+        }
 
         if (!done_first_size)
         {
@@ -722,7 +962,7 @@ void MainWindow::populateViewport()
         }
         else if (shared_sync.project_thread_started)
         {
-            // Launch initial simulation 1 frame late (background thread)
+            // Launch startup simulation 1 frame late once we have a valid canvas size
             if (!project_worker()->getActiveProject())
             {
                 auto first_project = ProjectBase::projectInfoList().front();
@@ -754,12 +994,10 @@ void MainWindow::populateViewport()
                         canvas.readPixels(frame_data);
                         record_manager.encodeFrame(frame_data.data());
                     }
-
-
                 }
 
-                // Capture next frame by default, unless manually set back to false
-                encode_next_sim_frame = true;
+                // Force worker to tell us when it wants to encode a new frame
+                encode_next_sim_frame = false;
 
                 shared_sync.frame_ready_to_draw = false;
                 shared_sync.frame_consumed = true;
@@ -777,21 +1015,378 @@ void MainWindow::populateViewport()
         ///    canvas.end();
         ///}
 
-        ImVec2 client_size((float)width, (float)height);
-        ImVec2 start = ImGui::GetCursorScreenPos();
+        ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+        ImVec2 image_size = (ImVec2)canvas_size;
+
+        if (record_manager.isRecording())
+        {
+            float w  = (float)client_size.x, h  = (float)client_size.y; // render size
+            float rw = (float)canvas_size.x, rh = (float)canvas_size.y; // client size
+            float sw = w, sh = h, ox = 0, oy = 0;
+
+            float client_aspect = (w / h);
+            float render_aspect = (rw / rh);
+
+            if (render_aspect > client_aspect)
+            {
+                sh = h * (client_aspect / render_aspect); // Render aspect is too wide
+                oy = 0.5f * (client_size.y - sh);         // Center vertically
+            }
+            else
+            {
+                sw = w * (render_aspect / client_aspect); // Render aspect is too tall
+                ox = 0.5f * (client_size.x - sw);         // Center horizontally
+            }
+
+            canvas_pos = { ox, oy };
+            image_size = { sw, sh };
+        }
+
 
         // Draw cached (or freshly generated) frame
-        ImGui::Image(canvas.texture(), client_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-        ImGui::SetItemAllowOverlap();              // allow next item to overlap this one
+        ImGui::SetCursorScreenPos(canvas_pos);
+        ImGui::Image(canvas.texture(), image_size, ImVec2(0,1), ImVec2(1,0));
 
-        ImGui::SetCursorScreenPos(start);
-        ImGui::Image(overlay.texture(), client_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        //ImGui::SetItemAllowOverlap();              // allow next item to overlap this one
+        //ImGui::SetCursorScreenPos(canvas_pos);
+        //ImGui::Image(overlay.texture(), client_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
         viewport_hovered = ImGui::IsWindowHovered();
     }
     ImGui::End();
+    ImGui::PopStyleVar();
 }
 
+static void on_folder_chosen(
+    [[maybe_unused]] void* userdata,
+    const char* const* filelist,
+    [[maybe_unused]] int filter)
+{
+    if (!filelist) { SDL_Log("Dialog error"); return; }
+    if (!*filelist) { SDL_Log("User canceled"); return; }
+    blPrint() << "Chosen folder: " << filelist[0]; // first (and only) entry for folder dialog
+}
+
+void MainWindow::populateRecordOptions()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
+    ImGui::BeginChild("RecordingFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+
+    // Paths
+    {
+        ImGui::GroupBox box("dir_box", "Paths");
+        ImGui::Text("Media Output Directory:");
+        ImGui::InputText("##folder", &record_folder, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        if (ImGui::Button("..."))
+        {
+            SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, platform()->sdl_window(), record_folder.c_str(), false);
+        }
+    }
+
+    //ImGui::SeparatorText("Image Capture");
+
+    // Image Resolution
+    {
+        //ImGui::GroupBox box("img_resolution", "Snapshot Resolution");
+        ImGui::GroupBox box("img_options", "Image Capture");
+
+        ImGui::Text("X:"); ImGui::SameLine();
+        if (ImGui::InputInt("##img_res_x", &snapshot_resolution.x, 10)) {
+            snapshot_resolution.x = std::clamp(snapshot_resolution.x, 16, 16384);
+            snapshot_resolution.x = (snapshot_resolution.x & ~1);
+        }
+        ImGui::Text("Y:"); ImGui::SameLine();
+        if (ImGui::InputInt("##img_res_y", &snapshot_resolution.y, 10)) {
+            snapshot_resolution.y = std::clamp(snapshot_resolution.y, 16, 16384);
+            snapshot_resolution.y = (snapshot_resolution.y & ~1);
+        }
+    }
+
+    //ImGui::SeparatorText("Video Capture");
+
+    // Video Resolution
+    {
+        //ImGui::GroupBox box("vid_resolution", "Video Resolution");
+        ImGui::GroupBox box("vid_options", "Video Capture");
+
+        struct Aspect { const char* label; bool portrait; };
+        struct Preset { int w, h; const char* label; bool HEVC_only=false; };
+
+        static const Aspect aspects[] = {
+            {"16:9", false},
+            {"21:9", false},
+            {"32:9", false},
+            {"4:3",  false},
+            {"3:2",  false},
+            {"1:1",  false},
+            {"9:16", true },
+        };
+
+        // 16:9 — compact, common
+        static const Preset presets_16_9[] = {
+            {1280,  720, "720p"},
+            {1920, 1080, "1080p"},
+            {2560, 1440, "1440p"},
+            {3840, 2160, "4K"},
+            {5120, 2880, "5K", true},
+            {7680, 4320, "8K", true},
+        };
+
+        // 21:9 — ultrawide
+        static const Preset presets_21_9[] = {
+            {2560, 1080, "FHD"},
+            {3440, 1440, "QHD"},
+            {3840, 1600, "WQHD+"},
+            {5120, 2160, "5K2K", true},
+        };
+
+        // 32:9 — super-ultrawide (dual-monitor equiv.)
+        static const Preset presets_32_9[] = {
+            {3840, 1080, "FHD"},
+            {5120, 1440, "QHD"},
+            {7680, 2160, "8K-wide", true},
+        };
+
+        // 4:3 — classic VESA
+        static const Preset presets_4_3[] = {
+            {1024,  768, "XGA"},
+            {1600, 1200, "UXGA"},
+            {2048, 1536, "QXGA"},
+        };
+
+        // 3:2 — laptop/document
+        static const Preset presets_3_2[] = {
+            {1920, 1280, "1280p"},
+            {2160, 1440, "1440p"},
+            {3000, 2000, "3K"},
+        };
+
+        // 1:1 — square
+        static const Preset presets_1_1[] = {
+            {1080, 1080, "Square 1080"},
+            {1440, 1440, "Square 1440"},
+            {2160, 2160, "Square 2160"},
+        };
+
+        // 9:16 — vertical/social
+        static const Preset presets_9_16[] = {
+            {1080, 1920, "1080p"},
+            {1440, 2560, "1440p"},
+            {2160, 3840, "4K"},
+        };
+
+        struct PresetList { const Preset* p; int x264_count;  int x265_count; };
+        auto get_preset_list = [&](int aspect_index) -> PresetList {
+            switch (aspect_index) {
+            case 0: return { presets_16_9, 4, 6 };
+            case 1: return { presets_21_9, 3, 4 };
+            case 2: return { presets_32_9, 2, 3};
+            case 3: return { presets_4_3,  3, 3 };
+            case 4: return { presets_3_2,  3, 3 };
+            case 5: return { presets_1_1,  3, 3 };
+            case 6: return { presets_9_16, 3, 3 };
+            default: return { nullptr, 0 };
+            }
+        };
+
+        // selection state
+        static int sel_aspect = -1;
+        static int sel_tier = -1;
+        static bool sel_aspect_was_portrait = false;
+
+        // highlight colors
+        static const ImVec4 sel = ImVec4(0.18f, 0.55f, 0.95f, 1.00f);
+        static const ImVec4 sel_hover = ImVec4(0.22f, 0.62f, 1.00f, 1.00f);
+        static const ImVec4 sel_active = ImVec4(0.14f, 0.45f, 0.85f, 1.00f);
+        auto pushSelected = [](bool selected) {
+            if (!selected) return 0;
+            ImGui::PushStyleColor(ImGuiCol_Button, sel);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sel_hover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, sel_active);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+            return 4;
+        };
+
+        auto set_even = [](int v) { return v & ~1; };
+
+        // apply current selection (bounds-checked)
+        auto apply_selection = [&](IVec2& out) {
+            if (sel_aspect < 0 || sel_tier < 0) return;
+            PresetList L = get_preset_list(sel_aspect);
+            if (!L.p || sel_tier >= L.x265_count) return; // safety
+            out.x = set_even(L.p[sel_tier].w);
+            out.y = set_even(L.p[sel_tier].h);
+            bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, codecs[record_encoding]);
+            record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
+        };
+
+        // auto-select from current resolution
+        auto try_select_from_resolution = [&](int w, int h)
+        {
+            sel_aspect = -1;
+            sel_tier = -1;
+
+            bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, codecs[record_encoding]);
+            record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
+
+            for (int ai = 0; ai < IM_ARRAYSIZE(aspects); ++ai) {
+                PresetList L = get_preset_list(ai);
+                for (int ti = 0; ti < L.x265_count; ++ti) {
+                    if (L.p[ti].w == w && L.p[ti].h == h) {
+                        sel_aspect = ai;
+                        sel_tier = ti;
+                        return;
+                    }
+                }
+            }
+            
+        };
+
+        bool changed = false;
+
+        ImGui::Text("X:"); ImGui::SameLine();
+        if (ImGui::InputInt("##vid_res_x", &record_resolution.x, 10)) {
+            record_resolution.x = std::clamp(record_resolution.x, 16, 16384);
+            record_resolution.x = (record_resolution.x & ~1); // force even
+            changed = true;
+        }
+        ImGui::Text("Y:"); ImGui::SameLine();
+        if (ImGui::InputInt("##vid_res_y", &record_resolution.y, 10)) {
+            record_resolution.y = std::clamp(record_resolution.y, 16, 16384);
+            record_resolution.y = (record_resolution.y & ~1); // force even
+            changed = true;
+        }
+
+        static bool first = true;
+        if (first) { try_select_from_resolution(record_resolution.x, record_resolution.y); first = false; }
+        if (changed) try_select_from_resolution(record_resolution.x, record_resolution.y);
+
+        // Helper: choose the closest tier (by height) to current H for a given aspect list
+        auto pick_closest_tier = [&](int aspect_index, int current_h) -> int
+        {
+            PresetList preset_list = get_preset_list(aspect_index);
+            if (!preset_list.p || preset_list.x265_count == 0) return -1;
+            int best = 0;
+            int best_d = INT_MAX;
+            for (int i = 0; i < preset_list.x265_count; ++i) {
+                int h = preset_list.p[i].h; // works for portrait lists too (we stored exact WxH)
+                int d = std::abs(h - current_h);
+                if (d < best_d) { best_d = d; best = i; }
+            }
+            return best;
+        };
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Aspect:");
+        for (int i = 0; i < (int)IM_ARRAYSIZE(aspects); ++i) {
+            bool is_selected = (sel_aspect == i);
+            int pushed = pushSelected(is_selected);
+            if (ImGui::Button(aspects[i].label)) {
+                int old_aspect = sel_aspect;
+                sel_aspect = i;
+
+                // Get new list
+                PresetList new_preset_list = get_preset_list(sel_aspect);
+
+                // If switching portrait <-> landscape or tier is out of range, choose a tier
+                bool switched_portrait =
+                    (old_aspect >= 0) &&
+                    (aspects[old_aspect].portrait != aspects[sel_aspect].portrait);
+
+                bool tier_invalid = (sel_tier < 0 || !new_preset_list.p || sel_tier >= new_preset_list.x265_count);
+
+                if (switched_portrait || tier_invalid)
+                {
+                    // Prefer closest tier to current height; fallback to 0
+                    int current_h = record_resolution.y;
+                    int t = pick_closest_tier(sel_aspect, current_h);
+                    sel_tier = (t >= 0 ? t : 0);
+                }
+                else
+                {
+                    int valid_tier_count = (record_encoding == (int)VideoEncoding::x264) ?
+                        new_preset_list.x264_count :
+                        new_preset_list.x265_count;
+
+
+                    // Clamp to new list length just in case
+                    sel_tier = (sel_tier >= valid_tier_count) ? (valid_tier_count - 1) : sel_tier;
+                }
+
+                // Apply the (aspect, tier) to actually change WxH
+                apply_selection(record_resolution);
+            }
+            if (pushed) ImGui::PopStyleColor(pushed);
+            if (i + 1 < (int)IM_ARRAYSIZE(aspects)) ImGui::SameLine(0, 6);
+        }
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Resolution tier:");
+
+        int ai = (sel_aspect >= 0) ? sel_aspect : 0;
+        PresetList preset_list = get_preset_list(ai);
+
+        // compact grid
+        int per_row = 6;
+        for (int i = 0; i < preset_list.x265_count; ++i) {
+            bool is_selected = (sel_aspect == ai && sel_tier == i);
+            int pushed = pushSelected(is_selected);
+            bool unsupported = record_encoding == 0 && preset_list.p[i].HEVC_only;
+            if (unsupported) ImGui::BeginDisabled();
+            if (ImGui::Button(preset_list.p[i].label)) {
+                sel_aspect = ai;
+                sel_tier = i;
+                apply_selection(record_resolution);
+            }
+            if (unsupported) ImGui::EndDisabled();
+            if (pushed) ImGui::PopStyleColor(pushed);
+            if ((i + 1) % per_row != 0 && (i + 1) < preset_list.x265_count) ImGui::SameLine(0, 6);
+        }
+    //}
+    //
+    //// Video Options
+    //{
+        //ImGui::GroupBox box("vid_options", "Video Options");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        ImGui::Text("Codec:");
+        if (ImGui::Combo("##codec", &record_encoding, "H.264 (x264)\0H.265 / HEVC (x265)"))
+        {
+            bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, codecs[record_encoding]);
+            record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
+        }
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Text("FPS:");
+        if (ImGui::InputInt("##fps", &record_fps, 1))
+        {
+            record_fps = std::clamp(record_fps, 1, 100);
+            bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, codecs[record_encoding]);
+            record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
+        }
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Text("Quality:");
+
+        if (ImGui::SliderInt("##quality", &record_quality, 1, 10))
+        {
+            record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
+        }
+
+        ImGui::Text("= %.1f Mbps", (double)record_bitrate / 1000000.0);
+    }
+
+   
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+}
 
 void threadsDebugInfo()
 {
@@ -868,6 +1463,12 @@ void MainWindow::populateUI()
         }
     }
 
+    ImGui::Begin("Settings"); // Begin Debug Window
+    {
+        populateRecordOptions();
+    }
+    ImGui::End();
+
     #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
     ImGui::Begin("Debug"); // Begin Debug Window
     {
@@ -911,7 +1512,6 @@ void MainWindow::populateUI()
 
         ImGui::Begin("Viewport Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::Text("Viewport hovered: %d", viewport_hovered ?1:0);
-        ImGui::Text("Editing UI: %d", isInteractingWithUI()?1:0);
         ImGui::Text("active_id: %d", active_id);
         //ImGui::Text("Viewport: {%.0f, %.0f, %.0f, %.0f}",
         //    viewport_rect.Min.x,

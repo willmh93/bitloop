@@ -14,14 +14,18 @@ BL_BEGIN_NS;
 struct ToolbarButtonState 
 {
     ImVec4 bgColor;
+    ImVec4 bgColorToggled;
     ImVec4 symbolColor;
 
     bool enabled = false;
-    bool stuck = false;
+    bool toggled = false;
 
     int  blink_timer = 0;
     bool blinking = false;
 };
+
+
+
 
 extern ImDebugLog project_log;
 extern ImDebugLog debug_log;
@@ -30,7 +34,9 @@ enum struct MainWindowCommandType
 {
     ON_STARTED_PROJECT,
     ON_STOPPED_PROJECT,
-    ON_PAUSED_PROJECT
+    ON_PAUSED_PROJECT,
+    BEGIN_RECORDING,
+    END_RECORDING
 };
 
 
@@ -62,23 +68,36 @@ class MainWindow
     //ImRect viewport_rect;
     bool viewport_hovered = false;
 
-    ToolbarButtonState play = { ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), true };
-    ToolbarButtonState stop = { ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1, 1, 1, 1), false };
-    ToolbarButtonState pause = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1, 1, 1, 1), false };
-    ToolbarButtonState record = { ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1, 1, 1, 1), true };
+    ToolbarButtonState play     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(0.4f, 1.0f, 0.4f, 1.0f), true };
+    ToolbarButtonState pause    = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f), false };
+    ToolbarButtonState stop     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), false };
+    ToolbarButtonState record   = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1.0f, 0.2f, 0.0f, 1.0f), true };
+    ToolbarButtonState snapshot = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(0.8f, 0.8f, 0.8f, 1.0f), true };
 
-    // Recording states
+    // Video Capture
     RecordManager record_manager;
     std::vector<uint8_t> frame_data;
 
-    ///bool window_capture = false;
-    bool encode_next_sim_frame = false;
-    bool captured_last_frame = false;
+    std::string  record_folder;
+    int          record_encoding = 0;
+    int          record_fps = 60;
+    IVec2        record_resolution{ 1920, 1080 };
+    int64_t      record_bitrate = 128000000ll;
 
+    BitrateRange bitrate_mbps_range{ 1, 1000 };
+    int          record_quality = 10;
+
+    ///bool window_capture = false;
+    bool        encode_next_sim_frame = false;
+    bool        captured_last_frame = false;
+
+    // Image Capture
+    IVec2       snapshot_resolution{ 1920, 1080 };
 
     Canvas canvas;
-
+    //Canvas snapshot_canvas;
     Canvas overlay;
+
     SharedSync& shared_sync;
 
     const int window_flags =
@@ -96,17 +115,12 @@ public:
         singleton = this;
     }
 
-    [[nodiscard]] Canvas* getCanvas() {
-        return &canvas;
-    }
+    [[nodiscard]] Canvas* getCanvas() { return &canvas; }
+    [[nodiscard]] Canvas* getOverlay() { return &overlay; }
+    [[nodiscard]] RecordManager* getRecordManager() { return &record_manager; }
 
-    [[nodiscard]] Canvas* getOverlay() {
-        return &overlay;
-    }
-
-    [[nodiscard]] RecordManager* getRecordManager() {
-        return &record_manager;
-    }
+    void queueBeginRecording();
+    void queueEndRecording();
 
     void beginRecording();
     void endRecording();
@@ -124,12 +138,11 @@ public:
     ImFont* mainFont() { return main_font; }
     ImFont* monoFont() { return mono_font; }
 
-    /// Determine whether *any* ImGui input is likely being altered
-    bool isInteractingWithUI();
-    //ImRect viewportRect() { return viewport_rect; }
-    bool viewportHovered() { return viewport_hovered; }
 
-    void addMainWindowCommand(MainWindowCommandEvent e)
+    //ImRect viewportRect() { return viewport_rect; }
+    bool viewportHovered() const { return viewport_hovered; }
+
+    void queueMainWindowCommand(MainWindowCommandEvent e)
     {
         std::lock_guard<std::mutex> lock(command_mutex);
         command_queue.push_back(e);
@@ -151,6 +164,7 @@ public:
 
     void populateCollapsedLayout();
     void populateViewport();
+    void populateRecordOptions();
     void populateExpandedLayout();
     void populateUI();
 };

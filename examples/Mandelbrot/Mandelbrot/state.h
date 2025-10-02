@@ -23,21 +23,10 @@ struct MandelState
     double      iter_weight                    = 1.0;
     double      dist_weight                    = 0.0;
     double      stripe_weight                  = 0.0;
-                                               
-    double      cycle_iter_weight              = 0.0;
-    bool        cycle_iter_dynamic_limit       = true;
-    bool        cycle_iter_normalize_depth     = true;
-    double      cycle_iter_log1p_weight        = 0.0;
-    double      cycle_iter_value               = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
-                                               
-    double      cycle_dist_weight              = 0.0;
-    bool        cycle_dist_invert              = false;
-    double      cycle_dist_value               = 0.5f;
-    double      cycle_dist_sharpness           = 0.9; // Used for UI (ignored during tween)
-
-    StripeParams stripe_params;
-                                               
-    double      cycle_stripe_weight            = 0.0;
+    
+    IterParams   iter_params;                              
+    DistParams   dist_params;
+    StripeParams stripe_params; // todo: Separate StripeComputeParams/StripeShadeParams
                 
     double      gradient_shift                 = 0.0;
     double      hue_shift                      = 0.0;
@@ -77,9 +66,10 @@ struct MandelState
         if (show_axis)                  flags |= MANDEL_SHOW_AXIS;
         if (flatten)                    flags |= MANDEL_FLATTEN;
 
-        if (cycle_iter_dynamic_limit)   flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
-        if (cycle_iter_normalize_depth) flags |= MANDEL_NORMALIZE_DEPTH;
-        if (cycle_dist_invert)          flags |= MANDEL_INVERT_DIST;
+        if (iter_params.cycle_iter_dynamic_limit)   flags |= MANDEL_DYNAMIC_COLOR_CYCLE;
+        if (iter_params.cycle_iter_normalize_depth) flags |= MANDEL_NORMALIZE_DEPTH;
+        if (dist_params.cycle_dist_invert)          flags |= MANDEL_INVERT_DIST;
+
         if (use_smoothing)              flags |= MANDEL_USE_SMOOTHING;
 
         //flags |= ((uint32_t)smoothing_type << MANDEL_SMOOTH_BITSHIFT);
@@ -113,12 +103,12 @@ struct MandelState
                 info["o"] = JSON::markCleanFloat(stripe_weight, 2);
 
                 // ITER
-                info["i"] = JSON::markCleanFloat(cycle_iter_value);
-                info["l"] = JSON::markCleanFloat(cycle_iter_log1p_weight);
+                info["i"] = JSON::markCleanFloat(iter_params.cycle_iter_value);
+                info["l"] = JSON::markCleanFloat(iter_params.cycle_iter_log1p_weight);
 
                 // DIST
-                info["d"] = JSON::markCleanFloat(cycle_dist_value, 5);
-                info["s"] = JSON::markCleanFloat(cycle_dist_sharpness, 5);
+                info["d"] = JSON::markCleanFloat(dist_params.cycle_dist_value, 5);
+                info["s"] = JSON::markCleanFloat(dist_params.cycle_dist_sharpness, 5);
 
                 // STRIPE
                 info["v"] = (int)stripe_params.freq;
@@ -195,9 +185,9 @@ private:
             dynamic_iter_lim            = flags & MANDEL_DYNAMIC_ITERS;
             show_axis                   = flags & MANDEL_SHOW_AXIS;
             flatten                     = flags & MANDEL_FLATTEN;
-            cycle_iter_dynamic_limit    = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
-            cycle_iter_normalize_depth  = flags & MANDEL_NORMALIZE_DEPTH;
-            cycle_dist_invert           = flags & MANDEL_INVERT_DIST;
+            iter_params.cycle_iter_dynamic_limit    = flags & MANDEL_DYNAMIC_COLOR_CYCLE;
+            iter_params.cycle_iter_normalize_depth  = flags & MANDEL_NORMALIZE_DEPTH;
+            dist_params.cycle_dist_invert           = flags & MANDEL_INVERT_DIST;
             use_smoothing               = flags & MANDEL_USE_SMOOTHING;
 
             // View
@@ -240,12 +230,12 @@ private:
                 stripe_weight = info.value("o", 0.0);
 
                 // ITER
-                cycle_iter_value = info.value("i", cycle_iter_value);
-                cycle_iter_log1p_weight = info.value("l", cycle_iter_log1p_weight);
+                iter_params.cycle_iter_value = info.value("i", iter_params.cycle_iter_value);
+                iter_params.cycle_iter_log1p_weight = info.value("l", iter_params.cycle_iter_log1p_weight);
 
                 // DIST
-                cycle_dist_value = info.value("d", cycle_dist_value);
-                cycle_dist_sharpness = info.value("s", cycle_dist_sharpness);
+                dist_params.cycle_dist_value = info.value("d", dist_params.cycle_dist_value);
+                dist_params.cycle_dist_sharpness = info.value("s", dist_params.cycle_dist_sharpness);
 
                 // STRIPE
                 stripe_params.freq = info.value("v", 0.0f);

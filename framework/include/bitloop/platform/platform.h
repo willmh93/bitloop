@@ -24,6 +24,7 @@
 #include "glad/glad.h"
 #endif
 
+#include <filesystem>
 #include <functional>
 
 #include <bitloop/core/debug.h>
@@ -65,12 +66,16 @@ public:
     void update();
     void resized();
 
+    [[nodiscard]] SDL_Window* sdl_window() { return window; }
+
     [[nodiscard]] int gl_width()      { return gl_w; }
     [[nodiscard]] int gl_height()     { return gl_h; }
     [[nodiscard]] int fbo_width()     { return fb_w; }
     [[nodiscard]] int fbo_height()    { return fb_h; }
     [[nodiscard]] int window_width()  { return win_w; }
     [[nodiscard]] int window_height() { return win_h; }
+
+    [[nodiscard]] IVec2 fbo_size()    { return {fb_w, fb_h}; }
 
     // Device Info
     ///[[nodiscard]] float dpi() { return _dpi; }
@@ -101,7 +106,10 @@ public:
     [[nodiscard]] float max_char_cols();
 
     // File system helpers
+    [[nodiscard]] std::filesystem::path executable_dir();
+    [[nodiscard]] std::filesystem::path resource_root();
     [[nodiscard]] std::string path(std::string_view virtual_path);
+
 
     // URL helpers
     #ifdef __EMSCRIPTEN__

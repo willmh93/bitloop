@@ -30,7 +30,7 @@
  *  ✔ Rapid prototyping of scientific simulations, visualizations, and 
  *     other ideas (games, art, etc.)
  *  ✔ Optimized for high performance
- *  ✘ Seamless video encoding with FFmpeg (desktop-only for now)
+ *  ✔ Seamless video encoding with FFmpeg (desktop-only for now)
  * 
  * Engine:
  *  ✔ Cross-platform (Linux:✔  Windows:✔  Emscripten:✔  macOS:✘  Android:✘  iPhone:✘)
@@ -38,7 +38,7 @@
  *  ✔ Multithreaded ImGui support for non-blocking UI input (updates applied at beginning of each frame)
  *  ✔ SDL3 for window/input handling
  *  ✔ Rich set helpers and 3rd party libraries for scientific simulations
- *  ✘ 128-bit floating-point support for Camera/World
+ *  ✔ 128-bit floating-point support for Camera/World
  *  ✘ Timeline support with integrated scripting
  * 
  * Tools:
@@ -86,7 +86,6 @@ using namespace bl;
 SDL_Window* window = nullptr;
 SharedSync shared_sync;
 bool simulated_imgui_paste = false;
-//std::unordered_map<size_t, size_t> thread_map;
 
 
 void gui_loop()
@@ -118,6 +117,7 @@ void gui_loop()
                 project_worker()->queueEvent(e);
 
             case SDL_EVENT_MOUSE_WHEEL:
+                // Project ignores scroll events when mouse is over ImGui
                 if (main_window()->viewportHovered())
                     project_worker()->queueEvent(e);
                 break;
@@ -125,7 +125,8 @@ void gui_loop()
             case SDL_EVENT_KEY_DOWN:
             case SDL_EVENT_KEY_UP:
             case SDL_EVENT_TEXT_INPUT:
-                if (!imguiWantsKeyboard)
+                // Project ignores key events when ImGui input active
+                if (!imguiWantsKeyboard) 
                     project_worker()->queueEvent(e); break;
 
             default:
@@ -138,7 +139,7 @@ void gui_loop()
     // ======== Prepare frame ========
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
-    ImGui::GetIO().DisplaySize = ImVec2((float)platform()->fbo_width(), (float)platform()->fbo_height());
+    ImGui::GetIO().DisplaySize = (ImVec2)platform()->fbo_size();
     ImGui::GetIO().DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
     ImGui::NewFrame();
 

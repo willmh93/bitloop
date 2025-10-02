@@ -125,14 +125,13 @@ struct Mandelbrot_Scene : public MandelState, public Scene<Mandelbrot_Scene>
 
     // ────── Expensive Interior "forwarding" optimization ──────
     struct {
-        int c1 = 1, e1 = 0, c2 = 1, e2 = 0;
+        int c1 = 5, e1 = 3, c2 = 7, e2 = 3;
     }  interior_phases_contract_expand;
 
     bool maxdepth_show_optimized = false;
 
     // ────── Computing / Shading ──────
-    bool compute_mandelbrot();
-    //void normalize_shading_limits();
+    bool compute_mandelbrot(EscapeField* field, CanvasImage128* bmp);
     void normalize_field(EscapeField* field, CanvasImage128* bmp);
 
     // ────── Timers ──────

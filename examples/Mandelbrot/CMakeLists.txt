@@ -14,13 +14,13 @@ file(GLOB SIM_SOURCES CONFIGURE_DEPENDS
 
 bitloop_new_project(Mandelbrot  ${SIM_SOURCES})
 
-# MSVC
-if (MSVC)
-	target_compile_options(Mandelbrot PRIVATE /arch:AVX2 /fp:fast)
-else()
-	# GCC/Clang
-	target_compile_options(Mandelbrot PRIVATE -mavx2 -mfma -ffp-contract=fast -ffast-math -fno-math-errno)
-endif()
+## MSVC
+#if (MSVC)
+#	target_compile_options(Mandelbrot PRIVATE /arch:AVX2 /fp:fast)
+#else()
+#	# GCC/Clang
+#	target_compile_options(Mandelbrot PRIVATE -mavx2 -mfma -ffp-contract=fast -ffast-math -fno-math-errno)
+#endif()
 
 
 bitloop_add_dependency(Mandelbrot  "../Cardioid")

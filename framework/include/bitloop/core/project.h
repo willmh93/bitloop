@@ -186,6 +186,7 @@ struct ProjectInfo
 {
     enum State { INACTIVE, ACTIVE, RECORDING };
 
+    std::string name;
     std::vector<std::string> path;
     ProjectCreatorFunc creator;
     int sim_uid;
@@ -193,11 +194,12 @@ struct ProjectInfo
 
     ProjectInfo(
         std::vector<std::string> path,
+        std::string name="",
         ProjectCreatorFunc creator = nullptr,
         int sim_uid = -100,
         State state = State::INACTIVE
     )
-        : path(path), creator(creator), sim_uid(sim_uid), state(state)
+        : name(name), path(path), creator(creator), sim_uid(sim_uid), state(state)
     {}
 };
 
@@ -244,22 +246,26 @@ protected:
 
     //
     
+
     void _onEvent(Event e) 
     {
         onEvent(e);
 
-        switch (e.type())
+        if (ownsEvent(e))
         {
-        case SDL_EVENT_FINGER_DOWN:       onPointerDown(PointerEvent(e));  break;
-        case SDL_EVENT_MOUSE_BUTTON_DOWN: onPointerDown(PointerEvent(e));  break;
-        case SDL_EVENT_FINGER_UP:         onPointerUp(PointerEvent(e));    break;
-        case SDL_EVENT_MOUSE_BUTTON_UP:   onPointerUp(PointerEvent(e));    break;
-        case SDL_EVENT_FINGER_MOTION:     onPointerMove(PointerEvent(e));  break;
-        case SDL_EVENT_MOUSE_MOTION:      onPointerMove(PointerEvent(e));  break;
-        case SDL_EVENT_MOUSE_WHEEL:       onWheel(PointerEvent(e));        break;
+            switch (e.type())
+            {
+            case SDL_EVENT_FINGER_DOWN:       onPointerDown(PointerEvent(e));  break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN: onPointerDown(PointerEvent(e));  break;
+            case SDL_EVENT_FINGER_UP:         onPointerUp(PointerEvent(e));    break;
+            case SDL_EVENT_MOUSE_BUTTON_UP:   onPointerUp(PointerEvent(e));    break;
+            case SDL_EVENT_FINGER_MOTION:     onPointerMove(PointerEvent(e));  break;
+            case SDL_EVENT_MOUSE_MOTION:      onPointerMove(PointerEvent(e));  break;
+            case SDL_EVENT_MOUSE_WHEEL:       onWheel(PointerEvent(e));        break;
 
-        case SDL_EVENT_KEY_DOWN:          onKeyDown(KeyEvent(e));          break;
-        case SDL_EVENT_KEY_UP:            onKeyUp(KeyEvent(e));            break;
+            case SDL_EVENT_KEY_DOWN:          onKeyDown(KeyEvent(e));          break;
+            case SDL_EVENT_KEY_UP:            onKeyUp(KeyEvent(e));            break;
+            }
         }
     }
 
@@ -293,6 +299,7 @@ public:
     virtual void viewportDraw(Viewport*) const = 0;
     virtual void viewportOverlay(Viewport*) const {};
 
+    bool ownsEvent(const Event& e);
     virtual void onEvent(Event e) { (void)e; }
 
     void pollEvents();
@@ -320,8 +327,8 @@ public:
     [[nodiscard]] bool isRecording() const;
     [[nodiscard]] bool capturedLastFrame();
 
-    void beginRecording();
-    void endRecording();
+    void queueBeginRecording();
+    void queueEndRecording();
     void captureFrame(bool b);
     
 
@@ -703,10 +710,11 @@ public:
     static inline int factory_sim_index = 0;
 
     template<typename T>
-    static std::shared_ptr<ProjectInfo> createProjectFactoryInfo()
+    static std::shared_ptr<ProjectInfo> createProjectFactoryInfo(std::string name)
     {
         auto project_info = std::make_shared<ProjectInfo>(T::info());
         project_info->creator = []() -> ProjectBase* { return new T(); };
+        project_info->name = name;
         project_info->sim_uid = ProjectBase::factory_sim_index++;
 
         return project_info;

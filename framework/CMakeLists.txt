@@ -42,22 +42,22 @@ file(GLOB NANOVGX_SOURCES CONFIGURE_DEPENDS
     "${BL_INC}/nanovgx/*.h"
 )
 
-file(GLOB EXTERNAL_HEADERS CONFIGURE_DEPENDS
-    "${BL_INC}/3rd_party/*.hpp"
-    "${BL_INC}/3rd_party/*.h"
-    "${BL_INC}/3rd_party/nanosvg/*.h"
-    "${BL_INC}/3rd_party/glad/*.h"
-    "${BL_INC}/3rd_party/glad/KHR/*.h"
-    "${BL_INC}/3rd_party/nanovg/*.h"
-    "${BL_INC}/3rd_party/concurrentqueue/*.h"
-)
+#file(GLOB EXTERNAL_HEADERS CONFIGURE_DEPENDS
+#    "${BL_INC}/3rd_party/*.hpp"
+#    "${BL_INC}/3rd_party/*.h"
+#    "${BL_INC}/3rd_party/nanosvg/*.h"
+#    "${BL_INC}/3rd_party/glad/*.h"
+#    "${BL_INC}/3rd_party/glad/KHR/*.h"
+#    "${BL_INC}/3rd_party/nanovg/*.h"
+#    "${BL_INC}/3rd_party/concurrentqueue/*.h"
+#)
 
-file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
-    "${BL_SRC}/3rd_party/*.cpp"
-    "${BL_SRC}/3rd_party/*.c"
-    "${BL_SRC}/3rd_party/glad/*.c"
-    "${BL_SRC}/3rd_party/nanovg/*.c"
-)
+#file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS
+#    "${BL_SRC}/3rd_party/*.cpp"
+#    "${BL_SRC}/3rd_party/*.c"
+#    "${BL_SRC}/3rd_party/glad/*.c"
+#    "${BL_SRC}/3rd_party/nanovg/*.c"
+#)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #source_group("CMakeLists (main)"    FILES ${CMAKE_SOURCE_DIR}/CMakeLists.txt)
@@ -65,8 +65,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 source_group("Core"                  FILES ${CORE_SOURCES})
 source_group("Platform"              FILES ${PLATFORM_SOURCES})
 source_group("Utility"               FILES ${UTILITY_SOURCES})
-source_group("ImGui (extras)"        FILES ${IMGUIX_SOURCES})
-source_group("NanoVG (extras)"       FILES ${NANOVGX_SOURCES})
+source_group("ImGui (ext)"           FILES ${IMGUIX_SOURCES})
+source_group("NanoVG (ext)"          FILES ${NANOVGX_SOURCES})
 source_group("Simulations"           FILES ${SIMULATION_HEADERS} ${SIMULATION_SOURCES})
 
 # ──────── Mark all .c files as c++ ────────
@@ -86,8 +86,8 @@ set(ALL_SRC_FILES
     ${IMGUIX_SOURCES}
     ${NANOVGX_SOURCES}
 
-    ${EXTERNAL_HEADERS}
-    ${EXTERNAL_SOURCES}
+    #${EXTERNAL_HEADERS}
+    #${EXTERNAL_SOURCES}
 )
 
 #target_sources(bitloop PRIVATE "${HINT_FILE}")
@@ -104,10 +104,11 @@ target_include_directories(bitloop
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 
         # Allow bundled glad paths to resolve (temp vcpkg cmake version workaround)
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
-        $<INSTALL_INTERFACE:include/bitloop/3rd_party>
-        $<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
+
+        #$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party>
+        #$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitloop/3rd_party/glad>
+        #$<INSTALL_INTERFACE:include/bitloop/3rd_party>
+        #$<INSTALL_INTERFACE:include/bitloop/3rd_party/glad>
 
 )
 
@@ -118,11 +119,12 @@ target_include_directories(bitloop
 find_package(Freetype CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
-#find_package(glad CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 find_package(nanovg CONFIG REQUIRED)
 find_package(NanoSVG CONFIG REQUIRED)
+find_package(WebP CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-brotli CONFIG REQUIRED)
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
@@ -132,12 +134,13 @@ target_link_libraries(bitloop
     Freetype::Freetype
     imgui::imgui
     SDL3::SDL3
-    #glad::glad
+    glad::glad
     glm::glm
     unofficial::concurrentqueue::concurrentqueue
     nanovg::nanovg
     NanoSVG::nanosvg
     NanoSVG::nanosvgrast
+    WebP::webp
     nlohmann_json::nlohmann_json
     unofficial::brotli::brotlidec
     unofficial::brotli::brotlienc

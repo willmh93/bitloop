@@ -15,6 +15,47 @@ namespace bl {
 #define FMA_AVAILABLE 
 #endif
 
+BL_PUSH_PRECISE
+FAST_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e)
+{
+    s = a + b;
+    double bv = s - a;
+    e = (a - (s - bv)) + (b - bv);
+}
+BL_POP_PRECISE
+
+#ifdef FMA_AVAILABLE
+
+static FAST_INLINE double fma1(double a, double b, double c)
+{
+    return std::fma(a, b, c);
+}
+
+FAST_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err)
+{
+    p = a * b;
+    err = fma1(a, b, -p);
+}
+
+#endif
+
+FAST_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p, double& err)
+{
+    constexpr double split = 134217729.0;
+
+    double a_c = a * split;
+    double a_hi = a_c - (a_c - a);
+    double a_lo = a - a_hi;
+
+    double b_c = b * split;
+    double b_hi = b_c - (b_c - b);
+    double b_lo = b - b_hi;
+
+    p = a * b; // rounded product
+    err = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo;
+}
+
+
 struct flt128;
 
 constexpr flt128 operator+(const flt128& a, const flt128& b);
@@ -41,6 +82,25 @@ struct flt128
     FAST_INLINE constexpr flt128& operator/=(flt128 rhs) { *this = *this / rhs; return *this; }
     #endif
 
+
+    FAST_INLINE constexpr flt128& operator=(double x) noexcept {
+        hi = x; lo = 0.0; return *this;
+    }
+    FAST_INLINE constexpr flt128& operator=(float x) noexcept {
+        hi = static_cast<double>(x); lo = 0.0; return *this;
+    }
+
+    FAST_INLINE constexpr flt128& operator=(uint64_t u) noexcept;
+    FAST_INLINE constexpr flt128& operator=(int64_t v) noexcept;
+
+    template<class T, std::enable_if_t<std::is_integral_v<T>&& std::is_signed_v<T> && (sizeof(T) < 8), int> = 0>
+    FAST_INLINE constexpr flt128& operator=(T v) noexcept {
+        return (*this = static_cast<int64_t>(v));
+    }
+    template<class T, std::enable_if_t<std::is_integral_v<T>&& std::is_unsigned_v<T> && (sizeof(T) < 8), int> = 0>
+    FAST_INLINE constexpr flt128& operator=(T v) noexcept {
+        return (*this = static_cast<uint64_t>(v));
+    }
 
     FAST_INLINE constexpr flt128& operator+=(flt128 rhs) { *this = *this + rhs; return *this; }
     FAST_INLINE constexpr flt128& operator-=(flt128 rhs) { *this = *this - rhs; return *this; }
@@ -119,59 +179,8 @@ namespace std
 
 namespace bl {
 
-static constexpr flt128 f128(double x) noexcept { return { x, 0.0 }; }
-
 static constexpr double DD_PI = 3.141592653589793238462643383279502884;
 static constexpr double DD_PI2 = 1.570796326794896619231321691639751442;
-
-// comparisons
-constexpr FAST_INLINE bool operator <(const flt128& a, const flt128& b) { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
-constexpr FAST_INLINE bool operator >(const flt128& a, const flt128& b) { return b < a; }
-constexpr FAST_INLINE bool operator<=(const flt128& a, const flt128& b) { return (a < b) || (a.hi == b.hi && a.lo == b.lo); }
-constexpr FAST_INLINE bool operator>=(const flt128& a, const flt128& b) { return b <= a; }
-constexpr FAST_INLINE bool operator==(const flt128& a, const flt128& b) { return a.hi == b.hi && a.lo == b.lo; }
-constexpr FAST_INLINE bool operator!=(const flt128& a, const flt128& b) { return !(a == b); }
-
-BL_PUSH_PRECISE
-FAST_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e)
-{
-    s = a + b;
-    double bv = s - a;
-    e = (a - (s - bv)) + (b - bv);
-}
-BL_POP_PRECISE
-
-#ifdef FMA_AVAILABLE
-
-static FAST_INLINE double fma1(double a, double b, double c)
-{
-    return std::fma(a, b, c);
-}
-
-FAST_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err)
-{
-    p = a * b;
-    err = fma1(a, b, -p);
-}
-
-#endif
-
-FAST_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p, double& err)
-{
-    constexpr double split = 134217729.0;
-
-    double a_c = a * split;
-    double a_hi = a_c - (a_c - a);
-    double a_lo = a - a_hi;
-
-    double b_c = b * split;
-    double b_hi = b_c - (b_c - b);
-    double b_lo = b - b_hi;
-
-    p = a * b; // rounded product
-    err = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo;
-}
-
 
 /// ======== Helpers ========
 
@@ -199,6 +208,112 @@ FAST_INLINE constexpr flt128 recip(flt128 b)
 
     return y;
 }
+
+FAST_INLINE constexpr flt128& flt128::operator=(uint64_t u) noexcept {
+    // same limb path you already use in f128(u)
+    uint64_t hi32 = u >> 32, lo32 = u & 0xFFFFFFFFull;
+    double a = static_cast<double>(hi32) * 4294967296.0; // 2^32
+    double b = static_cast<double>(lo32);
+    double s, e; two_sum_precise(a, b, s, e);
+    flt128 r = renorm(s, e);
+    hi = r.hi; lo = r.lo; return *this;
+}
+FAST_INLINE constexpr flt128& flt128::operator=(int64_t v) noexcept {
+    uint64_t u = (v < 0) ? uint64_t(0) - uint64_t(v) : uint64_t(v);
+    flt128 r; r = u;                       // reuse uint64_t path
+    if (v < 0) { r.hi = -r.hi; r.lo = -r.lo; }
+    hi = r.hi; lo = r.lo; return *this;
+}
+
+// ------------------ flt128 constructors (outside flt128 to keep trivially constructible) ------------------
+
+FAST_INLINE constexpr flt128 f128(double x) noexcept { return { x, 0.0 }; }
+FAST_INLINE constexpr flt128 f128(float x) { return flt128{ static_cast<double>(x) }; }
+FAST_INLINE constexpr flt128 f128(uint64_t u) {
+    // u = (hi<<32) + lo
+    uint64_t hi32 = u >> 32;
+    uint64_t lo32 = u & 0xFFFFFFFFull;
+
+    double a = static_cast<double>(hi32) * 4294967296.0; // 2^32
+    double b = static_cast<double>(lo32);
+
+    double s, e;
+    two_sum_precise(a, b, s, e);
+    return renorm(s, e);
+}
+FAST_INLINE constexpr flt128 f128(int64_t v) {
+    uint64_t u = v < 0 ? uint64_t(0) - uint64_t(v) : uint64_t(v);
+    flt128 r = f128(u);
+    return (v < 0) ? flt128{ -r.hi, -r.lo } : r;
+}
+FAST_INLINE constexpr flt128 f128(int v) { return f128(int64_t(v)); }
+
+// ------------------ flt128 <=> flt128 ------------------
+
+FAST_INLINE constexpr bool operator <(const flt128& a, const flt128& b) { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
+FAST_INLINE constexpr bool operator >(const flt128& a, const flt128& b) { return b < a; }
+FAST_INLINE constexpr bool operator<=(const flt128& a, const flt128& b) { return (a < b) || (a.hi == b.hi && a.lo == b.lo); }
+FAST_INLINE constexpr bool operator>=(const flt128& a, const flt128& b) { return b <= a; }
+FAST_INLINE constexpr bool operator==(const flt128& a, const flt128& b) { return a.hi == b.hi && a.lo == b.lo; }
+FAST_INLINE constexpr bool operator!=(const flt128& a, const flt128& b) { return !(a == b); }
+
+// ------------------ double <=> flt128 ------------------
+
+FAST_INLINE constexpr bool operator<(const flt128& a, double b) { return a < f128(b); }
+FAST_INLINE constexpr bool operator<(double a, const flt128& b) { return f128(a) < b; }
+FAST_INLINE constexpr bool operator>(const flt128& a, double b) { return b < a; }
+FAST_INLINE constexpr bool operator>(double a, const flt128& b) { return b < a; }
+FAST_INLINE constexpr bool operator<=(const flt128& a, double b) { return !(b < a); }
+FAST_INLINE constexpr bool operator<=(double a, const flt128& b) { return !(b < a); }
+FAST_INLINE constexpr bool operator>=(const flt128& a, double b) { return !(a < b); }
+FAST_INLINE constexpr bool operator>=(double a, const flt128& b) { return !(a < b); }
+FAST_INLINE constexpr bool operator==(const flt128& a, double b) { return a == f128(b); }
+FAST_INLINE constexpr bool operator==(double a, const flt128& b) { return f128(a) == b; }
+FAST_INLINE constexpr bool operator!=(const flt128& a, double b) { return !(a == b); }
+FAST_INLINE constexpr bool operator!=(double a, const flt128& b) { return !(a == b); }
+
+// ------------------ float <=> flt128 ------------------
+
+FAST_INLINE constexpr bool operator<(const flt128& a, float b) { return a < f128(b); }
+FAST_INLINE constexpr bool operator<(float a, const flt128& b) { return f128(a) < b; }
+FAST_INLINE constexpr bool operator>(const flt128& a, float b) { return b < a; }
+FAST_INLINE constexpr bool operator>(float a, const flt128& b) { return b < a; }
+FAST_INLINE constexpr bool operator<=(const flt128& a, float b) { return !(b < a); }
+FAST_INLINE constexpr bool operator<=(float a, const flt128& b) { return !(b < a); }
+FAST_INLINE constexpr bool operator>=(const flt128& a, float b) { return !(a < b); }
+FAST_INLINE constexpr bool operator>=(float a, const flt128& b) { return !(a < b); }
+FAST_INLINE constexpr bool operator==(const flt128& a, float b) { return a == f128(b); }
+FAST_INLINE constexpr bool operator==(float a, const flt128& b) { return f128(a) == b; }
+FAST_INLINE constexpr bool operator!=(const flt128& a, float b) { return !(a == b); }
+FAST_INLINE constexpr bool operator!=(float a, const flt128& b) { return !(a == b); }
+
+// --------------- int64_t / uint64_t <=> flt128 ---------------
+
+FAST_INLINE constexpr bool operator<(const flt128& a, int64_t b) { return a < f128(b); }
+FAST_INLINE constexpr bool operator<(int64_t a, const flt128& b) { return f128(a) < b; }
+FAST_INLINE constexpr bool operator>(const flt128& a, int64_t b) { return b < a; }
+FAST_INLINE constexpr bool operator>(int64_t a, const flt128& b) { return b < a; }
+FAST_INLINE constexpr bool operator<=(const flt128& a, int64_t b) { return !(b < a); }
+FAST_INLINE constexpr bool operator<=(int64_t a, const flt128& b) { return !(b < a); }
+FAST_INLINE constexpr bool operator>=(const flt128& a, int64_t b) { return !(a < b); }
+FAST_INLINE constexpr bool operator>=(int64_t a, const flt128& b) { return !(a < b); }
+FAST_INLINE constexpr bool operator==(const flt128& a, int64_t b) { return a == f128(b); }
+FAST_INLINE constexpr bool operator==(int64_t a, const flt128& b) { return f128(a) == b; }
+FAST_INLINE constexpr bool operator!=(const flt128& a, int64_t b) { return !(a == b); }
+FAST_INLINE constexpr bool operator!=(int64_t a, const flt128& b) { return !(a == b); }
+FAST_INLINE constexpr bool operator<(const flt128& a, uint64_t b) { return a < f128(b); }
+FAST_INLINE constexpr bool operator<(uint64_t a, const flt128& b) { return f128(a) < b; }
+FAST_INLINE constexpr bool operator>(const flt128& a, uint64_t b) { return b < a; }
+FAST_INLINE constexpr bool operator>(uint64_t a, const flt128& b) { return b < a; }
+FAST_INLINE constexpr bool operator<=(const flt128& a, uint64_t b) { return !(b < a); }
+FAST_INLINE constexpr bool operator<=(uint64_t a, const flt128& b) { return !(b < a); }
+FAST_INLINE constexpr bool operator>=(const flt128& a, uint64_t b) { return !(a < b); }
+FAST_INLINE constexpr bool operator>=(uint64_t a, const flt128& b) { return !(a < b); }
+FAST_INLINE constexpr bool operator==(const flt128& a, uint64_t b) { return a == f128(b); }
+FAST_INLINE constexpr bool operator==(uint64_t a, const flt128& b) { return f128(a) == b; }
+FAST_INLINE constexpr bool operator!=(const flt128& a, uint64_t b) { return !(a == b); }
+FAST_INLINE constexpr bool operator!=(uint64_t a, const flt128& b) { return !(a == b); }
+
 
 /// ======== Arithmetic operators ========
 FAST_INLINE constexpr flt128 operator+(const flt128& a, const flt128& b)

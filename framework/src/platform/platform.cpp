@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <limits.h>
 #endif
-#include <filesystem>
+
 
 BL_BEGIN_NS
 
@@ -187,7 +187,7 @@ float PlatformManager::max_char_cols()
     return io.DisplaySize.x / ImGui::GetFontSize();
 }
 
-inline std::filesystem::path executable_dir()
+std::filesystem::path PlatformManager::executable_dir()
 {
     #if defined(_WIN32)
     std::wstring buf(MAX_PATH, L'\0');
@@ -212,12 +212,12 @@ inline std::filesystem::path executable_dir()
     buf[len] = '\0';
     return std::filesystem::canonical(buf).parent_path();
 
-    #else   // last-ditch fallback
+    #else // fallback
     return std::filesystem::current_path();
     #endif
 }
 
-inline std::filesystem::path resource_root()
+std::filesystem::path PlatformManager::resource_root()
 {
     #ifdef __EMSCRIPTEN__
     return "/";

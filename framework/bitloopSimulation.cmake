@@ -376,7 +376,7 @@ macro(bitloop_finalize)
 			_bitloop_get_project_visibility(${project_name} project_visible)
 			if (project_visible)
 				file(APPEND "${BL_AUTOGEN_INCLUDES}"
-					"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>());\n")
+					"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>(\"${project_name}\"));\n")
 			endif()
 		endforeach()
 		file(APPEND "${BL_AUTOGEN_INCLUDES}" "}\n")

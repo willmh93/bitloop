@@ -86,6 +86,11 @@ void SceneBase::mountToAll(Layout& viewports)
         viewport->mountScene(this);
 }
 
+bool bl::SceneBase::ownsEvent(const Event& e)
+{
+    return e.ctx_owner() && e.ctx_owner()->scene == this;
+}
+
 void SceneBase::pollEvents()
 {
     project_worker()->pollEvents(false);
@@ -144,14 +149,14 @@ bool SceneBase::isRecording() const
     return main_window()->getRecordManager()->isRecording();
 }
 
-void SceneBase::beginRecording()
+void SceneBase::queueBeginRecording()
 {
-    main_window()->beginRecording();
+    main_window()->queueBeginRecording();
 }
 
-void SceneBase::endRecording()
+void SceneBase::queueEndRecording()
 {
-    main_window()->endRecording();
+    main_window()->queueEndRecording();
 }
 
 void SceneBase::captureFrame(bool b)
@@ -463,13 +468,7 @@ void ProjectBase::_projectStart()
 
     // Prepare layout
     _projectPrepare();
-
-    assert(viewports.count() >  0);
-
-    // Update layout rects
     updateViewportRects();
-
-    // Call BasicProject::projectStart()
     projectStart();
 
     //cache.init("cache.bin");
@@ -554,6 +553,8 @@ DVec2 ProjectBase::surfaceSize()
 
 void ProjectBase::updateViewportRects()
 {
+    assert(viewports.count() > 0);
+
     DVec2 surface_size = surfaceSize();
 
     // Update viewport sizes
@@ -830,8 +831,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
     {
         if (!main_window()->viewportHovered())
             return;
-    }
-    break;
+    } break;
     }
 
     // Wrap SDL event
@@ -849,21 +849,18 @@ void ProjectBase::_onEvent(SDL_Event& e)
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
 
-        }
-        break;
+        } break;
         case SDL_EVENT_MOUSE_BUTTON_UP:
         {
             mouse.pressed = false;
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
-        }
-        break;
+        } break;
         case SDL_EVENT_MOUSE_MOTION:
         {
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
-        }
-        break;
+        } break;
 
         // Touch
         case SDL_EVENT_FINGER_DOWN:
@@ -872,17 +869,16 @@ void ProjectBase::_onEvent(SDL_Event& e)
         {
             mouse.client_x = (double)(e.tfinger.x * (float)fboWidth());
             mouse.client_y = (double)(e.tfinger.y * (float)fboHeight());
-        }
-        break;
+        } break;
     }
 
-    // Detect which viewport we're "focusing" / "hovering" on
+    // Detect which viewport we're "focusing" / "hovering" on (to attach to event)
     switch (e.type)
     {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_FINGER_DOWN:
         {
-            // Detect which viewport we're "focusing" on
+            // Update "ctx_focused" when we touch/click
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
@@ -899,9 +895,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             }
             if (!captured)
                 ctx_focused = nullptr;
-        }
-        break;
-
+        } break;
         case SDL_EVENT_MOUSE_MOTION:
         case SDL_EVENT_FINGER_MOTION:
         {
@@ -922,89 +916,84 @@ void ProjectBase::_onEvent(SDL_Event& e)
             }
             if (!captured)
                 ctx_hovered = nullptr;
-        }
-        break;
+        } break;
     }
 
 
-    // Track fingers
-    if (platform()->is_mobile())
+    // Update pressed_fingers
     {
-        // Does this finger already have an "owner" viewport?
-        // If so, loop over fingers and restore it for 
-        Viewport* ctx_owner = nullptr;
-        
-        // Support both single-finger pan & 2 finger transform
-        switch (e.type)
+        if (platform()->is_mobile())
         {
-        case SDL_EVENT_FINGER_DOWN:
-        {
-            ctx_owner = ctx_focused;
-            PointerEvent pointer_event(event);
+            // Does this finger already have an "owner" viewport?
+            // If so, loop over fingers and restore it for 
+            Viewport* ctx_owner = nullptr;
 
-            // Add pressed finger
-            FingerInfo info;
-            info.ctx_owner = ctx_focused;
-            info.fingerId = e.tfinger.fingerID;
-            info.x = pointer_event.x();
-            info.y = pointer_event.y();
-            pressed_fingers.push_back(info);
-
-            // Remember touched-down ctx for touch release/motion event to use same owner
-            event.setOwnerViewport(ctx_owner);
-        }
-        break;
-
-        case SDL_EVENT_FINGER_MOTION:
-        {
-            for (size_t i = 0; i < pressed_fingers.size(); i++)
+            // Support both single-finger pan & 2 finger transform
+            switch (e.type)
             {
-                FingerInfo& info = pressed_fingers[i];
-                if (info.fingerId == e.tfinger.fingerID)
-                {
-                    ctx_owner = info.ctx_owner;
-                    break;
-                }
-            }
-
-            event.setOwnerViewport(ctx_owner);
-        }
-        break;
-
-        case SDL_EVENT_FINGER_UP:
-        {
-            for (size_t i = 0; i < pressed_fingers.size(); i++)
+            case SDL_EVENT_FINGER_DOWN:
             {
-                FingerInfo& info = pressed_fingers[i];
-                if (info.fingerId == e.tfinger.fingerID)
-                {
-                    ctx_owner = info.ctx_owner;
-                    break;
-                }
-            }
+                ctx_owner = ctx_focused;
+                PointerEvent pointer_event(event);
 
-            // Erase lifted finger
-            for (size_t i = 0; i < pressed_fingers.size(); i++)
+                // Add pressed finger
+                FingerInfo info;
+                info.ctx_owner = ctx_focused;
+                info.fingerId = e.tfinger.fingerID;
+                info.x = pointer_event.x();
+                info.y = pointer_event.y();
+                pressed_fingers.push_back(info);
+
+                // Remember touched-down ctx for touch release/motion event to use same owner
+                event.setOwnerViewport(ctx_owner);
+            } break;
+            case SDL_EVENT_FINGER_MOTION:
             {
-                FingerInfo& info = pressed_fingers[i];
-                if (info.fingerId == e.tfinger.fingerID)
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
                 {
-                    pressed_fingers.erase(pressed_fingers.begin() + i);
-                    break;
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == e.tfinger.fingerID)
+                    {
+                        ctx_owner = info.ctx_owner;
+                        break;
+                    }
                 }
+
+                event.setOwnerViewport(ctx_owner);
+            } break;
+            case SDL_EVENT_FINGER_UP:
+            {
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                {
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == e.tfinger.fingerID)
+                    {
+                        ctx_owner = info.ctx_owner;
+                        break;
+                    }
+                }
+
+                // Erase lifted finger
+                for (size_t i = 0; i < pressed_fingers.size(); i++)
+                {
+                    FingerInfo& info = pressed_fingers[i];
+                    if (info.fingerId == e.tfinger.fingerID)
+                    {
+                        pressed_fingers.erase(pressed_fingers.begin() + i);
+                        break;
+                    }
+                }
+
+                event.setOwnerViewport(ctx_owner);
+            } break;
             }
-
-            event.setOwnerViewport(ctx_owner);
         }
-        break;
-        }
-    }
-    else
-    {
-        Viewport* ctx_owner = nullptr;
-
-        switch (e.type)
+        else
         {
+            Viewport* ctx_owner = nullptr;
+
+            switch (e.type)
+            {
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 ctx_owner = ctx_focused;
@@ -1020,8 +1009,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
                 // Remember touched-down ctx for touch release/motion event to use same owner
                 event.setOwnerViewport(ctx_owner);
-            }
-            break;
+            } break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 for (size_t i = 0; i < pressed_fingers.size(); i++)
@@ -1036,8 +1024,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
                 pressed_fingers.clear();
                 event.setOwnerViewport(ctx_owner);
-            }
-            break;
+            } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
                 for (size_t i = 0; i < pressed_fingers.size(); i++)
@@ -1051,23 +1038,20 @@ void ProjectBase::_onEvent(SDL_Event& e)
                 }
 
                 event.setOwnerViewport(ctx_focused);
-            }
-            break;
+            } break;
             case SDL_EVENT_MOUSE_WHEEL:
             {
                 event.setOwnerViewport(ctx_hovered);
+            } break;
             }
-            break;
         }
     }
-
     
     event.setFocusedViewport(ctx_focused);
     event.setHoveredViewport(ctx_hovered);
 
     if (event.ctx_owner())
     {
-        //event.ctx_owner()->scene->input.addEvent(event, pressed_fingers);
         event.ctx_owner()->scene->input.addEvent(event, pressed_fingers);
     }
 
@@ -1075,11 +1059,9 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
     for (SceneBase* scene : viewports.all_scenes)
     {
-        if (event.ctx_owner() &&
-            event.ctx_owner()->scene == scene)
-        {
-            scene->_onEvent(event);
-        }
+        // Keep specialized handlers onMouseDown/onKeyDown(etc) pre-filtered, 
+        // but keep onEvent generic so users can retain full control.
+        scene->_onEvent(event);
     }
 }
 

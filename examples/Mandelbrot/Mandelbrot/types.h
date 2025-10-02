@@ -32,14 +32,7 @@ enum MandelFlag : uint32_t
     MANDEL_VERSION_BITSHIFT = 24
 };
 
-enum MandelFloatQuality
-{
-    F32,
-    F64,
-    F128
-};
-
-enum MandelMaxDepthOptimization
+enum struct MandelMaxDepthOptimization
 {
     SLOWEST,
     SLOW,
@@ -48,7 +41,7 @@ enum MandelMaxDepthOptimization
     COUNT
 };
 
-static inline const char* MandelMaxDepthOptimizationNames[MandelMaxDepthOptimization::COUNT] =
+static inline const char* MandelMaxDepthOptimizationNames[(int)MandelMaxDepthOptimization::COUNT] =
 {
     "Slowest (Lossless)",
     "Slow",
@@ -57,11 +50,34 @@ static inline const char* MandelMaxDepthOptimizationNames[MandelMaxDepthOptimiza
 };
 
 
-static inline const char* MandelFloatQualityNames[3] =
+static inline const char* FloatingPointTypeNames[3] =
 {
     "F32",
     "F64",
     "F128"
+};
+
+struct IterParams
+{
+    double      cycle_iter_weight = 0.0;
+    bool        cycle_iter_dynamic_limit = true;
+    bool        cycle_iter_normalize_depth = true;
+    double      cycle_iter_normalize_low_fact = 25;
+    double      cycle_iter_normalize_high_fact = 50;
+    double      cycle_iter_log1p_weight = 0.0;
+    double      cycle_iter_value = 0.5f; // If dynamic, iter_lim ratio, else iter_lim
+
+    bool operator==(const IterParams&) const = default;
+};
+
+struct DistParams
+{
+    double      cycle_dist_weight = 0.0;
+    bool        cycle_dist_invert = false;
+    double      cycle_dist_value = 0.5f;
+    double      cycle_dist_sharpness = 0.9; // Used for UI (ignored during tween)
+
+    bool operator==(const DistParams&) const = default;
 };
 
 struct StripeParams
@@ -88,16 +104,24 @@ struct StripeParams
 struct EscapeFieldPixel
 {
     double depth;
-    float stripe;
+
     union
     {
-        float dist_32;
+        float  dist_32;
         double dist_64;
         flt128 dist_128;
     };
 
+    union
+    {
+        float  stripe_32;
+        double stripe_64;
+        flt128 stripe_128;
+    };
+
     float final_depth;
     float final_dist;
+    float final_stripe;
 
     bool flag_for_skip;
 
@@ -105,9 +129,17 @@ struct EscapeFieldPixel
     inline void setDist(double d64)  { dist_64 = d64; }
     inline void setDist(flt128 d128) { dist_128 = d128; }
 
-    template<typename T> requires std::same_as<T, float> constexpr T getDist() { return dist_32; }
+    inline void setStripe(float s32)   { stripe_32 = s32; }
+    inline void setStripe(double s64)  { stripe_64 = s64; }
+    inline void setStripe(flt128 s128) { stripe_128 = s128; }
+
+    template<typename T> requires std::same_as<T, float>  constexpr T getDist() { return dist_32; }
     template<typename T> requires std::same_as<T, double> constexpr T getDist() { return dist_64; }
     template<typename T> requires std::same_as<T, flt128> constexpr T getDist() { return dist_128; }
+
+    template<typename T> requires std::same_as<T, float>  constexpr T getStripe() { return stripe_32; }
+    template<typename T> requires std::same_as<T, double> constexpr T getStripe() { return stripe_64; }
+    template<typename T> requires std::same_as<T, flt128> constexpr T getStripe() { return stripe_128; }
 };
 
 // ---- fast disk kernel (reuse between calls) ----
@@ -161,6 +193,9 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
     flt128 stable_min_dist{};
     flt128 stable_max_dist{};
 
+    flt128 min_stripe{};
+    flt128 max_stripe{};
+
     double log_color_cycle_iters;
     double cycle_dist_value;
 
@@ -174,14 +209,14 @@ struct EscapeField : public std::vector<EscapeFieldPixel>
         {
             EscapeFieldPixel &p = std::vector<EscapeFieldPixel>::at(i);
             p.depth = value;
-            p.dist_128 = { value, value };
-            p.stripe = (float)value;
+            p.dist_128 = { value, 0 };
+            p.stripe_128 = { value, 0 };
             p.flag_for_skip = false;
         }
     }
     void setDimensions(int _w, int _h)
     {
-        if (size() >= (_w * _h)) return;
+        //if (size() >= (_w * _h)) return;
         w = _w;
         h = _h;
         resize(w * h, { -1.0, -1.0 });

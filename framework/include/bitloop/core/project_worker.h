@@ -66,6 +66,7 @@ protected:
     void drawOverlay();
 
 public:
+
     std::vector<SDL_Event> input_event_queue;
 
     [[nodiscard]] static constexpr ProjectWorker* instance() {

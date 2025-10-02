@@ -44,7 +44,7 @@
 **/build/
 out
 __pycache__
-/bitloop_unversioned
 /bitloop
 /scripts/private
 /.unversioned
+/captures

@@ -46,7 +46,7 @@ void startTween(Mandelbrot_Scene &scene)
     scene.tween_progress = 0.0;
     scene.tweening = true;
     scene.tween_duration = 2;// tweenDistance(scene_data.state_a, scene_data.state_b);
-    scene.cycle_dist_invert = scene.state_b.cycle_dist_invert;
+    scene.dist_params.cycle_dist_invert = scene.state_b.dist_params.cycle_dist_invert;
 }
 
 void lerpState(
@@ -88,12 +88,12 @@ void lerpState(
     dst.stripe_weight = Math::lerp(a.stripe_weight, b.stripe_weight, color_cycle_f);
 
     // === Iter shader === 
-    dst.cycle_iter_value = Math::lerp(a.cycle_iter_value, b.cycle_iter_value, color_cycle_f);
-    dst.cycle_iter_log1p_weight = Math::lerp(a.cycle_iter_log1p_weight, b.cycle_iter_log1p_weight, color_cycle_f);
+    dst.iter_params.cycle_iter_value = Math::lerp(a.iter_params.cycle_iter_value, b.iter_params.cycle_iter_value, color_cycle_f);
+    dst.iter_params.cycle_iter_log1p_weight = Math::lerp(a.iter_params.cycle_iter_log1p_weight, b.iter_params.cycle_iter_log1p_weight, color_cycle_f);
 
     // === Dist Shader
-    dst.cycle_dist_value = Math::lerp(a.cycle_dist_value, b.cycle_dist_value, color_cycle_f);
-    dst.cycle_dist_sharpness = Math::lerp(a.cycle_dist_sharpness, b.cycle_dist_sharpness, color_cycle_f);
+    dst.dist_params.cycle_dist_value = Math::lerp(a.dist_params.cycle_dist_value, b.dist_params.cycle_dist_value, color_cycle_f);
+    dst.dist_params.cycle_dist_sharpness = Math::lerp(a.dist_params.cycle_dist_sharpness, b.dist_params.cycle_dist_sharpness, color_cycle_f);
 
     // === Stripe Shader
     dst.stripe_params.freq = Math::lerp(a.stripe_params.freq, b.stripe_params.freq, color_cycle_f);
@@ -116,7 +116,7 @@ void lerpState(
         dst.dynamic_iter_lim = b.dynamic_iter_lim;
         dst.quality = b.quality;
 
-        dst.cycle_iter_dynamic_limit = b.cycle_iter_dynamic_limit;
+        dst.iter_params.cycle_iter_dynamic_limit = b.iter_params.cycle_iter_dynamic_limit;
 
         dst.show_axis = b.show_axis;
         dst.show_color_animation_options = b.show_color_animation_options;

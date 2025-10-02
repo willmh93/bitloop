@@ -61,7 +61,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 
             active_project->updateShadowBuffers();
 
-            main_window()->addMainWindowCommand({ MainWindowCommandType::ON_STARTED_PROJECT });
+            main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_STARTED_PROJECT });
         }
         break;
 
@@ -71,7 +71,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
             active_project->_projectDestroy();
             active_project->_projectStop();
 
-            main_window()->addMainWindowCommand({ MainWindowCommandType::ON_STOPPED_PROJECT });
+            main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_STOPPED_PROJECT });
         }
         break;
 
@@ -79,7 +79,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
         if (active_project)
         {
             active_project->_projectPause();
-            main_window()->addMainWindowCommand({ MainWindowCommandType::ON_PAUSED_PROJECT });
+            main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_PAUSED_PROJECT });
         }
         break;
     }
@@ -91,7 +91,7 @@ void ProjectWorker::worker_loop()
 
     while (!shared_sync.quitting.load())
     {
-        /// ======== Safe place to control project changes ========
+        /// ────── Safe place to control project changes ──────
         // We don't call populateAttributes() if holding shadow_buffer_mutex,
         // meaning we won't loop over scenes here while processing project commands
         {
@@ -112,15 +112,15 @@ void ProjectWorker::worker_loop()
         shared_sync.wait_until_gui_consumes_frame();
 
 
-        /// ======== Do heavy work (while GUI thread redraws cached frame) ========
+        /// ────── Do heavy work (while GUI thread redraws cached frame) ──────
         if (active_project && active_project->started) 
         {
-            /// ======== Update live values ========
+            /// ────── Update live values ──────
             {
-                //blPrint() << "----------------------------";
-                //blPrint() << "----- NEW WORKER FRAME -----";
+                //blPrint() << "──────────────────────────────";
+                //blPrint() << "────── NEW WORKER FRAME ──────";
 
-                // ======== Event polling ========
+                /// ────── Event polling ──────
                 {
                     active_project->markLiveValues();
 
@@ -134,21 +134,25 @@ void ProjectWorker::worker_loop()
                         pushDataToShadow();
                 }
                 
-                // ======== Update Live Buffer ========
+                /// ────── Update Live Buffer ──────
                 pullDataFromShadow();
 
-                // ======== Mark buffer states prior to process ========
+                /// ────── Mark buffer states prior to process ──────
                 {
                     std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
                     active_project->markLiveValues();
                     active_project->markShadowValues();
                 }
 
-                // ======== Process simulation (potentially heavy work) ========
+                // Capture by default unless sim overrides flag (only has an affect when recording)
+                if (!active_project->paused)
+                    main_window()->captureFrame(true);
+
+                /// ────── Process simulation (potentially heavy work) ──────
                 active_project->_projectProcess();
 
                 
-                // ======== Update shadow buffer with *changed* live variables ========
+                /// ────── Update shadow buffer with *changed* live variables ──────
                 {
                     shadow_changed = active_project->changedShadow();
                     if (!shadow_changed)
@@ -156,8 +160,8 @@ void ProjectWorker::worker_loop()
                 }
 
 
-                //blPrint() << "----- END WORKER FRAME -----";
-                //blPrint() << "----------------------------";
+                //blPrint() << "────── END WORKER FRAME ──────";
+                //blPrint() << "──────────────────────────────";
                 //blPrint() << "";
             }
         }
@@ -168,23 +172,14 @@ void ProjectWorker::worker_loop()
         if (record_manager->isRecording() && main_window()->capturingNextFrame())
             record_manager->waitUntilReadyForNewFrame();
 
-        /// ======== Flag ready to draw ========
+        /// ────── Flag ready to draw ──────
         shared_sync.flag_ready_to_draw();
 
-        /// ======== Wake GUI ========
+        /// ────── Wake GUI ──────
         shared_sync.cv.notify_one();
 
-        // Start draw timer
-        auto draw_t0 = std::chrono::steady_clock::now();
-
-        // Wait for GUI to draw the freshly prepared data
+        /// ────── Wait for GUI to draw the freshly prepared data ──────
         shared_sync.wait_until_gui_drawn();
-
-
-        // Wait 16ms (minus time taken to draw the frame)
-        //using namespace std::chrono;
-        //auto draw_duration = steady_clock::now() - draw_t0;
-        //int draw_ms = static_cast<int>(duration_cast<milliseconds>(draw_duration).count());
     }
 }
 

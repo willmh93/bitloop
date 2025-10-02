@@ -83,6 +83,14 @@ enum struct Anchor
     BOTTOM_LEFT,  BOTTOM,  BOTTOM_RIGHT
 };
 
+enum struct FloatingPointType
+{
+    F32,
+    F64,
+    F128,
+    COUNT
+};
+
 // Vec2, Vec3, Vec4
 
 template<typename T> struct GlmVec2Type;
@@ -117,15 +125,16 @@ struct Vec2
     // constructors
     Vec2() = default;
     constexpr Vec2(T _x, T _y) : x{ _x }, y{ _y } {}
-    constexpr Vec2(const ImVec2 rhs) : x{ rhs.x }, y{ rhs.y } {}
+    constexpr Vec2(const ImVec2 rhs) : x{ (T)rhs.x }, y{ (T)rhs.y } {}
     constexpr Vec2(const GlmVec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
 
     template<typename T2>
     constexpr explicit Vec2(const GlmVec3<T2>& rhs) : x((T)rhs.x), y((T)rhs.y) {} // discards z for 2D
 
     // conversions
-    template<typename T2> constexpr operator Vec2<T2>()    const { return Vec2<T2>{(T2)x, (T2)y}; }
-    template<typename T2> constexpr operator GlmVec2<T2>() const { return GlmVec2<T2>{(T2)x, (T2)y}; }
+    [[nodiscard]] constexpr explicit operator ImVec2()                   const { return ImVec2((float)x, (float)y); }
+    template<typename T2> [[nodiscard]] constexpr operator Vec2<T2>()    const { return Vec2<T2>{(T2)x, (T2)y}; }
+    template<typename T2> [[nodiscard]] constexpr operator GlmVec2<T2>() const { return GlmVec2<T2>{(T2)x, (T2)y}; }
 
     // access
     [[nodiscard]] constexpr const T& operator[](int i) const { return _data[i]; }
@@ -1036,6 +1045,20 @@ template<class T> using downgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signe
 template<class T> using downgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
 template<class T> using downgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
 
+
+// ================= helper macros =================
+
+
+#define floatInvoke(f, callback)\
+    [&]()\
+    {\
+        auto fun = [&] {\
+            auto do_it = [&]<typename __T>() { return callback.template operator()<__T>(); };\
+            if (f == FloatingPointType::F32)  return do_it.template operator()<float>();\
+            if (f == FloatingPointType::F128) return do_it.template operator()<flt128>();\
+            return do_it.template operator()<double>();\
+        }; return fun();\
+    }()
 
 // Physics types
 

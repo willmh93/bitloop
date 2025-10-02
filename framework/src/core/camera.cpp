@@ -334,7 +334,7 @@ void Camera::panEnd()
 
 bool Camera::handleWorldNavigation(Event event, bool single_touch_pan, bool zoom_anchor_mouse)
 {
-    if (!event.isPointerEvent())
+    if (!viewport->scene->ownsEvent(event) || !event.isPointerEvent())
         return false;
 
     PointerEvent e(event);
