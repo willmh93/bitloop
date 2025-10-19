@@ -1,0 +1,55 @@
+# bitloopConfig.cmake.in
+
+message(STATUS "HEY")
+
+if(DEFINED BITLOOP_PACKAGE_PREFIX_DIR)
+  # We've been loaded before. Just report found and bail out.
+  set(bitloop_FOUND TRUE)
+  return()
+endif()
+
+set(BITLOOP_PACKAGE_PREFIX_DIR "${PACKAGE_PREFIX_DIR}" CACHE INTERNAL "bitloop prefix")
+
+# Optional: If targets already exist (e.g., consumer included targets file earlier),
+# still mark found and return immediately.
+if(TARGET bitloop::bitloop)
+  set(bitloop_FOUND TRUE)
+  return()
+endif()
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Freetype CONFIG REQUIRED)
+find_dependency(implot CONFIG REQUIRED)
+find_dependency(imgui CONFIG REQUIRED)
+find_dependency(SDL3 CONFIG REQUIRED)
+find_dependency(glad CONFIG REQUIRED)
+find_dependency(glm CONFIG REQUIRED)
+find_dependency(unofficial-concurrentqueue CONFIG REQUIRED)
+find_dependency(nanovg CONFIG REQUIRED)
+find_dependency(NanoSVG CONFIG REQUIRED)
+find_dependency(WebP CONFIG REQUIRED)
+find_dependency(nlohmann_json  CONFIG REQUIRED)
+find_dependency(unofficial-brotli CONFIG REQUIRED)
+
+if (NOT (CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR DEFINED EMSCRIPTEN))
+  find_dependency(FFMPEG REQUIRED COMPONENTS avcodec avformat avutil swscale)
+
+  if(NOT TARGET bitloop::ffmpeg)
+    add_library(bitloop::ffmpeg INTERFACE IMPORTED)
+
+    target_link_libraries(bitloop::ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
+    set_target_properties(bitloop::ffmpeg PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INCLUDE_DIRS}")
+  endif()
+endif()
+
+
+set(BITLOOP_CMAKE_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${BITLOOP_CMAKE_MODULE_DIR}")
+list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
+
+include(bitloopSimulation)
+include("${CMAKE_CURRENT_LIST_DIR}/bitloopTargets.cmake")
+
+set(bitloop_FOUND TRUE)

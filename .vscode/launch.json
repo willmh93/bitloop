@@ -1,0 +1,58 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug (Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/ninja-debug/app/app.exe",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "preLaunchTask": "CMake: ninja-debug"
+        },
+        {
+            "name": "Release (Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/ninja-release/app/app.exe",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "preLaunchTask": "CMake: ninja-release"
+        },
+        {
+            "name": "Debug (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/ninja-debug/app/app",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "preLaunchTask": "CMake: ninja-debug"
+        },
+        {
+            "name": "Release (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/ninja-release/app/app",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "preLaunchTask": "CMake: ninja-release"
+        },
+        {
+            "name": "Debug (wasm32)",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:6931/app.html",
+            "webRoot": "${command:cmake.launchTargetDirectory}",
+            "preLaunchTask": "Build+Serve wasm32-debug",
+            "serverReadyAction": {
+                "pattern": "Now listening on (http://localhost:6931)",
+                "uriFormat": "%s",
+                "action": "openExternally"
+            }
+        }
+    ]
+}

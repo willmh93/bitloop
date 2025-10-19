@@ -1,0 +1,17 @@
+{
+  "default-registry": {
+    "kind": "git",
+    "baseline": "74e6536215718009aae747d86d84b78376bf9e09",
+    "repository": "https://github.com/microsoft/vcpkg"
+  },
+  "registries": [
+    {
+      "kind": "git",
+      "baseline": "ceffdcda434d6dcda7be4b21c3756579831db9e8",
+      "repository": "https://github.com/willmh93/bitloop-registry.git",
+      "packages": [
+        "brotli-tool"
+      ]
+    }
+  ]
+}

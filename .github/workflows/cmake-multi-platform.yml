@@ -1,0 +1,72 @@
+# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
+name: CMake on multiple platforms
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux → Ninja
+          - os: ubuntu-latest
+            preset: ninja-debug
+          - os: ubuntu-latest
+            preset: ninja-release
+
+          # Linux → Wasm
+          - os: ubuntu-latest
+            preset: wasm32-debug
+          - os: ubuntu-latest
+            preset: wasm32-release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ─── Linux bootstrap ───────────────────────────────────────────
+      - name: Bootstrap (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update && sudo apt install -y git
+          bash scripts/bootstrap.sh
+          echo "BITLOOP_ROOT=$PWD" >> $GITHUB_ENV
+
+      # ─── Windows bootstrap ─────────────────────────────────────────
+      - name: Bootstrap (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          scripts\bootstrap.bat
+          echo "BITLOOP_ROOT=%CD%" >> $GITHUB_ENV
+
+      # ─── Linux → wasm32 ────────────────────────────────────────────
+      - name: Bootstrap & Build (Linux WASM)
+        if: runner.os == 'Linux' && contains(matrix.preset, 'wasm32')
+        shell: bash {0}
+        run: |
+          # emsdk install & activate
+          git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+          ~/emsdk/emsdk install 3.1.64
+          ~/emsdk/emsdk activate 3.1.64
+
+          source ~/emsdk/emsdk_env.sh
+          echo "EMSDK=$HOME/emsdk" >> $GITHUB_ENV
+
+      - name: Configure via CMake preset
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build via CMake preset
+        run: cmake --build --preset ${{ matrix.preset }}
+
+
+
+
+      #- name: Test via CMake preset
+      #  run: cmake --test --preset vs2022 --config ${{ matrix.build_type }}

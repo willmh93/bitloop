@@ -1,0 +1,16 @@
+{
+    "cmake.useCMakePresets": "always",
+    "cmake.preferredGenerators": [
+      "Ninja",
+      "Visual Studio 17 2022"
+    ],
+    "cmake.configureArgs": [],
+    "cmake.buildArgs": [],
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.buildBeforeRun": false,
+    "cmake.configureOnOpen": true,
+    "cmake.configureOnEdit": false,
+    "cmake.clearOutputBeforeBuild": true,
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.useVsDeveloperEnvironment": "always"
+}
