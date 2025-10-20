@@ -297,24 +297,30 @@ function(bitloop_new_project sim_name)
 			foreach(_hdr IN LISTS _pub_headers)
 				# path relative to project root
 				file(RELATIVE_PATH _rel "${CMAKE_CURRENT_SOURCE_DIR}" "${_hdr}")
+				file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
 				
-				# Make full wrapper include dir
-				get_filename_component(_rel_dir "${_rel}" DIRECTORY)
-				file(MAKE_DIRECTORY "${_wrap_root}/${_rel_dir}")
-				
-				# Relative include
-				file(RELATIVE_PATH rel_path "${_wrap_root}/${_rel}" "${_hdr}")
-				file(TO_CMAKE_PATH "${_hdr}" _hdr_for_line)
-				
+				## Make full wrapper include dir
+				#get_filename_component(_rel_dir "${_rel}" DIRECTORY)
+				#file(MAKE_DIRECTORY "${_wrap_root}/${_rel_dir}")
+				#
+				## Relative include
+				#file(RELATIVE_PATH rel_path "${_wrap_root}/${_rel}" "${_hdr}")
+				#file(TO_CMAKE_PATH "${_hdr}" _hdr_for_line)
+				#
 				set(INCLUDE_HEADER_PATH "${_wrap_root}/${_rel}")
+
+				message(STATUS "_hdr_abs: ${_hdr_abs}")
+				file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
+
 				file(WRITE  ${INCLUDE_HEADER_PATH} "// Auto wrapper for ${_rel}\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma once\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma push_macro(\"SIM_NAME\")\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#undef SIM_NAME\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#define SIM_NAME ${sim_name}\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#include <bitloop/core/project.h>\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#line 1 \"${_hdr_for_line}\"\n") # Add #line BEFORE including the real header
-				file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${rel_path}\"\n")
+				file(APPEND ${INCLUDE_HEADER_PATH} "#line 1 \"${_hdr_abs}\"\n") # Add #line BEFORE including the real header
+				#file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${rel_path}\"\n")
+				file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${_hdr_abs}\"\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma pop_macro(\"SIM_NAME\")\n")
 			endforeach()
 
