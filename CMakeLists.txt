@@ -231,10 +231,10 @@ install(FILES
     DESTINATION share/bitloop)
 
 
-#if(PROJECT_IS_TOP_LEVEL)
-#    message(STATUS "bitloop is top-level - including example projects")
-#    add_subdirectory(examples)
-#endif()
+if(PROJECT_IS_TOP_LEVEL)
+    message(STATUS "Loaded bitloop framework as root project - including example projects")
+    add_subdirectory(examples)
+endif()
 
 option(BITLOOP_BUILD_TESTS "Build tests" OFF)
 if (BITLOOP_BUILD_TESTS)

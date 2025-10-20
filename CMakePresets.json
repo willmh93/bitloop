@@ -21,7 +21,7 @@
       "name": "ninja-debug",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/ninja-debug",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "ninja-debug",
         "CMAKE_BUILD_TYPE": "Debug",
@@ -33,7 +33,7 @@
       "name": "ninja-release",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/ninja-release",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "ninja-release",
         "CMAKE_BUILD_TYPE": "Release",
@@ -45,6 +45,7 @@
       "name": "ninja-release-debug-info",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/ninja-release-debug-info",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "ninja-release-debug-info",
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
@@ -61,6 +62,7 @@
       },
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/ninja-release-win-static",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "ninja-release-win-static",
         "CMAKE_BUILD_TYPE": "Release",
@@ -79,6 +81,7 @@
       },
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/vs2022",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "vs2022",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
@@ -91,6 +94,7 @@
       "hidden": true,
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/vs2022-static",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "vs2022-static",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
@@ -103,7 +107,7 @@
       "name": "wasm32-debug",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/wasm32-debug",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-debug",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
@@ -119,7 +123,7 @@
       "name": "wasm32-release",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/wasm32-release",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-release",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
@@ -135,7 +139,7 @@
       "name": "wasm32-release-debug-info",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/wasm32-release-debug-info",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "BUILD_FLAVOR": "wasm32-release-debug-info",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
