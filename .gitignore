@@ -46,5 +46,5 @@ out
 __pycache__
 /bitloop
 /scripts/private
-/.unversioned
 /captures
+.vcpkg-cache
