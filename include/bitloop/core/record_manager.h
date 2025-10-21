@@ -8,7 +8,7 @@
 #include <atomic>
 #include <vector>
 
-#ifndef __EMSCRIPTEN__
+#if BITLOOP_FFMPEG_ENABLED
 extern "C" {
     #include <libavcodec/avcodec.h>
     #include <libavformat/avformat.h>
@@ -83,7 +83,7 @@ struct CaptureConfig
 
 class CaptureManager;
 
-#ifndef __EMSCRIPTEN__
+#if BITLOOP_FFMPEG_ENABLED
 const char* VideoCodecFromCaptureFormat(CaptureFormat format);
 
 class FFmpegWorker
@@ -143,7 +143,7 @@ class CaptureManager
     friend class  WebPWorker;
     WebPWorker    webp_worker;
 
-    #ifndef __EMSCRIPTEN__
+    #if BITLOOP_FFMPEG_ENABLED
     friend class  FFmpegWorker;
     FFmpegWorker  ffmpeg_worker;
     #endif

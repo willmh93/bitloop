@@ -372,7 +372,7 @@ bool webp_anim_encode_simple(
 
 // ────── FFmpegWorker ──────
 
-#ifndef __EMSCRIPTEN__
+#if BITLOOP_FFMPEG_ENABLED
 constexpr const char* codecs[] = { "x264", "x265" };
 const char* VideoCodecFromCaptureFormat(CaptureFormat format)
 {
@@ -868,12 +868,12 @@ bool CaptureManager::startCapture(
 
     if (format == CaptureFormat::x264 || format == CaptureFormat::x265)
     {
-        #ifndef __EMSCRIPTEN__
+        #if BITLOOP_FFMPEG_ENABLED
         recording.store(true, std::memory_order_release);
 
         encoder_thread = std::jthread(&FFmpegWorker::process, &ffmpeg_worker, this, config);
         #else
-        blPrint() << "Error: FFmpeg not supported on web";
+        blPrint() << "Error: FFmpeg not enabled";
         #endif
     }
     else if (format == CaptureFormat::WEBP_VIDEO)
@@ -1022,7 +1022,7 @@ bool CaptureManager::encodeFrame(const uint8_t* data)
 
     return true;
 
-    /*#ifndef __EMSCRIPTEN__
+    /*#if BITLOOP_FFMPEG_ENABLED
     if (isRecording())
     {
         // Wake the FFmpeg worker, a new frame is ready to encode

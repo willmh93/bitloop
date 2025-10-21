@@ -165,7 +165,7 @@ void MainWindow::init()
     //canvas.create(5.0);
     //canvas.create(0.75);
 
-    #ifndef __EMSCRIPTEN__
+    #if BITLOOP_FFMPEG_ENABLED
     bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
     record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
     #endif
@@ -329,6 +329,11 @@ void MainWindow::beginRecording()
     std::error_code ec;
     ensure_parent_directories_exist(capture_dir, ec);
 
+    int64_t bitrate = 0;
+    #if BITLOOP_FFMPEG_ENABLED
+    bitrate = record_bitrate;
+    #endif
+
     capture_manager.startCapture(
         (CaptureFormat)record_format,
         capture_dir.string(),
@@ -337,7 +342,7 @@ void MainWindow::beginRecording()
         snapshot_sharpen,
         record_fps,
         record_frame_count,
-        record_bitrate,
+        bitrate,
         (float)record_quality,
         record_lossless,
         record_near_lossless,
@@ -1195,7 +1200,7 @@ void MainWindow::populateRecordOptions()
         {
             record_fps = std::clamp(record_fps, 1, 100);
 
-            #ifndef __EMSCRIPTEN__
+            #if BITLOOP_FFMPEG_ENABLED
             bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
             record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
             #endif
@@ -1210,7 +1215,7 @@ void MainWindow::populateRecordOptions()
 
         ImGui::Spacing(); ImGui::Spacing();
         ImGui::Text("Sharpen");
-        ImGui::SliderFloat("##sharpen", &snapshot_sharpen, 0.0f, 1.0f, "%.1f");
+        ImGui::SliderFloat("##sharpen", &snapshot_sharpen, 0.0f, 1.0f, "%.2f");
     }
 
     // Image Resolution
@@ -1242,7 +1247,7 @@ void MainWindow::populateRecordOptions()
         ImGui::Text("Codec:");
         if (ImGui::Combo("##codec", &record_format, "H.264 (x264)\0H.265 / HEVC (x265)\0WebP Animation\0"))
         {
-            #ifndef __EMSCRIPTEN__
+            #if BITLOOP_FFMPEG_ENABLED
             bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
             record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
             #endif
@@ -1252,7 +1257,7 @@ void MainWindow::populateRecordOptions()
         ImGui::Spacing();
         ImGui::Spacing();
 
-        #ifndef __EMSCRIPTEN__
+        #if BITLOOP_FFMPEG_ENABLED_
         if (record_format != (int)CaptureFormat::WEBP_VIDEO)
         {
             struct Aspect { const char* label; bool portrait; };
@@ -1517,12 +1522,12 @@ void MainWindow::populateRecordOptions()
         {
             /// TODO: Apply quality to WebP
 
-            #ifndef __EMSCRIPTEN__
+            #if BITLOOP_FFMPEG_ENABLED
             record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
             #endif
         }
 
-        #ifndef __EMSCRIPTEN__
+        #if BITLOOP_FFMPEG_ENABLED
         ImGui::Text("= %.1f Mbps", (double)record_bitrate / 1000000.0);
         #endif
 

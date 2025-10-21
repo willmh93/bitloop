@@ -147,12 +147,18 @@ target_include_directories(bitloop PRIVATE
     ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
+set(_found_ffmpeg OFF)
 if (NOT EMSCRIPTEN)
-    find_package(FFMPEG REQUIRED COMPONENTS avcodec avformat avutil swscale)
-    target_link_libraries(bitloop
-        PUBLIC
-        ${FFMPEG_LIBRARIES})
+    find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
+    if(FFMPEG_FOUND)
+        target_link_libraries(bitloop
+            PUBLIC
+            ${FFMPEG_LIBRARIES})
+         set(_found_ffmpeg ON)
+    endif()
 endif()
+
+target_compile_definitions(bitloop PUBLIC BITLOOP_FFMPEG_ENABLED=$<BOOL:${_found_ffmpeg}>)
 
 add_library(bitloop::bitloop ALIAS bitloop)
 

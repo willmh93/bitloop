@@ -78,9 +78,9 @@ class MainWindow
     CaptureManager capture_manager;
     std::vector<uint8_t> frame_data;
 
-
-    #ifndef __EMSCRIPTEN__
     std::string   capture_dir;
+
+    #if BITLOOP_FFMPEG_ENABLED
     int64_t       record_bitrate = 128000000ll;
     BitrateRange  bitrate_mbps_range{ 1, 1000 };
     #endif
@@ -104,7 +104,7 @@ class MainWindow
     IVec2         snapshot_resolution{ 1920, 1080 };
     int           snapshot_format = (int)CaptureFormat::WEBP_SNAPSHOT; // CaptureFormat
     int           snapshot_supersample_factor = 1;
-    float         snapshot_sharpen = 0.25f;
+    float         snapshot_sharpen = 0.0f;
                 
     bool          use_delta_time_mult = true;
 
