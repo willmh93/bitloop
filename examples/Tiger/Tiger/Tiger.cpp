@@ -33,13 +33,6 @@ void Tiger_Scene::UI::sidebar()
     ImGui::Checkbox("Scale Sizes", &scale_sizes);
     ImGui::Checkbox("Rotate Text", &rotate_text);
 
-    if (ImGui::Button("Roar"))
-    {
-        bl_schedule([](Tiger_Scene& scene) {
-            scene.woof("ROAR!");
-        });
-    }
-
     if (ImGui::Section("View", true)) 
     {
         // imgui camera controls
@@ -87,8 +80,6 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
     ctx->scalingSizes(scale_sizes);
 
     draw_tiger(ctx);
-
-    ctx->print() << "Bark: " << woof_noise;
 }
 
 void Tiger_Scene::onEvent(Event e)

@@ -413,7 +413,7 @@ macro(bitloop_finalize)
 		message(STATUS "${rel_common}/data")
 
 		add_custom_command(TARGET ${_TARGET} PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory 
-				"${rel_common}/data"
+				"${BL_COMMON}/data"
 				"$<TARGET_FILE_DIR:${_TARGET}>/data"
 				COMMENT "Merging dependency data from ${dep_path}")
 

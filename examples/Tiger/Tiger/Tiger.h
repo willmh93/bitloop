@@ -34,11 +34,6 @@ struct Tiger_Scene : public Scene<Tiger_Scene>
     // double speed;
 
     /// ─────── Your custom methods ───────
-    std::string woof_noise;
-    void woof(std::string noise)
-    {
-        woof_noise = noise;
-    }
 
     /// ─────── Scene methods ─────── 
     void sceneStart() override;
@@ -52,9 +47,6 @@ struct Tiger_Scene : public Scene<Tiger_Scene>
 
     /// ─────── Input handling ─────── 
     void onEvent(Event e) override;
-
-
-
 };
 
 
