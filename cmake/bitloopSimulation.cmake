@@ -1,6 +1,7 @@
 # --- bitloopSimulation.cmake ---
 
-set(BL_SHARE		"${CMAKE_CURRENT_LIST_DIR}/..")
+get_filename_component(BL_SHARE "${CMAKE_CURRENT_LIST_DIR}/.." REALPATH)
+
 set(BL_MAIN_SOURCE	"${BL_SHARE}/src/bitloop_main.cpp"	CACHE INTERNAL "")
 set(BL_COMMON		"${BL_SHARE}/common"				CACHE INTERNAL "")
 
@@ -12,8 +13,6 @@ set(BL_DATA_DEPENDENCIES	""	CACHE INTERNAL "Ordered list of dependency data dire
 # ──────────────────────────────────────────────────────────
 # ──────────────────────── Private ─────────────────────────
 # ──────────────────────────────────────────────────────────
-
-
 
 function(_apply_common_settings _TARGET)
 	target_compile_features(${_TARGET} PUBLIC cxx_std_23)
@@ -121,7 +120,6 @@ function(_optimize_wasm _TARGET)
 	# Precompress with brotli
 	message(STATUS "BROTLI_EXECUTABLE: ${BROTLI_EXECUTABLE}")
 	add_custom_command(TARGET ${_TARGET} POST_BUILD COMMAND "${BROTLI_EXECUTABLE}" -f -q 11 "${_WASM}" VERBATIM)
-  
 endfunction()
 
 function(_apply_root_exe_name target)
@@ -180,9 +178,6 @@ function(bitloop_new_project sim_name)
 	# collect the other args as source files
 	set(SIM_SOURCES ${ARGN})
 
-	
-	message(STATUS "bitloop_new_project(${sim_name}) -- ${CMAKE_CURRENT_SOURCE_DIR}")
-
 	# First new_project call? Set as "root" since queued children are guaranteed to be processed later
 	get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)
 	if (NOT BL_ROOT_PROJECT)
@@ -201,8 +196,6 @@ function(bitloop_new_project sim_name)
 
 	if (IS_ROOT_PROJECT)
 		# ────────── top-level (executable) ──────────
-		message(STATUS "ROOT EXECUTABLE: ${_TARGET}")
-
 		if(NOT SIM_SOURCES)
 			set(SIM_SOURCES ${BL_MAIN_SOURCE}) # no user sources (e.g. superbuild), just use the framework main()
 			set(SIM_SOURCES_PROVIDED FALSE)
@@ -235,19 +228,14 @@ function(bitloop_new_project sim_name)
 			add_library(${_TARGET} ${_type} ${SIM_SOURCES})
 		endif()
 
-		message(STATUS "add_library(${sim_name}::${sim_name})")
 		add_library(${sim_name}::${sim_name} ALIAS ${sim_name}) # Export an alias so consumers can link as sim::sim
 	endif()
-
-	message(STATUS "${sim_name} IS ${_type}")
 
 	set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY _TYPE ${_type})
 	set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BL_TARGET_PROJECT ${_TARGET})
 
 	# Link exe/lib to bitloop
 	if (NOT _type STREQUAL "INTERFACE")
-
-		message(STATUS "LINKING ${_TARGET} to bitloop::bitloop")
 		target_link_libraries(${_TARGET} PRIVATE bitloop::bitloop)
 
 		# Add project names to list in order of inclusion
@@ -292,24 +280,14 @@ function(bitloop_new_project sim_name)
 			set(_wrap_ns_root "${_wrap_root}/${sim_name}")
 			file(MAKE_DIRECTORY "${_wrap_ns_root}")
 
-
 			# Generate one wrapper per public header
 			foreach(_hdr IN LISTS _pub_headers)
 				# path relative to project root
 				file(RELATIVE_PATH _rel "${CMAKE_CURRENT_SOURCE_DIR}" "${_hdr}")
 				file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
-				
-				## Make full wrapper include dir
-				#get_filename_component(_rel_dir "${_rel}" DIRECTORY)
-				#file(MAKE_DIRECTORY "${_wrap_root}/${_rel_dir}")
-				#
-				## Relative include
-				#file(RELATIVE_PATH rel_path "${_wrap_root}/${_rel}" "${_hdr}")
-				#file(TO_CMAKE_PATH "${_hdr}" _hdr_for_line)
-				#
+	
 				set(INCLUDE_HEADER_PATH "${_wrap_root}/${_rel}")
 
-				message(STATUS "_hdr_abs: ${_hdr_abs}")
 				file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
 
 				file(WRITE  ${INCLUDE_HEADER_PATH} "// Auto wrapper for ${_rel}\n")
@@ -318,8 +296,7 @@ function(bitloop_new_project sim_name)
 				file(APPEND ${INCLUDE_HEADER_PATH} "#undef SIM_NAME\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#define SIM_NAME ${sim_name}\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#include <bitloop/core/project.h>\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#line 1 \"${_hdr_abs}\"\n") # Add #line BEFORE including the real header
-				#file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${rel_path}\"\n")
+				file(APPEND ${INCLUDE_HEADER_PATH} "#line 1 \"${_hdr_abs}\"\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${_hdr_abs}\"\n")
 				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma pop_macro(\"SIM_NAME\")\n")
 			endforeach()
@@ -348,10 +325,7 @@ function(bitloop_new_project sim_name)
 endfunction()
 
 function(bitloop_add_dependency _TARGET _SIM_DIR)
-	message(STATUS "bitloop_add_dependency(${_TARGET}, ${_SIM_DIR}) - ${CMAKE_CURRENT_SOURCE_DIR}")
-
 	get_property(_type DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY _TYPE)
-	message(STATUS "_type: ${_type}")
 
 	# Grab simulation name from path
 	get_filename_component(sim_name "${_SIM_DIR}" NAME)
@@ -365,10 +339,8 @@ function(bitloop_add_dependency _TARGET _SIM_DIR)
 
 	# Link dependency into our target
 	if (_type STREQUAL "INTERFACE")
-		message(STATUS "DETECTED INTERFACE")
 		target_link_libraries(${_TARGET} INTERFACE ${sim_name}::${sim_name})
 	else()
-		message(STATUS "DETECTED STATIC")
 		target_link_libraries(${_TARGET} PUBLIC ${sim_name}::${sim_name})
 	endif()
 endfunction()
@@ -376,13 +348,6 @@ endfunction()
 # Auto-generated finalization step; adds includes to autogen header and bundles data into executable
 macro(bitloop_finalize)
 	get_property(_TARGET DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BL_TARGET_PROJECT)
-	message(STATUS "${_TARGET} Finalizing (${CMAKE_CURRENT_SOURCE_DIR})")
-
-	if(PROJECT_IS_TOP_LEVEL)
-		message(STATUS "${_TARGET} is top-level (${CMAKE_CURRENT_SOURCE_DIR})")
-	else()
-		message(STATUS "${_TARGET} is NOT top-level (${CMAKE_CURRENT_SOURCE_DIR})")
-	endif()
 
 	get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)
 	if (CMAKE_CURRENT_SOURCE_DIR STREQUAL BL_ROOT_PROJECT)
@@ -394,10 +359,9 @@ macro(bitloop_finalize)
 		#endforeach()
 
 		# Begin auto-generated header file
-		
 		file(MAKE_DIRECTORY			"${BL_AUTOGEN_DIR}")
 		set(BL_AUTOGEN_INCLUDES		"${BL_AUTOGEN_DIR}/bitloop_simulations.h")
-		message(STATUS "Creating: ${BL_AUTOGEN_DIR}/bitloop_simulations.h")
+
 
 		file(WRITE "${BL_AUTOGEN_INCLUDES}" "// Auto‑generated simulation includes\n")
 		file(APPEND "${BL_AUTOGEN_INCLUDES}" "#include <bitloop/core/project.h>\n\n")
@@ -445,9 +409,11 @@ macro(bitloop_finalize)
 		get_filename_component(BITLOOP_PARENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
 
 		# Add common data
-		message(STATUS "${BL_COMMON}/data")
+		file(RELATIVE_PATH rel_common "${BITLOOP_PARENT_DIR}" "${BL_COMMON}")
+		message(STATUS "${rel_common}/data")
+
 		add_custom_command(TARGET ${_TARGET} PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory 
-				"${BL_COMMON}/data"
+				"${rel_common}/data"
 				"$<TARGET_FILE_DIR:${_TARGET}>/data"
 				COMMENT "Merging dependency data from ${dep_path}")
 

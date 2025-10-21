@@ -117,7 +117,7 @@ find_package(implot CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+find_package(concurrentqueue CONFIG REQUIRED)
 find_package(nanovg CONFIG REQUIRED)
 find_package(NanoSVG CONFIG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
@@ -134,7 +134,7 @@ target_link_libraries(bitloop
     SDL3::SDL3
     glad::glad
     glm::glm
-    unofficial::concurrentqueue::concurrentqueue
+    concurrentqueue::concurrentqueue
     nanovg::nanovg
     NanoSVG::nanosvg
     NanoSVG::nanosvgrast

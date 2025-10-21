@@ -1,22 +1,5 @@
 # bitloopConfig.cmake.in
 
-message(STATUS "HEY")
-
-if(DEFINED BITLOOP_PACKAGE_PREFIX_DIR)
-  # We've been loaded before. Just report found and bail out.
-  set(bitloop_FOUND TRUE)
-  return()
-endif()
-
-set(BITLOOP_PACKAGE_PREFIX_DIR "${PACKAGE_PREFIX_DIR}" CACHE INTERNAL "bitloop prefix")
-
-# Optional: If targets already exist (e.g., consumer included targets file earlier),
-# still mark found and return immediately.
-if(TARGET bitloop::bitloop)
-  set(bitloop_FOUND TRUE)
-  return()
-endif()
-
 include(CMakeFindDependencyMacro)
 
 find_dependency(Freetype CONFIG REQUIRED)
@@ -51,5 +34,3 @@ list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
 
 include(bitloopSimulation)
 include("${CMAKE_CURRENT_LIST_DIR}/../bitloopTargets.cmake")
-
-set(bitloop_FOUND TRUE)
