@@ -209,7 +209,7 @@ endif()
 # ──────── Install simulation cmake helpers ────────
 install(FILES
    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bitloopSimulation.cmake"
-   DESTINATION share/cmake/bitloop
+   DESTINATION share/bitloop/cmake
  )
 
 # ──────── Config & Version file ────────
@@ -228,7 +228,7 @@ write_basic_package_version_file(
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/bitloopConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/bitloopConfigVersion.cmake"
-    DESTINATION share/bitloop)
+    DESTINATION share/bitloop/cmake)
 
 
 if(PROJECT_IS_TOP_LEVEL)

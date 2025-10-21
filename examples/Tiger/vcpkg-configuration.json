@@ -6,7 +6,7 @@
   "registries": [
     {
       "kind": "git",
-      "baseline": "8c74b5ad3d13f5eba2f70015a5a0c39893cc076f",
+      "baseline": "655e0cb734a79e9c5833c4b78dc8deaaee0416c4",
       "repository": "https://github.com/willmh93/bitloop-registry.git",
       "packages": [
         "bitloop"
