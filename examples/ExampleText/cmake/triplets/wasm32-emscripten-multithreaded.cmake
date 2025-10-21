@@ -1,8 +1,6 @@
 set(VCPKG_ENV_PASSTHROUGH_UNTRACKED EMSCRIPTEN_ROOT EMSDK PATH)
 set(CMAKE_SIZEOF_VOID_P 4 CACHE INTERNAL "Override for WebAssembly build" FORCE)
 
-message(STATUS "@@@@@@@@@@@@ Using custom wasm32-emscripten triplet from: ${CMAKE_CURRENT_LIST_FILE}")
-
 if(NOT DEFINED ENV{EMSCRIPTEN_ROOT})
    find_path(EMSCRIPTEN_ROOT "emcc")
 else()
@@ -26,7 +24,6 @@ set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_CMAKE_SYSTEM_NAME Emscripten)
 set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${EMSCRIPTEN_ROOT}/cmake/Modules/Platform/Emscripten.cmake")
 
-# 3) export to emcc (optional if you push via VCPKG_CMAKE_CONFIGURE_OPTIONS)
-#set(ENV{EMCC_JSOPT_BLACKLIST} "*" CACHE STRING "" FORCE)
+# export to emcc
 set(ENV{EMCC_CFLAGS}   "$ENV{EMCC_CFLAGS}   -pthread")
 set(ENV{EMCC_CXXFLAGS} "$ENV{EMCC_CXXFLAGS} -pthread")
