@@ -1,6 +1,6 @@
 {
   "ExcludedItems": [
-    "vcpkg/",
+    ".vcpkg/",
     "bitloop.bat",
     "bitloop.sh",
     "LICENSE",

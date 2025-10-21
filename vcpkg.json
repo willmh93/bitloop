@@ -39,9 +39,12 @@
       "default-features": false,
       "features": [
         "avcodec",
+        "avdevice",
+        "avfilter",
         "avformat",
-        "swscale",
         "gpl",
+        "swresample",
+        "swscale",
         "x264",
         "x265"
       ]
