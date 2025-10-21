@@ -5,6 +5,11 @@ project(bitloop VERSION 0.9 LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
+# ────────── Default Options ──────────
+option(BITLOOP_WITH_FFMPEG "Build with FFmpeg" OFF)
+option(BITLOOP_WITH_FFMPEG_X265 "FFmpeg built with x265 (GPL)" OFF)
+
+
 # ────────── Bootstrap package helpers for both in‑tree & installed modes ──────────
 set(BL_SIM_CMAKE "${CMAKE_CURRENT_LIST_DIR}/cmake/bitloopSimulation.cmake")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${BL_SIM_CMAKE}")
@@ -147,21 +152,31 @@ target_include_directories(bitloop PRIVATE
     ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
+add_library(bitloop.ffmpeg INTERFACE)
+
 set(_found_ffmpeg OFF)
-if (NOT EMSCRIPTEN)
+if (BITLOOP_WITH_FFMPEG AND NOT EMSCRIPTEN)
     find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
     if(FFMPEG_FOUND)
-        target_link_libraries(bitloop
-            PUBLIC
-            ${FFMPEG_LIBRARIES})
-         set(_found_ffmpeg ON)
+        
+        target_include_directories(bitloop.ffmpeg INTERFACE ${FFMPEG_INCLUDE_DIRS})
+        target_link_libraries(bitloop.ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
+        target_link_libraries(bitloop PUBLIC bitloop.ffmpeg)
+        set(_found_ffmpeg ON)
+        #target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
+        #set(_found_ffmpeg ON)
     endif()
 endif()
 
-target_compile_definitions(bitloop PUBLIC BITLOOP_FFMPEG_ENABLED=$<BOOL:${_found_ffmpeg}>)
+#target_compile_definitions(bitloop PUBLIC BITLOOP_FFMPEG_ENABLED=$<BOOL:${_found_ffmpeg}>)
+
+target_compile_definitions(bitloop PUBLIC
+  BITLOOP_FFMPEG_ENABLED=$<BOOL:${BITLOOP_WITH_FFMPEG}>
+  BITLOOP_FFMPEG_X265_ENABLED=$<BOOL:${BITLOOP_WITH_FFMPEG_X265}>
+)
 
 add_library(bitloop::bitloop ALIAS bitloop)
-
+add_library(bitloop::ffmpeg ALIAS bitloop.ffmpeg)
 
 # ──────── Install static libs ────────
 install(TARGETS bitloop
