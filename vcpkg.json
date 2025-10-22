@@ -31,7 +31,8 @@
         "avfilter",
         "avformat",
         "swresample",
-        "swscale"
+        "swscale",
+        "x265"
       ]
     }
   ]

@@ -152,12 +152,32 @@ target_include_directories(bitloop PRIVATE
     ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
-set(_found_ffmpeg OFF)
 if (NOT EMSCRIPTEN)
     find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
+
+    # BITLOOP_WITH_FFMPEG
+    if (FFMPEG_FOUND)
+       set(BITLOOP_WITH_FFMPEG TRUE)
+    else()
+       set(BITLOOP_WITH_FFMPEG FALSE)
+    endif()
+
+    # BITLOOP_WITH_FFMPEG_X265
+    find_library(X265_LIB NAMES x265 x265-static libx265)
+    find_path(X265_INCLUDE_DIR NAMES x265.h)
+     if (X265_LIB AND X265_INCLUDE_DIR)
+       set(BITLOOP_WITH_FFMPEG_X265 TRUE)
+    else()
+       set(BITLOOP_WITH_FFMPEG_X265 FALSE)
+     endif()
+
+    message(STATUS "BITLOOP_WITH_FFMPEG:        ${BITLOOP_WITH_FFMPEG}")
+    message(STATUS "BITLOOP_WITH_FFMPEG_X265:   ${BITLOOP_WITH_FFMPEG_X265}")
+
     if(FFMPEG_FOUND)
+        message(STATUS "FFmpeg found")
         target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
-         set(_found_ffmpeg ON)
+        set(BITLOOP_WITH_FFMPEG ON)
     endif()
 endif()
 
