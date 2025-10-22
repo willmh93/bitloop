@@ -152,31 +152,23 @@ target_include_directories(bitloop PRIVATE
     ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
-add_library(bitloop.ffmpeg INTERFACE)
+        #target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
+        #set(_found_ffmpeg ON)
+
 
 set(_found_ffmpeg OFF)
 if (BITLOOP_WITH_FFMPEG AND NOT EMSCRIPTEN)
     find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
     if(FFMPEG_FOUND)
-        
-        target_include_directories(bitloop.ffmpeg INTERFACE ${FFMPEG_INCLUDE_DIRS})
-        target_link_libraries(bitloop.ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
-        target_link_libraries(bitloop PUBLIC bitloop.ffmpeg)
+        target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
         set(_found_ffmpeg ON)
-        #target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
-        #set(_found_ffmpeg ON)
     endif()
 endif()
-
-#target_compile_definitions(bitloop PUBLIC BITLOOP_FFMPEG_ENABLED=$<BOOL:${_found_ffmpeg}>)
 
 target_compile_definitions(bitloop PUBLIC
   BITLOOP_FFMPEG_ENABLED=$<BOOL:${BITLOOP_WITH_FFMPEG}>
   BITLOOP_FFMPEG_X265_ENABLED=$<BOOL:${BITLOOP_WITH_FFMPEG_X265}>
 )
-
-add_library(bitloop::bitloop ALIAS bitloop)
-add_library(bitloop::ffmpeg ALIAS bitloop.ffmpeg)
 
 # ──────── Install static libs ────────
 install(TARGETS bitloop
@@ -230,7 +222,7 @@ endif()
 # ──────── Install simulation cmake helpers ────────
 install(FILES
    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bitloopSimulation.cmake"
-   DESTINATION share/bitloop/cmake
+   DESTINATION share/bitloop
  )
 
 # ──────── Config & Version file ────────
@@ -239,7 +231,7 @@ include(CMakePackageConfigHelpers)
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bitloopConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/bitloopConfig.cmake"
-    INSTALL_DESTINATION share/bitloop/cmake)
+    INSTALL_DESTINATION share/bitloop)
 
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/bitloopConfigVersion.cmake"
@@ -249,7 +241,7 @@ write_basic_package_version_file(
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/bitloopConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/bitloopConfigVersion.cmake"
-    DESTINATION share/bitloop/cmake)
+    DESTINATION share/bitloop)
 
 
 if(PROJECT_IS_TOP_LEVEL)
