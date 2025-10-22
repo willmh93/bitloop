@@ -33,4 +33,8 @@ list(APPEND CMAKE_MODULE_PATH "${BITLOOP_CMAKE_MODULE_DIR}")
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
 
 include(bitloopSimulation)
-include("${CMAKE_CURRENT_LIST_DIR}/bitloopTargets.cmake")
+
+# bitloopConfig.cmake  installs to:  share/bitloop/cmake
+# bitloopTargets.cmake installs to:  share/bitloop
+# include from parent folder...
+include("${CMAKE_CURRENT_LIST_DIR}/../bitloopTargets.cmake")
