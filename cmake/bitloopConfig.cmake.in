@@ -15,17 +15,17 @@ find_dependency(WebP CONFIG REQUIRED)
 find_dependency(nlohmann_json  CONFIG REQUIRED)
 find_dependency(unofficial-brotli CONFIG REQUIRED)
 
-if (NOT (CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR DEFINED EMSCRIPTEN))
-  find_dependency(FFMPEG REQUIRED COMPONENTS avcodec avformat avutil swscale)
-
-  if(NOT TARGET bitloop::ffmpeg)
-    add_library(bitloop::ffmpeg INTERFACE IMPORTED)
-
-    target_link_libraries(bitloop::ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
-    set_target_properties(bitloop::ffmpeg PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INCLUDE_DIRS}")
-  endif()
-endif()
+#if (NOT (CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR DEFINED EMSCRIPTEN))
+#  find_dependency(FFMPEG REQUIRED COMPONENTS avcodec avformat avutil swscale)
+#
+#  if(NOT TARGET bitloop::ffmpeg)
+#    add_library(bitloop::ffmpeg INTERFACE IMPORTED)
+#
+#    target_link_libraries(bitloop::ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
+#    set_target_properties(bitloop::ffmpeg PROPERTIES
+#      INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INCLUDE_DIRS}")
+#  endif()
+#endif()
 
 
 set(BITLOOP_CMAKE_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}")
@@ -33,4 +33,4 @@ list(APPEND CMAKE_MODULE_PATH "${BITLOOP_CMAKE_MODULE_DIR}")
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
 
 include(bitloopSimulation)
-include("${CMAKE_CURRENT_LIST_DIR}/../bitloopTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/bitloopTargets.cmake")

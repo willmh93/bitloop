@@ -152,16 +152,12 @@ target_include_directories(bitloop PRIVATE
     ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
-        #target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
-        #set(_found_ffmpeg ON)
-
-
 set(_found_ffmpeg OFF)
-if (BITLOOP_WITH_FFMPEG AND NOT EMSCRIPTEN)
+if (NOT EMSCRIPTEN)
     find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
     if(FFMPEG_FOUND)
         target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
-        set(_found_ffmpeg ON)
+         set(_found_ffmpeg ON)
     endif()
 endif()
 
@@ -169,6 +165,9 @@ target_compile_definitions(bitloop PUBLIC
   BITLOOP_FFMPEG_ENABLED=$<BOOL:${BITLOOP_WITH_FFMPEG}>
   BITLOOP_FFMPEG_X265_ENABLED=$<BOOL:${BITLOOP_WITH_FFMPEG_X265}>
 )
+
+add_library(bitloop::bitloop ALIAS bitloop)
+
 
 # ──────── Install static libs ────────
 install(TARGETS bitloop
