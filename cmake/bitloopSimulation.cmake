@@ -2,6 +2,7 @@
 
 get_filename_component(BL_SHARE "${CMAKE_CURRENT_LIST_DIR}/.." REALPATH)
 
+#set(BL_SHARE        "${CMAKE_CURRENT_LIST_DIR}")
 set(BL_MAIN_SOURCE	"${BL_SHARE}/src/bitloop_main.cpp"	CACHE INTERNAL "")
 set(BL_COMMON		"${BL_SHARE}/common"				CACHE INTERNAL "")
 
