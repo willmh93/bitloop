@@ -153,6 +153,7 @@ target_include_directories(bitloop PRIVATE
 )
 
 if (NOT EMSCRIPTEN)
+    message(STATUS "Non-web build - permitting FFmpeg")
     find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
 
     # BITLOOP_WITH_FFMPEG
@@ -179,6 +180,10 @@ if (NOT EMSCRIPTEN)
         target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
         set(BITLOOP_WITH_FFMPEG ON)
     endif()
+else()
+    message(STATUS "Web build - not permitting FFmpeg")
+    set(BITLOOP_WITH_FFMPEG FALSE)
+    set(BITLOOP_WITH_FFMPEG_X265 FALSE)
 endif()
 
 target_compile_definitions(bitloop PUBLIC

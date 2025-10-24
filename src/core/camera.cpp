@@ -78,6 +78,11 @@ void CameraInfo::setOriginViewportAnchor(double ax, double ay)
     dirty();
 }
 
+DVec2 bl::CameraInfo::viewportStageSize() const
+{
+    return surface->size();
+}
+
 void CameraInfo::setOriginViewportAnchor(Anchor anchor)
 {
     switch (anchor)
@@ -559,7 +564,7 @@ void CameraInfo::populateUI(DRect restrict_world_rect)
     if (ImGui::RevertableSliderAngle("Rotation", &rotation_64, &init_rotation))
         changed = true;
 
-    f128 relative_zoom = getRelativeZoom<f128>();
+    f128 relative_zoom = relativeZoom<f128>();
     f128 zoom_speed = relative_zoom / 100.0;
     ImGui::SetNextItemWidthForSpace(required_space);
     if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1, 1e32, "%.5f"))

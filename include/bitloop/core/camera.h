@@ -291,7 +291,7 @@ public:
     // ────── world rect focusing ─────────────────────────────────────────────────────────────────────────────────────────
     void focusWorldRect(f128 x0, f128 y0, f128 x1, f128 y1, bool stretch = false);
     void focusWorldRect(f64 x0, f64 y0, f64 x1, f64 y1, bool stretch = false)
-       { focusWorldRect(f128(x0),   f128(y0),   f128(x1),   f128(y1),   stretch); }
+       { focusWorldRect(f128(x0), f128(y0), f128(x1), f128(y1), stretch); }
     void focusWorldRect(const DDRect& r, bool stretch = false)
        { focusWorldRect(r.x1, r.y1, r.x2, r.y2, stretch); }
     void focusWorldRect(const DRect& r, bool stretch = false)
@@ -303,7 +303,16 @@ public:
     /// e.g. setRelativeZoom(2)  will zoom 2x relative to focused rect
     template<typename T> void setReferenceZoom(T _ref_zoom) { ref_zoom = _ref_zoom; }
     template<typename T> [[nodiscard]] T getReferenceZoom() const { return T{ref_zoom}; }
-    template<typename T> [[nodiscard]] T getRelativeZoom() const noexcept { return T{zoom_128 / ref_zoom}; }
+    template<typename T> [[nodiscard]] T relativeZoom() const noexcept { return T{zoom_128 / ref_zoom}; }
+
+    DVec2 viewportStageSize() const;
+    template<typename T = f64> Vec2<T> viewportWorldSize() const { return Vec2<T>(viewportStageSize()) / getReferenceZoom<T>(); }
+    template<typename T = f64> AngledRect<T> worldAngledRect() const {
+        return AngledRect<T>(pos<T>(), viewportWorldSize<T>(), (T)rotation());
+    }
+    template<typename T = f64> Quad<T> worldQuad() const {
+        return static_cast<Quad<T>>(AngledRect<T>(pos<T>(), viewportWorldSize<T>(), (T)rotation()));
+    }
 
     // Set zoom (relative to the reference)
     void setRelativeZoom(f64 rel_zoom)  { zoom_128 = ref_zoom * rel_zoom; zoomDirty(); }
@@ -345,13 +354,13 @@ public:
     }
 
     // ────── tween ───────────────────────────────────────────────────────────────────────────────────────────────────────
-    static void lerp(CameraInfo& dst, const CameraInfo& a, const CameraInfo& b, f64 f)
+    static void lerp(CameraInfo& dst, const CameraInfo& a, const CameraInfo& b, f64 lerp_factor)
     {
-        dst.setX(Math::lerp(a.x<f128>(), b.x<f128>(), f));
-        dst.setY(Math::lerp(a.y<f128>(), b.y<f128>(), f));
-        dst.setRotation(Math::lerpAngle(a.rotation(), b.rotation(), f));
-        dst.setZoom(Math::lerp(a.zoom<f128>(), b.zoom<f128>(), f));
-        dst.setStretch(Math::lerp(a.stretch(), b.stretch(), f));
+        dst.setX(Math::lerp(a.x<f128>(), b.x<f128>(), lerp_factor));
+        dst.setY(Math::lerp(a.y<f128>(), b.y<f128>(), lerp_factor));
+        dst.setRotation(Math::lerpAngle(a.rotation(), b.rotation(), lerp_factor));
+        dst.setZoom(Math::lerp(a.zoom<f128>(), b.zoom<f128>(), lerp_factor));
+        dst.setStretch(Math::lerp(a.stretch(), b.stretch(), lerp_factor));
     }
 };
 

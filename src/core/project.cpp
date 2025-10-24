@@ -263,7 +263,7 @@ void ProjectBase::_projectProcess()
             double viewport_mx = mouse.client_x - viewport->x;
             double viewport_my = mouse.client_y - viewport->y;
 
-            auto m = viewport->inverseTransform<f64>();
+            auto m = viewport->inverseTransform<f128>();
 
             if (//cam.panning ||
                 (viewport_mx >= 0 &&
@@ -275,8 +275,7 @@ void ProjectBase::_projectProcess()
                 mouse.stage_x = viewport_mx;
                 mouse.stage_y = viewport_my;
 
-                // @@@ todo: use f128 for accurate mouse world-pos at ultra-zooms
-                auto world_mouse = static_cast<DVec2>(m * glm::dvec3(viewport_mx, viewport_my, 1.0));
+                auto world_mouse = static_cast<DDVec2>(m * glm::ddvec3(viewport_mx, viewport_my, 1.0));
                 mouse.world_x = world_mouse.x;
                 mouse.world_y = world_mouse.y;
             }

@@ -77,9 +77,6 @@ namespace bl
 std::ostream& operator<<(std::ostream& os, const ImSpline::Spline& spline);
 std::ostream& operator<<(std::ostream& os, const ImGradient& gradient);
 
-bool SliderBehavior_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_type, void* p_v, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags, ImRect* out_grab_bb);
-
-
 namespace ImGui
 {
     using bl::f128;
@@ -93,7 +90,7 @@ namespace ImGui
             memcpy(item.first, item.second.initial, item.second.size);
     }
 
-    bool Section(const char* name, bool open_by_default = false, float header_spacing=5.0f, float body_margin_top=2.0f);
+    bool Section(const char* name, bool open_by_default = false, float header_spacing=2.0f, float body_margin_top=2.0f);
 
     bool ResetBtn(const char* id);
     bool InlResetBtn(const char* id);
@@ -139,99 +136,19 @@ namespace ImGui
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - lw - spacing);
     }
 
-    struct GroupBox {
+    struct GroupBox
+    {
         ImDrawList* dl{};
         const char* label{};
         float pad, label_pad_x;
         ImVec2 text_sz{}, content_min{}, content_max{};
         float top_extra{};
 
-        // NEW: capture starting x and the available row width
-        ImVec2 start_screen{};   // left/top of the row after the Dummy()
-        float  span_w{};         // width of parent content region
+        ImVec2 start_screen{};
+        float  span_w{};
 
-        GroupBox(const char* id, const char* label_ = "", float pad_ = bl::scale_size(13.0f), float label_pad_x_ = bl::scale_size(10.0f))
-            : label(label_), pad(pad_), label_pad_x(label_pad_x_)
-        {
-            ImVec2 label_height = ImGui::CalcTextSize(label);
-            ImGui::Dummy(ImVec2(0, label_height.y));        // space for title
-
-
-            // NEW: measure full available width of the current row/column
-            start_screen = ImGui::GetCursorScreenPos();
-            span_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x);
-
-            ImGui::PushID(id);
-            dl = ImGui::GetWindowDrawList();
-            text_sz = (label && *label) ? label_height : ImVec2(0, 0);
-            top_extra = (text_sz.y > 0.0f) ? text_sz.y * 0.5f : 0.0f;
-
-            dl->ChannelsSplit(2);           // 0 = bg/border, 1 = contents/label
-            dl->ChannelsSetCurrent(1);
-
-            ImVec2 p = ImGui::GetCursorScreenPos();
-            ImGui::SetCursorScreenPos(ImVec2(p.x + pad, p.y + pad + top_extra)); // inner + title clearance
-            ImGui::BeginGroup();
-        }
-
-        ~GroupBox() {
-            ImGui::EndGroup();
-            
-
-            // content bounds (tight)
-            content_min = ImGui::GetItemRectMin();
-            content_max = ImGui::GetItemRectMax();
-
-            // outer frame
-            ImVec2 outer_min = content_min - ImVec2(pad, pad + top_extra);
-            ImVec2 outer_max = content_max + ImVec2(pad, pad);
-
-            // NEW: force the frame to span the entire parent width
-            outer_min.x = start_screen.x;                     // align left to row start
-            outer_max.x = start_screen.x + span_w;            // extend to full available width
-
-            // draw bg/border behind contents
-            ImGuiStyle& style = ImGui::GetStyle();
-            float rounding = style.FrameRounding;
-            float t = style.FrameBorderSize > 0 ? style.FrameBorderSize : 1.0f;
-            ImU32 col_bg = ImGui::GetColorU32(ImGuiCol_TitleBg);
-            ImU32 col_border = ImGui::GetColorU32(ImGuiCol_Border);
-            //ImU32 col_winbg = ImGui::GetColorU32(ImGuiCol_WindowBg);
-            ImU32 col_text = ImGui::GetColorU32(ImGuiCol_Text);
-
-            // Draw bg + full border first (channel 0)
-            dl->ChannelsSetCurrent(0);
-            dl->AddRectFilled(outer_min, outer_max, col_bg, rounding);
-            dl->AddRect(outer_min, outer_max, col_border, rounding, 0, t);
-
-            // Foreground: title bg + text (channel 1)
-            dl->ChannelsSetCurrent(1);
-            if (label && *label)
-            {
-                float x_text = outer_min.x + pad + label_pad_x;
-                float y_line = outer_min.y; // top border y
-                float text_margin_x = 8.0f;
-                float text_margin_y = 4.0f;
-
-                ImVec2 label_min(x_text - text_margin_x, y_line - text_sz.y * 0.5f - t - text_margin_y);
-                ImVec2 label_max(x_text + text_sz.x + text_margin_x, y_line + text_sz.y * 0.5f + t + text_margin_y);
-
-                // title background (kept inside frame; no special clipping needed)
-                dl->AddRectFilled(label_min, label_max, col_bg);
-                dl->AddRect(label_min, label_max, col_border);
-
-                dl->AddText(ImVec2(x_text, y_line - text_sz.y * 0.5f), col_text, label);
-            }
-
-            dl->ChannelsMerge();
-
-            // NEW: advance the layout below the box and reserve the full row width
-            ImGui::SetCursorScreenPos(ImVec2(start_screen.x, outer_max.y));
-            ImGui::Dummy(ImVec2(span_w, 0.0f));
-
-            ImGui::PopID();
-
-        }
+        GroupBox(const char* id, const char* label = "", float pad = bl::scale_size(13.0f), float label_pad_x = bl::scale_size(10.0f));
+        ~GroupBox();
 
         void IncreaseRequiredSpaceForLabel(float& w, const char* text, float pad_right=bl::scale_size(10.0f))
         {

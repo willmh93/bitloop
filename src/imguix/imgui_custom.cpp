@@ -1804,4 +1804,83 @@ namespace ImGui
         region_padding = 0.0f;
     }
 
+    GroupBox::GroupBox(const char* id, const char* _label, float _pad, float _label_pad_x)
+        : label(_label), pad(_pad), label_pad_x(_label_pad_x)
+    {
+        ImVec2 label_height = ImGui::CalcTextSize(label);
+        ImGui::Dummy(ImVec2(0, label_height.y)); // space for title
+
+        // measure full available width of the current row/column
+        start_screen = ImGui::GetCursorScreenPos();
+        span_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x);
+
+        ImGui::PushID(id);
+        dl = ImGui::GetWindowDrawList();
+        text_sz = (label && *label) ? label_height : ImVec2(0, 0);
+        top_extra = (text_sz.y > 0.0f) ? text_sz.y * 0.5f : 0.0f;
+
+        dl->ChannelsSplit(2); // 0 = bg/border, 1 = contents/label
+        dl->ChannelsSetCurrent(1);
+
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos(ImVec2(p.x + pad, p.y + pad + top_extra)); // inner + title
+        ImGui::BeginGroup();
+    }
+
+    GroupBox::~GroupBox()
+    {
+        ImGui::EndGroup();
+
+        // content bounds (tight)
+        content_min = ImGui::GetItemRectMin();
+        content_max = ImGui::GetItemRectMax();
+
+        // outer frame
+        ImVec2 outer_min = content_min - ImVec2(pad, pad + top_extra);
+        ImVec2 outer_max = content_max + ImVec2(pad, pad);
+
+        // force the frame to span the entire parent width
+        outer_min.x = start_screen.x;
+        outer_max.x = start_screen.x + span_w;
+
+        // draw bg/border behind contents
+        ImGuiStyle& style = ImGui::GetStyle();
+        float rounding = style.FrameRounding;
+        float t = style.FrameBorderSize > 0 ? style.FrameBorderSize : 1.0f;
+        ImU32 col_bg = ImGui::GetColorU32(ImGuiCol_TitleBg);
+        ImU32 col_border = ImGui::GetColorU32(ImGuiCol_Border);
+        ImU32 col_text = ImGui::GetColorU32(ImGuiCol_Text);
+
+        // draw bg + full border
+        dl->ChannelsSetCurrent(0);
+        dl->AddRectFilled(outer_min, outer_max, col_bg, rounding);
+        dl->AddRect(outer_min, outer_max, col_border, rounding, 0, t);
+
+        // foreground: title bg + text (channel 1)
+        dl->ChannelsSetCurrent(1);
+        if (label && *label)
+        {
+            float x_text = outer_min.x + pad + label_pad_x;
+            float y_line = outer_min.y; // top border y
+            float text_margin_x = 8.0f;
+            float text_margin_y = 4.0f;
+
+            ImVec2 label_min(x_text - text_margin_x, y_line - text_sz.y * 0.5f - t - text_margin_y);
+            ImVec2 label_max(x_text + text_sz.x + text_margin_x, y_line + text_sz.y * 0.5f + t + text_margin_y);
+
+            // title background (kept inside frame; no special clipping needed)
+            dl->AddRectFilled(label_min, label_max, col_bg);
+            dl->AddRect(label_min, label_max, col_border);
+
+            dl->AddText(ImVec2(x_text, y_line - text_sz.y * 0.5f), col_text, label);
+        }
+
+        dl->ChannelsMerge();
+
+        ImGui::SetCursorScreenPos(ImVec2(start_screen.x, outer_max.y));
+        ImGui::Dummy(ImVec2(span_w, 0.0f));
+
+        ImGui::PopID();
+    }
+
 }

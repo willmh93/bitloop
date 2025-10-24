@@ -11,8 +11,11 @@
 
 namespace bl {
 
-#if defined(__FMA__) || defined(__FMA4__) || defined(_MSC_VER) || defined(__clang__) || defined(__GNUC__)
-#define FMA_AVAILABLE 
+// For now, disabling std::fma seems to offer a 5-6x performance boost on web
+#ifndef __EMSCRIPTEN__
+    #if defined(__FMA__) || defined(__FMA4__) || defined(_MSC_VER) || defined(__clang__) || defined(__GNUC__)
+    #define FMA_AVAILABLE
+    #endif
 #endif
 
 BL_PUSH_PRECISE
@@ -39,6 +42,7 @@ FAST_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err
 
 #endif
 
+BL_PUSH_PRECISE
 FAST_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p, double& err)
 {
     constexpr double split = 134217729.0;
@@ -54,7 +58,7 @@ FAST_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p
     p = a * b; // rounded product
     err = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo;
 }
-
+BL_POP_PRECISE
 
 struct f128;
 
@@ -211,8 +215,8 @@ FAST_INLINE constexpr f128 quick_two_sum(double a, double b)
 }
 FAST_INLINE constexpr f128 recip(f128 b)
 {
+    constexpr f128 one = f128(1.0);
     f128 y = f128(1.0 / b.hi);
-    f128 one = f128(1.0);
     f128 e = one - b * y;
 
     y += y * e;
@@ -374,8 +378,8 @@ FAST_INLINE           f128 operator*(double a, const f128& b) { return f128{ a }
 FAST_INLINE           f128 operator/(const f128& a, double b) { return a / f128{ b }; }
 FAST_INLINE           f128 operator/(double a, const f128& b) { return f128{ a } / b; }
 #else
-FAST_INLINE constexpr f128 operator*(const f128& a, double b) { return a / f128{ b }; }
-FAST_INLINE constexpr f128 operator*(double a, const f128& b) { return f128{ a } / b; }
+FAST_INLINE constexpr f128 operator*(const f128& a, double b) { return a * f128{ b }; }
+FAST_INLINE constexpr f128 operator*(double a, const f128& b) { return f128{ a } * b; }
 FAST_INLINE constexpr f128 operator/(const f128& a, double b) { return a / f128{ b }; }
 FAST_INLINE constexpr f128 operator/(double a, const f128& b) { return f128{ a } / b; }
 #endif
@@ -1021,7 +1025,7 @@ FAST_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr = 
     {
         p += 3;
         if (ci(p[0]) == 'i' && ci(p[1]) == 'n' && ci(p[2]) == 'i' && ci(p[3]) == 't' && ci(p[4]) == 'y') p += 5;
-        out = neg ? -std::numeric_limits<f128>::infinity() : std::numeric_limits<f128>::infinity();
+        out = neg ? -bl_infinity<f128>() : bl_infinity<f128>();
         if (endptr) *endptr = p; return true;
     }
     p = ps; // reset if not special
@@ -1136,8 +1140,6 @@ FAST_INLINE f128 from_string(const char* s)
         return ret;
     return 0;
 }
-
-//FAST_INLINE constexpr f128 f128(const char *s) { return from_string(s); }
 
 FAST_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
 {

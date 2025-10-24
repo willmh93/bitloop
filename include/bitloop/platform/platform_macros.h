@@ -8,25 +8,33 @@
 #endif
 
 // ======== FAST_INLINE ========
-
+/*
 #if defined(_MSC_VER)
 # define FAST_INLINE __forceinline
 
 #elif defined(__EMSCRIPTEN__)
-/* Emscripten/Clang does not support __attribute__((optimize)) */
 # define FAST_INLINE inline __attribute__((always_inline))
 #elif defined(__clang__) || defined(__GNUC__)
 # define FAST_INLINE inline __attribute__((always_inline, optimize("fast-math")))
 
 #else
 # define FAST_INLINE inline
+#endif*/
+
+// ===== Inline (no fast-math attr baked in) =====
+#if defined(_MSC_VER)
+#define FAST_INLINE __forceinline
+#elif defined(__clang__) || defined(__GNUC__)
+#define FAST_INLINE inline __attribute__((always_inline))
+#else
+#define FAST_INLINE inline
 #endif
 
 
 /* ------------------------------------------------------------------ */
 /*  Fast-math override helpers                                        */
 /* ------------------------------------------------------------------ */
-
+/*
 #if defined(_MSC_VER) // MSVC or clang-cl
 #define BL_PUSH_PRECISE  __pragma(float_control(precise, on, push)) \
                          __pragma(fp_contract(off))
@@ -47,6 +55,7 @@
 #define BL_PUSH_PRECISE
 #define BL_POP_PRECISE
 #endif
+*/
 
 
 #if defined(_MSC_VER)
@@ -56,6 +65,57 @@
 #elif defined(__FAST_MATH__)
 #define BL_FAST_MATH
 #endif
+
+
+#if defined(_MSC_VER)
+#define BL_PUSH_PRECISE  __pragma(float_control(precise, on, push)) \
+                         __pragma(fp_contract(off))
+#define BL_POP_PRECISE   __pragma(float_control(pop))
+
+// Emscripten Clang: only a limited fp pragma set, no push/pop, no eval-method
+#elif defined(__EMSCRIPTEN__)
+// Turn OFF fast-mathy transforms for the block:
+#define BL_PUSH_PRECISE  _Pragma("clang fp reassociate(off)") \
+                            _Pragma("clang fp contract(off)")
+  // Restore to a *reasonable* default (match your global flags):
+  // If you globally use -ffp-contract=fast and -ffast-math, this puts it back.
+#define BL_POP_PRECISE   _Pragma("clang fp reassociate(on)")  \
+                            _Pragma("clang fp contract(fast)")
+
+// Other Clang (desktop) that supports the richer set
+#elif defined(__clang__)
+#define BL_PUSH_PRECISE  _Pragma("clang fp reassociate(off)") \
+                            _Pragma("clang fp contract(off)")
+#define BL_POP_PRECISE   _Pragma("clang fp reassociate(on)")  \
+                            _Pragma("clang fp contract(fast)")
+
+// GCC fallback
+#elif defined(__GNUC__)
+#define BL_PUSH_PRECISE  _Pragma("GCC push_options")                \
+                            _Pragma("GCC optimize(\"no-fast-math\")") \
+                            _Pragma("STDC FP_CONTRACT OFF")
+#define BL_POP_PRECISE   _Pragma("GCC pop_options")
+
+#else
+#define BL_PUSH_PRECISE
+#define BL_POP_PRECISE
+#endif
+
+// Function-scope precise guards
+//#if defined(_MSC_VER)  // MSVC / clang-cl
+//#define BL_FUNC_PREC()     __pragma(float_control(precise, on, push)) __pragma(fp_contract(off))
+//#define BL_FUNC_PREC_END() __pragma(float_control(pop))
+//#elif defined(__EMSCRIPTEN__) || defined(__clang__)
+//  // Clang/Emscripten: must be FIRST statement in the function body
+//#define BL_FUNC_PREC()     _Pragma("clang fp reassociate(off)") _Pragma("clang fp contract(off)")
+//#define BL_FUNC_PREC_END() /* nothing */
+//#elif defined(__GNUC__)  // GCC fallback
+//#define BL_FUNC_PREC()     _Pragma("GCC push_options") _Pragma("GCC optimize(\"no-fast-math\")") _Pragma("STDC FP_CONTRACT OFF")
+//#define BL_FUNC_PREC_END() _Pragma("GCC pop_options")
+//#else
+//#define BL_FUNC_PREC()     /* nothing */
+//#define BL_FUNC_PREC_END() /* nothing */
+//#endif
 
 template<typename T>
 constexpr T bl_infinity() {
@@ -90,3 +150,16 @@ constexpr bool fast_math_enabled() {
     return false;
 #endif
 }
+
+// stringify helpers
+#define STR(x) #x
+#define VAL(x) STR(x)
+
+#if defined(_MSC_VER)
+#define PP_MESSAGE(msg) __pragma(message(msg))
+#define PP_SHOW(name)   __pragma(message(#name "=" VAL(name)))
+#else
+  // Clang/GCC/Emscripten
+#define PP_MESSAGE(msg) _Pragma("message \"" msg "\"")
+#define PP_SHOW(name)   _Pragma("message \"" #name "=" VAL(name) "\"")
+#endif
