@@ -10,7 +10,8 @@
 #include <cstdint>
 #include <vector>
 
-#include <bitloop/util/flt128.h>
+#include <bitloop/util/f128.h>
+//#include <bitloop/util/f256.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_UNRESTRICTED_GENTYPE
@@ -1176,3 +1177,144 @@ template<typename T> std::ostream& operator<<(std::ostream& os, const bl::Angled
 
 BL_END_NS
 
+// Convenience macro to enable bitops for one enum type
+#define bl_enable_enum_bitops(E) \
+    template<> struct enable_enum_bitops<E> : std::true_type {}
+
+template<class E>
+struct enable_enum_bitops : std::false_type {}; // specialize as needed: template<> struct enable_enum_bitops<YourEnum> : std::true_type {};
+
+template<class E>
+concept bitmask_enum = std::is_enum_v<E> && enable_enum_bitops<E>::value;
+
+template<bitmask_enum E>
+using enum_underlying_t = std::underlying_type_t<E>;
+
+// -------- assignment ops: E op= E --------
+template<bitmask_enum E>
+constexpr E& operator|=(E& a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<E>(static_cast<U>(a) | static_cast<U>(b));
+    return a;
+}
+template<bitmask_enum E>
+constexpr E& operator&=(E& a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<E>(static_cast<U>(a) & static_cast<U>(b));
+    return a;
+}
+template<bitmask_enum E>
+constexpr E& operator^=(E& a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<E>(static_cast<U>(a) ^ static_cast<U>(b));
+    return a;
+}
+
+// -------- assignment ops: E op= I (integral RHS) --------
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr E& operator|=(E& a, I b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<E>(static_cast<U>(a) | static_cast<U>(b));
+    return a;
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr E& operator&=(E& a, I b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<E>(static_cast<U>(a) & static_cast<U>(b));
+    return a;
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr E& operator^=(E& a, I b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<E>(static_cast<U>(a) ^ static_cast<U>(b));
+    return a;
+}
+
+// -------- assignment ops: I op= E (integral LHS) --------
+// NOTE: This is the one that collides with built-in int|=int if you also keep some older template;
+// keep only this version.
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr I& operator|=(I& a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<I>(static_cast<I>(a) | static_cast<I>(static_cast<U>(b)));
+    return a;
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr I& operator&=(I& a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<I>(static_cast<I>(a) & static_cast<I>(static_cast<U>(b)));
+    return a;
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr I& operator^=(I& a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    a = static_cast<I>(static_cast<I>(a) ^ static_cast<I> (static_cast<U>(b)));
+    return a;
+}
+
+// -------- non-assignment ops: E op E --------
+template<bitmask_enum E>
+constexpr E operator|(E a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(static_cast<U>(a) | static_cast<U>(b));
+}
+template<bitmask_enum E>
+constexpr E operator&(E a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(static_cast<U>(a) & static_cast<U>(b));
+}
+template<bitmask_enum E>
+constexpr E operator^(E a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(static_cast<U>(a) ^ static_cast<U>(b));
+}
+template<bitmask_enum E>
+constexpr E operator~(E a) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(~static_cast<U>(a));
+}
+
+// -------- non-assignment mixed: E op I, I op E --------
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr E operator|(E a, I b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(static_cast<U>(a) | static_cast<U>(b));
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr E operator&(E a, I b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(static_cast<U>(a) & static_cast<U>(b));
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr E operator^(E a, I b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<E>(static_cast<U>(a) ^ static_cast<U>(b));
+}
+
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr I operator|(I a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<I>(static_cast<I>(a) | static_cast<I>(static_cast<U>(b)));
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr I operator&(I a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<I>(static_cast<I> (a) & static_cast<I>(static_cast<U>(b)));
+}
+template<bitmask_enum E, class I>
+    requires std::is_integral_v<I>
+constexpr I operator^(I a, E b) noexcept {
+    using U = enum_underlying_t<E>;
+    return static_cast<I>(static_cast<I> (a) ^ static_cast<I>(static_cast<U>(b)));
+}

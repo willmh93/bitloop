@@ -1677,6 +1677,17 @@ namespace ImGui
         return SliderAngle(label, v_rad, v_rad_min, v_rad_max, format, flags);
     }
 
+    bool SliderAngle(const char* label, float* v_rad, float v_rad_min, float v_rad_max, int decimals, ImGuiSliderFlags flags)
+    {
+        double v_rad_d = *v_rad;
+        if (SliderAngle(label, &v_rad_d, v_rad_min, v_rad_max, decimals, flags))
+        {
+            *v_rad = (float)v_rad_d;
+            return true;
+        }
+        return false;
+    }
+
     bool RevertableSliderDouble(const char* label, double* v, double* initial, double v_min, double v_max, const char* format, ImGuiSliderFlags flags)
     {
         bool ret = false;
