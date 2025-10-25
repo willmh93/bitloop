@@ -1140,21 +1140,6 @@ template<class T> using downgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signe
 template<class T> using downgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
 template<class T> using downgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
 
-
-// ================= helper macros =================
-
-
-#define floatInvoke(f, callback)\
-    [&]()\
-    {\
-        auto fun = [&] {\
-            auto do_it = [&]<typename __T>() { return callback.template operator()<__T>(); };\
-            if (f == FloatingPointType::F32)  return do_it.template operator()<f32>();\
-            if (f == FloatingPointType::F128) return do_it.template operator()<f128>();\
-            return do_it.template operator()<f64>();\
-        }; return fun();\
-    }()
-
 // Physics types
 
 struct MassForceParticle : public DVec2
