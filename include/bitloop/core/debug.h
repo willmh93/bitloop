@@ -183,11 +183,11 @@ public:
 
     // Fallback for anything with an std::ostream << overload
     template<class T> requires OstreamInsertable<T> &&
-        (!std::is_integral_v<T> || std::is_same_v<T, bool>) && // exclude your integer path (keep bool)
-        (!std::is_same_v<std::remove_cvref_t<T>, char>) &&      // exclude your char path
-        (!std::is_convertible_v<T, const char*>) &&             // exclude your const char* path
-        (!std::is_same_v<std::remove_cvref_t<T>, std::string_view>) && // exclude your sv path
-        (!std::is_pointer_v<std::remove_reference_t<T>>)        // let your const void* path handle pointers
+        (!std::is_integral_v<T> || std::is_same_v<T, bool>) &&
+        (!std::is_same_v<std::remove_cvref_t<T>, char>) &&
+        (!std::is_convertible_v<T, const char*>) &&
+        (!std::is_same_v<std::remove_cvref_t<T>, std::string_view>) &&
+        (!std::is_pointer_v<std::remove_reference_t<T>>)
         DebugStream& operator<<(const T& v)
     {
         std::ostringstream oss;

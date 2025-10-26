@@ -31,33 +31,47 @@ void ImDebugPrint(const char* fmt, ...)
 }
 
 #ifndef __EMSCRIPTEN__
-std::string getPreferredCapturesDirectory()
+static bool path_contains(const std::filesystem::path& root, const std::filesystem::path& p)
 {
-    std::filesystem::path path = platform()->executable_dir();
-    std::filesystem::path trimmed;
+    std::error_code ec1, ec2;
+    std::filesystem::path pc   = std::filesystem::weakly_canonical(p, ec1);
+    std::filesystem::path rootc= std::filesystem::weakly_canonical(root,ec2);
 
-    // todo: Make sure this is threadsafe
-    // 
-    // should be name of root CMake project, not the launched project?
-    // They're usually the same on startup, so it should work in practice
-
-    if (!project_worker()->getActiveProject())
+    if (ec1 || ec2)
     {
-        DebugBreak();
+        pc = p.lexically_normal();
+        rootc = root.lexically_normal();
     }
 
-    std::string active_sim_name = project_worker()->getActiveProject()->getProjectInfo()->name;
-       
-    for (const auto& part : path) {
-        trimmed /= part;
-        if (!active_sim_name.empty() && part == active_sim_name) break;
-        if (part == "bitloop") break;
+    if (pc == rootc) return true;
+    std::filesystem::path rel = pc.lexically_relative(rootc);
+
+    auto s = rel.native();
+    return !s.empty() && !(s.size() >= 2 && s[0] == '.' && s[1] == '.');
+}
+
+std::string getPreferredCapturesDirectory() {
+    std::filesystem::path path = platform()->executable_dir();
+    std::filesystem::path project_root = std::filesystem::path(CMAKE_SOURCE_DIR).lexically_normal();
+
+    // If executable dir lives inside the cmake project dir, clamp to root cmake project dir
+    if (path_contains(project_root, path)) {
+        path = project_root;
+    } else {
+        std::filesystem::path trimmed;
+        if (!project_worker()->getActiveProject()) {
+            DebugBreak();
+        }
+        std::string active_sim_name =
+            project_worker()->getActiveProject()->getProjectInfo()->name;
+
+        for (const auto& part : path) {
+            trimmed /= part;
+            if (!active_sim_name.empty() && part == active_sim_name) break;
+        }
     }
-    if (!trimmed.empty() && trimmed.filename() == "bitloop")
-        path = trimmed;
 
     path /= "captures";
-
     return path.lexically_normal().string();
 }
 

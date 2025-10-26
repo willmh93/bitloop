@@ -18,6 +18,10 @@ set(BL_DATA_DEPENDENCIES	""	CACHE INTERNAL "Ordered list of dependency data dire
 function(_apply_common_settings _TARGET)
 	target_compile_features(${_TARGET} PUBLIC cxx_std_23)
 
+	target_compile_definitions(${_TARGET} PRIVATE
+	  CMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+	)
+
 	if (MSVC)
 		target_compile_options(${_TARGET} PRIVATE /MP) # Multi-threaded compilation
 		target_compile_options(${_TARGET} PRIVATE /permissive- /W3 /WX /utf-8 /D_CRT_SECURE_NO_WARNINGS)

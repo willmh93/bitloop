@@ -72,13 +72,10 @@
                          __pragma(fp_contract(off))
 #define BL_POP_PRECISE   __pragma(float_control(pop))
 
-// Emscripten Clang: only a limited fp pragma set, no push/pop, no eval-method
+
 #elif defined(__EMSCRIPTEN__)
-// Turn OFF fast-mathy transforms for the block:
 #define BL_PUSH_PRECISE  _Pragma("clang fp reassociate(off)") \
                             _Pragma("clang fp contract(off)")
-  // Restore to a *reasonable* default (match your global flags):
-  // If you globally use -ffp-contract=fast and -ffast-math, this puts it back.
 #define BL_POP_PRECISE   _Pragma("clang fp reassociate(on)")  \
                             _Pragma("clang fp contract(fast)")
 
@@ -100,22 +97,6 @@
 #define BL_PUSH_PRECISE
 #define BL_POP_PRECISE
 #endif
-
-// Function-scope precise guards
-//#if defined(_MSC_VER)  // MSVC / clang-cl
-//#define BL_FUNC_PREC()     __pragma(float_control(precise, on, push)) __pragma(fp_contract(off))
-//#define BL_FUNC_PREC_END() __pragma(float_control(pop))
-//#elif defined(__EMSCRIPTEN__) || defined(__clang__)
-//  // Clang/Emscripten: must be FIRST statement in the function body
-//#define BL_FUNC_PREC()     _Pragma("clang fp reassociate(off)") _Pragma("clang fp contract(off)")
-//#define BL_FUNC_PREC_END() /* nothing */
-//#elif defined(__GNUC__)  // GCC fallback
-//#define BL_FUNC_PREC()     _Pragma("GCC push_options") _Pragma("GCC optimize(\"no-fast-math\")") _Pragma("STDC FP_CONTRACT OFF")
-//#define BL_FUNC_PREC_END() _Pragma("GCC pop_options")
-//#else
-//#define BL_FUNC_PREC()     /* nothing */
-//#define BL_FUNC_PREC_END() /* nothing */
-//#endif
 
 template<typename T>
 constexpr T bl_infinity() {

@@ -149,7 +149,6 @@ inline std::vector<float> buildGlobalSplineWithErrorBound(
 	for (int iter = 0; iter < maxIterations; iter++)
 	{
 		// Build the spline from the current xvals
-		// (We rely on your existing 'computeNaturalCubicSpline' code.)
 		std::vector<CubicSegment> spline = computeNaturalCubicSpline(xvals, evalY);
 
 		// We test error at 'testSamples' points across [xStart, xEnd].
@@ -820,27 +819,25 @@ namespace ImSpline
 			float xStart,
 			float xEnd,
 			std::function<float(float)> evalY,
-			float errorTolerance=0.001,  // e.g. 0.001
-			int maxKnots=6,         // e.g. 50
+			float errorTolerance=0.001,
+			int maxKnots=6,
 			int maxIter = 10,
 			int testSamples = 10
 		)
 		{
 			equation = evalY;
-			// Step A: Build a refined knot set with global error bound
+			// Build a refined knot set with global error bound
 			std::vector<float> xvals = buildGlobalSplineWithErrorBound(
 				xStart, xEnd, evalY, errorTolerance, maxKnots, maxIter, testSamples
 			);
 
-			// Step B: Build the final spline
+			// Build the final spline
 			std::vector<CubicSegment> segments = computeNaturalCubicSpline(xvals, evalY);
 
-			// Step C: Convert that spline to (anchor, handle_in, handle_out) data
-			// We assume you have a function for that. Here's a quick sample implementation:
+			// Convert that spline to (anchor, handle_in, handle_out) data
 			ImVec2* points = pointVecArray();
 			splineToBezierHandles(segments, points, point_arr.Size);
 
-			// Finally, let your system know we've updated the curve
 			onChanged();
 		}
 

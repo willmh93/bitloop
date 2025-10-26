@@ -44,14 +44,14 @@ GLuint CreateGLTextureRGBA8(const void* pixels, int w, int h)
 
 GLuint loadSVG(const char* path, int outputWidth, int outputHeight)
 {
-    // Step 1: Parse SVG
-    NSVGimage* image = nsvgParseFromFile(bl::platform()->path(path).c_str(), "px", 96.0f); // 96 dpi, or 72 dpi depending on your needs
+    // Parse SVG
+    NSVGimage* image = nsvgParseFromFile(bl::platform()->path(path).c_str(), "px", 96.0f);
     if (!image) {
         printf("Could not open SVG image: %s\n", path);
         return 0;
     }
 
-    // Step 2: Create a rasterizer
+    // Create a rasterizer
     NSVGrasterizer* rast = nsvgCreateRasterizer();
     if (!rast) {
         nsvgDelete(image);
@@ -59,7 +59,7 @@ GLuint loadSVG(const char* path, int outputWidth, int outputHeight)
         return 0;
     }
 
-    // Step 3: Allocate buffer for the output
+    // Allocate buffer for the output
     int stride = outputWidth * 4;  // 4 bytes per pixel (RGBA)
     unsigned char* img = (unsigned char*)malloc(outputWidth * outputHeight * 4);
     if (!img) {

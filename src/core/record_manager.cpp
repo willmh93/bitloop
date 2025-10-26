@@ -292,19 +292,19 @@ bool webp_anim_add_rgba(
     if (lossless) {
         cfg.lossless = 1;
         WebPConfigLosslessPreset(&cfg, 9);
-        cfg.quality = quality;   // effort in lossless
-        cfg.near_lossless = near_lossless;      // strict lossless
-        cfg.exact = 1;        // preserve RGB under alpha
+        cfg.quality = quality; // effort in lossless
+        cfg.near_lossless = near_lossless; // strict lossless
+        cfg.exact = 1; // preserve RGB under alpha
         cfg.alpha_quality = 0;
-        cfg.thread_level = 1;        // if this is stable in your WASM build
+        cfg.thread_level = 1;
         cfg.preprocessing = 0;
         cfg.image_hint = WEBP_HINT_GRAPH;
     }
     else {
         cfg.lossless = 0;
-        cfg.quality = quality;  // 0..100
-        cfg.method = method;   // 0..6
-        cfg.alpha_quality = 0; // or your own alpha q
+        cfg.quality = quality; // 0..100
+        cfg.method = method; // 0..6
+        cfg.alpha_quality = 0;
         cfg.thread_level = 1;
     }
 
