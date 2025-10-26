@@ -1191,7 +1191,10 @@ void MainWindow::populateRecordOptions()
         //ImGui::GroupBox box("img_resolution", "Snapshot Resolution");
         ImGui::GroupBox box("shared_options", "Global Capture Options");
 
-        ImGui::Checkbox("Delta-Time Multiplier", &use_delta_time_mult);
+
+        bool fixed_time_delta = !use_delta_time_mult;
+        ImGui::Checkbox("Fixed time-delta", &fixed_time_delta);
+        use_delta_time_mult = !fixed_time_delta;
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -1257,7 +1260,7 @@ void MainWindow::populateRecordOptions()
         ImGui::Spacing();
         ImGui::Spacing();
 
-        #if BITLOOP_FFMPEG_ENABLED_
+        #if BITLOOP_FFMPEG_ENABLED
         if (record_format != (int)CaptureFormat::WEBP_VIDEO)
         {
             struct Aspect { const char* label; bool portrait; };

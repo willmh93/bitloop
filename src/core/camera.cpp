@@ -9,7 +9,7 @@ BL_BEGIN_NS
 
 DVec2 CameraInfo::originWorldOffset() const
 {
-    return originPixelOffset() / (f64)(zoom_128 * surface->scale_adjust);
+    return originPixelOffset() / (f64)(zoom_128 * surface->initialSizeScale());
 }
 
 bool CameraInfo::operator ==(const CameraInfo& rhs) const
@@ -54,11 +54,14 @@ const WorldStageTransform& CameraInfo::getTransform() const
 {
     assert(surface != nullptr);
 
+    if (surface->resized())
+        is_dirty = true; // Force update if surface size changes
+
     if (!is_dirty) return *t;
     if (!t) t = new WorldStageTransform();
 
     DDVec2 origin_offset = originPixelOffset();
-    DDVec2 adjusted_zoom = zoom_xy * surface->scale_adjust;
+    DDVec2 adjusted_zoom = zoom_xy * surface->initialSizeScale();
 
     t->m128 = glm::ddmat3(1.0);
     t->m128 *= glm_ddtranslate(origin_offset.x + pan_x, origin_offset.y + pan_y);
@@ -101,12 +104,12 @@ void CameraInfo::setOriginViewportAnchor(Anchor anchor)
 
 DVec2 CameraInfo::originPixelOffset() const
 {
-    double viewport_cx = (surface->w / 2.0);
-    double viewport_cy = (surface->h / 2.0);
+    double viewport_cx = (surface->width() / 2.0);
+    double viewport_cy = (surface->height() / 2.0);
 
     return Vec2(
-        viewport_cx + surface->w * (viewport_anchor.x - 0.5),
-        viewport_cy + surface->h * (viewport_anchor.y - 0.5)
+        viewport_cx + surface->width() * (viewport_anchor.x - 0.5),
+        viewport_cy + surface->height() * (viewport_anchor.y - 0.5)
     );
 }
 
@@ -121,10 +124,10 @@ void CameraInfo::cameraToViewport(
     double world_h = (bottom - top);
 
     rotation_64 = 0;
-    zoom_x = surface->w / world_w;
-    zoom_y = surface->h / world_h;
-    x_128  = (surface->w / 2) / zoom_x;
-    y_128  = (surface->h / 2) / zoom_y;
+    zoom_x = surface->width() / world_w;
+    zoom_y = surface->height() / world_h;
+    x_128  = (surface->width() / 2) / zoom_x;
+    y_128  = (surface->height() / 2) / zoom_y;
 }
 
 void CameraInfo::focusWorldRect(
@@ -140,8 +143,8 @@ void CameraInfo::focusWorldRect(
 
     if (stretch)
     {
-        f128 zx = surface->w / world_w;
-        f128 zy = surface->h / world_h;
+        f128 zx = surface->width() / world_w;
+        f128 zy = surface->height() / world_h;
         zoom_128 = DDVec2{ zx, zy }.magnitude();
         sx_64 = (double)(zx / zoom_128);
         sy_64 = (double)(zy / zoom_128);
@@ -152,7 +155,7 @@ void CameraInfo::focusWorldRect(
     }
     else
     {
-        f128 aspect_view = f128(surface->w / surface->h);
+        f128 aspect_view = f128(surface->width() / surface->height());
         f128 aspect_rect = world_w / world_h;
 
         // Not re-stretching, but preserve existing stretch aspect ratio?
@@ -161,14 +164,14 @@ void CameraInfo::focusWorldRect(
         if (aspect_rect > aspect_view)
         {
             // Shrink Height, gap top and bottom
-            zoom_128 = (surface->w / world_w);
+            zoom_128 = (surface->width() / world_w);
 
             assert(zoom_128 > 0.0);
 
             DVec2 _originWorldOffset = originWorldOffset();
 
             f128 world_ox{ 0 };
-            f128 world_oy = ((surface->h - (world_h * zoom_128)) / 2) / zoom_128;
+            f128 world_oy = ((surface->height() - (world_h * zoom_128)) / 2) / zoom_128;
 
             x_128 = _originWorldOffset.x + left - world_ox;
             y_128 = _originWorldOffset.y + top - world_oy;
@@ -176,13 +179,13 @@ void CameraInfo::focusWorldRect(
         else
         {
             // Shrink Width, gap left and right
-            zoom_128 = (surface->h / world_h);
+            zoom_128 = (surface->height() / world_h);
 
             assert(zoom_128 > 0.0);
 
             DVec2 _originWorldOffset = originWorldOffset();
 
-            f128 world_ox = ((surface->w - (world_w * zoom_128)) / 2) / zoom_128;
+            f128 world_ox = ((surface->width() - (world_w * zoom_128)) / 2) / zoom_128;
             f128 world_oy{ 0 };
 
             x_128 = _originWorldOffset.x + left - world_ox;

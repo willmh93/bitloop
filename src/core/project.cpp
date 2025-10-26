@@ -162,11 +162,7 @@ void ProjectBase::_projectStart()
     updateViewportRects();
 
     for (Viewport* viewport : viewports)
-    {
-        viewport->start_w = viewport->w;
-        viewport->start_h = viewport->h;
-        viewport->scale_adjust = 1.0;
-    }
+        viewport->setInitialSize();
 
     projectStart();
 
@@ -230,16 +226,27 @@ void ProjectBase::updateViewportRects()
     // Update viewport rects
     for (Viewport* viewport : viewports)
     {
-        viewport->x = viewport->viewport_grid_x * viewport_width;
-        viewport->y = viewport->viewport_grid_y * viewport_height;
-        viewport->w = viewport_width - 1;
-        viewport->h = viewport_height - 1;
+        //viewport->x = viewport->viewport_grid_x * viewport_width;
+        //viewport->y = viewport->viewport_grid_y * viewport_height;
 
-        DVec2 old_size = {viewport->start_w, viewport->start_h};
-        DVec2 new_size = {viewport->w, viewport->h};
-        double rel_scale = new_size.magnitude() / old_size.magnitude();
+        viewport->setSurfacePos(
+            viewport->viewport_grid_x * viewport_width,
+            viewport->viewport_grid_y * viewport_height
+        );
 
-        viewport->scale_adjust = rel_scale;
+        viewport->setSurfaceSize(
+            viewport_width - 1,
+            viewport_height - 1
+        );
+
+        //viewport->w = viewport_width - 1;
+        //viewport->h = viewport_height - 1;
+        //
+        //DVec2 old_size = {viewport->start_w, viewport->start_h};
+        //DVec2 new_size = {viewport->w, viewport->h};
+        //double rel_scale = new_size.magnitude() / old_size.magnitude();
+        //
+        //viewport->scale_adjust = rel_scale;
     }
 }
 
@@ -260,16 +267,16 @@ void ProjectBase::_projectProcess()
         // Allow panning/zooming, even when paused
         for (Viewport* viewport : viewports)
         {
-            double viewport_mx = mouse.client_x - viewport->x;
-            double viewport_my = mouse.client_y - viewport->y;
+            double viewport_mx = mouse.client_x - viewport->left();
+            double viewport_my = mouse.client_y - viewport->top();
 
             auto m = viewport->inverseTransform<f128>();
 
             if (//cam.panning ||
                 (viewport_mx >= 0 &&
                  viewport_my >= 0 &&
-                 viewport_mx <= viewport->w && 
-                 viewport_my <= viewport->h))
+                 viewport_mx <= viewport->width() &&
+                 viewport_my <= viewport->height()))
             {
                 mouse.viewport = viewport;
                 mouse.stage_x = viewport_mx;
@@ -306,9 +313,9 @@ void ProjectBase::_projectProcess()
             {
                 //viewport->camera.panZoomProcess();
 
-                viewport->just_resized =
-                    (viewport->w != viewport->old_w) ||
-                    (viewport->h != viewport->old_h);
+                //viewport->just_resized =
+                //    (viewport->w != viewport->old_w) ||
+                //    (viewport->h != viewport->old_h);
 
                 double dt;
                 if (main_window()->getRecordManager()->isRecording() )
@@ -318,8 +325,8 @@ void ProjectBase::_projectProcess()
 
                 viewport->scene->viewportProcess(viewport, dt);
 
-                viewport->old_w = viewport->w;
-                viewport->old_h = viewport->h;
+                //viewport->old_w = viewport->w;
+                //viewport->old_h = viewport->h;
             }
 
             // Post-Process each scene
@@ -375,11 +382,11 @@ void ProjectBase::_projectDraw()
 
         viewport->resetTransform();
 
-        canvas->setClipRect(viewport->x, viewport->y, viewport->w, viewport->h);
+        canvas->setClipRect(viewport->left(), viewport->top(), viewport->width(), viewport->height());
         canvas->save();
 
         // Starting viewport position
-        canvas->translate(std::floor(viewport->x), std::floor(viewport->y));
+        canvas->translate(std::floor(viewport->left()), std::floor(viewport->top()));
 
         // Set default world transform
         viewport->worldMode();
@@ -404,21 +411,24 @@ void ProjectBase::_projectDraw()
         // Draw vert line
         if (viewport->viewport_grid_x < viewports.cols - 1)
         {
-            double line_x = std::floor(viewport->x + viewport->w) + 0.5;
-            canvas->moveTo(line_x, viewport->y);
-            canvas->lineTo(line_x, viewport->y + viewport->h + 1);
+            double line_x = std::floor(viewport->right()) + 0.5;
+            canvas->moveTo(line_x, viewport->top());
+            canvas->lineTo(line_x, viewport->bottom() + 1);
         }
 
         // Draw horiz line
         if (viewport->viewport_grid_y < viewports.rows - 1)
         {
-            double line_y = std::floor(viewport->y + viewport->h) + 0.5;
-            canvas->moveTo(viewport->x + viewport->w + 1, line_y);
-            canvas->lineTo(viewport->x, line_y);
+            double line_y = std::floor(viewport->bottom()) + 0.5;
+            canvas->moveTo(viewport->left(), line_y);
+            canvas->lineTo(viewport->right() + 1, line_y);
         }
 
         canvas->stroke();
     }
+
+    for (Viewport* viewport : viewports)
+        viewport->setOldSize();
 }
 
 void ProjectBase::_clearEventQueue()

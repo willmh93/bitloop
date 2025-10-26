@@ -30,8 +30,7 @@ inline glm::ddmat3 glm_ddrotate(f128 r) {
     );
 }
 
-struct Surface;
-
+class SurfaceInfo;
 class CameraInfo;
 class Viewport;
 class ProjectBase;
@@ -221,7 +220,7 @@ class CameraInfo
     f64   zoom_64 = 1;
     f64   rotation_64 = 0;
 
-    Surface* surface = nullptr;
+    SurfaceInfo* surface = nullptr;
     DVec2 viewport_anchor{ 0.5, 0.5 };
     f128  ref_zoom = 1;
 
@@ -245,7 +244,7 @@ public:
     bool operator ==(const CameraInfo& rhs) const;
     CameraInfo& operator =(const CameraInfo& rhs);
 
-    void setSurface(Surface* s) { surface = s; }
+    void setSurface(SurfaceInfo* s) { surface = s; }
     const WorldStageTransform& getTransform() const;
 
     // ─────── f64 getters ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -315,7 +314,7 @@ public:
     }
 
     // Set zoom (relative to the reference)
-    void setRelativeZoom(f64 rel_zoom)  { zoom_128 = ref_zoom * rel_zoom; zoomDirty(); }
+    void setRelativeZoom(f64 rel_zoom) { zoom_128 = ref_zoom * rel_zoom; zoomDirty(); }
     void setRelativeZoom(f128 rel_zoom) { zoom_128 = ref_zoom * rel_zoom; zoomDirty(); }
     
     // ────── viewport origin ─────────────────────────────────────────────────────────────────────────────────────────────

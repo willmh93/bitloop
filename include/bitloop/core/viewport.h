@@ -11,7 +11,7 @@ class SceneBase;
 class Layout;
 class CameraInfo;
 
-class Viewport : public Painter, public Surface
+class Viewport : public Painter, public SurfaceInfo
 {
     std::string print_text;
     std::stringstream print_stream;
@@ -30,15 +30,6 @@ protected:
     Layout* layout = nullptr; // owner
     SceneBase* scene = nullptr; // mounted scene
 
-    double x = 0;
-    double y = 0;
-    
-    double start_w = 0;
-    double start_h = 0;
-    double old_w = 0;
-    double old_h = 0;
-    bool just_resized = false;
-
 public:
     
     Viewport(
@@ -56,10 +47,10 @@ public:
     [[nodiscard]] int viewportGridX() const { return viewport_grid_x; }
     [[nodiscard]] int viewportGridY() const { return viewport_grid_y; }
 
-    [[nodiscard]] double posX() const { return x; }
-    [[nodiscard]] double posY() const { return y; }
+    //[[nodiscard]] double posX() const { return x; }
+    //[[nodiscard]] double posY() const { return y; }
 
-    [[nodiscard]] DRect viewportRect() const { return DRect(x, y, x + w, y + h); }
+    
 
     template<typename T=double> [[nodiscard]] Vec2<T> worldSize() const { return m.toWorldOffset<T>(w, h); }
     template<typename T=double> [[nodiscard]] Quad<T> worldQuad() const {

@@ -321,15 +321,66 @@ public:
     }
 };
 
-struct Surface
+class SurfaceInfo
 {
+    double x = 0;
+    double y = 0;
+
     double w = 0;
     double h = 0;
-    f128 scale_adjust = 1;
 
-    [[nodiscard]] double width() const { return w; }
-    [[nodiscard]] double height() const { return h; }
-    [[nodiscard]] DVec2 size() const { return DVec2(w, h); }
+    double start_w = 0;
+    double start_h = 0;
+
+    double old_w = 0;
+    double old_h = 0;
+
+    double scale_adjust = 1;
+
+public:
+
+    void setInitialSize()
+    {
+        start_w = w;
+        start_h = h;
+        scale_adjust = 1;
+    }
+
+    void setOldSize()
+    {
+        old_w = w;
+        old_h = h;
+    }
+
+    void setSurfacePos(double _x, double _y)
+    {
+        x = _x;
+        y = _y;
+    }
+
+    void setSurfaceSize(double _w, double _h)
+    {
+        w = _w;
+        h = _h;
+
+        DVec2 start_size = { start_w, start_h };
+        DVec2 new_size = { w, h };
+
+        scale_adjust = std::min(new_size.x / start_size.x, new_size.y / start_size.y);
+    }
+
+    [[nodiscard]] constexpr double left() const { return x; }
+    [[nodiscard]] constexpr double top() const { return y; }
+    [[nodiscard]] constexpr double right() const { return x + w; }
+    [[nodiscard]] constexpr double bottom() const { return y + h; }
+
+    [[nodiscard]] constexpr double width() const { return w; }
+    [[nodiscard]] constexpr double height() const { return h; }
+    [[nodiscard]] constexpr DVec2  size() const { return DVec2(w, h); }
+    [[nodiscard]] constexpr DRect  viewportRect() const { return DRect(x, y, x + w, y + h); }
+
+    [[nodiscard]] constexpr double initialSizeScale() { return scale_adjust; }
+    [[nodiscard]] constexpr bool   resized() { return (w != old_w) || (h != old_h); }
 };
 
 // ==================================
@@ -365,12 +416,12 @@ class Painter : private SimplePainter
     bool saved_scale_text = scale_text;
     bool saved_rotate_text = rotate_text;
 
-    Surface* surface;
+    SurfaceInfo* surface;
     WorldStageTransform m;
 
 public:
 
-    Painter(Surface* s) : surface(s)
+    Painter(SurfaceInfo* s) : surface(s)
     {}
 
     double _avgAdjustedZoom() const {
