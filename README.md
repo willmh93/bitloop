@@ -2,7 +2,7 @@
 
 Bitloop is a modular cross-platform CMake project manager tailored toward scientific simulations/visualizations and rapid prototyping.
 
-[Web Demo](https://bitloop.dev)
+[Web Demo](https://bitloop.dev)  -  [Example Gallery](https://github.com/willmh93/bitloop/edit/main/README.md#example-snapshots--webp-animations)
 
 For help getting started, view the Wiki:
 
@@ -84,3 +84,40 @@ By default, projects contain a simple built-in viewport and sidebar for custom I
 |                                             | Windows                  | Linux                    | Web (Emscripten)                                          |
 | ------------------------------------------- | ------------------------ | ------------------------ | --------------------------------------------------------- |
 | Timeline (keyframed variables, tweens, etc) | N/A                      | N/A                      | N/A                                                       |
+
+### Example snapshots / WebP animations
+
+<table>
+  <tr>
+    <td>
+      <a href="https://bitloop.dev/main/assets/gallery/snap3_4k.webp">
+        <img src="https://bitloop.dev/main/assets/gallery/snap3_1080p.webp" alt="Preview" width="350">
+      </a>
+    </td>
+    <td>
+      <a href="https://bitloop.dev/main/assets/gallery/snap4_4k.webp">
+        <img src="https://bitloop.dev/main/assets/gallery/snap4_1080p.webp" alt="Preview" width="350">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="https://bitloop.dev/main/assets/gallery/snap1_4k.webp">
+        <img src="https://bitloop.dev/main/assets/gallery/snap1_1440p.webp" alt="Preview" width="350">
+      </a>
+    </td>
+    <td>
+      <a href="https://bitloop.dev/main/assets/gallery/snap2_4k.webp">
+        <img src="https://bitloop.dev/main/assets/gallery/snap2_1440p.webp" alt="Preview" width="350">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="https://bitloop.dev/main/assets/gallery/cardioid_ani.webp" alt="Alt text" width="350">
+    </td>
+  </tr>
+</table>
+
+
+
