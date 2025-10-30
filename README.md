@@ -2,39 +2,46 @@
 
 Bitloop is a modular cross-platform CMake project manager tailored toward scientific simulations/visualizations and rapid prototyping.
 
-By default, projects contain a simple built-in Viewport and GUI, along with a handy collection of tools/libraries.
+[Web Demo](https://bitloop.dev)
 
-[Demo](https://bitloop.dev)
+For help getting started, view the Wiki:
+
+- Building projects
+  - [Building from source on Windows / Linux](https://github.com/willmh93/bitloop/wiki/Build-library-from-source) (todo: update)
+  - [Building with Emscripten](https://github.com/willmh93/bitloop/wiki/Build-library-with-Emscripten) (todo: update)
+  - [Creating a standalone project with the command-line tool](https://github.com/willmh93/bitloop/wiki/Creating-a-new-project-(CLI)) (todo: update)
+- Tutorials (todo):
+  - Creating a simple "Hello World" project
+  - Using ImGui to control Scene variables (safely with multithreading)
+  - User input and world navigation
 
 ### Main Features
-- Projects are modular and can include each other as dependencies in a tree structure.
-  - Child projects can still be opened and compiled as standalone projects.
-  - Supported platforms:  Windows, Linux, Emscripten.
-- (Native only) Frame-by-frame video recording without blocking the UI.
-  - Great for computationally expensive simulations (e.g. Mandelbrot zoom).
+- Projects are modular and can include each other as dependencies in a tree structure
+  - Child projects can be opened and compiled as standalone projects
+  - Cross-platform:  Windows, Linux, Emscripten
+  - Designed for heavy per‑frame computations (e.g. Mandelbrot zoom)
+- C++ NanoVG wrapper with integrated 128-bit float support (**f128** class)
+  - If you have prior experience with HTML Canvas drawing, this should feel second-nature to you
+- FFmpeg video recording without blocking the UI (Desktop only)
+- WebP snapshots / animations (all platforms).
 
 ### Design Principles
 - Organization
-  - You can create an empty project (e.g. "Science"), and include several subprojects ("Physics", "Biology") where you can create further subprojects.
-  - Any individual project can be compiled as the "root" project, so that only it's subtree of projects is included.
-    - Child projects can still be selected in the GUI and viewed (but can optionally be hidden by the parent)
-  - Create new projects on the fly with the command-line tool, and avoid cluttering up your main build tree.
-- Building
-  - You can build any collection of projects (e.g. just "Biology") into a single final executable.
-- Resource Management
-  - All project data (images, audio, etc) are bundled into the final executable automatically.
+  - Using CMake, you can create an empty bitloop project (e.g. "Science"), and include several subprojects ("Physics", "Biology") where you can create further subprojects
+  - You can build any subtree of projects (e.g. just "Biology") in to a single final executable
+  - All project data (images, audio, etc) are bundled into the final executable automatically
 - Library Management
-  - Bitloop projects use vcpkg as a package manager.
-  - Each project has it's own vcpkg.json, allowing you to grab only the libraries you need for your current project.
+  - All bitloop projects use vcpkg as a package manager (vcpkg is fetched automatically for the current workspace)
+  - Shared binaries - all projects in a workspace will share the same vcpkg instance and binaries to prevent unnecessary rebuilds
+    - To create a workspace, simply add a "**.bitloop-workspace**" file in a project directory.
+      - For the root workspace folder, add:  "**root=TRUE**"
+      - For child workspaces, add: "**root=FALSE**"
+    - vcpkg will be automatically cloned in to the highest level folder containing a "**.bitloop-workspace**" file (but not above the root workspace)
 
 ### Layout
+By default, projects contain a simple built-in viewport and sidebar for custom ImGui controls, along with a handy collection of tools/libraries.
+
 <img src="https://i.imgur.com/vqsZn3m.png" width="700">
-
-For more help getting started, view the Wiki:
-
-- [Building from source on Windows / Linux](https://github.com/willmh93/bitloop/wiki/Build-library-from-source)
-- [Building with Emscripten](https://github.com/willmh93/bitloop/wiki/Build-library-with-Emscripten)
-- [Creating a standalone project with the command-line tool](https://github.com/willmh93/bitloop/wiki/Creating-a-new-project-(CLI))
 
 ## Development progress
 
@@ -43,8 +50,7 @@ For more help getting started, view the Wiki:
 |                                                                      | Windows                  | Linux                   
 | -------------------------------------------------------------------- | ------------------------ | ------------------------
 | Modular nested projects                                              | :heavy_check_mark:       | :heavy_check_mark:      
-| Building standalone projects (with child projects as dependencies)   | :heavy_check_mark:       | :heavy_check_mark:      
-| Command-line tools for projects                                      | :heavy_check_mark:       | :heavy_check_mark:      
+| Standalone projects (with child projects as dependencies)            | :heavy_check_mark:       | :heavy_check_mark:      
 | C++23 support                                                        | :heavy_check_mark:       | :heavy_check_mark:    
 | Visual Studio                                                        | :heavy_check_mark:       | :heavy_check_mark:    
 | Visual Studio Code                                                   | partial                  | partial    
@@ -54,7 +60,7 @@ For more help getting started, view the Wiki:
 |                                           | Windows                  | Linux                    | Web (Emscripten)                                          |
 | ----------------------------------------- | ------------------------ | ------------------------ | --------------------------------------------------------- |
 | Multithreading                            | :heavy_check_mark:       | :heavy_check_mark:       | :heavy_check_mark: (pthreads with COOP/COEP Headers)      |
-| 128-bit floating point support (wip)      | :hourglass:              | :hourglass:              | :hourglass:                                               |
+| 128-bit float support (f128)              | :heavy_check_mark:       | :heavy_check_mark:       | :heavy_check_mark:                                        |
 
 ### Graphics
 
@@ -69,11 +75,12 @@ For more help getting started, view the Wiki:
 
 |                                           | Windows                  | Linux                    | Web (Emscripten)                                          |
 | ----------------------------------------- | ------------------------ | ------------------------ | --------------------------------------------------------- |
-| Custom-resolution image renders           | N/A                      | N/A                      | N/A                                                       |
-| FFmpeg recording                          | N/A                      | N/A                      | N/A                                                       |
+| Custom-resolution image renders           | :heavy_check_mark:       | :heavy_check_mark:       | :heavy_check_mark:                                        |
+| FFmpeg recording                          | :heavy_check_mark:       | :heavy_check_mark:       | N/A                                                       |
+| WEBP animations                           | :heavy_check_mark:       | :heavy_check_mark:       | :heavy_check_mark:                                        |
 
-### Other features
+### Other planned features
 
-|                                           | Windows                  | Linux                    | Web (Emscripten)                                          |
-| ----------------------------------------- | ------------------------ | ------------------------ | --------------------------------------------------------- |
-| Timeline support                          | N/A                      | N/A                      | N/A                                                       |
+|                                             | Windows                  | Linux                    | Web (Emscripten)                                          |
+| ------------------------------------------- | ------------------------ | ------------------------ | --------------------------------------------------------- |
+| Timeline (keyframed variables, tweens, etc) | N/A                      | N/A                      | N/A                                                       |
