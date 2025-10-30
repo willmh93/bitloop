@@ -2,7 +2,7 @@
 
 Bitloop is a modular cross-platform CMake project manager tailored toward scientific simulations/visualizations and rapid prototyping.
 
-[Web Demo](https://bitloop.dev)  -  [Example Gallery](https://github.com/willmh93/bitloop/edit/main/README.md#example-snapshots--webp-animations)
+[Web Demo](https://bitloop.dev)  -  [Example Gallery](https://github.com/willmh93/bitloop/tree/main?tab=readme-ov-file#example-snapshots--webp-animations)
 
 For help getting started, view the Wiki:
 
