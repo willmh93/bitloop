@@ -52,7 +52,7 @@ public:
 
     
 
-    template<typename T=double> [[nodiscard]] Vec2<T> worldSize() const { return m.toWorldOffset<T>(w, h); }
+    template<typename T=double> [[nodiscard]] Vec2<T> worldSize() const { return m.toWorldOffset<T>(width(), height()); }
     template<typename T=double> [[nodiscard]] Quad<T> worldQuad() const {
         Rect<T> r = Rect<T>(Vec2<T>(T{0},T{0}), Vec2<T>(size()));
         return m.toWorldQuad(r);

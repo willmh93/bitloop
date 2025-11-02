@@ -48,8 +48,8 @@ public:
     CanvasObjectBase() {}
     ~CanvasObjectBase() {}
 
-    void setCamera(CameraInfo& cam) { camera = &cam; }
-    CameraInfo* getCamera() { return camera; }
+    void setCamera(const CameraInfo& cam) { camera = const_cast<CameraInfo*>(&cam); }
+    const CameraInfo* getCamera() { return camera; }
 
     void setAlign(int ax, int ay)      { align_x = ax; align_y = ay; }
     void setAlign(const DVec2& _align) { align = _align; }
@@ -69,6 +69,9 @@ public:
         DVec2 u_stage = stage_u_end - stage_origin;
 
         return std::atan2(u_stage.y, u_stage.x);
+    }
+    [[nodiscard]] DQuad stageQuad() const {
+        return camera->getTransform().toStageQuad<T>(worldQuad());
     }
 
     void setStagePos(double sx, double sy) { pos = toWorld(sx, sy); }
@@ -90,19 +93,19 @@ public:
     [[nodiscard]] T worldWidth()  const { return u.magnitude(); }
     [[nodiscard]] T worldHeight() const { return v.magnitude(); }
     [[nodiscard]] Vec2<T> worldSize() const { return { u.magnitude(), v.magnitude() }; }
-    [[nodiscard]] Quad<T> worldQuad() {
+    [[nodiscard]] Quad<T> worldQuad() const {
         Vec2<T> offset = T(0.5) * (T(-align_x - 1.0) * u + T(-align_y - 1.0) * v);
         Vec2<T> p = pos + offset;
         return { p, p + u, p + u + v, p + v };
     }
-    [[nodiscard]] Vec2<T> topLeft() {
+    [[nodiscard]] Vec2<T> topLeft() const {
         Vec2<T> offset = T(0.5) * (T(-align_x - 1.0) * u + T(-align_y - 1.0) * v);
         return pos + offset;
     }
 
-    [[nodiscard]] Vec2<T> worldAlignOffset() { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
-    [[nodiscard]] T worldAlignOffsetX() { return -(align_x + 1) * 0.5 * worldWidth(); }
-    [[nodiscard]] T worldAlignOffsetY() { return -(align_y + 1) * 0.5 * worldHeight(); }
+    [[nodiscard]] Vec2<T> worldAlignOffset() const { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
+    [[nodiscard]] T worldAlignOffsetX() const { return -(align_x + 1) * 0.5 * worldWidth(); }
+    [[nodiscard]] T worldAlignOffsetY() const { return -(align_y + 1) * 0.5 * worldHeight(); }
 
     [[nodiscard]] Vec2<T> worldToUVRatio(const Vec2<T>& p) const
     {
@@ -129,6 +132,14 @@ public:
         y = _y - worldAlignOffsetY();
         u = { _w, 0 };
         v = { 0, _h };
+    }
+    void setWorldRect(Vec2<T> pos, Vec2<T> size)
+    {
+        rotation = 0;
+        x = pos.x - worldAlignOffsetX();
+        y = pos.y - worldAlignOffsetY();
+        u = { size.x, 0 };
+        v = { 0, size.y };
     }
 };
 
@@ -398,10 +409,39 @@ public:
         }
     }
 
+    // todo: p could be a lower-precision world coord
     [[nodiscard]] IVec2 pixelPosFromWorld(Vec2<T> p)
     {
         return static_cast<IVec2>(CanvasObjectBase<T>::worldToUVRatio(p) * bmp_size);
     }
+
+    template<typename WorldT>
+    void worldPos(int px, int py, WorldT& wx, WorldT& wy)
+    {
+        Quad<WorldT> world_quad = static_cast<Quad<WorldT>>(CanvasObjectBase<T>::worldQuad());
+        WorldT ax = world_quad.a.x, ay = world_quad.a.y;
+        WorldT bx = world_quad.b.x, by = world_quad.b.y;
+        WorldT cx = world_quad.c.x, cy = world_quad.c.y;
+        WorldT dx = world_quad.d.x, dy = world_quad.d.y;
+
+        WorldT t_bmp_w = static_cast<WorldT>(bmp_fw);
+        WorldT t_bmp_h = static_cast<WorldT>(bmp_fh);
+
+        WorldT bmp_fx = static_cast<WorldT>(px) + WorldT{ 0.5 };
+        WorldT bmp_fy = static_cast<WorldT>(py) + WorldT{ 0.5 };
+
+        WorldT _u = bmp_fx / t_bmp_w;
+        WorldT _v = bmp_fy / t_bmp_h;
+
+        WorldT scan_left_x  = ax + (dx - ax) * _v;
+        WorldT scan_left_y  = ay + (dy - ay) * _v;
+        WorldT scan_right_x = bx + (cx - bx) * _v;
+        WorldT scan_right_y = by + (cy - by) * _v;
+
+        wx = scan_left_x + (scan_right_x - scan_left_x) * _u;
+        wy = scan_left_y + (scan_right_y - scan_left_y) * _u;
+    }
+    
 
     template<typename Callback>
     bool forEachPixel(
@@ -672,21 +712,254 @@ public:
         );
     }
 
-    //template<typename Callback>
-    //void forEachWorldPixel(
-    //    Camera* camera,
-    //    Callback&& callback,
-    //    int thread_count = Thread::idealThreadCount())
-    //{
-    //    int row = 0;
-    //    forEachWorldPixel(
-    //        camera, 
-    //        row,
-    //        callback,
-    //        thread_count,
-    //        0
-    //    );
-    //}
+    template<typename WorldT, typename Callback>
+    bool forEachWorldTile(
+        int tile_w, int tile_h,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount()
+    )
+    {
+        int current_tile = 0;
+        // World quad might be higher precision than is requested for the current zoom level, downgrade to requested WorldT
+        Quad<WorldT> world_quad = static_cast<Quad<WorldT>>(CanvasObjectBase<T>::worldQuad());
+
+        WorldT ax = world_quad.a.x, ay = world_quad.a.y;
+        WorldT bx = world_quad.b.x, by = world_quad.b.y;
+        WorldT cx = world_quad.c.x, cy = world_quad.c.y;
+        WorldT dx = world_quad.d.x, dy = world_quad.d.y;
+
+        WorldT t_bmp_w = static_cast<WorldT>(bmp_fw);
+        WorldT t_bmp_h = static_cast<WorldT>(bmp_fh);
+
+        const int tiles_x = (bmp_width + tile_w - 1) / tile_w;
+        const int tiles_y = (bmp_height + tile_h - 1) / tile_h;
+        const int tile_count = tiles_x * tiles_y;
+
+        auto start_time = std::chrono::steady_clock::now();
+
+        std::vector<std::future<void>> futures(thread_count);
+        std::vector<std::atomic<bool>> active_threads(thread_count);
+        for (int ti = 0; ti < thread_count; ++ti)
+            active_threads[ti].store(false, std::memory_order_relaxed);
+
+        std::atomic<bool> timed_out{ false };
+
+        // Continuously spin checking for idle threads and scheduling new tiles...
+        while (!timed_out.load(std::memory_order_relaxed))
+        {
+            for (int ti = 0; ti < thread_count; ++ti)
+            {
+                if (timed_out.load(std::memory_order_relaxed))
+                    break;
+
+                if (active_threads[ti].load(std::memory_order_relaxed))
+                    continue;
+
+                // Found an idle thread...
+                const int thread_index = ti;
+                const int tile_index = current_tile++;
+
+                if (tile_index >= tile_count)
+                {
+                    timed_out.store(true, std::memory_order_relaxed);
+                    break;
+                }
+
+                const int tx = tile_index % tiles_x;
+                const int ty = tile_index / tiles_x;
+
+                const int x0 = tx * tile_w;
+                const int y0 = ty * tile_h;
+                const int x1 = std::min(x0 + tile_w, bmp_width);
+                const int y1 = std::min(y0 + tile_h, bmp_height);
+
+                active_threads[thread_index].store(true, std::memory_order_relaxed);
+
+                futures[ti] = Thread::pool().submit_task([&, x0, y0, x1, y1, thread_index, tile_index]()
+                {
+                    const int px = x0 + (x1 - x0 - 1) / 2;
+                    const int py = y0 + (y1 - y0 - 1) / 2;
+
+                    // Pixel-center sampling
+                    const WorldT bmp_fx = static_cast<WorldT>(px) + WorldT{ 0.5 };
+                    const WorldT bmp_fy = static_cast<WorldT>(py) + WorldT{ 0.5 };
+
+                    // Interpolate world coords along the two vertical edges at this scanline
+                    const WorldT v = bmp_fy / t_bmp_h;
+                    const WorldT scan_left_x  = ax + (dx - ax) * v;
+                    const WorldT scan_left_y  = ay + (dy - ay) * v;
+                    const WorldT scan_right_x = bx + (cx - bx) * v;
+                    const WorldT scan_right_y = by + (cy - by) * v;
+
+                    // Interpolate across the scanline
+                    const WorldT u = bmp_fx / t_bmp_w;
+                    const WorldT wx = scan_left_x + (scan_right_x - scan_left_x) * u;
+                    const WorldT wy = scan_left_y + (scan_right_y - scan_left_y) * u;
+
+                    if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT, int, int, int, int, int>)
+                    {
+                        std::forward<Callback>(callback)(px, py, wx, wy, tile_index, x0, y0, x1, y1);
+                    }
+                    else
+                    {
+                        std::forward<Callback>(callback)(px, py, wx, wy, tile_index);
+                    }
+
+                    // Allow this worker to grab another tile
+                    active_threads[thread_index].store(false, std::memory_order_relaxed);
+                });
+            }
+
+            std::this_thread::yield();
+        }
+
+        // After timing out (or finishing), wait for remaining tasks
+        for (int ti = 0; ti < thread_count; ++ti)
+        {
+            if (futures[ti].valid())
+                futures[ti].get();
+        }
+
+        if (current_tile >= tile_count)
+        {
+            current_tile = 0;
+            return true;
+        }
+        return false;
+    }
+
+    template<typename WorldT, typename Callback>
+    bool forEachWorldTilePixel(
+        int tile_w, int tile_h,
+        int& current_tile,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount(),
+        int timeout_ms = 0
+    )
+    {
+        auto timeout = timeout_ms ?
+            std::chrono::milliseconds{ timeout_ms } :
+            std::chrono::steady_clock::duration::max();
+
+        // World quad might be higher precision than is requested for the current zoom level, downgrade to requested WorldT
+        Quad<WorldT> world_quad = static_cast<Quad<WorldT>>(CanvasObjectBase<T>::worldQuad());
+
+        WorldT ax = world_quad.a.x, ay = world_quad.a.y;
+        WorldT bx = world_quad.b.x, by = world_quad.b.y;
+        WorldT cx = world_quad.c.x, cy = world_quad.c.y;
+        WorldT dx = world_quad.d.x, dy = world_quad.d.y;
+
+        WorldT t_bmp_w = static_cast<WorldT>(bmp_fw);
+        WorldT t_bmp_h = static_cast<WorldT>(bmp_fh);
+
+        const int tiles_x = (bmp_width + tile_w - 1) / tile_w;
+        const int tiles_y = (bmp_height + tile_h - 1) / tile_h;
+        const int tile_count = tiles_x * tiles_y;
+
+        auto start_time = std::chrono::steady_clock::now();
+
+        std::vector<std::future<void>> futures(thread_count);
+        std::vector<std::atomic<bool>> active_threads(thread_count);
+        for (int ti = 0; ti < thread_count; ++ti)
+            active_threads[ti].store(false, std::memory_order_relaxed);
+
+        std::atomic<bool> timed_out{ false };
+
+        // Continuously spin checking for idle threads and scheduling new tiles...
+        while (!timed_out.load(std::memory_order_relaxed))
+        {
+            for (int ti = 0; ti < thread_count; ++ti)
+            {
+                if (timed_out.load(std::memory_order_relaxed))
+                    break;
+
+                if (active_threads[ti].load(std::memory_order_relaxed))
+                    continue;
+
+                // Found an idle thread...
+                const int thread_index = ti;
+                const int tile_index = current_tile++;
+
+                if (tile_index >= tile_count)
+                {
+                    timed_out.store(true, std::memory_order_relaxed);
+                    break;
+                }
+
+                const int tx = tile_index % tiles_x;
+                const int ty = tile_index / tiles_x;
+
+                const int x0 = tx * tile_w;
+                const int y0 = ty * tile_h;
+                const int x1 = std::min(x0 + tile_w, bmp_width);
+                const int y1 = std::min(y0 + tile_h, bmp_height);
+
+                active_threads[thread_index].store(true, std::memory_order_relaxed);
+
+                futures[ti] = Thread::pool().submit_task([&, x0, y0, x1, y1, thread_index, tile_index]()
+                {
+                    for (int row = y0; row < y1; ++row)
+                    {
+                        WorldT bmp_fy = static_cast<WorldT>(row) + WorldT{ 0.5 };
+                        WorldT v = bmp_fy / t_bmp_h;
+
+                        // Interpolate left/right edges for this scanline
+                        WorldT scan_left_x = ax + (dx - ax) * v;
+                        WorldT scan_left_y = ay + (dy - ay) * v;
+                        WorldT scan_right_x = bx + (cx - bx) * v;
+                        WorldT scan_right_y = by + (cy - by) * v;
+
+                        for (int bmp_x = x0; bmp_x < x1; ++bmp_x)
+                        {
+                            WorldT bmp_fx = static_cast<WorldT>(bmp_x) + WorldT{ 0.5 };
+                            WorldT u = bmp_fx / t_bmp_w;
+
+                            WorldT wx = scan_left_x + (scan_right_x - scan_left_x) * u;
+                            WorldT wy = scan_left_y + (scan_right_y - scan_left_y) * u;
+
+                            if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT, int>)
+                            {
+                                std::forward<Callback>(callback)(bmp_x, row, wx, wy, tile_index);
+                            }
+                            else if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT>)
+                            {
+                                std::forward<Callback>(callback)(bmp_x, row, wx, wy);
+                            }
+                        }
+                    }
+
+                    // After finishing this tile, check timeout
+                    if (std::chrono::steady_clock::now() - start_time >= timeout)
+                    {
+                        // Signal that no new tiles should be picked up
+                        timed_out.store(true, std::memory_order_relaxed);
+                    }
+                    else
+                    {
+                        // Allow this worker to grab another tile
+                        active_threads[thread_index].store(false, std::memory_order_relaxed);
+                    }
+                });
+            }
+
+            std::this_thread::yield();
+        }
+
+        // After timing out (or finishing), wait for remaining tasks
+        for (int ti = 0; ti < thread_count; ++ti)
+        {
+            if (futures[ti].valid())
+                futures[ti].get();
+        }
+
+        if (current_tile >= tile_count)
+        {
+            current_tile = 0;
+            return true;
+        }
+        return false;
+    }
+
 };
 
 typedef CanvasImageBase<double> CanvasImage;

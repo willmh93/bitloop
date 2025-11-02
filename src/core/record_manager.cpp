@@ -1005,7 +1005,7 @@ bool CaptureManager::encodeFrame(const uint8_t* data)
 
         std::lock_guard<std::mutex> lock(pending_mutex);
         pending_frame.resize(config.srcBytes());
-        std::memcpy(pending_frame.data(), preprocessed_frame.data(), config.srcBytes());
+        std::memcpy(pending_frame.data(), preprocessed_frame.data(), config.dstBytes());
 
         // Mark busy only after the buffer is fully populated
         blPrint() << "encoder_busy.store(true)";

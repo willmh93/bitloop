@@ -381,7 +381,7 @@ namespace ImSpline
 		int dragging_index = -1;          // Point index of handle/knot being dragged
 		ImVec2 h1_offset, h2_offset;      // Handle offsets (when dragging knot)
 		float opposite_handle_dist = 0;   // Opposite knot handle dist when moving handle
-		float xy_precision = 0.001f;      // 1e-6f;
+		float xy_precision = 0.01f;
 
 		bool bInitialized = false;
 
@@ -789,6 +789,8 @@ namespace ImSpline
 
 		bool operator ==(const Spline& rhs) const
 		{
+			if (dragging_index != rhs.dragging_index) return false;
+			if (panning != rhs.panning) return false;
 			return hash() == rhs.hash();
 			///bool a_empty = point_arr.empty();
 			///bool b_empty = rhs.point_arr.empty();

@@ -89,7 +89,7 @@ double SceneBase::project_dt(int average_samples) const
 
 double SceneBase::fpsFactor() const
 {
-    if (main_window()->useDeltaTimeMultiplier())
+    if (!main_window()->isFixedFrameTimeDelta())
     {
         double actual_fps = 1000.0 / frame_dt(1);
         double target_fps = main_window()->getFPS();

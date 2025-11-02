@@ -2,16 +2,17 @@
 
 // Fix for MSVC mutex constexpr bug
 //#define _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR
+
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <future>
-#include <functional>
 #include <atomic>
 
 #include <vector>
-#include <queue>
-#include <deque>
+
+#include <type_traits>
+#include <span>
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/threading.h>
@@ -100,6 +101,204 @@ namespace Thread
             : extra * (base + 1) + (blockIndex - extra) * base;
 
         return { start, start + size };   // [start, end)
+    }
+
+    //template<typename T, typename Callback>
+    //void forEachBatch(std::vector<T>& items, Callback&& callback, int thread_count = Thread::idealThreadCount())
+    //{
+    //    int item_count = (int)items.size();
+    //    std::vector<std::pair<int, int>> ranges = Thread::splitRanges<int>(item_count, thread_count);
+    //
+    //    std::vector<std::future<void>> futures(thread_count);
+    //
+    //    for (int ti = 0; ti < thread_count; ti++)
+    //    {
+    //        const std::pair<int, int>& range = ranges[ti];
+    //        futures[ti] = Thread::pool().submit_task([&]()
+    //        {
+    //            int i0 = range.first;
+    //            int i1 = range.second;
+    //            callback(i0, i1);
+    //        });
+    //    }
+    //
+    //    for (int ti = 0; ti < thread_count; ti++)
+    //    {
+    //        if (futures[ti].valid())
+    //            futures[ti].get();
+    //    }
+    //}
+
+    template<typename T, typename Callback>
+        requires (std::invocable<Callback&, int, int> && !std::invocable<Callback&, std::span<T>>)
+    auto forEachBatch(std::vector<T>& items,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount())
+    {
+        using CB = std::decay_t<Callback>;
+        static_assert(std::is_invocable_v<CB&, int, int>);
+        using R = std::invoke_result_t<CB&, int, int>;
+        using E = std::remove_cvref_t<R>;
+
+        const int N = static_cast<int>(items.size());
+        auto ranges = Thread::splitRanges<int>(N, thread_count);
+
+        CB cb = std::forward<Callback>(callback);
+
+        if constexpr (std::is_void_v<R>) {
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, i0, i1] {
+                    cb(i0, i1);
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return; // void
+        }
+        else {
+            std::vector<E> out(ranges.size());
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, i0, i1, &out, ti] {
+                    out[ti] = cb(i0, i1);
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return out; // std::vector<E>
+        }
+    }
+
+    // ---------- span<T> (mutable) overload ----------
+    template<typename T, typename Callback>
+        requires std::invocable<Callback&, std::span<T>>
+    auto forEachBatch(std::vector<T>& items,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount())
+    {
+        using CB = std::decay_t<Callback>;
+        using R = std::invoke_result_t<CB&, std::span<T>>;
+        using E = std::remove_cvref_t<R>;
+
+        const int N = static_cast<int>(items.size());
+        auto ranges = Thread::splitRanges<int>(N, thread_count);
+
+        CB cb = std::forward<Callback>(callback);
+
+        if constexpr (std::is_void_v<R>) {
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, &items, i0, i1] {
+                    cb(std::span<T>(items.data() + i0, static_cast<size_t>(i1 - i0)));
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return;
+        }
+        else {
+            std::vector<E> out(ranges.size());
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, &items, i0, i1, &out, ti] {
+                    out[ti] = cb(std::span<T>(items.data() + i0, static_cast<size_t>(i1 - i0)));
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return out;
+        }
+    }
+
+    // ---------- span<T> + thread_index (mutable) overload ----------
+    template<typename T, typename Callback>
+        requires std::invocable<Callback&, std::span<T>, int>
+    auto forEachBatch(std::vector<T>& items,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount())
+    {
+        using CB = std::decay_t<Callback>;
+        using R = std::invoke_result_t<CB&, std::span<T>, int>;
+        using E = std::remove_cvref_t<R>;
+
+        const int N = static_cast<int>(items.size());
+        auto ranges = Thread::splitRanges<int>(N, thread_count);
+
+        CB cb = std::forward<Callback>(callback);
+
+        if constexpr (std::is_void_v<R>) {
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, &items, i0, i1, ti] {
+                    cb(std::span<T>(items.data() + i0, static_cast<size_t>(i1 - i0)), (int)ti);
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return;
+        }
+        else {
+            std::vector<E> out(ranges.size());
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, &items, i0, i1, &out, ti] {
+                    out[ti] = cb(std::span<T>(items.data() + i0, static_cast<size_t>(i1 - i0)), ti);
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return out;
+        }
+    }
+
+    // ---------- span<const T> (read-only) overload ----------
+    template<typename T, typename Callback>
+        requires std::invocable<Callback&, std::span<const T>>
+    auto forEachBatch(const std::vector<T>& items,
+        Callback&& callback,
+        int thread_count = Thread::idealThreadCount())
+    {
+        using CB = std::decay_t<Callback>;
+        using R = std::invoke_result_t<CB&, std::span<const T>>;
+        using E = std::remove_cvref_t<R>;
+
+        const int N = static_cast<int>(items.size());
+        auto ranges = Thread::splitRanges<int>(N, thread_count);
+
+        CB cb = std::forward<Callback>(callback);
+
+        if constexpr (std::is_void_v<R>) {
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, &items, i0, i1] {
+                    cb(std::span<const T>(items.data() + i0, static_cast<size_t>(i1 - i0)));
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return;
+        }
+        else {
+            std::vector<E> out(ranges.size());
+            std::vector<std::future<void>> futs;
+            futs.reserve(ranges.size());
+            for (size_t ti = 0; ti < ranges.size(); ++ti) {
+                auto [i0, i1] = ranges[ti];
+                futs.emplace_back(Thread::pool().submit_task([&cb, &items, i0, i1, &out, ti] {
+                    out[ti] = cb(std::span<const T>(items.data() + i0, static_cast<size_t>(i1 - i0)));
+                }));
+            }
+            for (auto& f : futs) if (f.valid()) f.get();
+            return out;
+        }
     }
 }
 

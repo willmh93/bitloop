@@ -211,7 +211,7 @@ namespace Math
     }
     template<typename T> [[nodiscard]] inline T wrapRadians(T a) noexcept { return remainder(a, pi_v<T>*2); }
     template<typename T> [[nodiscard]] inline T wrapRadians2PI(T a) noexcept { return a - pi_v<T>*2 * floor(a * T{1}/(pi_v<T>*2)); }
-    template<typename T> [[nodiscard]] inline T lerpAngle(T a, T b, T f) { return wrapRadians(a + f * closestAngleDifference(a, b)); }
+    template<typename T, typename S> [[nodiscard]] inline T lerpAngle(T a, T b, S f) { return wrapRadians(a + T{f}*closestAngleDifference(a, b)); }
     template<typename T> [[nodiscard]] inline T avgAngle(T a, T b) { return lerpAngle(a, b, T{ 0.5 }); }
 
     // todo: Add support for "Segment" class, perhaps move to those classes for:
@@ -388,6 +388,14 @@ namespace Math
         return ((value - min) / (max - min));
     }
 
+    template<typename T>
+    [[nodiscard]] inline T lerpFactorClamped(T value, T min, T max) {
+        T f = ((value - min) / (max - min));
+        if (f < 0) return 0;
+        if (f > 1) return 1;
+        return f;
+    }
+
     static constexpr float atan_01_poly(float z)
     {
         // Estrin evaluation to reduce dependency chain
@@ -433,6 +441,53 @@ namespace Math
         if (x < 0.0f) a = (y >= 0.0f) ? (float(pi_v<float>) - a) : (-float(pi_v<float>) - a);
 
         return a;
+    }
+
+    template<typename T>
+    std::vector<Vec2<T>> delaunayMeshEllipse(
+        T cx, T cy,
+        T ellipse_r,
+        T spacing_r,
+        T dist_pow
+    )
+    {
+        static_assert(std::is_floating_point_v<T>, "T must be a floating type");
+
+        const T dx = T(2) * spacing_r;
+        const T dy = std::sqrt(T(3)) * spacing_r;
+
+        // Separate bounds for rows/cols so the hex grid fully covers the disk
+        const int max_row = int(std::ceil(ellipse_r / dy)) + 2;
+        const int max_col = int(std::ceil(ellipse_r / dx)) + 2;
+
+        std::vector<Vec2<T>> ret;
+        ret.reserve((2 * max_row + 1) * (2 * max_col + 1));
+
+        for (int row = -max_row; row <= max_row; ++row)
+        {
+            const T y = T(row) * dy;
+            const T ox = (row & 1) ? spacing_r : T(0);
+
+            for (int col = -max_col; col <= max_col; ++col)
+            {
+                const T x = ox + T(col) * dx;
+
+                const T r = std::hypot(x, y);
+                if (r > ellipse_r) continue;
+
+                if (r <= std::numeric_limits<T>::epsilon())
+                {
+                    ret.push_back({ cx, cy });
+                    continue;
+                }
+
+                // u in [0,1]; warp u -> u^{dist_pow}; keep angle the same
+                const T u = r / ellipse_r;
+                const T scale = std::pow(u, dist_pow - T(1)); // r' = scale * r = ellipse_r * u^{dist_pow}
+                ret.push_back({ cx + x * scale, cy + y * scale });
+            }
+        }
+        return ret;
     }
 
     namespace MovingAverage

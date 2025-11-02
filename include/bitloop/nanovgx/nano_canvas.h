@@ -656,15 +656,15 @@ public:
     }
 
     // Overloads
-    template<typename T> void strokeQuad(const Quad<T>& q)                  { beginPath(); drawClosedPath(q._data); stroke(); }
-    template<typename T> void strokeRect(const Rect<T>& r)                  { strokeRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    template<typename T> void fillRect(const Rect<T>& r)                    { fillRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
-    template<typename T> void strokeRoundedRect(const Rect<T>& r, T radius) { strokeRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
-    template<typename T> void fillRoundedRect(const Rect<T>& r, T radius)   { fillRoundedRect(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
-    template<typename T> void strokeEllipse(T cx, T cy, T r)                { strokeEllipse(cx, cy, r, r); }
-    template<typename T> void fillEllipse(T cx, T cy, T r)                  { fillEllipse(cx, cy, r, r); }
-    template<typename T> void strokeEllipse(Vec2<T> cen, T r)               { strokeEllipse(cen.x, cen.y, r, r); }
-    template<typename T> void fillEllipse(Vec2<T> cen, T r)                 { fillEllipse(cen.x, cen.y, r, r); }
+    template<typename T> void strokeQuad(const Quad<T>& q)                  { beginPath(); drawClosedPath<Vec2<T>>(q._data); stroke(); }
+    template<typename T> void strokeRect(const Rect<T>& r)                  { strokeRect<T>(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void fillRect(const Rect<T>& r)                    { fillRect<T>(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1); }
+    template<typename T> void strokeRoundedRect(const Rect<T>& r, T radius) { strokeRoundedRect<T>(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
+    template<typename T> void fillRoundedRect(const Rect<T>& r, T radius)   { fillRoundedRect<T>(r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, radius); }
+    template<typename T> void strokeEllipse(T cx, T cy, T r)                { strokeEllipse<T>(cx, cy, r, r); }
+    template<typename T> void fillEllipse(T cx, T cy, T r)                  { fillEllipse<T>(cx, cy, r, r); }
+    template<typename T> void strokeEllipse(Vec2<T> cen, T r)               { strokeEllipse<T>(cen.x, cen.y, r, r); }
+    template<typename T> void fillEllipse(Vec2<T> cen, T r)                 { fillEllipse<T>(cen.x, cen.y, r, r); }
 
     template<typename T> void drawArrow(Vec2<T> a, Vec2<T> b, Color color=Color(255,255,255), double tip_angle=35, double tip_scale=1.0, bool fill_tip=true)
     {

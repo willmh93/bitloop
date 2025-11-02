@@ -146,6 +146,7 @@ struct Vec2
 
     // constructors
     Vec2() = default;
+    constexpr Vec2(T v) : x{ v }, y{ v } {}
     constexpr Vec2(T _x, T _y) : x{ _x }, y{ _y } {}
     constexpr Vec2(const ImVec2 rhs) : x{ (T)rhs.x }, y{ (T)rhs.y } {}
     constexpr Vec2(const GlmVec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
@@ -155,6 +156,7 @@ struct Vec2
 
     // convenience
     constexpr void set(T _x, T _y) { x = _x; y = _y; }
+    constexpr void set(const Vec2<T>& rhs) { x = rhs.x; y = rhs.y; }
     [[nodiscard]] constexpr bool eq(T _x, T _y) const { return (x == _x && y == _y); }
 
     // conversions
@@ -209,6 +211,17 @@ struct Vec2
     }
 };
 
+template<typename T>
+struct UV
+{
+    Vec2<T> u, v;
+};
+
+template<typename T>
+constexpr Vec2<T> operator*(const UV<T>& uv, const Vec2<T>& p)
+{
+    return (uv.u * p.x + uv.v * p.y);
+}
 
 // run for all T that get instantiated
 template<class T>
@@ -851,6 +864,19 @@ struct Quad
     [[nodiscard]] constexpr Segment<T> cd() const { return Segment<T>(c, d); }
     [[nodiscard]] constexpr Segment<T> da() const { return Segment<T>(d, a); }
 
+    template<typename ScalarT>
+    [[nodiscard]] constexpr Vec2<T> lerpPoint(ScalarT fx, ScalarT fy) const
+    {
+        const Vec2<T> U = b - a;
+        const Vec2<T> V = d - a;
+        const Vec2<T> W = a - b - d + c; // twist
+        return a + U * fx + V * fy + W * (fx * fy);
+    }
+    template<typename ScalarT>
+    [[nodiscard]] constexpr Vec2<T> lerpPoint(Vec2<ScalarT> f) const {
+        return lerpPoint(f.x, f.y);
+    }
+
     [[nodiscard]] constexpr T minX() const { return std::min({ a.x, b.x, c.x, d.x }); }
     [[nodiscard]] constexpr T maxX() const { return std::max({ a.x, b.x, c.x, d.x }); }
     [[nodiscard]] constexpr T minY() const { return std::min({ a.y, b.y, c.y, d.y }); }
@@ -1140,6 +1166,8 @@ template<class T> using upgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_
 template<class T> using downgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signed_int_types>;
 template<class T> using downgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
 template<class T> using downgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
+
+template<class F, class... Args> using return_type = std::invoke_result_t<std::decay_t<F>, Args...>;
 
 // Physics types
 

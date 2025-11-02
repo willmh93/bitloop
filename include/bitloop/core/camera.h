@@ -115,7 +115,7 @@ public:
     // ────── worldToStageOffset ──────                                                                 
     template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageOffset(DVec2 o)     const { return static_cast<DVec2>(  m64  * glm::dvec3(o.x, o.y, 0.0)); }
     template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageOffset(DDVec2 o)    const { return static_cast<DDVec2>( m128 * glm::ddvec3(o.x, o.y, 0.0)); };
-                                                                                                        
+
     // ────── stageToWorldOffset ──────                                                                 
     template<class T>       requires is_f32<T>  [[nodiscard]] FVec2  toWorldOffset(DVec2 o)    const { return static_cast<FVec2>(  inv_m64  * glm::dvec3(o.x, o.y, 0.0)); }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2  toWorldOffset(DVec2 o)    const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(o.x, o.y, 0.0)); }
@@ -179,10 +179,18 @@ public:
 
     // ────── toStageRect ──────
     [[nodiscard]] DRect toStageRect(f64 x0, f64 y0, f64 x1, f64 y1) const { return { toStage(x0, y0), toStage(x1, y1) }; }
-    [[nodiscard]] DRect toStageRect(DVec2 pt1, DVec2 pt2)                       const { return { toStage(pt1), toStage(pt2) }; }
+    [[nodiscard]] DRect toStageRect(DVec2 pt1, DVec2 pt2)           const { return { toStage(pt1), toStage(pt2) }; }
 
     // ────── toStageQuad ──────
-    [[nodiscard]] DQuad toStageQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d) const { return { toStage(a), toStage(b), toStage(c), toStage(d) }; }
+    template<typename T>
+    [[nodiscard]] DQuad toStageQuad(Vec2<T> a, Vec2<T> b, Vec2<T> c, Vec2<T> d) const {
+        return { toStage<T>(a), toStage<T>(b), toStage<T>(c), toStage<T>(d) };
+    }
+
+    template<typename T> 
+    [[nodiscard]] DQuad toStageQuad(const Quad<T> &q) const {
+        return { toStage<T>(q.a), toStage<T>(q.b), toStage<T>(q.c), toStage<T>(q.d) };
+    }
 
     // ────── axis ──────
     [[nodiscard]] DVec2 axisStageDirection(bool isX) const
@@ -202,7 +210,6 @@ public:
         }
     }
     [[nodiscard]] DVec2 axisStagePerpDirection(bool isX) const { DVec2 d = axisStageDirection(isX).normalized(); return { -d.y, d.x }; }
-
 };
 
 

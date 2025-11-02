@@ -12,8 +12,8 @@ struct Tiger_Scene : public Scene<Tiger_Scene>
     bool scale_sizes = true;
     bool rotate_text = true;
 
-    CameraInfo          camera;
-    CameraNavigator navigator;
+    CameraInfo       camera;
+    CameraNavigator  navigator;
 
     /// ─────── Provide default Scene launch config ─────── 
     struct Config { 

@@ -146,11 +146,17 @@ public:
 
     virtual void sidebar() = 0;
 
+
+    // 4) Public macro
+    #define bl_scoped_one(name) \
+        auto& name = _pull(__target.name, false, #name); __PushGuard<decltype(__target), decltype(__target.name)> __push_guard_##name(__target, __target.name, name)
+    #define bl_scoped(...) \
+        BL_FOREACH(bl_scoped_one, __VA_ARGS__)
+
+    #define bl_schedule         _schedule
     #define bl_pull(name)       auto& name = _pull(__target.name, false, #name)
     #define bl_pull_temp(name)  auto& name = _temp_pull(__target.name, true, #name)
     #define bl_push(name)       _commit(__target.name, name)
-    #define bl_scoped(name)     auto& name = _pull(__target.name, false, #name); __PushGuard<decltype(__target), decltype(__target.name)> __push_guard_##name(__target, __target.name, name) 
-    #define bl_schedule         _schedule
 };
 
 // detect ostream support

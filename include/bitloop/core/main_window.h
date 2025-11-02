@@ -106,7 +106,7 @@ class MainWindow
     int           snapshot_supersample_factor = 1;
     float         snapshot_sharpen = 0.0f;
                 
-    bool          use_delta_time_mult = true;
+    bool          fixed_time_delta = false;
 
     Canvas canvas;
 
@@ -131,7 +131,8 @@ public:
     [[nodiscard]] CaptureManager* getRecordManager() { return &capture_manager; }
 
     int getFPS() const { return record_fps; }
-    bool useDeltaTimeMultiplier() const { return use_delta_time_mult; }
+    void setFixedFrameTimeDelta(bool b) { fixed_time_delta = b; }
+    bool isFixedFrameTimeDelta() const { return fixed_time_delta; }
 
     void queueBeginRecording();
     void queueEndRecording();
@@ -139,6 +140,7 @@ public:
     void beginRecording();
     void beginSnapshot();
     void endRecording();
+    void checkCaptureComplete();
 
     void captureFrame(bool b) { encode_next_sim_frame = b; }
     bool capturingNextFrame() const { return encode_next_sim_frame; }
@@ -179,6 +181,7 @@ public:
 
     void populateCollapsedLayout();
     void populateViewport();
+    void populateResolutionOptions(IVec2& targ_res, bool& first, int& sel_aspect, int& sel_tier, u64 max_pixels);
     void populateRecordOptions();
     void populateExpandedLayout();
     void populateUI();

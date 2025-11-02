@@ -59,8 +59,8 @@ struct CaptureConfig
     // Generic
     std::string     filename;
     IVec2           resolution;
-    int             ssaa; // supersample_factor
-    float           sharpen; // 0 - 1
+    int             ssaa = 1;    // supersample_factor
+    float           sharpen = 0; // 0 - 1
 
     float           quality = 100.0;
 

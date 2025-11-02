@@ -52,6 +52,7 @@ CameraInfo& CameraInfo::operator =(const CameraInfo& rhs)
 
 const WorldStageTransform& CameraInfo::getTransform() const
 {
+    // todo: Make thread safe? If called from multiple threads, is it safe?
     assert(surface != nullptr);
 
     if (surface->resized())
