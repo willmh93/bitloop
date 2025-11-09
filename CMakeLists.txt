@@ -8,7 +8,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 # ────────── Default Options ──────────
 option(BITLOOP_WITH_FFMPEG      "Build with FFmpeg"             OFF)
 option(BITLOOP_WITH_FFMPEG_X265 "FFmpeg built with x265 (GPL)"  OFF)
-option(BITLOOP_BUILD_TESTS      "Build tests"                   ON)
+option(BITLOOP_BUILD_TESTS      "Build tests"                   OFF) # keep off for releases
 
 # ────────── Bootstrap package helpers for both in‑tree & installed modes ──────────
 set(BL_SIM_CMAKE "${CMAKE_CURRENT_LIST_DIR}/cmake/bitloopSimulation.cmake")

@@ -60,8 +60,6 @@
  * 
  */
 
-#include <bitloop/util/f128.h>
-
 #include <memory>
 
 #include <bitloop/core/project.h>

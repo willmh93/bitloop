@@ -187,7 +187,7 @@ class ProjectBase
     double dt_projectProcess = 0;
     double dt_frameProcess = 0;
 
-    const int splitter_thickness = 6;// 6;
+    const int splitter_thickness = 6;
 
     std::chrono::steady_clock::time_point last_frame_time 
         = std::chrono::steady_clock::now();
