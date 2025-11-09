@@ -101,18 +101,25 @@ public:
     f64 _angle() const { return glm::atan(m64[0][1], m64[0][0]); }
 
     // ────── toStage ──────
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStage(f32 wx, f32 wy)    const { return DVec2{m64  * glm::dvec3(wx, wy, 1.0) }; }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStage(f64 wx, f64 wy)    const { return DVec2{m64  * glm::dvec3(wx, wy, 1.0) }; }
     template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStage(f128 wx, f128 wy)  const { return DVec2{m128 * glm::ddvec3(wx, wy, 1.0) }; }
+
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStage(FVec2 p)           const { return DVec2(m64  * glm::dvec3(p.x, p.y, 1.0)); }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStage(DVec2 p)           const { return DVec2(m64  * glm::dvec3(p.x, p.y, 1.0)); }
     template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStage(DDVec2 p)          const { return DVec2(m128 * glm::ddvec3(p.x, p.y, 1.0)); }
                                                                                                         
     // ────── toWorld ──────                                                                            
+    template<class T>       requires is_f32<T>  [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<FVec2>(  inv_m64  * glm::dvec3(sx, sy, 1.0)); }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(sx, sy, 1.0)); }
     template<class T>       requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(sx, sy, 1.0)); }
+
+    template<class T>       requires is_f32<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<FVec2>(  inv_m64  * glm::dvec3(p.x, p.y, 1.0) ); }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(p.x, p.y, 1.0) ); }
     template<class T>       requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(p.x, p.y, 1.0)); }
                                                                                                         
     // ────── worldToStageOffset ──────                                                                 
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStageOffset(FVec2 o)     const { return static_cast<DVec2>(  m64  * glm::dvec3(o.x, o.y, 0.0)); }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageOffset(DVec2 o)     const { return static_cast<DVec2>(  m64  * glm::dvec3(o.x, o.y, 0.0)); }
     template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageOffset(DDVec2 o)    const { return static_cast<DDVec2>( m128 * glm::ddvec3(o.x, o.y, 0.0)); };
 
@@ -141,56 +148,55 @@ public:
     }
 
     // ────── toWorldQuad ──────
-    template<typename T = f64> Quad<T> toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d)         const { return Quad<T>(toWorld<T>(a), toWorld<T>(b), toWorld<T>(c), toWorld<T>(d)); }
-    template<typename T = f64> Quad<T> toWorldQuad(const DQuad& quad)                          const { return toWorldQuad<T>(quad.a, quad.b, quad.c, quad.d); }
-    template<typename T = f64> Quad<T> toWorldQuad(f64 x1, f64 y1, f64 x2, f64 y2)             const { return toWorldQuad<T>(DQuad(x1, y1, x2, y2)); }
-    template<typename T = f64> Quad<T> toWorldQuad(const DRect& r)                             const { return toWorldQuad<T>(static_cast<DQuad>(r)); }
+    template<class T = f64> Quad<T> toWorldQuad(DVec2 a, DVec2 b, DVec2 c, DVec2 d)  const { return Quad<T>(toWorld<T>(a), toWorld<T>(b), toWorld<T>(c), toWorld<T>(d)); }
+    template<class T = f64> Quad<T> toWorldQuad(const DQuad& quad)                   const { return toWorldQuad<T>(quad.a, quad.b, quad.c, quad.d); }
+    template<class T = f64> Quad<T> toWorldQuad(f64 x1, f64 y1, f64 x2, f64 y2)      const { return toWorldQuad<T>(DQuad(x1, y1, x2, y2)); }
+    template<class T = f64> Quad<T> toWorldQuad(const DRect& r)                      const { return toWorldQuad<T>(static_cast<DQuad>(r)); }
 
-    // ────── toStageSize ──────
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageSizeAABB(DVec2 wh) const {
-        f64 a = m64[0][0], b = m64[1][0];
-        f64 c = m64[0][1], d = m64[1][1];
-        f64 nw = std::abs(a) * wh.x + std::abs(b) * wh.y;
-        f64 nh = std::abs(c) * wh.x + std::abs(d) * wh.y;
-        return { nw, nh };
-    }
-    template<class T>          requires is_f128<T> [[nodiscard]] DVec2 toStageSizeAABB(DDVec2 wh) const {
+    // ────── DVec2 toStageSize<INPUT_WORLD_PRECISION>(...) ──────
+    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const {
         auto a = m128[0][0], b = m128[1][0];
         auto c = m128[0][1], d = m128[1][1];
         auto nw = abs(a) * wh.x + abs(b) * wh.y;
         auto nh = abs(c) * wh.x + abs(d) * wh.y;
         return { (f64)nw, (f64)nh };
     }
-
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageSideLengths(DVec2 wh) const {
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const {
         f64 a = m64[0][0], b = m64[1][0];
         f64 c = m64[0][1], d = m64[1][1];
-        f64 sx = sqrt(a * a + b * b);
-        f64 sy = sqrt(c * c + d * d);
-        return { sx * wh.x, sy * wh.y };
+        f64 nw = std::abs(a) * wh.x + std::abs(b) * wh.y;
+        f64 nh = std::abs(c) * wh.x + std::abs(d) * wh.y;
+        return { nw, nh };
     }
-    template<class T>          requires is_f128<T> [[nodiscard]] DVec2 toStageSideLengths(DDVec2 wh) const {
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const {
+        return toStageSizeAABB((DVec2)wh);
+    }
+
+    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const {
         auto a = m128[0][0], b = m128[1][0];
         auto c = m128[0][1], d = m128[1][1];
         auto sx = sqrt(a * a + b * b);
         auto sy = sqrt(c * c + d * d);
         return { (f64)(sx * wh.x), (f64)(sy * wh.y) };
     }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const {
+        f64 a = m64[0][0], b = m64[1][0];
+        f64 c = m64[0][1], d = m64[1][1];
+        f64 sx = sqrt(a * a + b * b);
+        f64 sy = sqrt(c * c + d * d);
+        return { sx * wh.x, sy * wh.y };
+    }
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const {
+        return toStageSideLengths((DVec2)wh);
+    }
 
-    // ────── toStageRect ──────
-    [[nodiscard]] DRect toStageRect(f64 x0, f64 y0, f64 x1, f64 y1) const { return { toStage(x0, y0), toStage(x1, y1) }; }
-    [[nodiscard]] DRect toStageRect(DVec2 pt1, DVec2 pt2)           const { return { toStage(pt1), toStage(pt2) }; }
+    // ────── DRect toStageRect<INPUT_WORLD_PRECISION>(...) ──────
+    template<class T = f64> [[nodiscard]] DRect toStageRect(T x0, T y0, T x1, T y1)   const { return { toStage<T>(x0, y0), toStage<T>(x1, y1) }; }
+    template<class T = f64> [[nodiscard]] DRect toStageRect(Vec2<T> pt1, Vec2<T> pt2) const { return { toStage<T>(pt1), toStage<T>(pt2) }; }
 
     // ────── toStageQuad ──────
-    template<typename T>
-    [[nodiscard]] DQuad toStageQuad(Vec2<T> a, Vec2<T> b, Vec2<T> c, Vec2<T> d) const {
-        return { toStage<T>(a), toStage<T>(b), toStage<T>(c), toStage<T>(d) };
-    }
-
-    template<typename T> 
-    [[nodiscard]] DQuad toStageQuad(const Quad<T> &q) const {
-        return { toStage<T>(q.a), toStage<T>(q.b), toStage<T>(q.c), toStage<T>(q.d) };
-    }
+    template<class T> [[nodiscard]] DQuad toStageQuad(Vec2<T> a, Vec2<T> b, Vec2<T> c, Vec2<T> d) const { return { toStage<T>(a),   toStage<T>(b),   toStage<T>(c),   toStage<T>(d)   }; }
+    template<class T> [[nodiscard]] DQuad toStageQuad(const Quad<T> &q)                           const { return { toStage<T>(q.a), toStage<T>(q.b), toStage<T>(q.c), toStage<T>(q.d) }; }
 
     // ────── axis ──────
     [[nodiscard]] DVec2 axisStageDirection(bool isX) const
@@ -262,19 +268,25 @@ public:
     [[nodiscard]] constexpr f64 stretchY()   const  { return sy_64; }
     [[nodiscard]] constexpr DVec2 stretch()  const  { return stretch_64; }
 
-    // ─────── f64 / f128 getters ─────────────────────────────────────────────────────────────────────────────────────────
+    // ─────── f32 / f64 / f128 getters ─────────────────────────────────────────────────────────────────────────────────────────
+    template<class T>       requires is_f32<T>  [[nodiscard]] constexpr f32    x() const { return (f32)x_64; }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr f64    x() const { return x_64; }
     template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   x() const { return x_128; }
+    template<class T>       requires is_f32<T>  [[nodiscard]] constexpr f32    y() const { return (f32)y_64; }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr f64    y() const { return y_64; }
     template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   y() const { return y_128; }
+    template<class T>       requires is_f32<T>  [[nodiscard]] constexpr FVec2  pos() const { return (FVec2)pos_64; }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr DVec2  pos() const { return pos_64; }
     template<class T>       requires is_f128<T> [[nodiscard]] constexpr DDVec2 pos() const { return pos_128; }
+    template<class T>       requires is_f32<T>  [[nodiscard]] constexpr f32    zoom() const { return (f32)zoom_64; }
     template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr f64    zoom() const { return zoom_64; }
     template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   zoom() const { return zoom_128; }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr f64    zoomX() const { return zoom_x_64; }
-    template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   zoomX() const { return zoom_x; }
+
+    /// includes stretch
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr f64    zoomX() const { return zoom_x_64; } 
+    template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   zoomX() const { return zoom_x; }   
     template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr f64    zoomY() const { return zoom_y_64; }
-    template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   zoomY() const { return zoom_y; }
+    template<class T>       requires is_f128<T> [[nodiscard]] constexpr f128   zoomY() const { return zoom_y; }   
 
     // ─────── f128 setters ───────────────────────────────────────────────────────────────────────────────────────────────
     bool setX(f128 x)           { if (x_128 != x)        { x_128 = x;         posDirty();  return true; }  return false; }
@@ -344,8 +356,7 @@ private:
     bool   ui_using_relative_zoom = false;
 public:
 
-
-    void populateUI(DRect restrict_world_rect = DRect::infinite());
+    void populateUI(DRect restrict_world_rect = DRect::max_extent());
     int  getPositionDecimals()  const { return 1 + Math::countWholeDigits(zoom_128 * 5); }
     f128 getPositionPrecision() const { return Math::precisionFromDecimals<f128>(getPositionDecimals()); }
 
@@ -369,9 +380,6 @@ public:
         dst.setStretch(Math::lerp(a.stretch(), b.stretch(), lerp_factor));
     }
 };
-
-
-
 
 struct CameraNavigator
 {
@@ -411,7 +419,7 @@ struct CameraNavigator
     bool panZoomProcess();
 
 
-    [[nodiscard]] std::vector<FingerInfo> pressedFingers() {
+    [[nodiscard]] std::vector<FingerInfo> pressedFingers() const {
         return fingers;
     }
 
@@ -439,6 +447,8 @@ struct CameraNavigator
     [[nodiscard]] constexpr f64  panBegCamAngle()    const { return pan_beg_cam_angle; }
 
     bool handleWorldNavigation(Event e, bool single_touch_pan, bool zoom_anchor_mouse = false);
+
+    void debugPrint(Viewport* ctx) const;
 };
 
 
