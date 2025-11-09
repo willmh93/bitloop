@@ -86,7 +86,15 @@ function(_apply_main_settings _TARGET)
 	endif()
 endfunction()
 
-function(_optimize_wasm _TARGET)
+function(bitloop_enable_wasm_brotli  _TARGET)
+	#if (NOT PROJECT_IS_TOP_LEVEL)
+	#	return() # skip in vcpkg/consumer builds
+	#endif()
+	if(NOT EMSCRIPTEN)
+		message(STATUS "[bitloop] Skipping Brotli: not an Emscripten build.")
+		return()
+	  endif()
+
 	# _HOST_TRIPLET: prefer what vcpkg gives us; otherwise infer from host OS/arch
 	set(_HOST_TRIPLET "${VCPKG_HOST_TRIPLET}")
 	if(NOT _HOST_TRIPLET)
@@ -130,6 +138,15 @@ function(_optimize_wasm _TARGET)
 	# Precompress with brotli
 	message(STATUS "BROTLI_EXECUTABLE: ${BROTLI_EXECUTABLE}")
 	add_custom_command(TARGET ${_TARGET} POST_BUILD COMMAND "${BROTLI_EXECUTABLE}" -f -q 11 "${_WASM}" VERBATIM)
+endfunction()
+
+function(_optimize_wasm target)
+  # Do not run in the port build
+  if(NOT PROJECT_IS_TOP_LEVEL)
+    return()
+  endif()
+  # If you still build demo executables in the framework repo itself, you can call:
+  bitloop_enable_wasm_brotli(${target})
 endfunction()
 
 function(_apply_root_exe_name target)
