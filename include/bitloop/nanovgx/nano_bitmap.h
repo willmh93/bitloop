@@ -57,8 +57,8 @@ public:
     // ======== Stage Methods ========
 
     [[nodiscard]] DVec2  stagePos()      const { return toStage(pos); }
-    [[nodiscard]] double stageWidth()    const { return toStageOffset(u).magnitude(); }
-    [[nodiscard]] double stageHeight()   const { return toStageOffset(v).magnitude(); }
+    [[nodiscard]] double stageWidth()    const { return toStageOffset(u).mag(); }
+    [[nodiscard]] double stageHeight()   const { return toStageOffset(v).mag(); }
     [[nodiscard]] DVec2  stageSize()     const { return {stageWidth(), stageHeight()}; }
     [[nodiscard]] double stageRotation() const {
         T cos_r = cos(rotation);
@@ -90,9 +90,9 @@ public:
 
     // ======== World Methods ========
 
-    [[nodiscard]] T worldWidth()  const { return u.magnitude(); }
-    [[nodiscard]] T worldHeight() const { return v.magnitude(); }
-    [[nodiscard]] Vec2<T> worldSize() const { return { u.magnitude(), v.magnitude() }; }
+    [[nodiscard]] T worldWidth()  const { return u.mag(); }
+    [[nodiscard]] T worldHeight() const { return v.mag(); }
+    [[nodiscard]] Vec2<T> worldSize() const { return { u.mag(), v.mag() }; }
     [[nodiscard]] Quad<T> worldQuad() const {
         Vec2<T> offset = T(0.5) * (T(-align_x - 1.0) * u + T(-align_y - 1.0) * v);
         Vec2<T> p = pos + offset;
@@ -104,8 +104,8 @@ public:
     }
 
     [[nodiscard]] Vec2<T> worldAlignOffset() const { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
-    [[nodiscard]] T worldAlignOffsetX() const { return -(align_x + 1) * 0.5 * worldWidth(); }
-    [[nodiscard]] T worldAlignOffsetY() const { return -(align_y + 1) * 0.5 * worldHeight(); }
+    [[nodiscard]] T worldAlignOffsetX() const { return T(-(align_x + 1) * 0.5) * worldWidth(); }
+    [[nodiscard]] T worldAlignOffsetY() const { return T(-(align_y + 1) * 0.5) * worldHeight(); }
 
     [[nodiscard]] Vec2<T> worldToUVRatio(const Vec2<T>& p) const
     {
@@ -185,7 +185,7 @@ public:
     {
         if (pixels.size() == 0)
             return;
-        uint32_t u32 = c.u32;
+        uint32_t u32 = c.rgba;
         uint32_t* pixel = colors;
         uint32_t count = bmp_width * bmp_height;
         for (uint32_t i=0; i< count; i++)
@@ -361,6 +361,115 @@ protected:
     }*/
 };
 
+#include <atomic>
+#include <vector>
+#include <chrono>
+#include <algorithm>
+
+struct Block {
+    int tile_index;
+    int x0, y0, x1, y1;
+};
+
+struct TileBlockProgress {
+    // Build params (to detect changes)
+    int bmp_w = 0, bmp_h = 0;
+    int tile_w = 0, tile_h = 0;
+    int block_w = 0, block_h = 0;
+    int tiles_x = 0, tiles_y = 0;
+
+    // Work decomposition (one micro-block = one job)
+    std::vector<Block> blocks;         // size = sum over tiles of ceil(tile_w/block_w)*ceil(tile_h/block_h)
+    std::atomic<int>  next_block{ 0 };   // global cursor (persists across frames)
+
+    // Per-tile progress
+    std::vector<uint32_t> blocks_total_per_tile;
+    std::vector<uint32_t> blocks_done_per_tile; // incremented via atomic_ref
+
+    int owner_count = 0;                // threads used when plan was initialized
+    std::vector<int> owner_cursor;      // blocks consumed per owner (size = owner_count)
+
+    // call this when blocks (or thread_count) may have changed
+    void ensure_owner_slots(int threads) {
+        if (owner_count != threads || owner_cursor.size() != (size_t)threads) {
+            owner_count = threads;
+            owner_cursor.assign(threads, 0); // reset resume state (mapping changed)
+        }
+    }
+
+    // optional: reset after completion
+    void reset_progress_only() {
+        std::fill(owner_cursor.begin(), owner_cursor.end(), 0);
+    }
+};
+
+inline double now_ms()
+{
+    #ifdef __EMSCRIPTEN__
+    return emscripten_get_now(); // high-res ms
+    #else
+    using clock = std::chrono::steady_clock;
+    return std::chrono::duration<double, std::milli>(clock::now().time_since_epoch()).count();
+    #endif
+}
+
+// build/rebuild micro-blocks. Returns true if rebuilt.
+inline bool ensure_blocks_built(TileBlockProgress& P,
+    int bmp_w, int bmp_h,
+    int tile_w, int tile_h,
+    int block_w, int block_h)
+{
+    if (block_w <= 0) block_w = 64;
+    if (block_h <= 0) block_h = 8;
+
+    const bool changed =
+        (P.bmp_w != bmp_w) || (P.bmp_h != bmp_h) ||
+        (P.tile_w != tile_w) || (P.tile_h != tile_h) ||
+        (P.block_w != block_w) || (P.block_h != block_h);
+
+    if (!changed) return false;
+
+    P.bmp_w = bmp_w;  P.bmp_h = bmp_h;
+    P.tile_w = tile_w; P.tile_h = tile_h;
+    P.block_w = block_w; P.block_h = block_h;
+
+    P.tiles_x = (bmp_w + tile_w - 1) / tile_w;
+    P.tiles_y = (bmp_h + tile_h - 1) / tile_h;
+    const int tile_count = P.tiles_x * P.tiles_y;
+
+    std::vector<Block> blocks;
+    blocks.reserve((bmp_w / block_w + 1) * (bmp_h / block_h + 1));
+
+    std::vector<uint32_t> total(tile_count, 0), done(tile_count, 0);
+
+    for (int ty = 0; ty < P.tiles_y; ++ty) {
+        for (int tx = 0; tx < P.tiles_x; ++tx) {
+            const int tile_index = ty * P.tiles_x + tx;
+
+            const int x0 = tx * tile_w;
+            const int y0 = ty * tile_h;
+            const int x1 = std::min(x0 + tile_w, bmp_w);
+            const int y1 = std::min(y0 + tile_h, bmp_h);
+
+            for (int by = y0; by < y1; by += block_h) {
+                const int yy1 = std::min(by + block_h, y1);
+                for (int bx = x0; bx < x1; bx += block_w) {
+                    const int xx1 = std::min(bx + block_w, x1);
+                    blocks.push_back(Block{ tile_index, bx, by, xx1, yy1 });
+                    ++total[tile_index];
+                }
+            }
+        }
+    }
+
+    P.blocks = std::move(blocks);
+    P.blocks_total_per_tile = std::move(total);
+    P.blocks_done_per_tile = std::move(done);
+    P.next_block.store(0, std::memory_order_relaxed);
+    return true;
+}
+
+
 template<typename T>
 class CanvasImageBase : public Image, public CanvasObjectBase<T>
 {
@@ -447,7 +556,7 @@ public:
     bool forEachPixel(
         int& current_row,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount(),
+        int thread_count = Thread::threadCount(),
         int timeout_ms = 0)
     {
         static_assert(std::is_invocable_r_v<void, Callback, int, int>,
@@ -547,7 +656,7 @@ public:
     bool forEachWorldPixel(
         int& current_row,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount(),
+        int thread_count = Thread::threadCount(),
         int timeout_ms = 0,
         std::atomic<bool>*busy = nullptr
     )
@@ -701,7 +810,7 @@ public:
     template<typename Callback>
     void forEachPixel(
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount())
+        int thread_count = Thread::threadCount())
     {
         int row = 0;
         forEachPixel(
@@ -716,10 +825,11 @@ public:
     bool forEachWorldTile(
         int tile_w, int tile_h,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount()
+        int thread_count = Thread::threadCount()
     )
     {
         int current_tile = 0;
+
         // World quad might be higher precision than is requested for the current zoom level, downgrade to requested WorldT
         Quad<WorldT> world_quad = static_cast<Quad<WorldT>>(CanvasObjectBase<T>::worldQuad());
 
@@ -831,130 +941,105 @@ public:
     template<typename WorldT, typename Callback>
     bool forEachWorldTilePixel(
         int tile_w, int tile_h,
-        int& current_tile,
+        TileBlockProgress& P, // progress tracker
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount(),
-        int timeout_ms = 0
+        int thread_count = Thread::threadCount(),
+        int budget_ms = 16, // 0 = no timeout (finish in this call)
+        int block_w = 64,
+        int block_h = 8
     )
     {
-        auto timeout = timeout_ms ?
-            std::chrono::milliseconds{ timeout_ms } :
-            std::chrono::steady_clock::duration::max();
+        ensure_blocks_built(P, bmp_width, bmp_height, tile_w, tile_h, block_w, block_h);
 
-        // World quad might be higher precision than is requested for the current zoom level, downgrade to requested WorldT
+        // initialize cursors if thread_count changed
+        P.ensure_owner_slots(thread_count);
+
+        const int N = static_cast<int>(P.blocks.size());
+        if (N == 0) return true;
+
+        const bool no_timeout = (budget_ms == 0);
+        const double t_end = no_timeout ? std::numeric_limits<double>::max() : (now_ms() + double(budget_ms));
+
+        // world quad
         Quad<WorldT> world_quad = static_cast<Quad<WorldT>>(CanvasObjectBase<T>::worldQuad());
+        const WorldT ax = world_quad.a.x, ay = world_quad.a.y;
+        const WorldT bx = world_quad.b.x, by = world_quad.b.y;
+        const WorldT cx = world_quad.c.x, cy = world_quad.c.y;
+        const WorldT dx = world_quad.d.x, dy = world_quad.d.y;
 
-        WorldT ax = world_quad.a.x, ay = world_quad.a.y;
-        WorldT bx = world_quad.b.x, by = world_quad.b.y;
-        WorldT cx = world_quad.c.x, cy = world_quad.c.y;
-        WorldT dx = world_quad.d.x, dy = world_quad.d.y;
+        const WorldT t_bmp_w = static_cast<WorldT>(bmp_fw);
+        const WorldT t_bmp_h = static_cast<WorldT>(bmp_fh);
 
-        WorldT t_bmp_w = static_cast<WorldT>(bmp_fw);
-        WorldT t_bmp_h = static_cast<WorldT>(bmp_fh);
+        // one persistent task per worker
+        std::vector<std::future<void>> futs;
+        futs.reserve(thread_count);
 
-        const int tiles_x = (bmp_width + tile_w - 1) / tile_w;
-        const int tiles_y = (bmp_height + tile_h - 1) / tile_h;
-        const int tile_count = tiles_x * tiles_y;
-
-        auto start_time = std::chrono::steady_clock::now();
-
-        std::vector<std::future<void>> futures(thread_count);
-        std::vector<std::atomic<bool>> active_threads(thread_count);
-        for (int ti = 0; ti < thread_count; ++ti)
-            active_threads[ti].store(false, std::memory_order_relaxed);
-
-        std::atomic<bool> timed_out{ false };
-
-        // Continuously spin checking for idle threads and scheduling new tiles...
-        while (!timed_out.load(std::memory_order_relaxed))
+        for (int k = 0; k < thread_count; ++k)
         {
-            for (int ti = 0; ti < thread_count; ++ti)
+            futs.push_back(Thread::pool().submit_task([&, owner_id = k]()
             {
-                if (timed_out.load(std::memory_order_relaxed))
-                    break;
+                int M = P.owner_count;              // threads used for this plan
+                int cur = P.owner_cursor[owner_id]; // blocks already consumed by this owner
+                auto idx_from_cur = [&](int c) {
+                    return owner_id + c * M;
+                };
 
-                if (active_threads[ti].load(std::memory_order_relaxed))
-                    continue;
-
-                // Found an idle thread...
-                const int thread_index = ti;
-                const int tile_index = current_tile++;
-
-                if (tile_index >= tile_count)
+                while (true)
                 {
-                    timed_out.store(true, std::memory_order_relaxed);
-                    break;
-                }
+                    // stop between blocks only
+                    if (!no_timeout && now_ms() >= t_end)
+                        break;
 
-                const int tx = tile_index % tiles_x;
-                const int ty = tile_index / tiles_x;
+                    int bi = idx_from_cur(cur);
+                    if (bi >= N)
+                        break; // this owner finished its sequence
 
-                const int x0 = tx * tile_w;
-                const int y0 = ty * tile_h;
-                const int x1 = std::min(x0 + tile_w, bmp_width);
-                const int y1 = std::min(y0 + tile_h, bmp_height);
+                    const Block b = P.blocks[bi];
+                    const int x0 = b.x0, x1 = b.x1, y0 = b.y0, y1 = b.y1;
 
-                active_threads[thread_index].store(true, std::memory_order_relaxed);
-
-                futures[ti] = Thread::pool().submit_task([&, x0, y0, x1, y1, thread_index, tile_index]()
-                {
+                    // render micro-block
                     for (int row = y0; row < y1; ++row)
                     {
-                        WorldT bmp_fy = static_cast<WorldT>(row) + WorldT{ 0.5 };
-                        WorldT v = bmp_fy / t_bmp_h;
+                        const WorldT bmp_fy = static_cast<WorldT>(row) + WorldT{ 0.5 };
+                        const WorldT v = bmp_fy / t_bmp_h;
 
-                        // Interpolate left/right edges for this scanline
-                        WorldT scan_left_x = ax + (dx - ax) * v;
-                        WorldT scan_left_y = ay + (dy - ay) * v;
-                        WorldT scan_right_x = bx + (cx - bx) * v;
-                        WorldT scan_right_y = by + (cy - by) * v;
+                        const WorldT scan_left_x = ax + (dx - ax) * v;
+                        const WorldT scan_left_y = ay + (dy - ay) * v;
+                        const WorldT scan_right_x = bx + (cx - bx) * v;
+                        const WorldT scan_right_y = by + (cy - by) * v;
 
                         for (int bmp_x = x0; bmp_x < x1; ++bmp_x)
                         {
-                            WorldT bmp_fx = static_cast<WorldT>(bmp_x) + WorldT{ 0.5 };
-                            WorldT u = bmp_fx / t_bmp_w;
+                            const WorldT bmp_fx = static_cast<WorldT>(bmp_x) + WorldT{ 0.5 };
+                            const WorldT u = bmp_fx / t_bmp_w; // TODO: Not efficient for f128 WorldT. Either cache or calculate offset in double precision
 
-                            WorldT wx = scan_left_x + (scan_right_x - scan_left_x) * u;
-                            WorldT wy = scan_left_y + (scan_right_y - scan_left_y) * u;
+                            const WorldT wx = scan_left_x + (scan_right_x - scan_left_x) * u;
+                            const WorldT wy = scan_left_y + (scan_right_y - scan_left_y) * u;
 
                             if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT, int>)
-                            {
-                                std::forward<Callback>(callback)(bmp_x, row, wx, wy, tile_index);
-                            }
+                                std::forward<Callback>(callback)(bmp_x, row, wx, wy, b.tile_index);
                             else if constexpr (std::is_invocable_r_v<void, Callback, int, int, WorldT, WorldT>)
-                            {
                                 std::forward<Callback>(callback)(bmp_x, row, wx, wy);
-                            }
                         }
                     }
+                    ++cur; // advance owner's local cursor
+                }
 
-                    // After finishing this tile, check timeout
-                    if (std::chrono::steady_clock::now() - start_time >= timeout)
-                    {
-                        // Signal that no new tiles should be picked up
-                        timed_out.store(true, std::memory_order_relaxed);
-                    }
-                    else
-                    {
-                        // Allow this worker to grab another tile
-                        active_threads[thread_index].store(false, std::memory_order_relaxed);
-                    }
-                });
-            }
-
-            std::this_thread::yield();
+                // write back owner's progress
+                P.owner_cursor[owner_id] = cur;
+            }));
         }
 
-        // After timing out (or finishing), wait for remaining tasks
-        for (int ti = 0; ti < thread_count; ++ti)
-        {
-            if (futures[ti].valid())
-                futures[ti].get();
+        for (auto& f : futs) f.get();
+
+        bool finished = true;
+        for (int k = 0; k < P.owner_count; ++k) {
+            const int bi = k + P.owner_cursor[k] * P.owner_count;
+            if (bi < N) { finished = false; break; }
         }
 
-        if (current_tile >= tile_count)
-        {
-            current_tile = 0;
+        if (finished) {
+            P.reset_progress_only();
             return true;
         }
         return false;

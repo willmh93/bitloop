@@ -7,6 +7,20 @@
 #define BL_END_NS   }
 #endif
 
+/// ======== compiler message ========
+
+#define STR(x) #x
+#define VAL(x) STR(x)
+
+#if defined(_MSC_VER)
+#define BL_MESSAGE(msg) __pragma(message(msg))
+#define BL_SHOW(name)   __pragma(message(#name "=" VAL(name)))
+#else
+  // Clang/GCC/Emscripten
+#define BL_MESSAGE(msg) _Pragma("message \"" msg "\"")
+#define BL_SHOW(name)   _Pragma("message \"" #name "=" VAL(name) "\"")
+#endif
+
 /// ======== FAST_INLINE ========
 
 #if defined(_MSC_VER)
@@ -20,14 +34,11 @@
 
 /// ======== Fast-math ========
 
-#if defined(_MSC_VER)
-#if defined(_M_FP_FAST)
+#if defined(__FAST_MATH__) // GCC/Clang: -ffast-math
+#define BL_FAST_MATH
+#elif defined(_MSC_VER) && defined(_M_FP_FAST)  // MSVC: /fp:fast
 #define BL_FAST_MATH
 #endif
-#elif defined(__FAST_MATH__)
-#define BL_FAST_MATH
-#endif
-
 
 #if defined(_MSC_VER)
 #define BL_PUSH_PRECISE  __pragma(float_control(precise, on, push)) \
@@ -60,22 +71,10 @@
 #define BL_POP_PRECISE
 #endif
 
-template<typename T>
-constexpr T bl_infinity()
-{
-    #ifdef BL_FAST_MATH
-    return T(1e300); // Safe large finite fallback
-    #else
-    return std::numeric_limits<T>::infinity();
-    #endif
-}
-
 // Returns true if the compiler enabled a "fast math" mode for this TU
 constexpr bool fast_math_enabled()
 {
-    #if defined(__FAST_MATH__) // GCC/Clang: -ffast-math
-    return true;
-    #elif defined(_MSC_VER) && defined(_M_FP_FAST)  // MSVC: /fp:fast
+    #ifdef BL_FAST_MATH
     return true;
     #else
     return false;
@@ -91,21 +90,6 @@ constexpr bool fast_math_enabled()
 #define blBreak() std::raise(SIGTRAP)
 #else
 #define blBreak() ((void)0)  // fallback
-#endif
-
-
-/// ======== compiler message ========
-
-#define STR(x) #x
-#define VAL(x) STR(x)
-
-#if defined(_MSC_VER)
-#define BL_MESSAGE(msg) __pragma(message(msg))
-#define BL_SHOW(name)   __pragma(message(#name "=" VAL(name)))
-#else
-  // Clang/GCC/Emscripten
-#define BL_MESSAGE(msg) _Pragma("message \"" msg "\"")
-#define BL_SHOW(name)   _Pragma("message \"" #name "=" VAL(name) "\"")
 #endif
 
 /// ======== for-each macro ========

@@ -257,6 +257,12 @@ void ProjectWorker::populateAttributes()
         active_project->_populateAllAttributes();
 }
 
+void ProjectWorker::populateOverlay()
+{
+    if (active_project)
+        active_project->_populateOverlay();
+}
+
 void ProjectWorker::_onEvent(SDL_Event& e)
 {
     #ifdef DEBUG_SIMULATE_MOBILE

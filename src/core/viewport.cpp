@@ -63,39 +63,4 @@ void Viewport::draw()
     restore();
 }
 
-///void Viewport::printTouchInfo()
-///{
-///    double pinch_zoom_factor = camera.touchDist() / camera.panDownTouchDist();
-///
-///    setFont(getDefaultFont());
-///    print() << "cam.position          = (" << camera.x() << ",  " << camera.y() << ")\n";
-///    print() << "cam.pan               = (" << camera.panX() << ",  " << camera.panY() << ")\n";
-///    print() << "cam.rotation          = " << camera.rotation() << "\n";
-///    ///print() << "cam.zoom              = (" << camera.zoomX() << ", " << camera.zoomY() << ")\n\n";
-///    print() << "--------------------------------------------------------------\n";
-///    print() << "pan_down_touch_x      = " << camera.panDownTouchX() << "\n";
-///    print() << "pan_down_touch_y      = " << camera.panDownTouchY() << "\n";
-///    print() << "pan_down_touch_dist   = " << camera.panDownTouchDist() << "\n";
-///    print() << "pan_down_touch_angle  = " << camera.panDownTouchAngle() << "\n";
-///    print() << "--------------------------------------------------------------\n";
-///    print() << "pan_beg_cam_x         = " << (double)camera.panBegCamX() << "\n";
-///    print() << "pan_beg_cam_y         = " << (double)camera.panBegCamY() << "\n";
-///    print() << "pan_beg_cam_zoom_x    = " << (double)camera.panBegCamZoom() << "\n";
-///    print() << "pan_beg_cam_angle     = " << camera.panBegCamAngle() << "\n";
-///    print() << "--------------------------------------------------------------\n";
-///    print() << "cam.touchAngle()      = " << camera.touchAngle() << "\n";
-///    print() << "cam.touchDist()       = " << camera.touchDist() << "\n";
-///    print() << "--------------------------------------------------------------\n";
-///    print() << "pinch_zoom_factor     = " << pinch_zoom_factor << "x\n";
-///    print() << "--------------------------------------------------------------\n";
-///
-///    int i = 0;
-///    for (auto finger : camera.pressedFingers())
-///    {
-///        print() << "Finger " << i << ": [id: " << finger.fingerId << "] - (" << finger.x << ", " << finger.y << ")\n";
-///        i++;
-///    }
-///}
-
-
 BL_END_NS

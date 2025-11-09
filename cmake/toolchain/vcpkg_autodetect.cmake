@@ -197,7 +197,7 @@ set(VCPKG_ROOT "${_vcpkg_dir}" CACHE PATH "" FORCE)
 # Pick a root location relative to the determined VCPKG_ROOT
 get_filename_component(_root_dir "${_vcpkg_dir}/.." REALPATH)
 
-set(_cache_dir      "${_root_dir}/.vcpkg-cache")
+set(_cache_dir       "${_root_dir}/.vcpkg-cache")
 #set(_installed_dir  "${_root_dir}/.vcpkg-installed")
 
 file(MAKE_DIRECTORY "${_cache_dir}")

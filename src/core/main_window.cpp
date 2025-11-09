@@ -301,6 +301,11 @@ void MainWindow::populateProjectUI()
     ImGui::EndPaddedRegion();
 }
 
+void MainWindow::populateOverlay()
+{
+    project_worker()->populateOverlay();
+}
+
 void MainWindow::queueBeginRecording()
 {
     queueMainWindowCommand({ MainWindowCommandType::BEGIN_RECORDING });
@@ -593,8 +598,8 @@ bool MainWindow::toolbarButton(const char* id, const char* symbol, const Toolbar
 
 void MainWindow::populateToolbar()
 {
-    if (platform()->is_mobile())
-        return;
+    //if (platform()->is_mobile())
+    //    return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
 
@@ -882,8 +887,6 @@ void ScrollWhenDraggingOnVoid(const ImVec2& delta)
     static float vy = 0.0;
     static float scroll_amount = 0.0;
 
-    
-
     //if (g.HoveredId == 0) // If nothing hovered so far in the frame (not same as IsAnyItemHovered()!)
         ImGui::ButtonBehavior(window->Rect(), id, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
     //if (held && delta.x != 0.0f)
@@ -1012,7 +1015,6 @@ void MainWindow::populateCollapsedLayout()
 
 void MainWindow::populateExpandedLayout()
 {
-
     // Show both windows
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
@@ -1054,7 +1056,7 @@ void MainWindow::populateViewport()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin("Viewport");
     {
-        ImVec2 client_size = ImGui::GetContentRegionAvail();
+        client_size = ImGui::GetContentRegionAvail();
 
         // set canvas size to viewport size by default
         IVec2 canvas_size(client_size);
@@ -1651,13 +1653,18 @@ void MainWindow::populateUI()
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-            if (collapse_layout)
-                populateCollapsedLayout();
-            else
-                populateExpandedLayout();
+            if (sidebar_visible)
+            {
+                if (collapse_layout)
+                    populateCollapsedLayout();
+                else
+                    populateExpandedLayout();
 
-            if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
-                done_first_focus = true;
+                if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
+                    done_first_focus = true;
+            }
+
+            populateOverlay();
 
             ImGui::PopStyleVar();
         }
@@ -1676,35 +1683,38 @@ void MainWindow::populateUI()
         }
     }
 
-    ImGui::Begin("Settings"); // Begin Debug Window
+    if (sidebar_visible)
     {
-        populateRecordOptions();
-    }
-    ImGui::End();
-
-    #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
-    ImGui::Begin("Debug"); // Begin Debug Window
-    {
-        if (ImGui::BeginTabBar("DebugTabs"))
+        ImGui::Begin("Settings");
         {
-
-            if (ImGui::BeginTabItem("Project Log"))
-            {
-                project_log.draw();
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Global Log"))
-            {
-                debug_log.draw();
-                ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
+            populateRecordOptions();
         }
+        ImGui::End();
+
+        #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
+        ImGui::Begin("Debug"); // Begin Debug Window
+        {
+            if (ImGui::BeginTabBar("DebugTabs"))
+            {
+
+                if (ImGui::BeginTabItem("Project Log"))
+                {
+                    project_log.draw();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Global Log"))
+                {
+                    debug_log.draw();
+                    ImGui::EndTabItem();
+                }
+
+                ImGui::EndTabBar();
+            }
+        }
+        ImGui::End(); // End Debug Window
+        #endif
     }
-    ImGui::End(); // End Debug Window
-    #endif
 
     ImGui::PopStyleVar();
 

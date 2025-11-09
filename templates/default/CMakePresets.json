@@ -15,7 +15,8 @@
         "BUILD_FLAVOR": "ninja-debug",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -26,7 +27,8 @@
         "BUILD_FLAVOR": "ninja-release",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -37,7 +39,8 @@
         "BUILD_FLAVOR": "vs2022",
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain/vcpkg_autodetect.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain/vcpkg_autodetect.cmake",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -51,7 +54,8 @@
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
-        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory"
+        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -65,7 +69,8 @@
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
-        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory"
+        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     },
     {
@@ -79,7 +84,8 @@
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-multithreaded",
-        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory"
+        "VCPKG_CMAKE_CONFIGURE_OPTIONS": "-pthread -matomics -mbulk-memory",
+        "VCPKG_INSTALL_OPTIONS": "--x-abi-tools-use-exact-versions"
       }
     }
   ],

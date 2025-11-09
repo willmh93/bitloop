@@ -113,7 +113,7 @@ def create_project(bitloop_root:Path):
         print("Project name cannot be empty.", file=sys.stderr)
         sys.exit(1)
 
-    src:Path = bitloop_root / "framework" / "templates" / "default"
+    src:Path = bitloop_root / "templates" / "default"
     dst:Path = Path.cwd() / name
 
     print(f"src = {src} dst = {dst}")

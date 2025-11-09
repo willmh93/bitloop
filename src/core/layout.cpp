@@ -77,6 +77,12 @@ void Layout::resize(size_t viewport_count)
 
 void Layout::clear()
 {
+    // todo:
+    // Explicitly call unmount on each viewport, and clear ctx_focused/ctx_hovered if removing that viewport.
+    // (in case we provide user with a way to remove individual viewports later)
+    project->ctx_focused = nullptr;
+    project->ctx_hovered = nullptr;
+
     // layout freed each time you call setLayout
     for (Viewport* p : viewports) delete p;
     viewports.clear();

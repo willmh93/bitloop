@@ -46,7 +46,7 @@ void Tiger_Scene::sceneStart()
 
 void Tiger_Scene::sceneMounted(Viewport* ctx)
 {
-    // Initialize viewport
+    // initialize viewport
     camera.setSurface(ctx);
     camera.setOriginViewportAnchor(Anchor::CENTER);
     camera.focusWorldRect(-100, -100, 1000, 1000);
@@ -70,9 +70,13 @@ void Tiger_Scene::viewportProcess(Viewport*, double)
 
 void Tiger_Scene::viewportDraw(Viewport* ctx) const
 {
+    //ctx->SimplePainter::translate(500.0, 100.0);
+    //ctx->rotate(Math::toRadians(30.0));
+	
     ctx->transform(camera.getTransform());
     ctx->drawWorldAxis();
-
+    
+	//ctx->translate(700.0, 100.0);
     //ctx->scale(2);
 
     ctx->worldCoordinates(transform_coordinates);

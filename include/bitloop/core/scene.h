@@ -53,6 +53,7 @@ protected:
     //
     bool has_var_buffer = false;
     virtual void _sceneAttributes() {}
+    virtual void _populateOverlay() {}
 
     // In case Scene uses double buffer
     virtual void updateLiveBuffers() {}
@@ -180,6 +181,11 @@ protected:
     virtual void _sceneAttributes() override 
     {
         ui->sidebar();
+    }
+
+    virtual void _populateOverlay() override
+    {
+        ui->overlay();
     }
 
 private:

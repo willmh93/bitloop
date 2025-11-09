@@ -69,16 +69,15 @@ void ProjectBase::_populateAllAttributes()
     }
 	
     // Scene sections
-    Layout& layout = currentLayout();
-    auto& scenes = layout.scenes();
-    for (SceneBase* scene : scenes)
+    if (ctx_focused)
     {
-        //if (!scene->has_var_buffer)
-        //    continue;
+        SceneBase* scene = ctx_focused->scene;
 
         std::string sceneName = scene->name() + " " + std::to_string(scene->sceneIndex());
         std::string section_id = sceneName + "_section";
-        bool showSceneUI = (scenes.size() == 1) || ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+        bool showSceneUI = (viewports.count() == 1) || ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
         if (showSceneUI)
         {
             // Allow Scene to populate inputs for section
@@ -93,6 +92,16 @@ void ProjectBase::_populateAllAttributes()
             ImGui::PopStyleColor(3);
             ImGui::PopID();
         }
+    }
+}
+
+void ProjectBase::_populateOverlay()
+{
+    Layout& layout = currentLayout();
+    auto& scenes = layout.scenes();
+    for (SceneBase* scene : scenes)
+    {
+        scene->_populateOverlay();
     }
 }
 
@@ -219,9 +228,12 @@ void ProjectBase::updateViewportRects()
 
     DVec2 surface_size = canvas->fboSize();
 
+    double visible_client_w = surface_size.x - ((viewports.cols-1) * splitter_thickness);
+    double visible_client_h = surface_size.y - ((viewports.rows-1) * splitter_thickness);
+
     // Update viewport sizes
-    double viewport_width = surface_size.x / viewports.cols;
-    double viewport_height = surface_size.y / viewports.rows;
+    double viewport_width  = (visible_client_w / viewports.cols);
+    double viewport_height = (visible_client_h / viewports.rows);
 
     // Update viewport rects
     for (Viewport* viewport : viewports)
@@ -230,13 +242,13 @@ void ProjectBase::updateViewportRects()
         //viewport->y = viewport->viewport_grid_y * viewport_height;
 
         viewport->setSurfacePos(
-            viewport->viewport_grid_x * viewport_width,
-            viewport->viewport_grid_y * viewport_height
+            floor(viewport->viewport_grid_x * (viewport_width + splitter_thickness)),
+            floor(viewport->viewport_grid_y * (viewport_height + splitter_thickness))
         );
 
         viewport->setSurfaceSize(
-            viewport_width - 1,
-            viewport_height - 1
+            ceil(viewport_width),
+            ceil(viewport_height)
         );
 
         //viewport->w = viewport_width - 1;
@@ -244,7 +256,7 @@ void ProjectBase::updateViewportRects()
         //
         //DVec2 old_size = {viewport->start_w, viewport->start_h};
         //DVec2 new_size = {viewport->w, viewport->h};
-        //double rel_scale = new_size.magnitude() / old_size.magnitude();
+        //double rel_scale = new_size.mag() / old_size.mag();
         //
         //viewport->scale_adjust = rel_scale;
     }
@@ -404,27 +416,38 @@ void ProjectBase::_projectDraw()
     // Draw viewport splitters
     for (Viewport* viewport : viewports)
     {
-        canvas->setLineWidth(6);
+        canvas->setLineWidth(splitter_thickness);
         canvas->setStrokeStyle(30, 30, 40);
         canvas->beginPath();
 
         // Draw vert line
         if (viewport->viewport_grid_x < viewports.cols - 1)
         {
-            double line_x = std::floor(viewport->right()) + 0.5;
+            double line_x = viewport->right() + splitter_thickness / 2;
             canvas->moveTo(line_x, viewport->top());
-            canvas->lineTo(line_x, viewport->bottom() + 1);
+            canvas->lineTo(line_x, viewport->bottom() + splitter_thickness); // +splitter_thickness to fill sqare gap between lines
         }
 
         // Draw horiz line
         if (viewport->viewport_grid_y < viewports.rows - 1)
         {
-            double line_y = std::floor(viewport->bottom()) + 0.5;
+            double line_y = viewport->bottom() + splitter_thickness / 2;
             canvas->moveTo(viewport->left(), line_y);
-            canvas->lineTo(viewport->right() + 1, line_y);
+            canvas->lineTo(viewport->right(), line_y);
         }
 
         canvas->stroke();
+
+        //canvas->setLineWidth(1);
+        //canvas->setStrokeStyle(Color::purple);
+        //canvas->strokeRect(viewport->left()+1, viewport->top()+1, viewport->width()-2, viewport->height()-2);
+
+        if (ctx_focused == viewport)
+        {
+            canvas->setLineWidth(1);
+            canvas->setStrokeStyle(75, 75, 100);
+            canvas->strokeRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
+        }
     }
 
     for (Viewport* viewport : viewports)

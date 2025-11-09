@@ -145,7 +145,7 @@ public:
     virtual ~VarBufferInterface() = default;
 
     virtual void sidebar() = 0;
-
+    virtual void overlay() {}
 
     // 4) Public macro
     #define bl_scoped_one(name) \
@@ -205,6 +205,7 @@ struct VarBuffer
         // -------- per-entry helpers --------
         void updateLive() {
             if (!owner || !assign_fn || !value.has_value() || !key) return;
+            if (!changed) return;
             assign_fn(const_cast<void*>(key), value);
         }
         void updateShadow() {

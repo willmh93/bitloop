@@ -63,6 +63,7 @@ protected:
 
     void draw();
     void populateAttributes();
+    void populateOverlay();
 
 public:
 

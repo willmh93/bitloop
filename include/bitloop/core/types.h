@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <tuple>
 
 #include <bitloop/util/f128.h>
 //#include <bitloop/util/f256.h>
@@ -139,10 +140,7 @@ template<typename T> using GlmMat3 = typename GlmMat3Type<T>::type;
 template<typename T>
 struct Vec2
 {
-    union {
-        struct { T x, y; };
-        T _data[2]{ 0 };
-    };
+    T x, y;
 
     // constructors
     Vec2() = default;
@@ -165,9 +163,13 @@ struct Vec2
     template<typename T2> [[nodiscard]] constexpr operator GlmVec2<T2>() const { return GlmVec2<T2>{(T2)x, (T2)y}; }
 
     // access
-    [[nodiscard]] constexpr const T& operator[](int i) const { return _data[i]; }
-    [[nodiscard]] constexpr T& operator[](int i) { return _data[i]; }
-    [[nodiscard]] constexpr T (&asArray())[2] { return _data; }
+    [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
+    [[nodiscard]] constexpr T& operator[](int i) { return (&x)[i]; }
+    [[nodiscard]] constexpr T* data() { return &x; }
+    //friend double& get<0>(Vec2& v)       noexcept { return v.x; }
+    //friend double& get<1>(Vec2& v)       noexcept { return v.y; }
+    //friend const double& get<0>(const Vec2& v) noexcept { return v.x; }
+    //friend const double& get<1>(const Vec2& v) noexcept { return v.y; }
 
     // operator
     [[nodiscard]] constexpr Vec2 operator-() const { return Vec2(-x, -y); }
@@ -191,7 +193,8 @@ struct Vec2
     // properties
     [[nodiscard]] constexpr T angle() const { return atan2(y, x); }
     [[nodiscard]] constexpr T average() const { return (x + y) / T{ 2 }; }
-    [[nodiscard]] constexpr T magnitude() const { return sqrt(x * x + y * y); }
+    [[nodiscard]] constexpr T mag() const { return sqrt(x * x + y * y); }
+    [[nodiscard]] constexpr T mag2() const { return x * x + y * y; }
     [[nodiscard]] constexpr T dot(const Vec2& other) const { return x * other.x + y * other.y; }
     [[nodiscard]] constexpr T angleTo(const Vec2& b) const { return atan2(b.y - y, b.x - x); }
 
@@ -201,27 +204,50 @@ struct Vec2
     [[nodiscard]] constexpr Vec2 rounded() const { return { round(x), round(y) }; }
     [[nodiscard]] constexpr Vec2 floored(f64 offset) const { return { floor(x) + offset, floor(y) + offset }; }
     [[nodiscard]] constexpr Vec2 rounded(f64 offset) const { return { round(x) + offset, round(y) + offset }; }
-    [[nodiscard]] constexpr Vec2 normalized() const { return (*this) / magnitude(); }
+    [[nodiscard]] constexpr Vec2 normalized() const { return (*this) / mag(); }
 
     // static
     [[nodiscard]] static constexpr Vec2 lerp(const Vec2& a, const Vec2& b, T ratio) { return a + (b - a) * ratio; }
+    [[nodiscard]] static constexpr Vec2 lowest() { return Vec2{ std::numeric_limits<T>::lowest(), std::numeric_limits<T>::lowest()}; }
+    [[nodiscard]] static constexpr Vec2 highest() { return Vec2{ std::numeric_limits<T>::max(), std::numeric_limits<T>::max() }; }
 
     friend std::ostream& operator<<(std::ostream& os, const Vec2& v) {
         return os << "(x: " << v.x << ", y: " << v.y << ")";
     }
 };
 
-template<typename T>
-struct UV
-{
-    Vec2<T> u, v;
-};
+/*
+namespace std {
+    template<class T>
+    struct std::tuple_size<bl::Vec2<T>> : std::integral_constant<size_t, 2> {};
 
-template<typename T>
-constexpr Vec2<T> operator*(const UV<T>& uv, const Vec2<T>& p)
-{
-    return (uv.u * p.x + uv.v * p.y);
+    template<class T>
+    struct std::tuple_element<0, bl::Vec2<T>> { using type = T; };
+
+    template<class T>
+    struct std::tuple_element<1, bl::Vec2<T>> { using type = T; };
 }
+
+template<std::size_t I, class T>
+decltype(auto) get(bl::Vec2<T>& v) {
+    static_assert(I < 2);
+    if constexpr (I == 0) return (v.x);
+    else                   return (v.y);
+}
+template<std::size_t I, class T>
+decltype(auto) get(const bl::Vec2<T>& v) {
+    static_assert(I < 2);
+    if constexpr (I == 0) return (v.x);
+    else                   return (v.y);
+}
+template<std::size_t I, class T>
+decltype(auto) get(bl::Vec2<T>&& v) {
+    static_assert(I < 2);
+    if constexpr (I == 0) return std::move(v.x);
+    else                   return std::move(v.y);
+}
+
+*/
 
 // run for all T that get instantiated
 template<class T>
@@ -251,10 +277,7 @@ static inline VecTests tests;
 template<typename T>
 struct Vec3
 {
-    union {
-        struct { T x, y, z; };
-        T _data[3]{ 0 };
-    };
+    T x, y, z;
 
     // constructors
     Vec3() = default;
@@ -266,9 +289,9 @@ struct Vec3
     template<typename T2> constexpr operator GlmVec3<T2>() const { return GlmVec3<T2>{(T2)x, (T2)y, (T2)z}; }
 
     // access
-    [[nodiscard]] constexpr const T& operator[](int i) const { return _data[i]; }
-    [[nodiscard]] constexpr T& operator[](int i) { return _data[i]; }
-    [[nodiscard]] constexpr T(&asArray())[3] { return _data; }
+    [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
+    [[nodiscard]] constexpr T& operator[](int i) { return (&x)[i]; }
+    [[nodiscard]] constexpr T* data() { return &x; }
 
     // arithmetic
     [[nodiscard]] constexpr Vec3 operator-() const { return Vec3(-x, -y, -z); }
@@ -294,7 +317,7 @@ struct Vec3
 
     // properties
     [[nodiscard]] constexpr T average() const { return (x + y + z) / T{ 3 }; }
-    [[nodiscard]] constexpr T magnitude() const { return sqrt(x * x + y * y + z * z); }
+    [[nodiscard]] constexpr T mag() const { return sqrt(x * x + y * y + z * z); }
     [[nodiscard]] constexpr T dot(const Vec3& other) const { return x * other.x + y * other.y + z * other.z; }
 
     // operators
@@ -302,7 +325,7 @@ struct Vec3
     [[nodiscard]] constexpr Vec3 rounded() const { return { round(x), round(y), round(z)}; }
     [[nodiscard]] constexpr Vec3 floored(f64 offset) const { return { floor(x) + offset, floor(y) + offset, floor(z) + offset}; }
     [[nodiscard]] constexpr Vec3 rounded(f64 offset) const { return { round(x) + offset, round(y) + offset, round(z) + offset }; }
-    [[nodiscard]] constexpr Vec3 normalized() const { return (*this) / magnitude(); }
+    [[nodiscard]] constexpr Vec3 normalized() const { return (*this) / mag(); }
 
     // static
     [[nodiscard]] static constexpr Vec3 lerp(const Vec3& a, const Vec3& b, T ratio) { return a + (b - a) * ratio; }
@@ -311,10 +334,7 @@ struct Vec3
 template<typename T>
 struct Vec4
 {
-    union {
-        struct { T x, y, z, w; };
-        T _data[4]{ 0 };
-    };
+    T x, y, z, w;
 
     // constructors
     Vec4() = default;
@@ -326,9 +346,9 @@ struct Vec4
     template<typename T2> constexpr operator GlmVec4<T2>() const { return GlmVec4<T2>{(T2)x, (T2)y, (T2)z, (T2)w}; }
 
     // access
-    [[nodiscard]] constexpr const T& operator[](int i) const { return _data[i]; }
-    [[nodiscard]] constexpr T& operator[](int i) { return _data[i]; }
-    [[nodiscard]] constexpr T(&asArray())[4] { return _data; }
+    [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
+    [[nodiscard]] constexpr T& operator[](int i) { return (&x)[i]; }
+    [[nodiscard]] constexpr T* data() { return &x; }
 
     // arithmetic
     [[nodiscard]] constexpr Vec4 operator-() const { return Vec4(-x, -y, -z, -w); }
@@ -354,7 +374,7 @@ struct Vec4
 
     // properties
     [[nodiscard]] constexpr T average() const { return (x + y + z + w) / T{ 4 }; }
-    [[nodiscard]] constexpr T magnitude() const { return sqrt(x * x + y * y + z * z + w * w); }
+    [[nodiscard]] constexpr T mag() const { return sqrt(x * x + y * y + z * z + w * w); }
     [[nodiscard]] constexpr T dot(const Vec4& other) const { return x * other.x + y * other.y + z * other.z + w * other.w; }
 
     // operators
@@ -362,7 +382,7 @@ struct Vec4
     [[nodiscard]] constexpr Vec4 rounded() const { return { round(x), round(y), round(z), round(w) }; }
     [[nodiscard]] constexpr Vec4 floored(f64 offset) const { return { floor(x) + offset, floor(y) + offset, floor(z) + offset, floor(w) + offset }; }
     [[nodiscard]] constexpr Vec4 rounded(f64 offset) const { return { round(x) + offset, round(y) + offset, round(z) + offset, round(w) + offset }; }
-    [[nodiscard]] constexpr Vec4 normalized() const { return (*this) / magnitude(); }
+    [[nodiscard]] constexpr Vec4 normalized() const { return (*this) / mag(); }
 
     // static
     [[nodiscard]] static constexpr Vec4 lerp(const Vec4& a, const Vec4& b, T ratio) { return a + (b - a) * ratio; }
@@ -466,10 +486,7 @@ template<typename T>
 struct Segment
 {
     using Pt = Vec2<T>;
-    union {
-        struct { Pt a, b; };
-        Pt _data[2];
-    };
+    Pt a, b;
 
     // constructors
     Segment() = default;
@@ -482,9 +499,9 @@ struct Segment
     }
 
     // access
-    [[nodiscard]] constexpr const Pt& operator[](int i) const { return _data[i]; }
-    [[nodiscard]] constexpr Pt& operator[](int i) { return _data[i]; }
-    [[nodiscard]] constexpr Pt(&asArray())[2] { return _data; }
+    [[nodiscard]] constexpr const Pt& operator[](int i) const { return (&a)[i]; }
+    [[nodiscard]] constexpr Pt& operator[](int i) { return (&a)[i]; }
+    [[nodiscard]] constexpr Pt* data() { return (&a); }
 
     // equality
     [[nodiscard]] constexpr bool operator==(const Segment& rhs) const { return a == rhs.a && b == rhs.b; }
@@ -734,8 +751,26 @@ struct Rect
         if (r.y2 > y2) y2 = r.y2;
     }
 
-    //static constexpr Rect<T> full() { return Rect<T>(-std::numeric_limits<T>(), -std::numeric_limits<T>(), std::numeric_limits<T>(), std::numeric_limits<T>()); }
-    static constexpr Rect<T> infinite() { return Rect<T>(-bl_infinity<T>(), -bl_infinity<T>(), bl_infinity<T>(), bl_infinity<T>()); }
+    // the "biggest" finite rect representable (caution: size of rect becomes infinite, be careul if using fast-math)
+    static constexpr Rect<T> max_extent() {
+        constexpr T lo = std::numeric_limits<T>::lowest();
+        constexpr T hi = std::numeric_limits<T>::max();
+        return Rect<T>(lo, lo, hi, hi);
+    }
+
+    // large finite rect such that the width/height is guaranteed to be finite
+    static constexpr Rect max_finite_extent() {
+        const T hi = std::numeric_limits<T>::max() / T(4);
+        const T lo = -hi;
+        return { lo, lo, hi, hi };
+    }
+
+    // an "empty" rect for incremental expansion
+    static constexpr Rect<T> empty() {
+        constexpr T lo = std::numeric_limits<T>::lowest();
+        constexpr T hi = std::numeric_limits<T>::max();
+        return Rect<T>(hi, hi, lo, lo);
+    }
 };
 
 // AngledRect
@@ -768,8 +803,8 @@ struct AngledRect
         const T2 cosC = cos(-avgAngle);
         const T2 sinC = sin(-avgAngle);
 
-        T2 xmin =  bl_infinity<T2>(), ymin =  bl_infinity<T2>();
-        T2 xmax = -bl_infinity<T2>(), ymax = -bl_infinity<T2>();
+        T2 xmin = std::numeric_limits<T2>::max(),    ymin = std::numeric_limits<T2>::max();
+        T2 xmax = std::numeric_limits<T2>::lowest(), ymax = std::numeric_limits<T2>::lowest();
 
         auto accumulate = [&](const AngledRect<T2>& R)
         {
@@ -842,12 +877,7 @@ template<typename T>
 struct Quad
 {
     using Pt = Vec2<T>;
-    union
-    {
-        struct { Pt a, b, c, d; };
-        Pt _data[4]{};
-    };
-
+    Pt a, b, c, d;
 
     Quad() = default;
     constexpr Quad(T ax, T ay, T bx, T by, T cx, T cy, T dx, T dy)  : a(ax, ay), b(bx, by), c(cx, cy), d(dx, dy) {}
@@ -1139,7 +1169,43 @@ using vec2_types = type_list<FVec2, DVec2, DDVec2>;
 using vec3_types = type_list<FVec3, DVec3, DDVec3> ;
 using vec4_types = type_list<FVec4, DVec4, DDVec4> ;
 
-// ================= convenience aliases =================
+// ================= float type comparisons =================
+
+template<class A, class B>
+struct max_float {
+private:
+    using list = float_types;
+    static constexpr std::size_t ia = index_of_v<A, f32, f64, f128>;
+    static constexpr std::size_t ib = index_of_v<B, f32, f64, f128>;
+    static constexpr bool valid = (ia != type_npos) && (ib != type_npos);
+public:
+    using type = std::conditional_t<
+        valid,
+        typename nth_type<(ia > ib ? ia : ib), f32, f64, f128>::type,
+        void
+    >;
+};
+template<class A, class B>
+using max_float_t = typename max_float<A, B>::type;
+
+template<class A, class B>
+struct min_float {
+private:
+    using list = float_types;
+    static constexpr std::size_t ia = index_of_v<A, f32, f64, f128>;
+    static constexpr std::size_t ib = index_of_v<B, f32, f64, f128>;
+    static constexpr bool valid = (ia != type_npos) && (ib != type_npos);
+public:
+    using type = std::conditional_t<
+        valid,
+        typename nth_type<(ia < ib ? ia : ib), f32, f64, f128>::type,
+        void
+        >;
+};
+template<class A, class B>
+using min_float_t = typename min_float<A, B>::type;
+
+// ================= upgrade/downgrade =================
 
 // integers
 template<class T> using upgrade_int_t    = upgrade_from_list_t<T, signed_int_types>;
@@ -1151,6 +1217,7 @@ template<class T> using downgrade_uint_t = downgrade_from_list_t<T, unsigned_int
 template<class T> using upgrade_float_t = upgrade_from_list_t<T, float_types>;
 template<class T> using downgrade_float_t = downgrade_from_list_t<T, float_types>;
 
+// vec
 template<class T> using downgrade_vec2_float_t = downgrade_template_t<Vec2<T>, float_types>;
 template<class T> using downgrade_vec3_float_t = downgrade_template_t<Vec3<T>, float_types>;
 template<class T> using downgrade_vec4_float_t = downgrade_template_t<Vec4<T>, float_types>;

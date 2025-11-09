@@ -7,7 +7,16 @@ using namespace bl;
 
 struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
 {
-    /// ─────── Default launch config (overridable by Project) ───────
+    CameraInfo       camera;
+    CameraNavigator  navigator;
+    
+    /// ─────── Your variables ───────
+    // double gravity;
+
+    /// ─────── Your methods ───────
+    // void customMethod();
+
+    /// ─────── launch config (overridable by Project) ───────
     struct Config { /* double gravity = 9.8; */ };
 
     {SIM_NAME}_Scene(Config& info [[maybe_unused]])
@@ -18,18 +27,13 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
     struct UI : Interface
     {
         using Interface::Interface;
-        void populate();
+        void sidebar();
+        //void overlay();
 
         /// ─────── Your UI-only variables ───────
         // bool test_popup_open = false;
     };
 
-    /// ─────── Your variables ───────
-    CameraViewController cam_view;
-    // double gravity;
-
-    /// ─────── Your methods ───────
-    // void customMethod();
 
     /// ─────── Scene methods ───────
     void sceneStart() override;
@@ -61,7 +65,8 @@ struct {SIM_NAME}_Project : public Project<{SIM_NAME}_Project>
 
     struct UI : Interface {
         using Interface::Interface;
-        void populate();
+        void sidebar();
+        //void overlay();
     };
 
     int viewport_count = 1;

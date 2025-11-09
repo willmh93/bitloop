@@ -62,7 +62,7 @@ struct Tiger_Project : public Project<Tiger_Project>
         void sidebar();
     };
 
-    int viewport_count = 1;
+    int viewport_count = 4;
 
     void projectPrepare(Layout& layout) override;
 };

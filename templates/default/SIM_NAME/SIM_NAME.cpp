@@ -4,21 +4,15 @@ SIM_BEG;
 
 using namespace bl;
 
-/*  ─────────────────── Development tips ───────────────────
+/// ─────────────────────── project setup ───────────────────────
 
-  - Any custom types synced with:  bl_pull(..)  bl_push(..)  bl_scoped(..)
-    should have a cheap operator==(const T& rhs) to avoid unnecessary syncing.
-    (Use hashing where possible(.)
-
-*/
-
-
-/// ─────────────────────── Project Setup ───────────────────────
-
-void {SIM_NAME}_Project::UI::populate()
+void {SIM_NAME}_Project::UI::sidebar()
 {
-    /// Use bl_pull(..) / bl_push(..) on all used {SIM_NAME}_Project:: variables
-    /// or use bl_scoped(..) to pull/push automatically in the current scope
+    /// use bl_pull(..) / bl_push(..) on all used {SIM_NAME}_Project:: variables
+    /// or bl_scoped(..) to pull/push automatically in the current scope
+    /// custom types should have:
+    ///   - an operator==(const T&) overload to avoid unnecessary syncing (use hashing if possible)
+    ///   - an assignment overload and copy constructor
     
     bl_scoped(viewport_count);
     ImGui::SliderInt("Viewport Count", &viewport_count, 1, 8);
@@ -26,36 +20,38 @@ void {SIM_NAME}_Project::UI::populate()
 
 void {SIM_NAME}_Project::projectPrepare(Layout& layout)
 {
-    /// Create multiple instance of a single Scene, mount to separate viewports
+    /// create multiple instance of a single Scene, mount to separate viewports
     layout << create<{SIM_NAME}_Scene>(viewport_count);
 
-    /// Or create a single Scene instance and view on multiple Viewports
+    /// or create a single Scene instance and view on multiple Viewports
     //auto* scene = create<{SIM_NAME}_Scene>();
     //for (int i = 0; i < viewport_count; ++i)
     //    layout << scene;
 }
 
-/// ─────────────────────── Scene ───────────────────────
+/// ─────────────────────── scene ───────────────────────
 
-void {SIM_NAME}_Scene::UI::populate()
+void {SIM_NAME}_Scene::UI::sidebar()
 {
-    /// Use bl_pull(..) / bl_push(..) on all used {SIM_NAME}_Scene:: variables
-    /// or use bl_scoped(..) to pull/push automatically in the current scope.
-    /// 
-    /// Avoid static variables, they're shared across all scenes.
-
-    bl_scoped(cam_view);
+    /// use bl_pull(..) / bl_push(..) on all used {SIM_NAME}_Project:: variables
+    /// or bl_scoped(..) to pull/push automatically in the current scope
+    /// custom types should have:
+    ///   - an operator==(const T&) overload to avoid unnecessary syncing (use hashing if possible)
+    ///   - an assignment overload and copy constructor
 
     if (ImGui::Section("View", true))
-        cam_view.populateUI(); // Populate ImGui camera controls
+    {
+        // imgui camera controls
+        bl_scoped(camera);
+        camera.populateUI();
+    }
 
-    
-    /// EXAMPLE: Scene variable input
+    /// example: Scene variable input
     // bl_pull(gravity);
     // ImGui::SliderDouble("gravity", &gravity, 0.0, 10.0);
     // bl_push(gravity);
 
-    /// EXAMPLE: Queue {SIM_NAME}_Scene::foo() call
+    /// example: Queue {SIM_NAME}_Scene::foo() call
     // if (ImGui::Button("FOO"))
     // {
     //     bl_schedule([]({SIM_NAME}_Scene& scene) {
@@ -63,58 +59,54 @@ void {SIM_NAME}_Scene::UI::populate()
     //     });
     // }
 
-    /// EXAMPLE: UI-only options, no bl_pull / bl_push needed
+    /// example: UI-only, no sync needed
     // ImGui::Checkbox("option", &test_popup_open);
 }
 
 void {SIM_NAME}_Scene::sceneStart()
 {
-    /// Initialize scene
+    /// initialize scene
 }
 
-void {SIM_NAME}_Scene::sceneMounted(Viewport*)
+void {SIM_NAME}_Scene::sceneMounted(Viewport* ctx)
 {
-    /// Initialize viewport
-    camera->setOriginViewportAnchor(Anchor::CENTER);
-    //camera->focusWorldRect(0, 0, 100, 100);
+    // initialize viewport
+    camera.setSurface(ctx);
+    camera.setOriginViewportAnchor(Anchor::CENTER);
+    //camera.focusWorldRect(-100, -100, 100, 100);
+    //camera.uiSetCurrentAsDefault();
 
-    /// Apply updates from imgui to camera view
-    cam_view.read(camera);
+    navigator.setTarget(camera);
+    navigator.setDirectCameraPanning(true);
 }
 
 void {SIM_NAME}_Scene::sceneDestroy()
 {
-    /// Destroy scene (dynamically allocated resources, etc.)
+    /// destroy scene (dynamically allocated resources, etc.)
 }
 
 void {SIM_NAME}_Scene::sceneProcess()
 {
-    /// Apply updates from imgui to camera view
-    cam_view.apply(camera);
-
-    /// Process entire scene once each frame (not per viewport)
+    /// process scene once each frame (not per viewport)
 }
 
 void {SIM_NAME}_Scene::viewportProcess(
     [[maybe_unused]] Viewport* ctx,
     [[maybe_unused]] double dt)
 {
-    /// Process scene update (called once per mounted viewport each frame)
+    /// process scene update (called once per mounted viewport each frame)
 }
 
 void {SIM_NAME}_Scene::viewportDraw(Viewport* ctx) const
 {
-    /// Draw Scene on this viewport (only draw, don't try to modify sim states)
+    /// draw scene on this viewport (no modifying sim state)
+    ctx->transform(camera.getTransform());
     ctx->drawWorldAxis();
 }
 
 void {SIM_NAME}_Scene::onEvent(Event e)
 {
-    if (handleWorldNavigation(e, true))
-    {
-        /// Update camera view after handling navigation
-        cam_view.read(e.ctx_owner()->camera);
-    }
+    navigator.handleWorldNavigation(e, true);
 }
 
 //void {SIM_NAME}_Scene::onPointerDown(PointerEvent e) {{}}

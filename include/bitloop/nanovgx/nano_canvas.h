@@ -190,6 +190,7 @@ public:
     // ======== Styles ========
 
     void setFillStyle(const Color& color)                    { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
+    void setFillStyle(const Color& color, int a)             { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, a)); }
     void setFillStyle(const float(&color)[3])                { nvgFillColor(vg, {color[0], color[1], color[2], 1.0f}); }
     void setFillStyle(const float(&color)[4])                { nvgFillColor(vg, {color[0], color[1], color[2], color[3]}); }
     void setFillStyle(int r, int g, int b, int a = 255)      { nvgFillColor(vg, nvgRGBA(r, g, b, a)); }
@@ -202,6 +203,7 @@ public:
     void setLineWidth(double w)                              { nvgStrokeWidth(vg, (float)w); }
     void setLineCap(LineCap cap)                             { nvgLineCap(vg, (int)cap); }
     void setLineJoin(LineJoin join)                          { nvgLineJoin(vg, (int)join); }
+    void setMiterLimit(double limit)                         { nvgMiterLimit(vg, (float)limit); }
                                                              
     // ======== Paths ========                               
                                                              
@@ -613,6 +615,17 @@ public:
         lineTo(path[0]);
     }
 
+    template<typename PointT> void strokePath(const std::vector<PointT>& path)
+    {
+        if (path.size() < 2) return;
+        beginPath();
+        size_t len = path.size();
+        moveTo(path[0]);
+        for (size_t i = 1; i < len; i++)
+            lineTo(path[i]);
+        stroke();
+    }
+
     // ======== Shapes ========
 
     template<typename T> void strokeRect(T x, T y, T w, T h)
@@ -665,6 +678,7 @@ public:
     template<typename T> void fillEllipse(T cx, T cy, T r)                  { fillEllipse<T>(cx, cy, r, r); }
     template<typename T> void strokeEllipse(Vec2<T> cen, T r)               { strokeEllipse<T>(cen.x, cen.y, r, r); }
     template<typename T> void fillEllipse(Vec2<T> cen, T r)                 { fillEllipse<T>(cen.x, cen.y, r, r); }
+    template<typename T> void fillEllipse(Vec2<T> cen, T r, Color col)      { setFillStyle(col); fillEllipse<T>(cen.x, cen.y, r, r); }
 
     template<typename T> void drawArrow(Vec2<T> a, Vec2<T> b, Color color=Color(255,255,255), double tip_angle=35, double tip_scale=1.0, bool fill_tip=true)
     {
@@ -953,6 +967,58 @@ public:
         double text_opacity = 0.45
     );
 
+    void drawCursor(double x, double y, double size = 24.0)
+    {
+        const double s = size;
+        const double lw = std::max(1.0, s * 0.075);
+        const double sh = std::max(1.0, s * 0.10);
+
+        save();
+        translate(x, y);
+
+        beginPath();
+        moveTo(0.0 + sh, 0.0 + sh);
+        lineTo(0.0 + sh, 1.00 * s + sh);
+        lineTo(0.23 * s + sh, 0.78 * s + sh);
+        lineTo(0.33 * s + sh, 1.12 * s + sh);
+        lineTo(0.44 * s + sh, 1.05 * s + sh);
+        lineTo(0.32 * s + sh, 0.70 * s + sh);
+        lineTo(1.00 * s + sh, 0.70 * s + sh);
+        closePath();
+        setFillStyle(0, 0, 0, 96);
+        fill();
+
+        beginPath();
+        moveTo(0.0, 0.0);
+        lineTo(0.0, 1.00 * s);
+        lineTo(0.23 * s, 0.78 * s);
+        lineTo(0.33 * s, 1.12 * s);
+        lineTo(0.44 * s, 1.05 * s);
+        lineTo(0.32 * s, 0.70 * s);
+        lineTo(1.00 * s, 0.70 * s);
+        closePath();
+        setFillStyle(255, 255, 255);
+        fill();
+
+        setLineWidth(lw);
+        setStrokeStyle(0, 0, 0);
+        setLineJoin(LineJoin::JOIN_MITER);
+        setMiterLimit(6.0);
+        beginPath();
+        moveTo(0.0, 0.0);
+        lineTo(0.0, 1.00 * s);
+        lineTo(0.23 * s, 0.78 * s);
+        lineTo(0.33 * s, 1.12 * s);
+        lineTo(0.44 * s, 1.05 * s);
+        lineTo(0.32 * s, 0.70 * s);
+        lineTo(1.00 * s, 0.70 * s);
+        closePath();
+        stroke();
+
+        restore();
+    }
+
+
     // ======== Expose unchanged methods ========
 
     using SimplePainter::usePainter;
@@ -964,11 +1030,11 @@ public:
     //
     using SimplePainter::save;
     using SimplePainter::restore;
-    using SimplePainter::skewX;
-    using SimplePainter::skewY;
+    using SimplePainter::skewX; // todo: untested
+    using SimplePainter::skewY; // todo: untested
     //
-    using SimplePainter::setClipRect;
-    using SimplePainter::resetClipping;
+    using SimplePainter::setClipRect;   // todo: untested
+    using SimplePainter::resetClipping; // todo: untested
     //
     using SimplePainter::setFont;
     using SimplePainter::setTextAlign;

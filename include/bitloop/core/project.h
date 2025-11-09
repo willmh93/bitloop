@@ -187,6 +187,8 @@ class ProjectBase
     double dt_projectProcess = 0;
     double dt_frameProcess = 0;
 
+    const int splitter_thickness = 6;// 6;
+
     std::chrono::steady_clock::time_point last_frame_time 
         = std::chrono::steady_clock::now();
 
@@ -215,6 +217,7 @@ protected:
 
     // -------- Populating Project/Scene ImGui attributes --------
     void _populateAllAttributes();
+    void _populateOverlay();
     virtual void _projectAttributes() {}
 
     // -------- Data Buffers --------

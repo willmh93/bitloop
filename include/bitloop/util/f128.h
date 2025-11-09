@@ -6,9 +6,74 @@
 #include <sstream>
 #include <type_traits>
 
-#include <bitloop/platform/platform_macros.h>
-#include <bitloop/core/debug.h>
+/// ======== FAST_INLINE ========
 
+#ifndef FAST_INLINE
+    #if defined(_MSC_VER)
+    #define FAST_INLINE __forceinline
+    #elif defined(__clang__) || defined(__GNUC__)
+    #define FAST_INLINE inline __attribute__((always_inline))
+    #else
+    #define FAST_INLINE inline
+    #endif
+#endif
+
+/// ======== Fast-math ========
+
+#ifndef BL_FAST_MATH
+    #if defined(__FAST_MATH__) // GCC/Clang: -ffast-math
+    #define BL_FAST_MATH
+    #elif defined(_MSC_VER) && defined(_M_FP_FAST)  // MSVC: /fp:fast
+    #define BL_FAST_MATH
+    #endif
+#endif
+
+#if defined(_MSC_VER)
+
+    #ifndef BL_PUSH_PRECISE
+        #define BL_PUSH_PRECISE  __pragma(float_control(precise, on, push)) \
+                                 __pragma(fp_contract(off))
+    #endif
+    #ifndef BL_POP_PRECISE
+        #define BL_POP_PRECISE   __pragma(float_control(pop))
+    #endif
+
+#elif defined(__EMSCRIPTEN__)
+
+    #ifndef BL_PUSH_PRECISE
+        #define BL_PUSH_PRECISE  _Pragma("clang fp reassociate(off)") \
+                                 _Pragma("clang fp contract(off)")
+    #endif
+    #ifndef BL_POP_PRECISE
+        #define BL_POP_PRECISE   _Pragma("clang fp reassociate(on)")  \
+                                 _Pragma("clang fp contract(fast)")
+    #endif
+    // Other Clang (desktop) that supports the richer set
+    #elif defined(__clang__)
+    #ifndef BL_PUSH_PRECISE
+        #define BL_PUSH_PRECISE  _Pragma("clang fp reassociate(off)") \
+                                 _Pragma("clang fp contract(off)")
+    #endif
+    #ifndef BL_POP_PRECISE
+        #define BL_POP_PRECISE   _Pragma("clang fp reassociate(on)")  \
+                                 _Pragma("clang fp contract(fast)")
+    #endif
+    // GCC fallback
+    #elif defined(__GNUC__)
+    #ifndef BL_PUSH_PRECISE
+        #define BL_PUSH_PRECISE  _Pragma("GCC push_options")               \
+                                 _Pragma("GCC optimize(\"no-fast-math\")") \
+                                 _Pragma("STDC FP_CONTRACT OFF")
+    #endif
+    #ifndef BL_POP_PRECISE
+        #define BL_POP_PRECISE   _Pragma("GCC pop_options")
+    #endif
+#else
+
+    #define BL_PUSH_PRECISE
+    #define BL_POP_PRECISE
+
+#endif
 namespace bl {
 
 // For now, disabling std::fma seems to offer a 5-6x performance boost on web
@@ -157,7 +222,7 @@ namespace std
 		// special values                        
         static constexpr f128 epsilon()        noexcept { return { 1.232595164407831e-32, 0.0 }; } // ~2^-106, a single ulp of double-double
         static constexpr f128 round_error()    noexcept { return { 0.5, 0.0 }; }
-        static constexpr f128 infinity()       noexcept { return { bl_infinity<double>(), 0.0}; }
+        static constexpr f128 infinity()       noexcept { return { numeric_limits<double>::infinity(), 0.0}; }
         static constexpr f128 quiet_NaN()      noexcept { return { numeric_limits<double>::quiet_NaN(), 0.0 }; }
         static constexpr f128 signaling_NaN()  noexcept { return { numeric_limits<double>::signaling_NaN(), 0.0 }; }
         static constexpr f128 denorm_min()     noexcept { return { numeric_limits<double>::denorm_min(), 0.0 }; }
@@ -705,7 +770,7 @@ FAST_INLINE void normalize10(const f128& x, f128& m, int& exp10)
     exp10 = e10;
 }
 
-FAST_INLINE f128 round_scaled(bl::f128 x, int prec) noexcept {
+FAST_INLINE f128 round_scaled(f128 x, int prec) noexcept {
     /// round x to an integer at scale = 10^prec (ties-to-even)
     if (prec <= 0) return x;
     const f128 scale = pow10_128(prec);
@@ -722,23 +787,21 @@ FAST_INLINE f128 round_scaled(bl::f128 x, int prec) noexcept {
     return n;
 }
 FAST_INLINE void emit_uint_rev(std::string& out, f128 n) {
-    /// emits integer 'n' (n >= 0) in base-10 into buffer (reversed)
-
     // n is a non-negative integer in f128
     const f128 base = f128(1000000000.0); // 1e9
 
     // Fast path for small values
     if (n < 10) {
         int d = (int)floor(n).hi;
-        if (d < 0) d = 0; if (d > 9) d = 9;      // safety clamp
+        if (d < 0) d = 0; if (d > 9) d = 9;  // safety clamp
         out.push_back(char('0' + d));
         return;
     }
 
     // Extract 9-digit chunks in base 1e9
     while (n >= base) {
-        bl::f128 q = floor(n / base);
-        bl::f128 r = n - q * base;            // should be in [0, 1e9)
+        f128 q = floor(n / base);
+        f128 r = n - q * base; // should be in [0, 1e9]
 
         // Convert r to an integer chunk
         long long chunk = (long long)floor(r).hi;
@@ -748,7 +811,7 @@ FAST_INLINE void emit_uint_rev(std::string& out, f128 n) {
             chunk -= 1000000000LL;
             q = q + 1;
         }
-        if (chunk < 0) chunk = 0;               // guard against tiny negative drift
+        if (chunk < 0) chunk = 0; // guard against tiny negative drift
 
         // Emit this chunk as exactly 9 digits, reversed
         for (int i = 0; i < 9; ++i) {
@@ -1025,7 +1088,7 @@ FAST_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr = 
     {
         p += 3;
         if (ci(p[0]) == 'i' && ci(p[1]) == 'n' && ci(p[2]) == 'i' && ci(p[3]) == 't' && ci(p[4]) == 'y') p += 5;
-        out = neg ? -bl_infinity<f128>() : bl_infinity<f128>();
+        out = neg ? -std::numeric_limits<f128>::infinity() : std::numeric_limits<f128>::infinity();
         if (endptr) *endptr = p; return true;
     }
     p = ps; // reset if not special

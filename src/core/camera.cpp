@@ -146,7 +146,7 @@ void CameraInfo::focusWorldRect(
     {
         f128 zx = surface->width() / world_w;
         f128 zy = surface->height() / world_h;
-        zoom_128 = DDVec2{ zx, zy }.magnitude();
+        zoom_128 = DDVec2{ zx, zy }.mag();
         sx_64 = (double)(zx / zoom_128);
         sy_64 = (double)(zy / zoom_128);
 
@@ -205,6 +205,52 @@ void CameraInfo::originToCenterViewport()
     setPos(0, 0);
 }
 
+void CameraInfo::populateUI(DRect restrict_world_rect)
+{
+    bool changed = false;
+
+    float required_space = 0.0f;
+    ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", scale_size(20.0f));
+
+    int decimals = getPositionDecimals();
+    char format[16];
+    snprintf(format, sizeof(format), "%%.%df", decimals);
+
+
+    ImGui::SetNextItemWidthForSpace(required_space);
+    if (ImGui::RevertableDragFloat128("X", &x_128, &init_pos.x, 1.0 / zoom_128, restrict_world_rect.x1, restrict_world_rect.x2, format))
+        changed = true;
+    ImGui::SetNextItemWidthForSpace(required_space);
+    if (ImGui::RevertableDragFloat128("Y", &y_128, &init_pos.y, 1.0 / zoom_128, restrict_world_rect.y1, restrict_world_rect.y2, format))
+        changed = true;
+
+    ImGui::SetNextItemWidthForSpace(required_space);
+    if (ImGui::RevertableSliderAngle("Rotation", &rotation_64, &init_rotation))
+        changed = true;
+
+    f128 relative_zoom = relativeZoom<f128>();
+    f128 zoom_speed = relative_zoom / 100.0;
+    ImGui::SetNextItemWidthForSpace(required_space);
+    if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1, 1e32, "%.5f"))
+    {
+        zoom_speed = relative_zoom / 100.0;
+        zoom_128 = relative_zoom * getReferenceZoom<f128>();
+        changed = true;
+    }
+
+    ImGui::SetNextItemWidthForSpace(required_space);
+    if (ImGui::RevertableSliderDouble2("Zoom X/Y", stretch_64.data(), init_stretch.data(), 0.1, 10.0, "%.2fx"))
+        changed = true;
+
+    if (changed)
+    {
+        zoomDirty();
+        posDirty();
+    }
+
+    return;
+}
+
 void CameraNavigator::restrictRelativeZoomRange(double min, double max)
 {
     min_zoom = min;
@@ -227,6 +273,7 @@ void CameraNavigator::panBegin(int _x, int _y, double touch_dist, double touch_a
         //DVec2 world_mouse = toWorld(x, y);
         pan_beg_cam_x = camera->x<f128>();
         pan_beg_cam_y = camera->y<f128>();
+        pan_beg_cam_zoom = camera->zoom<f128>();
         ///pan_beg_cam_zoom_x = zoom_x;
         ///pan_beg_cam_zoom_y = zoom_y;
         pan_beg_cam_angle = camera->rotation();
@@ -545,50 +592,42 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
     return false;
 }
 
-void CameraInfo::populateUI(DRect restrict_world_rect)
+void CameraNavigator::debugPrint(Viewport* ctx) const
 {
-    bool changed = false;
+    double pinch_zoom_factor = touchDist() / panDownTouchDist();
 
-    float required_space = 0.0f;
-    ImGui::IncreaseRequiredSpaceForLabel(required_space, "Zoom X/Y", scale_size(20.0f));
+    //setFont(getDefaultFont());
+    ctx->print() << "cam.position          = (" << camera->x() << ",  " << camera->y() << ")\n";
+    ctx->print() << "cam.pan               = (" << camera->panX() << ",  " << camera->panY() << ")\n";
+    ctx->print() << "cam.rotation          = " << camera->rotation() << "\n";
+    ctx->print() << "cam.zoom              = (" << camera->zoomX() << ", " << camera->zoomY() << ")\n\n";
+    ctx->print() << "--------------------------------------------------------------\n";
+    ctx->print() << "pan_down_touch_x      = " << panDownTouchX() << "\n";
+    ctx->print() << "pan_down_touch_y      = " << panDownTouchY() << "\n";
+    ctx->print() << "pan_down_touch_dist   = " << panDownTouchDist() << "\n";
+    ctx->print() << "pan_down_touch_angle  = " << panDownTouchAngle() << "\n";
+    ctx->print() << "--------------------------------------------------------------\n";
+    ctx->print() << "pan_beg_cam_x         = " << (double)panBegCamX() << "\n";
+    ctx->print() << "pan_beg_cam_y         = " << (double)panBegCamY() << "\n";
+    ctx->print() << "pan_beg_cam_zoom_x    = " << (double)panBegCamZoom() << "\n";
+    ctx->print() << "pan_beg_cam_angle     = " << panBegCamAngle() << "\n";
+    ctx->print() << "--------------------------------------------------------------\n";
+    ctx->print() << "cam.touchAngle()      = " << touchAngle() << "\n";
+    ctx->print() << "cam.touchDist()       = " << touchDist() << "\n";
+    ctx->print() << "--------------------------------------------------------------\n";
+    ctx->print() << "pinch_zoom_factor     = " << pinch_zoom_factor << "x\n";
+    ctx->print() << "--------------------------------------------------------------\n";
 
-    int decimals = getPositionDecimals();
-    char format[16];
-    snprintf(format, sizeof(format), "%%.%df", decimals);
-
-
-    ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("X", &x_128, &init_pos.x, 1.0 / zoom_128, restrict_world_rect.x1, restrict_world_rect.x2, format))
-        changed = true;
-    ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("Y", &y_128, &init_pos.y, 1.0 / zoom_128, restrict_world_rect.y1, restrict_world_rect.y2, format))
-        changed = true;
-
-    ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableSliderAngle("Rotation", &rotation_64, &init_rotation))
-        changed = true;
-
-    f128 relative_zoom = relativeZoom<f128>();
-    f128 zoom_speed = relative_zoom / 100.0;
-    ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1, 1e32, "%.5f"))
+    int i = 0;
+    auto fingers = pressedFingers();
+    for (auto finger : fingers)
     {
-        zoom_speed = relative_zoom / 100.0;
-        zoom_128 = relative_zoom * getReferenceZoom<f128>();
-        changed = true;
+        ctx->print() << "Finger " << i << ": [id: " << finger.fingerId << "] - (" << finger.x << ", " << finger.y << ")\n";
+        i++;
     }
-
-    ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableSliderDouble2("Zoom X/Y", stretch_64.asArray(), init_stretch.asArray(), 0.1, 10.0, "%.2fx"))
-        changed = true;
-
-    if (changed)
-    {
-        zoomDirty();
-        posDirty();
-    }
-
-    return;
 }
+
+
+
 
 BL_END_NS

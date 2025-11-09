@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <future>
 #include <atomic>
+#include <memory>
 
 #include <vector>
 
@@ -37,6 +38,9 @@ namespace Thread
     using moodycamel::ConcurrentQueue;
     using moodycamel::BlockingConcurrentQueue;
 
+    inline int max_threads = 0;
+    inline std::unique_ptr<BS::thread_pool<BS::tp::none>> _pool;
+
     [[nodiscard]] inline unsigned int idealThreadCount()
     {
         // 1. Try the standard C++ hint
@@ -59,10 +63,25 @@ namespace Thread
         return (n > 1) ? (n - 1) : 1;
     }
 
-    [[nodiscard]] static BS::thread_pool<BS::tp::none>& pool()
+    inline unsigned int threadCount()
     {
-        static BS::thread_pool pool(Thread::idealThreadCount());
-        return pool;
+        return (max_threads == 0) ? idealThreadCount() : max_threads;
+    }
+
+    inline void setMaxThreads(int c)
+    {
+        if (_pool)
+            _pool.release();
+
+        max_threads = c;
+
+        _pool = std::make_unique<BS::thread_pool<BS::tp::none>>(Thread::threadCount());
+    }
+
+    [[nodiscard]] inline BS::thread_pool<BS::tp::none>& pool()
+    {
+        if (!_pool) _pool = std::make_unique<BS::thread_pool<BS::tp::none>>(Thread::threadCount());
+        return *_pool.get();
     }
 
     template<typename sizeT>
@@ -104,7 +123,7 @@ namespace Thread
     }
 
     //template<typename T, typename Callback>
-    //void forEachBatch(std::vector<T>& items, Callback&& callback, int thread_count = Thread::idealThreadCount())
+    //void forEachBatch(std::vector<T>& items, Callback&& callback, int thread_count = Thread::threadCount())
     //{
     //    int item_count = (int)items.size();
     //    std::vector<std::pair<int, int>> ranges = Thread::splitRanges<int>(item_count, thread_count);
@@ -133,7 +152,7 @@ namespace Thread
         requires (std::invocable<Callback&, int, int> && !std::invocable<Callback&, std::span<T>>)
     auto forEachBatch(std::vector<T>& items,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount())
+        int thread_count = Thread::threadCount())
     {
         using CB = std::decay_t<Callback>;
         static_assert(std::is_invocable_v<CB&, int, int>);
@@ -177,7 +196,7 @@ namespace Thread
         requires std::invocable<Callback&, std::span<T>>
     auto forEachBatch(std::vector<T>& items,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount())
+        int thread_count = Thread::threadCount())
     {
         using CB = std::decay_t<Callback>;
         using R = std::invoke_result_t<CB&, std::span<T>>;
@@ -220,7 +239,7 @@ namespace Thread
         requires std::invocable<Callback&, std::span<T>, int>
     auto forEachBatch(std::vector<T>& items,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount())
+        int thread_count = Thread::threadCount())
     {
         using CB = std::decay_t<Callback>;
         using R = std::invoke_result_t<CB&, std::span<T>, int>;
@@ -263,7 +282,7 @@ namespace Thread
         requires std::invocable<Callback&, std::span<const T>>
     auto forEachBatch(const std::vector<T>& items,
         Callback&& callback,
-        int thread_count = Thread::idealThreadCount())
+        int thread_count = Thread::threadCount())
     {
         using CB = std::decay_t<Callback>;
         using R = std::invoke_result_t<CB&, std::span<const T>>;

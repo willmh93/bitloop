@@ -46,7 +46,11 @@ void SceneBase::mountTo(Viewport* viewport)
 
 void SceneBase::mountTo(Layout& viewports)
 {
-    viewports[viewports.count()]->mountScene(this);
+    Viewport* ctx = viewports[viewports.count()];
+    ctx->mountScene(this);
+
+    if (!this->project->ctx_focused)
+        this->project->ctx_focused = ctx;
 }
 
 void SceneBase::mountToAll(Layout& viewports)

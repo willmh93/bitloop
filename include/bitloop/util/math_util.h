@@ -95,6 +95,14 @@ namespace Math
     }
 
     template<typename T>
+    [[nodiscard]] T wrap01(T value)
+    {
+        if (value >= T{0} && value < T{1}) return value;
+        T y = value - std::floor(value);
+        return y == T{0} ? T{0} : y;
+    }
+
+    template<typename T>
     [[nodiscard]] constexpr T fast_log1p(T x)
     {
         T y = x / (2 + x);
@@ -395,6 +403,73 @@ namespace Math
         if (f > 1) return 1;
         return f;
     }
+
+    template<class T>
+    inline T len(const Vec2<T>& v) { return sqrt(v.x * v.x + v.y * v.y); }
+
+    template<class T>
+    inline Vec2<T> arcLerp(float t, const Vec2<T>& a, const Vec2<T>& b, const Vec2<T>& c)
+    {
+        using Vec2 = Vec2<T>;
+        if (t <= 0.0f) { return a; }
+        if (t >= 1.0f) { return c; }
+
+        auto eval_seg = [&](int seg, T u) -> Vec2 {
+            const Vec2 P0 = (seg == 0) ? (a + (a - b)) : a;
+            const Vec2 P1 = (seg == 0) ? a : b;
+            const Vec2 P2 = (seg == 0) ? b : c;
+            const Vec2 P3 = (seg == 0) ? c : (c + (c - b));
+            const T u2 = u * u, u3 = u2 * u;
+            return (P1 * T(2)
+                + (P2 - P0) * u
+                + (P0 * T(2) - P1 * T(5) + P2 * T(4) - P3) * u2
+                + (-P0 + P1 * T(3) - P2 * T(3) + P3) * u3) * T(0.5);
+        };
+
+        constexpr int S = 64;
+        auto seg_length = [&](int seg, T cum[S + 1], Vec2 pts[S + 1]) -> T {
+            T L = 0;
+            pts[0] = eval_seg(seg, 0);
+            cum[0] = 0.0f;
+            for (int i = 1; i <= S; ++i) {
+                T u = T(i) / T(S);
+                pts[i] = eval_seg(seg, u);
+                L += len(pts[i] - pts[i - 1]);
+                cum[i] = L;
+            }
+            return L;
+        };
+
+        T cum0[S + 1], cum1[S + 1];
+        Vec2  pts0[S + 1], pts1[S + 1];
+
+        const T L0 = seg_length(0, cum0, pts0);
+        const T L1 = seg_length(1, cum1, pts1);
+        const T L = L0 + L1;
+
+        if (L <= 0.0f) { return b; }
+
+        const T target = t * L;
+
+        // Choose segment and invert the sampled cumulative length
+        int   seg = (target <= L0) ? 0 : 1;
+        T want = (seg == 0) ? target : (target - L0);
+
+        T* cum = (seg == 0) ? cum0 : cum1;
+        Vec2* pts = (seg == 0) ? pts0 : pts1;
+
+        int i = 1;
+        while (i <= S && cum[i] < want) ++i;
+        if (i > S) { return pts[S]; }
+
+        const T c0 = cum[i - 1], c1 = cum[i];
+        const T w = (c1 > c0) ? ((want - c0) / (c1 - c0)) : 0;
+
+        // Linearly blend between the two sampled points for final position
+        Vec2 d = pts[i - 1] + (pts[i] - pts[i - 1]) * w;
+        return d;
+    }
+
 
     static constexpr float atan_01_poly(float z)
     {

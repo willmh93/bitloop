@@ -62,10 +62,12 @@ class MainWindow
     bool done_first_focus = false;
     bool update_docking_layout = false;
     bool vertical_layout = false;
+    bool sidebar_visible = true;
 
     bool need_draw = false;
 
     //ImRect viewport_rect;
+    ImVec2 client_size{};
     bool viewport_hovered = false;
 
     ToolbarButtonState play     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(0.4f, 1.0f, 0.4f, 1.0f), true };
@@ -158,6 +160,9 @@ public:
 
     //ImRect viewportRect() { return viewport_rect; }
     bool viewportHovered() const { return viewport_hovered; }
+    IVec2 viewportSize() const { return (IVec2)client_size; }
+
+    void setSidebarVisible(bool b) { sidebar_visible = b; }
 
     void queueMainWindowCommand(MainWindowCommandEvent e)
     {
@@ -174,6 +179,7 @@ public:
     void populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i, int depth);
     void populateProjectTree(bool expand_vertical);
     void populateProjectUI();
+    void populateOverlay();
     
     /// Main Window populate
     bool manageDockingLayout();

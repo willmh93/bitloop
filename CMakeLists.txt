@@ -6,9 +6,9 @@ project(bitloop VERSION 0.9 LANGUAGES CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
 # ────────── Default Options ──────────
-option(BITLOOP_WITH_FFMPEG "Build with FFmpeg" OFF)
-option(BITLOOP_WITH_FFMPEG_X265 "FFmpeg built with x265 (GPL)" OFF)
-
+option(BITLOOP_WITH_FFMPEG      "Build with FFmpeg"             OFF)
+option(BITLOOP_WITH_FFMPEG_X265 "FFmpeg built with x265 (GPL)"  OFF)
+option(BITLOOP_BUILD_TESTS      "Build tests"                   ON)
 
 # ────────── Bootstrap package helpers for both in‑tree & installed modes ──────────
 set(BL_SIM_CMAKE "${CMAKE_CURRENT_LIST_DIR}/cmake/bitloopSimulation.cmake")
@@ -273,7 +273,7 @@ if(PROJECT_IS_TOP_LEVEL)
     add_subdirectory(examples)
 endif()
 
-option(BITLOOP_BUILD_TESTS "Build tests" OFF)
+
 if (BITLOOP_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)

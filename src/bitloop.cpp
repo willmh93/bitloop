@@ -60,6 +60,8 @@
  * 
  */
 
+#include <bitloop/util/f128.h>
+
 #include <memory>
 
 #include <bitloop/core/project.h>
@@ -106,7 +108,8 @@ void gui_loop()
         switch (e.type)
         {
             case SDL_EVENT_QUIT:
-                shared_sync.quit(); break;
+                shared_sync.quit();
+                break;
 
             case SDL_EVENT_WINDOW_RESIZED:
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -117,6 +120,7 @@ void gui_loop()
             case SDL_EVENT_MOUSE_BUTTON_UP:
             case SDL_EVENT_MOUSE_MOTION:
                 project_worker()->queueEvent(e);
+                break;
 
             case SDL_EVENT_MOUSE_WHEEL:
                 // Project ignores scroll events when mouse is over ImGui
@@ -129,10 +133,12 @@ void gui_loop()
             case SDL_EVENT_TEXT_INPUT:
                 // Project ignores key events when ImGui input active
                 if (!imguiWantsKeyboard) 
-                    project_worker()->queueEvent(e); break;
+                    project_worker()->queueEvent(e);
+                break;
 
             default:
-                project_worker()->queueEvent(e); break;
+                project_worker()->queueEvent(e);
+                break;
         }
     }
 
