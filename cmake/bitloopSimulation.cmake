@@ -68,10 +68,11 @@ function(_apply_main_settings _TARGET)
 	if (MSVC)
 		set_target_properties(${_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
 	elseif (EMSCRIPTEN)
+		message(STATUS "embedding: ${CMAKE_CURRENT_BINARY_DIR}/data@/data")
 		target_link_options(${_TARGET} PRIVATE
 			"--shell-file=${BL_COMMON}/static/shell.html"
-			#"--embed-file=${CMAKE_CURRENT_BINARY_DIR}/data@/data"
-			"--embed-file=${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
+			"--embed-file=${CMAKE_CURRENT_BINARY_DIR}/app/data@/data"
+			#"--embed-file=${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
 		)
 		set_target_properties(${_TARGET} PROPERTIES
 			OUTPUT_NAME "index"
@@ -129,14 +130,15 @@ endfunction()
 
 function(_apply_root_exe_name target)
   # If the preset provided a flavor (single-config like Ninja), use it.
-  if(BUILD_FLAVOR)
-    set(_root "${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app")
-    set_target_properties(${target} PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY "${_root}"
-      LIBRARY_OUTPUT_DIRECTORY "${_root}"
-      ARCHIVE_OUTPUT_DIRECTORY "${_root}"
-    )
-  else()
+  #if(BUILD_FLAVOR)
+  #  set(_root "${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app")
+  #  #set(_root "${CMAKE_CURRENT_BINARY_DIR}/app")
+  #  set_target_properties(${target} PROPERTIES
+  #    RUNTIME_OUTPUT_DIRECTORY "${_root}"
+  #    LIBRARY_OUTPUT_DIRECTORY "${_root}"
+  #    ARCHIVE_OUTPUT_DIRECTORY "${_root}"
+  #  )
+  #else()
     # Multi-config or no flavor: split by configuration.
     foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
       string(TOUPPER "${cfg}" CFG)
@@ -147,7 +149,7 @@ function(_apply_root_exe_name target)
         ARCHIVE_OUTPUT_DIRECTORY_${CFG} "${_root}"
       )
     endforeach()
-  endif()
+  #endif()
   # Consistent executable "name" regardless of project.
   set_target_properties(${target} PROPERTIES OUTPUT_NAME "app")
 endfunction()
