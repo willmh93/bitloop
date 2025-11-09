@@ -64,9 +64,6 @@ function(_apply_common_settings _TARGET)
 	endif()
 endfunction()
 
-function(_apply_main_settings _TARGET)
-	if (MSVC)
-		set_target_properties(${_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
 	#elseif(EMSCRIPTEN)
 	#	# Where your outputs go for this preset
 	#	set(APP_DATA_DIR "$<IF:$<BOOL:${CMAKE_CONFIGURATION_TYPES}>, ${CMAKE_BINARY_DIR}/$<CONFIG>/app/data, ${CMAKE_BINARY_DIR}/app/data>")
@@ -86,9 +83,12 @@ function(_apply_main_settings _TARGET)
 	#	set_target_properties(${_TARGET} PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
 	#	_optimize_wasm(${_TARGET})
 	#	endif()
+
+function(_apply_main_settings _TARGET)
+	if (MSVC)
+		set_target_properties(${_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
 	elseif (EMSCRIPTEN)
-	
-		set(APP_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/app/data") #"${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
+		set(APP_DATA_DIR "${CMAKE_BINARY_DIR}/app/data") #"${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
 		message(STATUS "APP_DATA_DIR: ${APP_DATA_DIR}")
 	
 		target_link_options(${_TARGET} PRIVATE "--embed-file=${APP_DATA_DIR}@/data")
