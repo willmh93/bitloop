@@ -67,17 +67,33 @@ endfunction()
 function(_apply_main_settings _TARGET)
 	if (MSVC)
 		set_target_properties(${_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
+	#elseif(EMSCRIPTEN)
+	#	# Where your outputs go for this preset
+	#	set(APP_DATA_DIR "$<IF:$<BOOL:${CMAKE_CONFIGURATION_TYPES}>, ${CMAKE_BINARY_DIR}/$<CONFIG>/app/data, ${CMAKE_BINARY_DIR}/app/data>")
+	#
+	#	# Add only if the folder exists at link time; pass raw to emcc with SHELL:
+	#	set(APP_DATA_DIR_SC "${CMAKE_BINARY_DIR}/app/data")                  # single-config
+	#	set(APP_DATA_DIR_MC "${CMAKE_BINARY_DIR}/$<CONFIG>/app/data")        # multi-config
+	#
+	#	target_link_options(${_TARGET} PRIVATE
+	#	  "$<$<OR:$<PATH_EXISTS:${APP_DATA_DIR_MC}>,$<PATH_EXISTS:${APP_DATA_DIR_SC}>>:
+	#		SHELL:--preload-file $<IF:$<PATH_EXISTS:${APP_DATA_DIR_MC}>,${APP_DATA_DIR_MC},${APP_DATA_DIR_SC}>@/data
+	#	  >"
+	#	)
+	#
+	#	target_link_options(${_TARGET} PRIVATE "SHELL:--shell-file=${BL_COMMON}/static/shell.html")
+	#
+	#	set_target_properties(${_TARGET} PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
+	#	_optimize_wasm(${_TARGET})
+	#	endif()
 	elseif (EMSCRIPTEN)
-
+	
 		set(APP_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/app/data") #"${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
 		message(STATUS "APP_DATA_DIR: ${APP_DATA_DIR}")
-
-		if(EXISTS "${APP_DATA_DIR}")
-			target_link_options(${_TARGET} PRIVATE "--embed-file=${APP_DATA_DIR}@/data")
-		endif()
-
+	
+		target_link_options(${_TARGET} PRIVATE "--embed-file=${APP_DATA_DIR}@/data")
 		target_link_options(${_TARGET} PRIVATE "--shell-file=${BL_COMMON}/static/shell.html")
-
+	
 		set_target_properties(${_TARGET} PROPERTIES
 			OUTPUT_NAME "index"
 			SUFFIX ".html"
@@ -455,6 +471,13 @@ macro(bitloop_finalize)
 		get_property(_data_dirs GLOBAL PROPERTY BL_DATA_DEPENDENCIES)
 
 		get_filename_component(BITLOOP_PARENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
+
+		# ensure /data folder exists
+		if(MSVC)
+		  add_custom_command(TARGET ${_TARGET} PRE_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${_TARGET}>/data")
+		else()
+		  add_custom_command(TARGET ${_TARGET} PRE_LINK COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${_TARGET}>/data")
+		endif()
 
 		# Add common data
 		file(RELATIVE_PATH rel_common "${BITLOOP_PARENT_DIR}" "${BL_COMMON}")
