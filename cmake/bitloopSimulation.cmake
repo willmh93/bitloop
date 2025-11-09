@@ -68,12 +68,16 @@ function(_apply_main_settings _TARGET)
 	if (MSVC)
 		set_target_properties(${_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
 	elseif (EMSCRIPTEN)
-		message(STATUS "embedding: ${CMAKE_CURRENT_BINARY_DIR}/data@/data")
-		target_link_options(${_TARGET} PRIVATE
-			"--shell-file=${BL_COMMON}/static/shell.html"
-			"--embed-file=${CMAKE_CURRENT_BINARY_DIR}/app/data@/data"
-			#"--embed-file=${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
-		)
+
+		set(APP_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/app/data") #"${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app/data@/data"
+		message(STATUS "APP_DATA_DIR: ${APP_DATA_DIR}")
+
+		if(EXISTS "${APP_DATA_DIR}")
+			target_link_options(${_TARGET} PRIVATE "--embed-file=${APP_DATA_DIR}@/data")
+		endif()
+
+		target_link_options(${_TARGET} PRIVATE "--shell-file=${BL_COMMON}/static/shell.html")
+
 		set_target_properties(${_TARGET} PROPERTIES
 			OUTPUT_NAME "index"
 			SUFFIX ".html"
