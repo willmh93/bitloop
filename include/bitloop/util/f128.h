@@ -222,7 +222,7 @@ namespace std
 		// special values                        
         static constexpr f128 epsilon()        noexcept { return { 1.232595164407831e-32, 0.0 }; } // ~2^-106, a single ulp of double-double
         static constexpr f128 round_error()    noexcept { return { 0.5, 0.0 }; }
-        static constexpr f128 infinity()       noexcept { return { numeric_limits<double>::infinity(), 0.0}; }
+        static constexpr f128 infinity()       noexcept { return { numeric_limits<double>::max(), 0.0}; }
         static constexpr f128 quiet_NaN()      noexcept { return { numeric_limits<double>::quiet_NaN(), 0.0 }; }
         static constexpr f128 signaling_NaN()  noexcept { return { numeric_limits<double>::signaling_NaN(), 0.0 }; }
         static constexpr f128 denorm_min()     noexcept { return { numeric_limits<double>::denorm_min(), 0.0 }; }
@@ -1088,7 +1088,7 @@ FAST_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr = 
     {
         p += 3;
         if (ci(p[0]) == 'i' && ci(p[1]) == 'n' && ci(p[2]) == 'i' && ci(p[3]) == 't' && ci(p[4]) == 'y') p += 5;
-        out = neg ? -std::numeric_limits<f128>::infinity() : std::numeric_limits<f128>::infinity();
+        out = neg ? -std::numeric_limits<f128>::max() : std::numeric_limits<f128>::max();
         if (endptr) *endptr = p; return true;
     }
     p = ps; // reset if not special

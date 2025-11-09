@@ -1,5 +1,6 @@
 #pragma once
 #include <bitloop/core/types.h>
+#include <bit>
 
 BL_BEGIN_NS
 
