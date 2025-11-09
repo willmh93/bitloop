@@ -133,29 +133,49 @@ function(_optimize_wasm _TARGET)
 endfunction()
 
 function(_apply_root_exe_name target)
-  # If the preset provided a flavor (single-config like Ninja), use it.
-  #if(BUILD_FLAVOR)
-  #  set(_root "${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app")
-  #  #set(_root "${CMAKE_CURRENT_BINARY_DIR}/app")
-  #  set_target_properties(${target} PROPERTIES
-  #    RUNTIME_OUTPUT_DIRECTORY "${_root}"
-  #    LIBRARY_OUTPUT_DIRECTORY "${_root}"
-  #    ARCHIVE_OUTPUT_DIRECTORY "${_root}"
-  #  )
-  #else()
-    # Multi-config or no flavor: split by configuration.
-    foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
-      string(TOUPPER "${cfg}" CFG)
-      set(_root "${CMAKE_SOURCE_DIR}/build/${cfg}/app")
-      set_target_properties(${target} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY_${CFG} "${_root}"
-        LIBRARY_OUTPUT_DIRECTORY_${CFG} "${_root}"
-        ARCHIVE_OUTPUT_DIRECTORY_${CFG} "${_root}"
-      )
-    endforeach()
-  #endif()
-  # Consistent executable "name" regardless of project.
-  set_target_properties(${target} PROPERTIES OUTPUT_NAME "app")
+	if(CMAKE_CONFIGURATION_TYPES)
+		# multi-config (VS / Ninja Multi-Config)
+		set(_root "${CMAKE_BINARY_DIR}/$<CONFIG>/app")
+	else() # single-config (Ninja/Makefiles)
+		set(_root "${CMAKE_BINARY_DIR}/app")
+	endif()
+
+	set_target_properties(${target} PROPERTIES
+		RUNTIME_OUTPUT_DIRECTORY "${_root}"
+		LIBRARY_OUTPUT_DIRECTORY "${_root}"
+		ARCHIVE_OUTPUT_DIRECTORY "${_root}"
+	)
+
+	##if(EMSCRIPTEN)
+	##	set_target_properties(${target} PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
+	##else()
+	##	set_target_properties(${target} PROPERTIES OUTPUT_NAME "app")
+	##endif()
+
+	# If the preset provided a flavor (single-config like Ninja), use it.
+	#if(BUILD_FLAVOR)
+	#  set(_root "${CMAKE_SOURCE_DIR}/build/${BUILD_FLAVOR}/app")
+	#  #set(_root "${CMAKE_CURRENT_BINARY_DIR}/app")
+	#  set_target_properties(${target} PROPERTIES
+	#    RUNTIME_OUTPUT_DIRECTORY "${_root}"
+	#    LIBRARY_OUTPUT_DIRECTORY "${_root}"
+	#    ARCHIVE_OUTPUT_DIRECTORY "${_root}"
+	#  )
+	#else()
+	#  # Multi-config or no flavor: split by configuration.
+	#  foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
+	#    string(TOUPPER "${cfg}" CFG)
+	#    set(_root "${CMAKE_SOURCE_DIR}/build/${cfg}/app")
+	#    set_target_properties(${target} PROPERTIES
+	#      RUNTIME_OUTPUT_DIRECTORY_${CFG} "${_root}"
+	#      LIBRARY_OUTPUT_DIRECTORY_${CFG} "${_root}"
+	#      ARCHIVE_OUTPUT_DIRECTORY_${CFG} "${_root}"
+	#    )
+	#  endforeach()
+	#endif()
+
+	# Consistent executable "name" regardless of project.
+	set_target_properties(${target} PROPERTIES OUTPUT_NAME "app")
 endfunction()
 
 function(_bitloop_set_visibility name value)
