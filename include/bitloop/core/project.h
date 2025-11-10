@@ -374,7 +374,8 @@ public:
         return scene;
     }
 
-    template<typename SceneType> [[nodiscard]] SceneType* create(typename SceneType::Config config)
+    template<typename SceneType>
+    [[nodiscard]] SceneType* create(typename SceneType::Config config)
     {
         auto config_ptr = std::make_shared<typename SceneType::Config>(config);
 
@@ -386,6 +387,7 @@ public:
         return scene;
     }
 
+    // reuse active_config from another Scene
     template<typename SceneType>
     [[nodiscard]] SceneType* create(std::shared_ptr<typename SceneType::Config> config)
     {
@@ -398,34 +400,6 @@ public:
         scene->project = this;
 
         return scene;
-    }
-
-    template<typename SceneType>
-    [[nodiscard]] std::shared_ptr<SimSceneList> create(int count)
-    {
-        auto ret = std::make_shared<SimSceneList>();
-        for (int i = 0; i < count; i++)
-        {
-            SceneType* scene = create<SceneType>();
-            scene->project = this;
-
-            ret->push_back(scene);
-        }
-        return ret;
-    }
-
-    template<typename SceneType>
-    [[nodiscard]] std::shared_ptr<SimSceneList> create(int count, typename SceneType::Config config)
-    {
-        auto ret = std::make_shared<SimSceneList>();
-        for (int i = 0; i < count; i++)
-        {
-            SceneType* scene = create<SceneType>(config);
-            scene->project = this;
-
-            ret->push_back(scene);
-        }
-        return ret;
     }
 
     Layout& newLayout();

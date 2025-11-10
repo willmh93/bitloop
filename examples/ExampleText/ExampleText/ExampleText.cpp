@@ -14,7 +14,8 @@ void ExampleText_Project::UI::sidebar()
 void ExampleText_Project::projectPrepare(Layout& layout)
 {
     /// Create multiple instance of a single Scene, mount to separate viewports
-    layout << create<ExampleText_Scene>(viewport_count);
+    for (int i = 0; i < viewport_count; i++)
+        layout << create<ExampleText_Scene>();
 
     /// Or create a single Scene instance and view on multiple Viewports
     //auto* scene = create<ExampleText_Scene>();

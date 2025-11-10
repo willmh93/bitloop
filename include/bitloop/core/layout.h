@@ -12,11 +12,6 @@ class Viewport;
 class SceneBase;
 class Layout;
 
-struct SimSceneList : public std::vector<SceneBase*>
-{
-    void mountTo(Layout& viewports);
-};
-
 class Layout
 {
     std::vector<Viewport*> viewports;
@@ -64,7 +59,6 @@ public:
 
     [[nodiscard]] Viewport* operator[](size_t i) { expandCheck(i + 1); return viewports[i]; }
     Layout& operator<<(SceneBase* scene);
-    Layout& operator<<(std::shared_ptr<SimSceneList> scenes);
 
     [[nodiscard]] iterator begin() { return viewports.begin(); }
     [[nodiscard]] iterator end() { return viewports.end(); }

@@ -5,12 +5,6 @@
 
 BL_BEGIN_NS
 
-void SimSceneList::mountTo(Layout& viewports)
-{
-    for (size_t i = 0; i < size(); i++)
-        at(i)->mountTo(viewports[i]);
-}
-
 void Layout::expandCheck(size_t count)
 {
     if (count > viewports.size())
@@ -88,11 +82,11 @@ void Layout::clear()
     viewports.clear();
 }
 
-Layout& Layout::operator<<(SceneBase* scene) { scene->mountTo(*this); return *this; }
-Layout& Layout::operator<<(std::shared_ptr<SimSceneList> scenes) {
-    for (SceneBase* scene : *scenes)
-        scene->mountTo(*this);
+Layout& Layout::operator<<(SceneBase* scene)
+{
+    scene->mountTo(*this);
     return *this;
 }
+
 
 BL_END_NS

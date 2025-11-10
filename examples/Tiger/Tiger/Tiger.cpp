@@ -16,7 +16,8 @@ void Tiger_Project::UI::sidebar()
 
 void Tiger_Project::projectPrepare(Layout& layout)
 {
-    layout << create<Tiger_Scene>(viewport_count);
+    for (int i = 0; i < viewport_count; i++)
+        layout << create<Tiger_Scene>();
 }
 
 /// ─────────────────────── Scene ───────────────────────
