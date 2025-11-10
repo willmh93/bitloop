@@ -83,6 +83,7 @@ struct Color
 
     Color() = default;
     constexpr Color(u32 _rgba) : rgba(_rgba) {}
+    constexpr Color(Color rgb, u8 _a) : r(rgb.r), g(rgb.g), b(rgb.b), a(_a) {}
     constexpr Color(const float(&c)[3]) : r(int(c[0] * 255.f)), g(int(c[1] * 255.f)), b(int(c[2] * 255.f)), a(255) {}
     constexpr Color(const float(&c)[4]) : r(int(c[0] * 255.f)), g(int(c[1] * 255.f)), b(int(c[2] * 255.f)), a(int(c[3] * 255.f)) {}
     constexpr Color(u8 _r, u8 _g, u8 _b, u8 _a = 255) : r(_r), g(_g), b(_b), a(_a) {}

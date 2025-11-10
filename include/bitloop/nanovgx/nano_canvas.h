@@ -45,31 +45,40 @@ enum struct TextBaseline
 };
 enum struct CompositeOperation
 {
-    COMPOSITE_SOURCE_OVER       = NVGcompositeOperation::NVG_SOURCE_OVER,
-    COMPOSITE_SOURCE_IN         = NVGcompositeOperation::NVG_SOURCE_IN,
-    COMPOSITE_SOURCE_OUT        = NVGcompositeOperation::NVG_SOURCE_OUT,
-    COMPOSITE_ATOP              = NVGcompositeOperation::NVG_ATOP,
-    COMPOSITE_DESTINATION_OVER  = NVGcompositeOperation::NVG_DESTINATION_OVER,
-    COMPOSITE_DESTINATION_IN    = NVGcompositeOperation::NVG_DESTINATION_IN,
-    COMPOSITE_DESTINATION_OUT   = NVGcompositeOperation::NVG_DESTINATION_OUT,
-    COMPOSITE_DESTINATION_ATOP  = NVGcompositeOperation::NVG_DESTINATION_ATOP,
-    COMPOSITE_LIGHTER           = NVGcompositeOperation::NVG_LIGHTER,
-    COMPOSITE_COPY              = NVGcompositeOperation::NVG_COPY,
-    COMPOSITE_XOR               = NVGcompositeOperation::NVG_XOR
+    SOURCE_OVER       = NVGcompositeOperation::NVG_SOURCE_OVER,
+    SOURCE_IN         = NVGcompositeOperation::NVG_SOURCE_IN,
+    SOURCE_OUT        = NVGcompositeOperation::NVG_SOURCE_OUT,
+    ATOP              = NVGcompositeOperation::NVG_ATOP,
+    DESTINATION_OVER  = NVGcompositeOperation::NVG_DESTINATION_OVER,
+    DESTINATION_IN    = NVGcompositeOperation::NVG_DESTINATION_IN,
+    DESTINATION_OUT   = NVGcompositeOperation::NVG_DESTINATION_OUT,
+    DESTINATION_ATOP  = NVGcompositeOperation::NVG_DESTINATION_ATOP,
+    LIGHTER           = NVGcompositeOperation::NVG_LIGHTER,
+    COPY              = NVGcompositeOperation::NVG_COPY,
+    XOR               = NVGcompositeOperation::NVG_XOR
 };
 enum struct BlendFactor
 {
-    BLEND_ZERO                  = NVGblendFactor::NVG_ZERO,
-    BLEND_ONE                   = NVGblendFactor::NVG_ONE,
-    BLEND_SRC_COLOR             = NVGblendFactor::NVG_SRC_COLOR,
-    BLEND_ONE_MINUS_SRC_COLOR   = NVGblendFactor::NVG_ONE_MINUS_SRC_COLOR,
-    BLEND_DST_COLOR             = NVGblendFactor::NVG_DST_COLOR,
-    BLEND_ONE_MINUS_DST_COLOR   = NVGblendFactor::NVG_ONE_MINUS_DST_COLOR,
-    BLEND_SRC_ALPHA             = NVGblendFactor::NVG_SRC_ALPHA,
-    BLEND_ONE_MINUS_SRC_ALPHA   = NVGblendFactor::NVG_ONE_MINUS_SRC_ALPHA,
-    BLEND_DST_ALPHA             = NVGblendFactor::NVG_DST_ALPHA,
-    BLEND_ONE_MINUS_DST_ALPHA   = NVGblendFactor::NVG_ONE_MINUS_DST_ALPHA,
-    BLEND_SRC_ALPHA_SATURATE    = NVGblendFactor::NVG_SRC_ALPHA_SATURATE
+    ZERO                  = NVGblendFactor::NVG_ZERO,
+    ONE                   = NVGblendFactor::NVG_ONE,
+    SRC_COLOR             = NVGblendFactor::NVG_SRC_COLOR,
+    ONE_MINUS_SRC_COLOR   = NVGblendFactor::NVG_ONE_MINUS_SRC_COLOR,
+    DST_COLOR             = NVGblendFactor::NVG_DST_COLOR,
+    ONE_MINUS_DST_COLOR   = NVGblendFactor::NVG_ONE_MINUS_DST_COLOR,
+    SRC_ALPHA             = NVGblendFactor::NVG_SRC_ALPHA,
+    ONE_MINUS_SRC_ALPHA   = NVGblendFactor::NVG_ONE_MINUS_SRC_ALPHA,
+    DST_ALPHA             = NVGblendFactor::NVG_DST_ALPHA,
+    ONE_MINUS_DST_ALPHA   = NVGblendFactor::NVG_ONE_MINUS_DST_ALPHA,
+    SRC_ALPHA_SATURATE    = NVGblendFactor::NVG_SRC_ALPHA_SATURATE
+};
+
+struct CompositeScope
+{
+    NVGcontext* vg;
+    CompositeScope(NVGcontext* vg, CompositeOperation op) : vg(vg) { nvgSave(vg); nvgGlobalCompositeOperation(vg, (int)op); }
+    CompositeScope(NVGcontext* vg, BlendFactor src, BlendFactor dst) : vg(vg) { nvgSave(vg); nvgGlobalCompositeBlendFunc(vg, (int)src, (int)dst); }
+    CompositeScope(NVGcontext* vg, BlendFactor sRGB, BlendFactor dRGB, BlendFactor sA, BlendFactor dA) : vg(vg) { nvgSave(vg); nvgGlobalCompositeBlendFuncSeparate(vg, (int)sRGB, (int)dRGB, (int)sA, (int)dA); }
+    ~CompositeScope() { nvgRestore(vg); }
 };
 
 class NanoFontInternal
@@ -139,6 +148,10 @@ class Painter;
 // ======== Simple nanovg C++ wrapper ========
 // ===========================================
 
+static inline NVGcolor toNVG(const Color& c) { return nvgRGBA(c.r, c.g, c.b, c.a); }
+static inline NVGcolor toNVG(const float(&rgb)[3], float a) { return NVGcolor{ rgb[0], rgb[1], rgb[2], a }; }
+static inline NVGcolor toNVG(const float(&rgba)[4]) { return NVGcolor{ rgba[0], rgba[1], rgba[2], rgba[3] }; }
+
 class SimplePainter
 {
     PainterContext* paint_ctx = nullptr;
@@ -163,6 +176,7 @@ public:
     }
 
     // ======== Context getter/setters ========
+
     [[nodiscard]] NanoFont getDefaultFont() { return paint_ctx->default_font; }
     [[nodiscard]] double getGlobalScale() { return paint_ctx->global_scale; }
     void setGlobalScale(double scale) { paint_ctx->global_scale = scale; }
@@ -204,7 +218,144 @@ public:
     void setLineCap(LineCap cap)                             { nvgLineCap(vg, (int)cap); }
     void setLineJoin(LineJoin join)                          { nvgLineJoin(vg, (int)join); }
     void setMiterLimit(double limit)                         { nvgMiterLimit(vg, (float)limit); }
-                                                             
+
+    // ======== composite ========
+
+    void setCompositeSourceOver()             { nvgGlobalCompositeOperation(vg, NVG_SOURCE_OVER); }
+    void setCompositeSourceIn()               { nvgGlobalCompositeOperation(vg, NVG_SOURCE_IN); }
+    void setCompositeSourceOut()              { nvgGlobalCompositeOperation(vg, NVG_SOURCE_OUT); }
+    void setCompositeSourceAtop()             { nvgGlobalCompositeOperation(vg, NVG_ATOP); }
+    void setCompositeDestOver()               { nvgGlobalCompositeOperation(vg, NVG_DESTINATION_OVER); }
+    void setCompositeDestIn()                 { nvgGlobalCompositeOperation(vg, NVG_DESTINATION_IN); }
+    void setCompositeDestOut()                { nvgGlobalCompositeOperation(vg, NVG_DESTINATION_OUT); }
+    void setCompositeDestAtop()               { nvgGlobalCompositeOperation(vg, NVG_DESTINATION_ATOP); }
+    void setCompositeLighter()                { nvgGlobalCompositeOperation(vg, NVG_LIGHTER); }
+    void setCompositeCopy()                   { nvgGlobalCompositeOperation(vg, NVG_COPY); }
+    void setCompositeXor()                    { nvgGlobalCompositeOperation(vg, NVG_XOR); }
+    void setComposite(CompositeOperation op)  { nvgGlobalCompositeOperation(vg, (int)op); }
+
+    // ======== blending ========
+
+    void setBlendFunc(BlendFactor src, BlendFactor dst) {
+        nvgGlobalCompositeBlendFunc(vg, (int)src, (int)dst);
+    }
+    void setBlendFuncSeparate(BlendFactor srcRGB, BlendFactor dstRGB, BlendFactor srcA, BlendFactor dstA) {
+        nvgGlobalCompositeBlendFuncSeparate(vg, (int)srcRGB, (int)dstRGB, (int)srcA, (int)dstA);
+    }
+
+    // blend presets
+    void setBlendAdditive() { nvgGlobalCompositeOperation(vg, NVG_LIGHTER); }
+    void setBlendAlphaPremult() { nvgGlobalCompositeBlendFunc(vg, NVG_ONE, NVG_ONE_MINUS_SRC_ALPHA); }
+    void setBlendAlphaStraight() { nvgGlobalCompositeBlendFunc(vg, NVG_SRC_ALPHA, NVG_ONE_MINUS_SRC_ALPHA); }
+    void setBlendMultiply() { nvgGlobalCompositeBlendFuncSeparate(vg, NVG_DST_COLOR, NVG_ONE_MINUS_SRC_ALPHA, NVG_ONE, NVG_ONE_MINUS_SRC_ALPHA); }
+    void setBlendScreen() { nvgGlobalCompositeBlendFuncSeparate(vg, NVG_ONE, NVG_ONE_MINUS_DST_COLOR, NVG_ONE, NVG_ONE_MINUS_DST_ALPHA); }
+
+    CompositeScope scopedComposite(CompositeOperation op) { return CompositeScope(vg, op); }
+    CompositeScope scopedBlend(BlendFactor src, BlendFactor dst) { return CompositeScope(vg, src, dst); }
+    CompositeScope scopedBlendSeparate(BlendFactor sRGB, BlendFactor dRGB, BlendFactor sA, BlendFactor dA) { return CompositeScope(vg, sRGB, dRGB, sA, dA); }
+
+    // ======== Linear Gradient ========
+
+    void setFillLinearGradient(double x0, double y0, double x1, double y1, const Color& inner, const Color& outer) {
+        nvgFillPaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    }
+    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
+        nvgFillPaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner, a), toNVG(outer, a)));
+    }
+    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4]) {
+        nvgFillPaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    }
+
+    // ======== Radial Gradient ========
+
+    void setFillRadialGradient(double cx, double cy, double r0, double r1, const Color& inner, const Color& outer) {
+        nvgFillPaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    }
+    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
+        nvgFillPaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner, a), toNVG(outer, a)));
+    }
+    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) {
+        nvgFillPaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    }
+
+    // ======== Box Gradient ========
+
+    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer) {
+        nvgFillPaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    }
+    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
+        nvgFillPaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner, a), toNVG(outer, a)));
+    }
+    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4]) {
+        nvgFillPaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    }
+
+    // ======== Linear Gradient (Stroke) ========
+
+    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const Color& inner, const Color& outer) {
+        nvgStrokePaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    }
+    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
+        nvgStrokePaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner, a), toNVG(outer, a)));
+    }
+    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4]) {
+        nvgStrokePaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    }
+
+    // ======== Radial Gradient (Stroke) ========
+
+    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const Color& inner, const Color& outer) {
+        nvgStrokePaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    }
+    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
+        nvgStrokePaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner, a), toNVG(outer, a)));
+    }
+    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) {
+        nvgStrokePaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    }
+
+    // ======== Box Gradient (Stroke) ========
+
+    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer) {
+        nvgStrokePaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    }
+    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
+        nvgStrokePaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner, a), toNVG(outer, a)));
+    }
+    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4]) {
+        nvgStrokePaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    }
+
+    // Linear (Fill)
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer, a); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4]) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
+
+    // Linear (Stroke)
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer, a); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4]) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
+
+    // Radial (Fill)
+    void setFillRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer, a); }
+    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+
+    // Radial (Stroke)
+    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer, a); }
+    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+
+    // Box (Fill)
+    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer, a); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4]) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+
+    // Box (Stroke)
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer, a); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4]) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+
     // ======== Paths ========                               
                                                              
     void beginPath()                                         { nvgBeginPath(vg); }
@@ -625,6 +776,63 @@ public:
             lineTo(path[i]);
         stroke();
     }
+    template<typename PointT> void strokePath(const std::vector<PointT>& path, size_t i0, size_t i1)
+    {
+        size_t len = i1 - i0;
+        if (len < 2) return;
+        beginPath();
+        moveTo(path[i0]);
+        for (size_t i = i0+1; i < i1; i++)
+            lineTo(path[i]);
+        stroke();
+    }
+
+    // Linear (Fill)
+    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
+    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4])                 { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                                 { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer, a); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4])                                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
+
+    // Linear (Stroke)
+    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
+    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4])               { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                               { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer, a); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4])                                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
+
+    // Radial (Fill)
+    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a=1.0f)   { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4])                 { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer)                                      { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4])                              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+
+    // Radial (Stroke)
+    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4])               { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer)                                    { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4])                            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+
+    // Box (Fill)
+    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer)            { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
+    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4])    { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer)                             { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f)       { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4])                     { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+
+    // Box (Stroke)
+    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer)          { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
+    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4])  { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer)                           { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f)     { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4])                   { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+
 
     // ======== Shapes ========
 
@@ -1039,6 +1247,42 @@ public:
     using SimplePainter::setFont;
     using SimplePainter::setTextAlign;
     using SimplePainter::setTextBaseline;
+    //
+    // ======== composite ========
+
+    using SimplePainter::setCompositeSourceOver;
+    using SimplePainter::setCompositeSourceIn;
+    using SimplePainter::setCompositeSourceOut;
+    using SimplePainter::setCompositeSourceAtop;
+    using SimplePainter::setCompositeDestOver;
+    using SimplePainter::setCompositeDestIn;
+    using SimplePainter::setCompositeDestOut;
+    using SimplePainter::setCompositeDestAtop;
+    using SimplePainter::setCompositeLighter;
+    using SimplePainter::setCompositeCopy;
+    using SimplePainter::setCompositeXor;
+    using SimplePainter::setComposite;
+
+    // ======== blending ========
+
+    using SimplePainter::setBlendFunc;
+    using SimplePainter::setBlendFuncSeparate;
+    using SimplePainter::setBlendAdditive;
+    using SimplePainter::setBlendAlphaPremult;
+    using SimplePainter::setBlendAlphaStraight;
+    using SimplePainter::setBlendMultiply;
+    using SimplePainter::setBlendScreen;
+
+    using SimplePainter::scopedComposite;
+    using SimplePainter::scopedBlend;
+    using SimplePainter::scopedBlendSeparate;
+
+    // ======== line cap/join/miter ========
+
+    using SimplePainter::setLineCap;
+    using SimplePainter::setLineJoin;
+    using SimplePainter::setMiterLimit; // todo: Use world size?
+
     //
     using SimplePainter::setStrokeStyle;
     using SimplePainter::setFillStyle;
