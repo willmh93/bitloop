@@ -67,6 +67,17 @@ struct ImGradientMark
     float position{};
 };
 
+namespace detail {
+    inline void hash_combine(std::size_t& seed, std::size_t value) noexcept {
+        seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
+    }
+    inline std::size_t hash_int64(std::int64_t v) noexcept {
+        return std::hash<std::int64_t>{}(v);
+    }
+    inline std::int64_t quantize(float x, float eps) noexcept {
+        return static_cast<std::int64_t>(std::llround(static_cast<double>(x) / static_cast<double>(eps)));
+    }
+}
 
 class ImGradient
 {
@@ -182,9 +193,14 @@ public:
         c = m_cachedColors[(int)(position * CACHE_SIZE_M1)];
     }
 
+    size_t hash() const
+    {
+        return _hash;
+    }
+
 private:
     static constexpr float kEps = 1e-6f;
-    static constexpr int CACHE_SIZE = 512*6;
+    static constexpr int CACHE_SIZE = 3072;
     static constexpr int CACHE_SIZE_M1 = CACHE_SIZE - 1;
 
     void   clear() noexcept;
@@ -195,6 +211,34 @@ private:
     int selected_uid = -1;
     float m_cachedValues[CACHE_SIZE * 3]{};
     uint32_t m_cachedColors[CACHE_SIZE]{};
+
+    mutable size_t _hash = 0;
+
+    void updateHash() const noexcept
+    {
+        _hash = 0;
+
+        // Match == : size, dragging_uid, selected_uid
+        detail::hash_combine(_hash, std::hash<std::size_t>{}(m_marks.size()));
+        detail::hash_combine(_hash, std::hash<int>{}(dragging_uid));
+        detail::hash_combine(_hash, std::hash<int>{}(selected_uid));
+
+        // Match == : order matters; compare position (with eps) and color[0..2] (with eps)
+        for (const ImGradientMark& m : m_marks) {
+            // NOTE: == ignores uid and color[3], so we ignore them here as well.
+            const std::int64_t qp = detail::quantize(m.position, kEps);
+            const std::int64_t qc0 = detail::quantize(m.color[0], kEps);
+            const std::int64_t qc1 = detail::quantize(m.color[1], kEps);
+            const std::int64_t qc2 = detail::quantize(m.color[2], kEps);
+
+            std::size_t h = detail::hash_int64(qp);
+            detail::hash_combine(h, detail::hash_int64(qc0));
+            detail::hash_combine(h, detail::hash_int64(qc1));
+            detail::hash_combine(h, detail::hash_int64(qc2));
+
+            detail::hash_combine(_hash, h);
+        }
+    }
 };
 
 /* ---------------------------- editor helpers ------------------------------ */

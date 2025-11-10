@@ -4,6 +4,12 @@
 #include <type_traits>
 #include <any>
 #include <memory>
+#include <concepts>
+
+template<class U>
+concept HasHashMethod = requires(const U & u) {
+    { u.hash() } -> std::convertible_to<std::size_t>;
+};
 
 ///--------------------------///
 /// Variable Changed Tracker ///
@@ -13,10 +19,9 @@ class ChangeTracker
 {
     template <typename T>
     struct StateMapPair {
-        // previous: baseline snapshot taken by the last updateCurrent()
-        std::unordered_map<T*, T> previous;
-        // current: set of variables we intend to track (we ignore the stored value here)
-        std::unordered_map<T*, T> current;
+        using Baseline = std::conditional_t<HasHashMethod<T>, std::size_t, T>;
+        std::unordered_map<T*, Baseline> previous;
+        std::unordered_map<T*, unsigned char> current;
     };
 
     struct ClearCommit {
@@ -35,12 +40,11 @@ class ChangeTracker
 
         auto it = store_.find(idx);
         if (it == store_.end()) {
-            // first time we see this T -> create holder and hook up clear/commit
             auto& holder = store_[idx];
             holder.emplace<StateMapPair<T>>();
-            // IMPORTANT: capture [this, idx] so we re-lookup maps each time (safe vs rehash/move)
+
             registry_[idx] = {
-                // clear: wipe "current" (tracked set) AND "previous" (baseline)
+                // clear: wipe both sets
                 [this, idx]() {
                     auto it2 = store_.find(idx);
                     if (it2 == store_.end()) return;
@@ -48,34 +52,45 @@ class ChangeTracker
                     maps.current.clear();
                     maps.previous.clear();
                 },
-                // commit: build a fresh baseline by dereferencing tracked pointers *now*
+                // commit: update baseline only when changed; add first-time snapshots
                 [this, idx]() {
                     auto it2 = store_.find(idx);
                     if (it2 == store_.end()) return;
                     auto& maps = std::any_cast<StateMapPair<T>&>(it2->second);
 
-                    std::unordered_map<T*, T> next_prev;
-                    next_prev.reserve(maps.previous.size() + maps.current.size());
+                    // 1) Existing tracked vars => write only if changed
+                    for (auto& kv : maps.previous) {
+                        T* p = kv.first;
+                        if (!p) continue;
 
-                    auto add_snapshot = [&](T* p) {
-                        if (p) next_prev[p] = *p; // snapshot live value at commit time
-                    };
+                        if constexpr (HasHashMethod<T>) {
+                            const std::size_t h = p->hash();
+                            if (kv.second != h) kv.second = h;
+                        } else {
+                            const T& live = *p;
+                            if (!(kv.second == live)) kv.second = live; // LHS non-const map value
+                        }
+                    }
 
-                    // keep previously known vars, even if not re-registered this frame
-                    for (auto& kv : maps.previous) add_snapshot(kv.first);
-                    // include any newly tracked vars
-                    for (auto& kv : maps.current)  add_snapshot(kv.first);
-
-                    maps.previous.swap(next_prev);
-                    // optional: leave maps.current as the "tracked set" persistent across commits
-                    // If you prefer re-declare each frame, uncomment the next line:
-                    // maps.current.clear();
+                    // 2) Newly staged vars => add snapshot if not present
+                    for (auto& kv : maps.current) {
+                        T* p = kv.first;
+                        if (!p) continue;
+                        if (maps.previous.find(p) == maps.previous.end()) {
+                            if constexpr (HasHashMethod<T>) {
+                                maps.previous.emplace(p, p->hash());
+                            } else {
+                                maps.previous.emplace(p, *p);
+                            }
+                        }
+                    }
                 }
             };
             return std::any_cast<StateMapPair<T>&>(holder);
         }
         return std::any_cast<StateMapPair<T>&>(it->second);
     }
+
 
     template <typename T>
     [[nodiscard]] bool variableChanged(T& var) const
@@ -87,14 +102,22 @@ class ChangeTracker
         auto  it = maps.previous.find(key);
 
         if (it == maps.previous.end()) {
-            // Not in baseline yet -> treat as "no change" until first updateCurrent() snapshot.
-            // (Call commitCurrent(var) once to start tracking, or rely on prior updateCurrent().)
-            //commitCurrent(var);
-            maps.current[key] = var;
+            // not in baseline yet => start tracking.
+            // report "no change" until first snapshot
+            maps.current[key] = 0;
             return false;
         }
-        return !(var == it->second);
+
+        if constexpr (HasHashMethod<NonConstT>) {
+            // compare hashes
+            return it->second != var.hash();
+        }
+        else {
+            // keep non-const object on LHS to allow non-const member operator==
+            return !(it->second == var);
+        }
     }
+
 
 public:
     ChangeTracker() = default;
@@ -106,12 +129,10 @@ public:
         return (variableChanged(std::forward<Args>(args)) || ...);
     }
 
-    // Register/stage a variable so updateCurrent() will snapshot it.
-    // You can call this once at setup (the stored value is ignored at commit time).
     template <typename T>
     void commitCurrent(T& var) const
     {
-        getStateMap<std::remove_const_t<T>>().current[std::addressof(var)] = var;
+        getStateMap<std::remove_const_t<T>>().current[std::addressof(var)] = 0;
     }
 
     // Convenience: register many at once
