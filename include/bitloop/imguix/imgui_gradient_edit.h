@@ -51,6 +51,7 @@
 #include "imgui_internal.h"
 //#include "types.h"
 
+#include <math.h>
 #include <vector>
 #include <algorithm>
 #include <cstring>
@@ -75,7 +76,7 @@ namespace detail {
         return std::hash<std::int64_t>{}(v);
     }
     inline std::int64_t quantize(float x, float eps) noexcept {
-        return static_cast<std::int64_t>(std::llround(static_cast<double>(x) / static_cast<double>(eps)));
+        return static_cast<std::int64_t>(llround(static_cast<double>(x) / static_cast<double>(eps)));
     }
 }
 

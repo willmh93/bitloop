@@ -10,7 +10,12 @@
 #include <algorithm>
 #include <type_traits>
 #include <unordered_map>
+#include <concepts>
 
+template<class U>
+concept VarHasHashMethod = requires(const U & u) {
+    { u.hash() } -> std::convertible_to<std::size_t>;
+};
 
 template<class T, class Enable = void>
 struct TypeOps {
@@ -187,6 +192,10 @@ struct VarBuffer
         std::any mark_live;    // snapshot of *live* memory
         std::any mark_shadow;  // snapshot of current shadow (value)
 
+        bool hashable = false;
+        std::size_t(*hash_from_live_fn)(const void*) = nullptr;   // live ptr -> hash
+        std::size_t(*hash_from_any_fn)(const std::any&) = nullptr; // any(value) -> hash
+
         bool changed = false;  // set by _commit if shadow != mark_shadow
         bool temp = false;
 
@@ -213,37 +222,71 @@ struct VarBuffer
             store_from_live_fn(value, key);
         }
         void markLiveValue() {
-            if (!owner || !store_from_live_fn || !key) return;
-            store_from_live_fn(mark_live, key);
+            if (!owner || !key) return;
+            if (hashable && hash_from_live_fn) {
+                mark_live = hash_from_live_fn(key); // store size_t
+            }
+            else if (store_from_live_fn) {
+                store_from_live_fn(mark_live, key); // store full copy
+            }
         }
         void markShadowValue() {
-            if (value.has_value()) mark_shadow = value;
-            else mark_shadow.reset();
+            if (!value.has_value()) { mark_shadow.reset(); return; }
+            if (hashable && hash_from_any_fn) {
+                mark_shadow = hash_from_any_fn(value); // store size_t
+            }
+            else {
+                mark_shadow = value; // store full copy
+            }
         }
         bool liveChanged() const {
-            if (!equals_fn || !mark_live.has_value() || !key) return false;
+            if (!key) return false;
+            if (hashable && hash_from_live_fn && mark_live.has_value()) {
+                const std::size_t now = hash_from_live_fn(key);
+                const std::size_t was = std::any_cast<const std::size_t&>(mark_live);
+                return now != was;
+            }
+            if (!equals_fn || !mark_live.has_value()) return false;
             return !equals_fn(key, mark_live);
         }
         bool shadowChanged() const {
-            if (!equals_any_fn || !value.has_value() || !mark_shadow.has_value()) return false;
+            if (!value.has_value() || !mark_shadow.has_value()) return false;
+            if (hashable && hash_from_any_fn) {
+                const std::size_t now = hash_from_any_fn(value);
+                const std::size_t was = std::any_cast<const std::size_t&>(mark_shadow);
+                return now != was;
+            }
+            if (!equals_any_fn) return false;
             return !equals_any_fn(value, mark_shadow);
         }
+
         std::string to_string_value() const {
-            if (!value.has_value() || !print_fn) return {};
+            if (!value.has_value()) return {};
             std::ostringstream oss;
-            print_fn(oss, value);
+            if (hashable)
+                oss << std::any_cast<const std::size_t&>(value);
+            else if (print_fn)
+                print_fn(oss, value);
             return oss.str();
         }
+
         std::string to_string_marked_shadow() const {
-            if (!value.has_value() || !print_fn) return {};
+            if (!mark_shadow.has_value()) return {};
             std::ostringstream oss;
-            print_fn(oss, mark_shadow);
+            if (hashable)
+                oss << std::any_cast<const std::size_t&>(mark_shadow);
+            else if (print_fn)
+                print_fn(oss, mark_shadow);
             return oss.str();
         }
+
         std::string to_string_marked_live() const {
-            if (!value.has_value() || !print_fn) return {};
+            if (!mark_live.has_value()) return {};
             std::ostringstream oss;
-            print_fn(oss, mark_live);
+            if (hashable)
+                oss << std::any_cast<const std::size_t&>(mark_live);
+            else if (print_fn)
+                print_fn(oss, mark_live);
             return oss.str();
         }
     };
@@ -290,6 +333,17 @@ struct VarBuffer
         if (!e.equals_fn)          e.equals_fn = +[](const void* d, const std::any& a) { return Ops::equals(d, a); };
         if (!e.store_from_live_fn) e.store_from_live_fn = +[](std::any& dst, const void* src) { Ops::store(dst, src); };
         if (!e.equals_any_fn)      e.equals_any_fn = +[](const std::any& a, const std::any& b) { return Ops::equals_any(a, b); };
+
+        if constexpr (VarHasHashMethod<Store>) {
+            e.hashable = true;
+            e.hash_from_live_fn = +[](const void* src) -> std::size_t {
+                const Store& s = *static_cast<const Store*>(src);
+                return s.hash();
+            };
+            e.hash_from_any_fn = +[](const std::any& a) -> std::size_t {
+                return std::any_cast<const Store&>(a).hash();
+            };
+        }
 
         if (!e.print_fn) {
             e.print_fn = +[](std::ostream& os, const std::any& a [[maybe_unused]] ) {
@@ -372,7 +426,7 @@ struct VarBuffer
         return *std::any_cast<Store>(&e.value);
     }
 
-    // _commit now ONLY compares shadow vs snapshot; no writes.
+    // scalar
     template<class T, std::enable_if_t<!std::is_array_v<T>, int> = 0>
     void _commit(const T& member, const T& /*staged_value*/) const
     {
@@ -382,11 +436,12 @@ struct VarBuffer
         Entry& e = it->second;
 
         if (!e.equals_any_fn) bind_ops<T>(e);
-        e.changed = (e.value.has_value() && e.mark_shadow.has_value())
-            ? !e.equals_any_fn(e.value, e.mark_shadow)
-            : false;
+
+        // Use Entry's hash-aware comparator
+        e.changed = e.shadowChanged();
     }
 
+    // array (std::array<T,N> path)
     template<class T, std::size_t N>
     void _commit(const T(&member)[N], const std::array<T, N>& /*staged*/) const
     {
@@ -396,11 +451,10 @@ struct VarBuffer
         Entry& e = it->second;
 
         if (!e.equals_any_fn) bind_ops<T[N]>(e);
-        e.changed = (e.value.has_value() && e.mark_shadow.has_value())
-            ? !e.equals_any_fn(e.value, e.mark_shadow)
-            : false;
+        e.changed = e.shadowChanged();
     }
 
+    // array (T[N] forwarding overload)
     template<class T, std::size_t N>
     void _commit(const T(&member)[N], const T(&)[N]) const
     {
@@ -410,10 +464,9 @@ struct VarBuffer
         Entry& e = it->second;
 
         if (!e.equals_any_fn) bind_ops<T[N]>(e);
-        e.changed = (e.value.has_value() && e.mark_shadow.has_value())
-            ? !e.equals_any_fn(e.value, e.mark_shadow)
-            : false;
+        e.changed = e.shadowChanged();
     }
+
 
     template<class T>
     std::remove_const_t<T>& _temp_pull(const T& member) const { return _pull(member, true); }

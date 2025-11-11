@@ -246,26 +246,7 @@ void ImGradient::deserialize(std::string txt)
 
 bool ImGradient::operator==(const ImGradient& rhs) const
 {
-    if (m_marks.size() != rhs.m_marks.size()) return false;
-    if (dragging_uid != rhs.dragging_uid) return false;
-    if (selected_uid != rhs.selected_uid) return false;
-
-    auto it1 = m_marks.begin();
-    auto it2 = rhs.m_marks.begin();
-
-    while (it1 != m_marks.end())
-    {
-        const ImGradientMark& a = *it1;
-        const ImGradientMark& b = *it2;
-
-        if (std::abs(a.position - b.position) > kEps) return false;
-
-        for (int i = 0; i < 3; ++i)
-            if (std::abs(a.color[i] - b.color[i]) > kEps) return false;
-
-        ++it1; ++it2;
-    }
-    return true;
+    return _hash == rhs._hash;
 }
 
 

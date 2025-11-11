@@ -9,16 +9,20 @@
 
 /// ======== compiler message ========
 
-#define STR(x) #x
-#define VAL(x) STR(x)
+#define BL_STR1(x) #x
+#define BL_STR(x)  BL_STR1(x)
 
+// ------------------ Pragmas ------------------
 #if defined(_MSC_VER)
 #define BL_MESSAGE(msg) __pragma(message(msg))
-#define BL_SHOW(name)   __pragma(message(#name "=" VAL(name)))
+#define BL_SHOW(name)   __pragma(message(#name "=" BL_STR(name)))
 #else
   // Clang/GCC/Emscripten
-#define BL_MESSAGE(msg) _Pragma("message \"" msg "\"")
-#define BL_SHOW(name)   _Pragma("message \"" #name "=" VAL(name) "\"")
+#define BL_DO_PRAGMA(x) _Pragma(BL_STR(x))
+#define BL_MESSAGE(msg) BL_DO_PRAGMA(message msg)
+// shows: name=VALUE for a macro VALUE
+#define BL_SHOW(name)   BL_DO_PRAGMA(message BL_NAME(name) "=" BL_STR(name))
+#define BL_NAME(x)      #x
 #endif
 
 /// ======== FAST_INLINE ========
