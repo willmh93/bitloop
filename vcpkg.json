@@ -16,6 +16,7 @@
     "sdl3",
     "glad",
     "glm",
+    "gcem",
     "concurrentqueue",
     "nanovg",
     "nanosvg",

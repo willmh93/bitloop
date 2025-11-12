@@ -17,22 +17,34 @@ concept VarHasHashMethod = requires(const U & u) {
     { u.hash() } -> std::convertible_to<std::size_t>;
 };
 
+template<typename T>
+concept HasEq = requires(const T & x, const T & y) {
+    { x == y } -> std::convertible_to<bool>;
+};
+
 template<class T, class Enable = void>
 struct TypeOps {
     using Store = std::remove_const_t<T>;
 
-    static void assign(void* dst, const std::any& src) {
+    static void assign(void* dst, const std::any& src)
+    {
         const Store& s = std::any_cast<const Store&>(src);
         *static_cast<Store*>(dst) = s;
     }
-    static bool equals(const void* dst, const std::any& src) {
-        const Store& s = std::any_cast<const Store&>(src);
-        const Store& d = *static_cast<const Store*>(dst);
-        if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
-            return std::memcmp(&d, &s, sizeof(Store)) == 0;
+
+    static bool equals(const void* a, const std::any& b)
+    {
+        const Store& A = *static_cast<const Store*>(a);
+        const Store& B = std::any_cast<const Store&>(b);
+
+        if constexpr (HasEq<Store>)
+            return A == B; // prefer user-defined equality if available
+        else if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
+            return std::memcmp(&A, &B, sizeof(Store)) == 0;
         else
-            return d == s;
+            static_assert(HasEq<Store>, "Store must be equality comparable or trivially copyable");
     }
+
     // copy live memory -> any
     static void store(std::any& dst, const void* src) {
         const Store& s = *static_cast<const Store*>(src);
@@ -46,14 +58,19 @@ struct TypeOps {
         ///    dst.emplace<Store>(s);
         ///}
     }
+
     // compare any vs any (same underlying type)
-    static bool equals_any(const std::any& a, const std::any& b) {
+    static bool equals_any(const std::any& a, const std::any& b)
+    {
         const Store& A = std::any_cast<const Store&>(a);
         const Store& B = std::any_cast<const Store&>(b);
-        if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
+
+        if constexpr (HasEq<Store>) 
+            return A == B; // prefer user-defined equality if available
+        else if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
             return std::memcmp(&A, &B, sizeof(Store)) == 0;
         else
-            return A == B;
+            static_assert(HasEq<Store>, "Store must be equality comparable or trivially copyable");
     }
 };
 
@@ -217,10 +234,31 @@ struct VarBuffer
             if (!changed) return;
             assign_fn(const_cast<void*>(key), value);
         }
+        ///void updateShadow() {
+        ///    if (!owner || !store_from_live_fn || !key) return;
+        ///    store_from_live_fn(value, key);
+        ///}
         void updateShadow() {
-            if (!owner || !store_from_live_fn || !key) return;
-            store_from_live_fn(value, key);
+            if (!owner || !key) return;
+
+            // First time: populate shadow
+            if (!value.has_value()) {
+                if (store_from_live_fn) store_from_live_fn(value, key);
+                return;
+            }
+
+            if (hashable && hash_from_live_fn && hash_from_any_fn) {
+                const std::size_t live_h = hash_from_live_fn(key);
+                const std::size_t shadow_h = hash_from_any_fn(value);
+                if (live_h == shadow_h) return;                // no change => skip copy
+            }
+            else if (equals_fn) {
+                if (equals_fn(key, value)) return;             // no change => skip copy
+            }
+
+            if (store_from_live_fn) store_from_live_fn(value, key); // changed => update shadow
         }
+
         void markLiveValue() {
             if (!owner || !key) return;
             if (hashable && hash_from_live_fn) {
