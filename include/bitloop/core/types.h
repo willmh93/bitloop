@@ -19,41 +19,44 @@
 #define GLM_FORCE_CTOR_INIT
 #include "glm/glm.hpp"
 #include "glm/gtx/transform2.hpp"
+#include <gcem.hpp>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
+
 
 #define BL_BEGIN_NS namespace bl {
 #define BL_END_NS   }
 
 namespace bl
 {
-    using std::abs;
-    using std::fabs;
-    using std::floor;
-    using std::ceil;
-    using std::round;
-    using std::sin;
-    using std::cos;
-    using std::tan;
-    using std::atan;
-    using std::atan2;
-    using std::sqrt;
-    using std::pow;
-    using std::exp;
-    using std::log;
-    using std::log2;
-    using std::log10;
-    using std::trunc;
-    using std::remainder;
-    using std::fmod;
-    using std::isnan;
-    using std::isinf;
+    using std::isnan; // already constexpr
+    using std::isinf; // already constexpr
+    using std::remainder; // no gcem equivelant
 
-    typedef int8_t  i8;
-    typedef int16_t i16;
-    typedef int32_t i32;
-    typedef int64_t i64;
+    template<class T> constexpr T abs(T x)   { if consteval { return gcem::abs(x);   } else { return std::abs(x);   } }
+    template<class T> constexpr T floor(T x) { if consteval { return gcem::floor(x); } else { return std::floor(x); } }
+    template<class T> constexpr T ceil(T x)  { if consteval { return gcem::ceil(x);  } else { return std::ceil(x);  } }
+    template<class T> constexpr T round(T x) { if consteval { return gcem::round(x); } else { return std::round(x); } }
+    template<class T> constexpr T cos(T x)   { if consteval { return gcem::cos(x);   } else { return std::cos(x);   } }
+    template<class T> constexpr T sin(T x)   { if consteval { return gcem::sin(x);   } else { return std::sin(x);   } }
+    template<class T> constexpr T tan(T x)   { if consteval { return gcem::tan(x);   } else { return std::tan(x);   } }
+    template<class T> constexpr T atan(T x)  { if consteval { return gcem::atan(x);  } else { return std::atan(x);  } }
+    template<class T> constexpr T sqrt(T x)  { if consteval { return gcem::sqrt(x);  } else { return std::sqrt(x);  } }
+    template<class T> constexpr T exp(T x)   { if consteval { return gcem::exp(x);   } else { return std::exp(x);   } }
+    template<class T> constexpr T log(T x)   { if consteval { return gcem::log(x);   } else { return std::log(x);   } }
+    template<class T> constexpr T log2(T x)  { if consteval { return gcem::log2(x);  } else { return std::log2(x);  } }
+    template<class T> constexpr T log10(T x) { if consteval { return gcem::log10(x); } else { return std::log10(x); } }
+    template<class T> constexpr T trunc(T x) { if consteval { return gcem::trunc(x); } else { return std::trunc(x); } }
+
+    template<class T, class U> constexpr T atan2(T y, U x) { if consteval { return gcem::atan2(y, x); } else { return std::atan2(y, x); } }
+    template<class T, class U> constexpr T pow(T x, U y)   { if consteval { return gcem::pow(x, y);   } else { return std::pow(x, y);   } }
+    template<class T, class U> constexpr T fmod(T x, U y)  { if consteval { return gcem::fmod(x, y);  } else { return std::fmod(x, y);  } }
+
+    typedef int8_t   i8;
+    typedef int16_t  i16;
+    typedef int32_t  i32;
+    typedef int64_t  i64;
 
     typedef uint8_t  u8;
     typedef uint16_t u16;
@@ -62,6 +65,7 @@ namespace bl
 
     typedef float  f32;
     typedef double f64;
+    // ........... f128;
 
 }
 
