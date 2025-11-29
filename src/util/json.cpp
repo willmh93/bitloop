@@ -1,10 +1,8 @@
 #include <bitloop/util/json.h>
 
-//#include "nlohmann/json.hpp"
-
-// JSON support must go *after* class definition
+// JSON support needs to be after class definition
 inline void to_json(nlohmann::json& j, const FiniteDouble& fd) {
-    j = static_cast<double>(fd);  // or fd.get();
+    j = static_cast<double>(fd);
 }
 
 inline void from_json(const nlohmann::json& j, FiniteDouble& fd) {

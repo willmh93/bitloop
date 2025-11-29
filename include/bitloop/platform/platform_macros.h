@@ -25,14 +25,14 @@
 #define BL_NAME(x)      #x
 #endif
 
-/// ======== FAST_INLINE ========
+/// ======== FORCE_INLINE ========
 
 #if defined(_MSC_VER)
-#define FAST_INLINE __forceinline
+#define FORCE_INLINE __forceinline
 #elif defined(__clang__) || defined(__GNUC__)
-#define FAST_INLINE inline __attribute__((always_inline))
+#define FORCE_INLINE inline __attribute__((always_inline))
 #else
-#define FAST_INLINE inline
+#define FORCE_INLINE inline
 #endif
 
 

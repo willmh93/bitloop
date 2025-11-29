@@ -62,6 +62,8 @@ protected:
     virtual bool changedShadow() { return false; }
     virtual void markLiveValues() {}
     virtual void markShadowValues() {}
+    virtual void updateUnchangedShadowVars() {}
+    virtual void invokeScheduledCalls() {}
 
     //
     
@@ -169,6 +171,7 @@ public:
     {
         has_var_buffer = true;
         ui = new SceneType::UI(static_cast<const SceneType*>(this));
+        ui->init();
     }
 
     ~Scene()
@@ -178,28 +181,30 @@ public:
 
 protected:
 
-    virtual void _sceneAttributes() override 
+    void _sceneAttributes() override final
     {
         ui->sidebar();
     }
 
-    virtual void _populateOverlay() override
+    void _populateOverlay() override final
     {
         ui->overlay();
     }
 
 private:
 
-    void updateLiveBuffers() override final   { VarBuffer<SceneType>::updateLive(); VarBuffer<SceneType>::runScheduledCalls(); }
-    void updateShadowBuffers() override final { VarBuffer<SceneType>::updateShadow(); }
-    void markLiveValues() override final      { VarBuffer<SceneType>::markLiveValue(); }
-    void markShadowValues() override final    { VarBuffer<SceneType>::markShadowValue(); }
-    bool changedLive() override final         { return VarBuffer<SceneType>::liveChanged(); }
-    bool changedShadow() override final       { return VarBuffer<SceneType>::shadowChanged(); }
+    void updateLiveBuffers() override final          { VarBuffer<SceneType>::updateLive(); }
+    void updateShadowBuffers() override final        { VarBuffer<SceneType>::updateShadow(); }
+    void markLiveValues() override final             { VarBuffer<SceneType>::markLiveValue(); }
+    void markShadowValues() override final           { VarBuffer<SceneType>::markShadowValue(); }
+    bool changedLive() override final                { return VarBuffer<SceneType>::liveChanged(); }
+    bool changedShadow() override final              { return VarBuffer<SceneType>::shadowChanged(); }
+    void updateUnchangedShadowVars() override final  { VarBuffer<SceneType>::updateUnchangedShadowVars(); }
+    void invokeScheduledCalls() override final       { VarBuffer<SceneType>::invokeScheduledCalls(); }
 };
 
-
-
+// todo: Make dedicated "SingleThreadedScene" class which uses a single thread for both UI/process
+//       BasicScene currently doesn't support any UI
 typedef SceneBase BasicScene;
 
 BL_END_NS

@@ -159,10 +159,13 @@ protected:
         IVec2 bmp_size;
     };
 
-    int nano_img = 0;
-    bool pending_resize = false;
+    // mutable: silently refresh nanovg data when necessary
+    mutable int nano_img = 0;
+    mutable bool pending_resize = false;
 
+    // non-mutable
     std::vector<uint8_t> pixels;
+
     uint32_t* colors;
 
 public:
@@ -278,7 +281,7 @@ public:
 
 protected:
 
-    void refreshData(NVGcontext* vg)
+    void refreshData(NVGcontext* vg) const
     {
         if (bmp_width <= 0 || bmp_height <= 0)
             return;
@@ -652,7 +655,7 @@ public:
         //    "Callback must be: void(int x, int y, float_t wx, float_y wy)");
 
 
-    template<typename WorldT, typename Callback>
+    template<typename WorldT=T, typename Callback>
     bool forEachWorldPixel(
         int& current_row,
         Callback&& callback,

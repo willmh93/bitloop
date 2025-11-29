@@ -31,10 +31,12 @@
 #define BL_SIMD_SCALAR 1
 #endif
 
-#ifdef SIMD_FORCE_SCALER
+#if BL_SIMD_FORCE_SCALAR
 #undef BL_SIMD_SSE2
 #undef BL_SIMD_AVX
 #undef BL_SIMD_AVX2
+#define BL_SIMD_SCALAR 1
+//BL_MESSAGE("SIMD: Forcing scalar mode")
 #endif
 
 BL_BEGIN_NS;
@@ -144,11 +146,17 @@ namespace simd2 {
         static inline v2 set(float x, float y) { return { _mm_set_ps(0,0,y,x) }; }
         static inline v2 load2(const float* p) { return set(p[0], p[1]); }
         static inline v2 load(const float* p) { return load2(p); }
-        inline void store2(float* p) const { alignas(16) float t[4]; _mm_store_ps(t, v); p[0] = t[0]; p[1] = t[1]; }
+        inline void store2(float* p) const {
+            alignas(16) float t[4];
+            _mm_store_ps(t, v);
+            p[0] = t[0];
+            p[1] = t[1];
+        }
 
         static inline v2 add(v2 a, v2 b) { return { _mm_add_ps(a.v,b.v) }; }
         static inline v2 sub(v2 a, v2 b) { return { _mm_sub_ps(a.v,b.v) }; }
         static inline v2 mul(v2 a, v2 b) { return { _mm_mul_ps(a.v,b.v) }; }
+
         static inline v2 fma(v2 a, v2 b, v2 c) {
             #if defined(__FMA__) || defined(__AVX2__) || defined(__FMA4__)
             return { _mm_fmadd_ps(a.v,b.v,c.v) };
@@ -159,22 +167,42 @@ namespace simd2 {
 
         static inline float dot(v2 a) {
             __m128 m = _mm_mul_ps(a.v, a.v);
-            alignas(16) float t[4]; _mm_store_ps(t, m);
-            return t[0] + t[1];
+            __m128 sh = _mm_shuffle_ps(m, m, _MM_SHUFFLE(3, 2, 0, 1)); // swap x/y
+            __m128 s = _mm_add_ps(m, sh);
+            alignas(16) float t[4];
+            _mm_store_ps(t, s);
+            return t[0]; // x*x + y*y
         }
 
+        // *** fixed complex multiply ***
         static inline v2 cmul(v2 a, v2 b) {
-            const __m128 ab = _mm_mul_ps(a.v, b.v);                         // (ax*bx, ay*by, 0,0)
-            const __m128 b_yx = _mm_shuffle_ps(b.v, b.v, _MM_SHUFFLE(3, 2, 0, 1)); // (by,bx,*,*)
-            const __m128 apb = _mm_mul_ps(a.v, b_yx);                        // (ax*by, ay*bx, 0,0)
-            const __m128 real = _mm_sub_ps(ab, _mm_shuffle_ps(ab, ab, _MM_SHUFFLE(3, 2, 0, 1)));
-            const __m128 imag = _mm_add_ps(apb, _mm_shuffle_ps(apb, apb, _MM_SHUFFLE(3, 2, 0, 1)));
-            const __m128 out = _mm_movelh_ps(real, imag);                    // lane0(real), lane0(imag)
+            // a = (ax, ay, _, _), b = (bx, by, _, _)
+            const __m128 ab = _mm_mul_ps(a.v, b.v);                          // (ax*bx, ay*by, …)
+            const __m128 b_sw = _mm_shuffle_ps(b.v, b.v, _MM_SHUFFLE(3, 2, 0, 1)); // (by,bx, …)
+            const __m128 apb = _mm_mul_ps(a.v, b_sw);                         // (ax*by, ay*bx, …)
+
+            // swap first two lanes: (ay*by, ax*bx, …) / (ay*bx, ax*by, …)
+            const __m128 ab_sw = _mm_shuffle_ps(ab, ab, _MM_SHUFFLE(2, 3, 0, 1));
+            const __m128 apb_sw = _mm_shuffle_ps(apb, apb, _MM_SHUFFLE(2, 3, 0, 1));
+
+            const __m128 real = _mm_sub_ps(ab, ab_sw);   // (ax*bx - ay*by, …)
+            const __m128 imag = _mm_add_ps(apb, apb_sw);  // (ax*by + ay*bx, …)
+
+            // interleave lane0(real), lane0(imag), ignore the rest
+            const __m128 out = _mm_unpacklo_ps(real, imag); // [real0, imag0, …, …]
             return { out };
         }
 
-        inline float x() const { alignas(16) float t[4]; _mm_store_ps(t, v); return t[0]; }
-        inline float y() const { alignas(16) float t[4]; _mm_store_ps(t, v); return t[1]; }
+        inline float x() const {
+            alignas(16) float t[4];
+            _mm_store_ps(t, v);
+            return t[0];
+        }
+        inline float y() const {
+            alignas(16) float t[4];
+            _mm_store_ps(t, v);
+            return t[1];
+        }
     };
     #endif
 

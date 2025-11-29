@@ -6,15 +6,15 @@
 #include <sstream>
 #include <type_traits>
 
-/// ======== FAST_INLINE ========
+/// ======== FORCE_INLINE ========
 
-#ifndef FAST_INLINE
+#ifndef FORCE_INLINE
     #if defined(_MSC_VER)
-    #define FAST_INLINE __forceinline
+    #define FORCE_INLINE __forceinline
     #elif defined(__clang__) || defined(__GNUC__)
-    #define FAST_INLINE inline __attribute__((always_inline))
+    #define FORCE_INLINE inline __attribute__((always_inline))
     #else
-    #define FAST_INLINE inline
+    #define FORCE_INLINE inline
     #endif
 #endif
 
@@ -84,7 +84,7 @@ namespace bl {
 #endif
 
 BL_PUSH_PRECISE
-FAST_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e)
+FORCE_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e)
 {
     s = a + b;
     double bv = s - a;
@@ -94,12 +94,12 @@ BL_POP_PRECISE
 
 #ifdef FMA_AVAILABLE
 
-static FAST_INLINE double fma1(double a, double b, double c)
+static FORCE_INLINE double fma1(double a, double b, double c)
 {
     return std::fma(a, b, c);
 }
 
-FAST_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err)
+FORCE_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err)
 {
     p = a * b;
     err = fma1(a, b, -p);
@@ -108,7 +108,7 @@ FAST_INLINE void two_prod_precise_fma(double a, double b, double& p, double& err
 #endif
 
 BL_PUSH_PRECISE
-FAST_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p, double& err)
+FORCE_INLINE constexpr void two_prod_precise_dekker(double a, double b, double& p, double& err)
 {
     constexpr double split = 134217729.0;
 
@@ -144,11 +144,11 @@ struct f128
     
     #ifdef FMA_AVAILABLE
     /// FMA versions (not constexpr)
-    FAST_INLINE f128& operator*=(f128 rhs) { *this = *this * rhs; return *this; }
-    FAST_INLINE f128& operator/=(f128 rhs) { *this = *this / rhs; return *this; }
+    FORCE_INLINE f128& operator*=(f128 rhs) { *this = *this * rhs; return *this; }
+    FORCE_INLINE f128& operator/=(f128 rhs) { *this = *this / rhs; return *this; }
     #else
-    FAST_INLINE constexpr f128& operator*=(f128 rhs) { *this = *this * rhs; return *this; }
-    FAST_INLINE constexpr f128& operator/=(f128 rhs) { *this = *this / rhs; return *this; }
+    FORCE_INLINE constexpr f128& operator*=(f128 rhs) { *this = *this * rhs; return *this; }
+    FORCE_INLINE constexpr f128& operator/=(f128 rhs) { *this = *this / rhs; return *this; }
     #endif
 
     constexpr f128() noexcept = default;
@@ -156,39 +156,34 @@ struct f128
     constexpr f128(float  x) noexcept : hi((double)x), lo(0.0) {}
     constexpr f128(double x) noexcept : hi(x), lo(0.0) {}
 
-    //constexpr void renormalize()
-    //{
-    //    two_sum_precise(hi, lo, hi, lo);
-    //}
-
     constexpr f128(int64_t  v) noexcept { *this = static_cast<int64_t>(v); }
     constexpr f128(uint64_t u) noexcept { *this = static_cast<uint64_t>(u); }
     constexpr f128(int32_t  v) noexcept : f128((int64_t)v) {}
     constexpr f128(uint32_t u) noexcept : f128((int64_t)u) {}
 
-    //FAST_INLINE constexpr f128(int v) { f128(int64_t(v)); }
+    //FORCE_INLINE constexpr f128(int v) { f128(int64_t(v)); }
 
-    FAST_INLINE constexpr f128& operator=(double x) noexcept {
+    FORCE_INLINE constexpr f128& operator=(double x) noexcept {
         hi = x; lo = 0.0; return *this;
     }
-    FAST_INLINE constexpr f128& operator=(float x) noexcept {
+    FORCE_INLINE constexpr f128& operator=(float x) noexcept {
         hi = static_cast<double>(x); lo = 0.0; return *this;
     }
 
-    FAST_INLINE constexpr f128& operator=(uint64_t u) noexcept;
-    FAST_INLINE constexpr f128& operator=(int64_t v) noexcept;
+    FORCE_INLINE constexpr f128& operator=(uint64_t u) noexcept;
+    FORCE_INLINE constexpr f128& operator=(int64_t v) noexcept;
 
     template<class T, std::enable_if_t<std::is_integral_v<T>&& std::is_signed_v<T> && (sizeof(T) < 8), int> = 0>
-    FAST_INLINE constexpr f128& operator=(T v) noexcept {
+    FORCE_INLINE constexpr f128& operator=(T v) noexcept {
         return (*this = static_cast<int64_t>(v));
     }
     template<class T, std::enable_if_t<std::is_integral_v<T>&& std::is_unsigned_v<T> && (sizeof(T) < 8), int> = 0>
-    FAST_INLINE constexpr f128& operator=(T v) noexcept {
+    FORCE_INLINE constexpr f128& operator=(T v) noexcept {
         return (*this = static_cast<uint64_t>(v));
     }
 
-    FAST_INLINE constexpr f128& operator+=(f128 rhs) { *this = *this + rhs; return *this; }
-    FAST_INLINE constexpr f128& operator-=(f128 rhs) { *this = *this - rhs; return *this; }
+    FORCE_INLINE constexpr f128& operator+=(f128 rhs) { *this = *this + rhs; return *this; }
+    FORCE_INLINE constexpr f128& operator-=(f128 rhs) { *this = *this - rhs; return *this; }
 
 
     /// ======== Conversions ========
@@ -266,19 +261,23 @@ static constexpr double DD_PI2 = 1.570796326794896619231321691639751442;
 
 /// ======== Helpers ========
 
-FAST_INLINE constexpr f128 renorm(double hi, double lo)
+FORCE_INLINE constexpr f128 renorm(double hi, double lo)
 {
     double s, e;
     two_sum_precise(hi, lo, s, e);
     return { s, e };
 }
-FAST_INLINE constexpr f128 quick_two_sum(double a, double b)
+
+BL_PUSH_PRECISE
+FORCE_INLINE constexpr f128 quick_two_sum(double a, double b)
 {
     double s = a + b;
     double err = b - (s - a);
     return { s, err };
 }
-FAST_INLINE constexpr f128 recip(f128 b)
+BL_POP_PRECISE
+
+FORCE_INLINE constexpr f128 recip(f128 b)
 {
     constexpr f128 one = f128(1.0);
     f128 y = f128(1.0 / b.hi);
@@ -291,7 +290,7 @@ FAST_INLINE constexpr f128 recip(f128 b)
     return y;
 }
 
-FAST_INLINE constexpr f128& f128::operator=(uint64_t u) noexcept {
+FORCE_INLINE constexpr f128& f128::operator=(uint64_t u) noexcept {
     // same limb path you already use in f128(u)
     uint64_t hi32 = u >> 32, lo32 = u & 0xFFFFFFFFull;
     double a = static_cast<double>(hi32) * 4294967296.0; // 2^32
@@ -300,7 +299,7 @@ FAST_INLINE constexpr f128& f128::operator=(uint64_t u) noexcept {
     f128 r = renorm(s, e);
     hi = r.hi; lo = r.lo; return *this;
 }
-FAST_INLINE constexpr f128& f128::operator=(int64_t v) noexcept {
+FORCE_INLINE constexpr f128& f128::operator=(int64_t v) noexcept {
     uint64_t u = (v < 0) ? uint64_t(0) - uint64_t(v) : uint64_t(v);
     f128 r; r = u;                       // reuse uint64_t path
     if (v < 0) { r.hi = -r.hi; r.lo = -r.lo; }
@@ -309,230 +308,244 @@ FAST_INLINE constexpr f128& f128::operator=(int64_t v) noexcept {
 
 // ------------------ f128 <=> f128 ------------------
 
-FAST_INLINE constexpr bool operator <(const f128& a, const f128& b) { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
-FAST_INLINE constexpr bool operator >(const f128& a, const f128& b) { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, const f128& b) { return (a < b) || (a.hi == b.hi && a.lo == b.lo); }
-FAST_INLINE constexpr bool operator>=(const f128& a, const f128& b) { return b <= a; }
-FAST_INLINE constexpr bool operator==(const f128& a, const f128& b) { return a.hi == b.hi && a.lo == b.lo; }
-FAST_INLINE constexpr bool operator!=(const f128& a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator <(const f128& a, const f128& b) { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
+FORCE_INLINE constexpr bool operator >(const f128& a, const f128& b) { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, const f128& b) { return (a < b) || (a.hi == b.hi && a.lo == b.lo); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, const f128& b) { return b <= a; }
+FORCE_INLINE constexpr bool operator==(const f128& a, const f128& b) { return a.hi == b.hi && a.lo == b.lo; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, const f128& b) { return !(a == b); }
 
 // ------------------ double <=> f128 ------------------
 
-FAST_INLINE constexpr bool operator<(const f128& a, double b)  { return a < f128(b); }
-FAST_INLINE constexpr bool operator<(double a, const f128& b)  { return f128(a) < b; }
-FAST_INLINE constexpr bool operator>(const f128& a, double b)  { return b < a; }
-FAST_INLINE constexpr bool operator>(double a, const f128& b)  { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, double b) { return !(b < a); }
-FAST_INLINE constexpr bool operator<=(double a, const f128& b) { return !(b < a); }
-FAST_INLINE constexpr bool operator>=(const f128& a, double b) { return !(a < b); }
-FAST_INLINE constexpr bool operator>=(double a, const f128& b) { return !(a < b); }
-FAST_INLINE constexpr bool operator==(const f128& a, double b) { return a == f128(b); }
-FAST_INLINE constexpr bool operator==(double a, const f128& b) { return f128(a) == b; }
-FAST_INLINE constexpr bool operator!=(const f128& a, double b) { return !(a == b); }
-FAST_INLINE constexpr bool operator!=(double a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator<(const f128& a, double b)  { return a < f128(b); }
+FORCE_INLINE constexpr bool operator<(double a, const f128& b)  { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator>(const f128& a, double b)  { return b < a; }
+FORCE_INLINE constexpr bool operator>(double a, const f128& b)  { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, double b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator<=(double a, const f128& b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, double b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator>=(double a, const f128& b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator==(const f128& a, double b) { return a == f128(b); }
+FORCE_INLINE constexpr bool operator==(double a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, double b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator!=(double a, const f128& b) { return !(a == b); }
 
 // ------------------ float <=> f128 ------------------
 
-FAST_INLINE constexpr bool operator<(const f128& a, float b) { return a < f128(b); }
-FAST_INLINE constexpr bool operator<(float a, const f128& b) { return f128(a) < b; }
-FAST_INLINE constexpr bool operator>(const f128& a, float b) { return b < a; }
-FAST_INLINE constexpr bool operator>(float a, const f128& b) { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, float b) { return !(b < a); }
-FAST_INLINE constexpr bool operator<=(float a, const f128& b) { return !(b < a); }
-FAST_INLINE constexpr bool operator>=(const f128& a, float b) { return !(a < b); }
-FAST_INLINE constexpr bool operator>=(float a, const f128& b) { return !(a < b); }
-FAST_INLINE constexpr bool operator==(const f128& a, float b) { return a == f128(b); }
-FAST_INLINE constexpr bool operator==(float a, const f128& b) { return f128(a) == b; }
-FAST_INLINE constexpr bool operator!=(const f128& a, float b) { return !(a == b); }
-FAST_INLINE constexpr bool operator!=(float a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator<(const f128& a, float b) { return a < f128(b); }
+FORCE_INLINE constexpr bool operator<(float a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator>(const f128& a, float b) { return b < a; }
+FORCE_INLINE constexpr bool operator>(float a, const f128& b) { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, float b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator<=(float a, const f128& b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, float b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator>=(float a, const f128& b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator==(const f128& a, float b) { return a == f128(b); }
+FORCE_INLINE constexpr bool operator==(float a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, float b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator!=(float a, const f128& b) { return !(a == b); }
 
 // --------------- ints <=> f128 ---------------
 
-FAST_INLINE constexpr bool operator<(const f128& a, int32_t b) { return a < f128(b); }
-FAST_INLINE constexpr bool operator<(int32_t a, const f128& b) { return f128(a) < b; }
-FAST_INLINE constexpr bool operator>(const f128& a, int32_t b) { return b < a; }
-FAST_INLINE constexpr bool operator>(int32_t a, const f128& b) { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, int32_t b) { return !(b < a); }
-FAST_INLINE constexpr bool operator<=(int32_t a, const f128& b) { return !(b < a); }
-FAST_INLINE constexpr bool operator>=(const f128& a, int32_t b) { return !(a < b); }
-FAST_INLINE constexpr bool operator>=(int32_t a, const f128& b) { return !(a < b); }
-FAST_INLINE constexpr bool operator==(const f128& a, int32_t b) { return a == f128(b); }
-FAST_INLINE constexpr bool operator==(int32_t a, const f128& b) { return f128(a) == b; }
-FAST_INLINE constexpr bool operator!=(const f128& a, int32_t b) { return !(a == b); }
-FAST_INLINE constexpr bool operator!=(int32_t a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator<(const f128& a, int32_t b) { return a < f128(b); }
+FORCE_INLINE constexpr bool operator<(int32_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator>(const f128& a, int32_t b) { return b < a; }
+FORCE_INLINE constexpr bool operator>(int32_t a, const f128& b) { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, int32_t b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator<=(int32_t a, const f128& b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, int32_t b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator>=(int32_t a, const f128& b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator==(const f128& a, int32_t b) { return a == f128(b); }
+FORCE_INLINE constexpr bool operator==(int32_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, int32_t b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator!=(int32_t a, const f128& b) { return !(a == b); }
 
-FAST_INLINE constexpr bool operator<(const f128& a, uint32_t b) { return a < f128(b); }
-FAST_INLINE constexpr bool operator<(uint32_t a, const f128& b) { return f128(a) < b; }
-FAST_INLINE constexpr bool operator>(const f128& a, uint32_t b) { return b < a; }
-FAST_INLINE constexpr bool operator>(uint32_t a, const f128& b) { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, uint32_t b) { return !(b < a); }
-FAST_INLINE constexpr bool operator<=(uint32_t a, const f128& b) { return !(b < a); }
-FAST_INLINE constexpr bool operator>=(const f128& a, uint32_t b) { return !(a < b); }
-FAST_INLINE constexpr bool operator>=(uint32_t a, const f128& b) { return !(a < b); }
-FAST_INLINE constexpr bool operator==(const f128& a, uint32_t b) { return a == f128(b); }
-FAST_INLINE constexpr bool operator==(uint32_t a, const f128& b) { return f128(a) == b; }
-FAST_INLINE constexpr bool operator!=(const f128& a, uint32_t b) { return !(a == b); }
-FAST_INLINE constexpr bool operator!=(uint32_t a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator<(const f128& a, uint32_t b) { return a < f128(b); }
+FORCE_INLINE constexpr bool operator<(uint32_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator>(const f128& a, uint32_t b) { return b < a; }
+FORCE_INLINE constexpr bool operator>(uint32_t a, const f128& b) { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, uint32_t b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator<=(uint32_t a, const f128& b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, uint32_t b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator>=(uint32_t a, const f128& b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator==(const f128& a, uint32_t b) { return a == f128(b); }
+FORCE_INLINE constexpr bool operator==(uint32_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, uint32_t b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator!=(uint32_t a, const f128& b) { return !(a == b); }
 
-FAST_INLINE constexpr bool operator<(const f128& a, int64_t b) { return a < f128(b); }
-FAST_INLINE constexpr bool operator<(int64_t a, const f128& b) { return f128(a) < b; }
-FAST_INLINE constexpr bool operator>(const f128& a, int64_t b) { return b < a; }
-FAST_INLINE constexpr bool operator>(int64_t a, const f128& b) { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, int64_t b) { return !(b < a); }
-FAST_INLINE constexpr bool operator<=(int64_t a, const f128& b) { return !(b < a); }
-FAST_INLINE constexpr bool operator>=(const f128& a, int64_t b) { return !(a < b); }
-FAST_INLINE constexpr bool operator>=(int64_t a, const f128& b) { return !(a < b); }
-FAST_INLINE constexpr bool operator==(const f128& a, int64_t b) { return a == f128(b); }
-FAST_INLINE constexpr bool operator==(int64_t a, const f128& b) { return f128(a) == b; }
-FAST_INLINE constexpr bool operator!=(const f128& a, int64_t b) { return !(a == b); }
-FAST_INLINE constexpr bool operator!=(int64_t a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator<(const f128& a, int64_t b) { return a < f128(b); }
+FORCE_INLINE constexpr bool operator<(int64_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator>(const f128& a, int64_t b) { return b < a; }
+FORCE_INLINE constexpr bool operator>(int64_t a, const f128& b) { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, int64_t b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator<=(int64_t a, const f128& b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, int64_t b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator>=(int64_t a, const f128& b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator==(const f128& a, int64_t b) { return a == f128(b); }
+FORCE_INLINE constexpr bool operator==(int64_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, int64_t b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator!=(int64_t a, const f128& b) { return !(a == b); }
 
-FAST_INLINE constexpr bool operator<(const f128& a, uint64_t b) { return a < f128(b); }
-FAST_INLINE constexpr bool operator<(uint64_t a, const f128& b) { return f128(a) < b; }
-FAST_INLINE constexpr bool operator>(const f128& a, uint64_t b) { return b < a; }
-FAST_INLINE constexpr bool operator>(uint64_t a, const f128& b) { return b < a; }
-FAST_INLINE constexpr bool operator<=(const f128& a, uint64_t b) { return !(b < a); }
-FAST_INLINE constexpr bool operator<=(uint64_t a, const f128& b) { return !(b < a); }
-FAST_INLINE constexpr bool operator>=(const f128& a, uint64_t b) { return !(a < b); }
-FAST_INLINE constexpr bool operator>=(uint64_t a, const f128& b) { return !(a < b); }
-FAST_INLINE constexpr bool operator==(const f128& a, uint64_t b) { return a == f128(b); }
-FAST_INLINE constexpr bool operator==(uint64_t a, const f128& b) { return f128(a) == b; }
-FAST_INLINE constexpr bool operator!=(const f128& a, uint64_t b) { return !(a == b); }
-FAST_INLINE constexpr bool operator!=(uint64_t a, const f128& b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator<(const f128& a, uint64_t b) { return a < f128(b); }
+FORCE_INLINE constexpr bool operator<(uint64_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator>(const f128& a, uint64_t b) { return b < a; }
+FORCE_INLINE constexpr bool operator>(uint64_t a, const f128& b) { return b < a; }
+FORCE_INLINE constexpr bool operator<=(const f128& a, uint64_t b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator<=(uint64_t a, const f128& b) { return !(b < a); }
+FORCE_INLINE constexpr bool operator>=(const f128& a, uint64_t b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator>=(uint64_t a, const f128& b) { return !(a < b); }
+FORCE_INLINE constexpr bool operator==(const f128& a, uint64_t b) { return a == f128(b); }
+FORCE_INLINE constexpr bool operator==(uint64_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator!=(const f128& a, uint64_t b) { return !(a == b); }
+FORCE_INLINE constexpr bool operator!=(uint64_t a, const f128& b) { return !(a == b); }
 
 
 /// ======== Arithmetic operators ========
-FAST_INLINE constexpr f128 operator+(const f128& a, const f128& b)
+
+BL_PUSH_PRECISE
+FORCE_INLINE constexpr f128 operator+(const f128& a, const f128& b)
 {
-    double s1, e1;
-    two_sum_precise(a.hi, b.hi, s1, e1);
-    double s2, e2;
-    two_sum_precise(a.lo, b.lo, s2, e2);
-    double lo = e1 + s2;
-    double result_hi, result_lo;
-    two_sum_precise(s1, lo, result_hi, result_lo);
-    result_lo += e2;
-    return renorm(result_hi, result_lo);
+    // accurate sum of the high parts
+    double s, e;
+    two_sum_precise(a.hi, b.hi, s, e);
+
+    // fold low parts into the error
+    double t = a.lo + b.lo;
+    e += t;
+
+    // renormalize
+    return renorm(s, e);
 }
-FAST_INLINE constexpr f128 operator-(const f128& a, const f128& b)
+BL_POP_PRECISE
+
+FORCE_INLINE constexpr f128 operator-(const f128& a, const f128& b)
 {
-    return operator+(a, f128{ -b.hi, -b.lo });
+    return a + f128{ -b.hi, -b.lo };
 }
 #ifdef FMA_AVAILABLE
-FAST_INLINE           f128 operator*(const f128& a, const f128& b) {
+FORCE_INLINE f128 operator*(const f128& a, const f128& b)
+{
     double p, e;
-    two_prod_precise_fma(a.hi, b.hi, p, e);
-    e += a.hi * b.lo + a.lo * b.hi;
+    two_prod_precise_fma(a.hi, b.hi, p, e);   // p ≈ a.hi*b.hi, e = exact error
+
+    // Fold in cross terms and low*low
+    e = fma1(a.hi, b.lo, e);
+    e = fma1(a.lo, b.hi, e);
+    e = fma1(a.lo, b.lo, e); // kept for generic high precision
+
     return renorm(p, e);
 }
-FAST_INLINE           f128 operator/(const f128& a, const f128& b) { return a * recip(b); }
+FORCE_INLINE           f128 operator/(const f128& a, const f128& b) { return a * recip(b); }
 #else
-FAST_INLINE constexpr f128 operator*(const f128& a, const f128& b) {
+FORCE_INLINE constexpr f128 operator*(const f128& a, const f128& b)
+{
     double p, e;
     two_prod_precise_dekker(a.hi, b.hi, p, e);
     e += a.hi * b.lo + a.lo * b.hi;
-    return renorm(p, e);
+    e += a.lo * b.lo; // restore full dd precision
+
+    return quick_two_sum(p, e);
 }
-FAST_INLINE constexpr f128 operator/(const f128& a, const f128& b) { return a * recip(b); }
+FORCE_INLINE constexpr f128 operator/(const f128& a, const f128& b) { return a * recip(b); }
 #endif
 
 /// 'double' support
 #ifdef FMA_AVAILABLE
-FAST_INLINE           f128 operator*(const f128& a, double b) { return a * f128{ b }; }
-FAST_INLINE           f128 operator*(double a, const f128& b) { return f128{ a } * b; }
-FAST_INLINE           f128 operator/(const f128& a, double b) { return a / f128{ b }; }
-FAST_INLINE           f128 operator/(double a, const f128& b) { return f128{ a } / b; }
+FORCE_INLINE           f128 operator*(const f128& a, double b) { return a * f128{ b }; }
+FORCE_INLINE           f128 operator*(double a, const f128& b) { return f128{ a } * b; }
+FORCE_INLINE           f128 operator/(const f128& a, double b) { return a / f128{ b }; }
+FORCE_INLINE           f128 operator/(double a, const f128& b) { return f128{ a } / b; }
 #else
-FAST_INLINE constexpr f128 operator*(const f128& a, double b) { return a * f128{ b }; }
-FAST_INLINE constexpr f128 operator*(double a, const f128& b) { return f128{ a } * b; }
-FAST_INLINE constexpr f128 operator/(const f128& a, double b) { return a / f128{ b }; }
-FAST_INLINE constexpr f128 operator/(double a, const f128& b) { return f128{ a } / b; }
+FORCE_INLINE constexpr f128 operator*(const f128& a, double b) { return a * f128{ b }; }
+FORCE_INLINE constexpr f128 operator*(double a, const f128& b) { return f128{ a } * b; }
+FORCE_INLINE constexpr f128 operator/(const f128& a, double b) { return a / f128{ b }; }
+FORCE_INLINE constexpr f128 operator/(double a, const f128& b) { return f128{ a } / b; }
 #endif
-FAST_INLINE constexpr f128 operator+(const f128& a, double b) { return a + f128{ b }; }
-FAST_INLINE constexpr f128 operator+(double a, const f128& b) { return f128{ a } + b; }
-FAST_INLINE constexpr f128 operator-(const f128& a, double b) { return a - f128{ b }; }
-FAST_INLINE constexpr f128 operator-(double a, const f128& b) { return f128{ a } - b; }
+FORCE_INLINE constexpr f128 operator+(const f128& a, double b) { return a + f128{ b }; }
+FORCE_INLINE constexpr f128 operator+(double a, const f128& b) { return f128{ a } + b; }
+FORCE_INLINE constexpr f128 operator-(const f128& a, double b) { return a - f128{ b }; }
+FORCE_INLINE constexpr f128 operator-(double a, const f128& b) { return f128{ a } - b; }
 
-FAST_INLINE bool isnan(const f128& x) { return std::isnan(x.hi); }
-FAST_INLINE bool isinf(const f128& x) { return std::isinf(x.hi); }
-FAST_INLINE bool isfinite(const f128& x) { return std::isfinite(x.hi); }
-FAST_INLINE bool iszero(const f128& x) { return x.hi == 0.0 && x.lo == 0.0; }
+FORCE_INLINE bool isnan(const f128& x) { return std::isnan(x.hi); }
+FORCE_INLINE bool isinf(const f128& x) { return std::isinf(x.hi); }
+FORCE_INLINE bool isfinite(const f128& x) { return std::isfinite(x.hi); }
+FORCE_INLINE bool iszero(const f128& x) { return x.hi == 0.0 && x.lo == 0.0; }
 
-FAST_INLINE double log_as_double(float a)
+FORCE_INLINE double log_as_double(float a)
 {
     return std::log(a);
 }
-FAST_INLINE double log_as_double(double a)
+FORCE_INLINE double log_as_double(double a)
 {
     return std::log(a);
 }
-FAST_INLINE double log_as_double(f128 a)
+FORCE_INLINE double log_as_double(f128 a)
 {
     return std::log(a.hi) + std::log1p(a.lo / a.hi);
 }
-FAST_INLINE f128 log(const f128& a)
+FORCE_INLINE f128 log(const f128& a)
 {
     double log_hi = std::log(a.hi); // first guess
     f128 exp_log_hi(std::exp(log_hi)); // exp(guess)
     f128 r = (a - exp_log_hi) / exp_log_hi; // (a - e^g) / e^g ≈ error
     return f128(log_hi) + r; // refined log
 }
-FAST_INLINE f128 log2(const f128& a)
+FORCE_INLINE f128 log2(const f128& a)
 {
     constexpr f128 LOG2_RECIPROCAL(1.442695040888963407359924681001892137); // 1/log(2)
     return log(a) * LOG2_RECIPROCAL;
 }
-FAST_INLINE f128 log10(const f128& x)
+FORCE_INLINE f128 log10(const f128& x)
 {
     // 1 / ln(10) to full-double accuracy
     static constexpr double INV_LN10 = 0.434294481903251827651128918916605082;
     return log(x) * f128(INV_LN10);   // log(x) already returns float128
 }
-FAST_INLINE f128 clamp(const f128& v, const f128& lo, const f128& hi)
+FORCE_INLINE f128 clamp(const f128& v, const f128& lo, const f128& hi)
 {
     if (v < lo) return lo;
     if (v > hi) return hi;
     return v;
 }
-FAST_INLINE f128 abs(const f128& a)
+FORCE_INLINE f128 abs(const f128& a)
 {
     return (a.hi < 0.0) ? -a : a;
 }
-FAST_INLINE f128 fabs(const f128& a) 
+FORCE_INLINE f128 fabs(const f128& a) 
 {
     return (a.hi < 0.0) ? -a : a;
 }
-FAST_INLINE f128 floor(const f128& a)
+FORCE_INLINE f128 floor(const f128& a)
 {
     double f = std::floor(a.hi);
     /*     hi already integral ?  trailing part < 0  →  round one below   */
     if (f == a.hi && a.lo < 0.0) f -= 1.0;
     return { f, 0.0 };
 }
-FAST_INLINE f128 ceil(const f128& a)
+FORCE_INLINE f128 ceil(const f128& a)
 {
     double c = std::ceil(a.hi);
     if (c == a.hi && a.lo > 0.0) c += 1.0;
     return { c, 0.0 };
 }
-FAST_INLINE f128 trunc(const f128& a)
+FORCE_INLINE f128 trunc(const f128& a)
 {
     return (a.hi < 0.0) ? ceil(a) : floor(a);
 }
-FAST_INLINE f128 round(const f128& a)
+FORCE_INLINE f128 round(const f128& a)
 {
     f128 t = floor(a + f128(0.5));
     /* halfway cases: round to even like std::round */
     if (((t.hi - a.hi) == 0.5) && (std::fmod(t.hi, 2.0) != 0.0)) t -= f128(1.0);
     return t;
 }
-FAST_INLINE f128 fmod(const f128& x, const f128& y)
+FORCE_INLINE f128 fmod(const f128& x, const f128& y)
 {
     if (y.hi == 0.0 && y.lo == 0.0)
         return std::numeric_limits<f128>::quiet_NaN();
     return x - trunc(x / y) * y;
 }
-FAST_INLINE f128 remainder(const f128& x, const f128& y)
+FORCE_INLINE f128 remainder(const f128& x, const f128& y)
 {
     // Domain checks (match std::remainder)
     if (isnan(x) || isnan(y)) return std::numeric_limits<f128>::quiet_NaN();
@@ -568,120 +581,319 @@ FAST_INLINE f128 remainder(const f128& x, const f128& y)
 
 /*------------ transcendentals -------------------------------------------*/
 
-#ifdef FMA_AVAILABLE
-FAST_INLINE f128 sqrt(f128 a)
+// high-precision constants
+static constexpr f128 F128_PIO2 = renorm(1.5707963267948966, 6.1232339957367660e-17);
+static constexpr f128 F128_INV_PIO2 = renorm(0.6366197723675814, -3.9357353350364970e-17);
+static constexpr f128 F128_LN2 = renorm(0.6931471805599453, 2.3190468138462996e-17);
+static constexpr f128 F128_INV_LN2 = renorm(1.4426950408889634, 2.0355273740931033e-17);
+static constexpr double F128_PIO4_HI = 0.7853981633974483;
+
+FORCE_INLINE f128 f128_ldexp(const f128& x, int e)
 {
-    double approx = std::sqrt(a.hi);
-    f128 y{ approx };
-    f128 y_sq = y * y;
-    f128 r = a - y_sq;
-    f128 half{ 0.5 };
-    // y = y + r*(0.5/y)
-    double t = 0.5 / y.hi;
-    // fold hi updates with fma; lo correction comes via renorm in ops
-    y.hi = fma1(r.hi, t, y.hi);
-    // keep the original structure for lo through normal ops
+    // Scale by a power of two (preserves the double exponent range behavior)
+    return f128(std::ldexp(x.hi, e), std::ldexp(x.lo, e));
+}
+FORCE_INLINE bool f128_rem_pio2(const f128& x, long long& n_out, f128& r_out)
+{
+    // Reduce x = n*(pi/2) + r with r in roughly [-pi/4, pi/4].
+    // Returns false if n cannot be represented robustly
+
+    double ax = std::fabs(x.hi);
+    if (!std::isfinite(ax)) return false;
+
+    // If x exceeds 2^52, a double cannot represent every integer and remainder accuracy collapses
+    if (ax > 7.0e15) return false;
+
+    f128 t = x * F128_INV_PIO2;
+    double qd = std::nearbyint((double)t);
+
+    // Guard cast to int64
+    if (!std::isfinite(qd) ||
+        qd < (double)std::numeric_limits<long long>::min() ||
+        qd >(double)std::numeric_limits<long long>::max())
+        return false;
+
+    long long n = (long long)qd;
+    n_out = n;
+    r_out = x - f128((double)n) * F128_PIO2;
+    return true;
+}
+FORCE_INLINE void f128_sincos_kernel_pio4(const f128& x, f128& s_out, f128& c_out)
+{
+    // Taylor kernels on |x| <= pi/4. Degrees chosen to push truncation error below ~1e-34.
+    f128 t = x * x;
+
+    // sin(x) = x + x^3 * P(t)
+    f128 ps = f128(1.13099628864477159e-31);      //  1/29!
+    ps = ps * t + f128(-9.18368986379554601e-29); // -1/27!
+    ps = ps * t + f128(6.44695028438447359e-26);  //  1/25!
+    ps = ps * t + f128(-3.86817017063068413e-23); // -1/23!
+    ps = ps * t + f128(1.95729410633912626e-20);  //  1/21!
+    ps = ps * t + f128(-8.22063524662432950e-18); // -1/19!
+    ps = ps * t + f128(2.81145725434552060e-15);  //  1/17!
+    ps = ps * t + f128(-7.64716373181981641e-13); // -1/15!
+    ps = ps * t + f128(1.60590438368216133e-10);  //  1/13!
+    ps = ps * t + f128(-2.50521083854417202e-08); // -1/11!
+    ps = ps * t + f128(2.75573192239858925e-06);  //  1/9!
+    ps = ps * t + f128(-1.98412698412698413e-04); // -1/7!
+    ps = ps * t + f128(8.33333333333333322e-03);  //  1/5!
+    ps = ps * t + f128(-1.66666666666666657e-01); // -1/3!
+    s_out = x + x * t * ps;
+
+    // cos(x) = 1 + x^2 * Q(t)
+    f128 pc = f128(3.27988923706983776e-30);       //  1/28!
+    pc = pc * t + f128(-2.47959626322479759e-27);  // -1/26!
+    pc = pc * t + f128(1.61173757109611839e-24);   //  1/24!
+    pc = pc * t + f128(-8.89679139245057408e-22);  // -1/22!
+    pc = pc * t + f128(4.11031762331216484e-19);   //  1/20!
+    pc = pc * t + f128(-1.56192069685862253e-16);  // -1/18!
+    pc = pc * t + f128(4.77947733238738525e-14);   //  1/16!
+    pc = pc * t + f128(-1.14707455977297245e-11);  // -1/14!
+    pc = pc * t + f128(2.08767569878681002e-09);   //  1/12!
+    pc = pc * t + f128(-2.75573192239858883e-07);  // -1/10!
+    pc = pc * t + f128(2.48015873015873016e-05);   //  1/8!
+    pc = pc * t + f128(-1.38888888888888894e-03);  // -1/6!
+    pc = pc * t + f128(4.16666666666666644e-02);   //  1/4!
+    pc = pc * t + f128(-5.00000000000000000e-01);  // -1/2!
+    c_out = f128(1.0) + t * pc;
+}
+FORCE_INLINE bool f128_sincos(const f128& x, f128& s_out, f128& c_out)
+{
+    // Full sin/cos with quadrant handling; uses kernels above
+    double ax = std::fabs(x.hi);
+    if (!std::isfinite(ax))
+    {
+        s_out = f128(std::numeric_limits<double>::quiet_NaN());
+        c_out = s_out;
+        return false;
+    }
+
+    // Fast path: already small enough.
+    if (ax <= F128_PIO4_HI)
+    {
+        f128_sincos_kernel_pio4(x, s_out, c_out);
+        return true;
+    }
+
+    long long n = 0;
+    f128 r;
+    if (!f128_rem_pio2(x, n, r))
+        return false;
+
+    f128 sr, cr;
+    f128_sincos_kernel_pio4(r, sr, cr);
+
+    switch ((int)(n & 3))
+    {
+    case 0: s_out = sr;  c_out = cr;  break;
+    case 1: s_out = cr;  c_out = -sr; break;
+    case 2: s_out = -sr; c_out = -cr; break;
+    default: s_out = -cr; c_out = sr; break;
+    }
+    return true;
+}
+FORCE_INLINE f128 f128_exp_kernel_ln2_half(const f128& r)
+{
+    // exp(r) kernel for |r| <= ln2/2 via truncated Taylor series (degree 22)
+    f128 p =    f128(8.89679139245057408e-22); // 1/22!
+    p = p * r + f128(1.95729410633912626e-20); // 1/21!
+    p = p * r + f128(4.11031762331216484e-19); // 1/20!
+    p = p * r + f128(8.22063524662432950e-18); // 1/19!
+    p = p * r + f128(1.56192069685862253e-16); // 1/18!
+    p = p * r + f128(2.81145725434552060e-15); // 1/17!
+    p = p * r + f128(4.77947733238738525e-14); // 1/16!
+    p = p * r + f128(7.64716373181981641e-13); // 1/15!
+    p = p * r + f128(1.14707455977297245e-11); // 1/14!
+    p = p * r + f128(1.60590438368216133e-10); // 1/13!
+    p = p * r + f128(2.08767569878681002e-09); // 1/12!
+    p = p * r + f128(2.50521083854417202e-08); // 1/11!
+    p = p * r + f128(2.75573192239858883e-07); // 1/10!
+    p = p * r + f128(2.75573192239858925e-06); // 1/9!
+    p = p * r + f128(2.48015873015873016e-05); // 1/8!
+    p = p * r + f128(1.98412698412698413e-04); // 1/7!
+    p = p * r + f128(1.38888888888888894e-03); // 1/6!
+    p = p * r + f128(8.33333333333333322e-03); // 1/5!
+    p = p * r + f128(4.16666666666666644e-02); // 1/4!
+    p = p * r + f128(1.66666666666666657e-01); // 1/3!
+    p = p * r + f128(5.00000000000000000e-01); // 1/2!
+    p = p * r + f128(1.0);                     // 1/1!
+    return (p * r) + f128(1.0);                //+1/0!
+}
+FORCE_INLINE f128 f128_sin_kernel_pio4(const f128& x)
+{
+    // sin kernel for |x| <= pi/4.
+    f128 t = x * x;
+
+    // sin(x) = x + x*t*P(t)
+    f128 ps = f128(-9.18368986379554615e-29);
+    ps = ps * t + f128(6.4469502843844734e-26);
+    ps = ps * t + f128(-3.86817017063068404e-23);
+    ps = ps * t + f128(1.95729410633912612e-20);
+    ps = ps * t + f128(-8.22063524662432972e-18);
+    ps = ps * t + f128(2.81145725434552076e-15);
+    ps = ps * t + f128(-7.64716373181981648e-13);
+    ps = ps * t + f128(1.60590438368216146e-10);
+    ps = ps * t + f128(-2.50521083854417188e-8);
+    ps = ps * t + f128(2.75573192239858907e-6);
+    ps = ps * t + f128(-1.98412698412698413e-4);
+    ps = ps * t + f128(8.33333333333333333e-3);
+    ps = ps * t + f128(-1.66666666666666667e-1);
+
+    return x + x * t * ps;
+}
+FORCE_INLINE f128 f128_cos_kernel_pio4(const f128& x)
+{
+    // cos kernel for |x| <= pi/4
+    f128 t = x * x;
+
+    // cos(x) = 1 + t*Q(t)
+    f128 pc = f128(3.27988923706983791e-30);
+    pc = pc * t + f128(-2.47959626322479746e-27);
+    pc = pc * t + f128(1.61173757109611835e-24);
+    pc = pc * t + f128(-8.89679139245057329e-22);
+    pc = pc * t + f128(4.11031762331216486e-19);
+    pc = pc * t + f128(-1.56192069685862265e-16);
+    pc = pc * t + f128(4.7794773323873853e-14);
+    pc = pc * t + f128(-1.14707455977297247e-11);
+    pc = pc * t + f128(2.0876756987868099e-9);
+    pc = pc * t + f128(-2.75573192239858907e-7);
+    pc = pc * t + f128(2.48015873015873016e-5);
+    pc = pc * t + f128(-1.38888888888888889e-3);
+    pc = pc * t + f128(4.16666666666666667e-2);
+    pc = pc * t + f128(-5.0e-1);
+
+    return f128(1.0) + t * pc;
+}
+
+FORCE_INLINE f128 sin(f128 a)
+{
+    double ax = std::fabs(a.hi);
+    if (!std::isfinite(ax))
+        return f128(std::sin((double)a));
+
+    // Small fast path: no range reduction
+    if (ax <= F128_PIO4_HI)
+        return f128_sin_kernel_pio4(a);
+
+    long long n = 0;
+    f128 r;
+    if (!f128_rem_pio2(a, n, r))
+        return f128(std::sin((double)a));
+
+    // sin(x) uses sin(r) or cos(r) depending on quadrant.
+    switch ((int)(n & 3))
+    {
+    case 0:  return  f128_sin_kernel_pio4(r);
+    case 1:  return  f128_cos_kernel_pio4(r);
+    case 2:  return -f128_sin_kernel_pio4(r);
+    default: return -f128_cos_kernel_pio4(r);
+    }
+}
+FORCE_INLINE f128 cos(f128 a)
+{
+    double ax = std::fabs(a.hi);
+    if (!std::isfinite(ax))
+        return f128(std::cos((double)a));
+
+    // Small fast path: no range reduction.
+    if (ax <= F128_PIO4_HI)
+        return f128_cos_kernel_pio4(a);
+
+    long long n = 0;
+    f128 r;
+    if (!f128_rem_pio2(a, n, r))
+        return f128(std::cos((double)a));
+
+    // cos(x) uses cos(r) or sin(r) depending on quadrant.
+    switch ((int)(n & 3))
+    {
+    case 0:  return  f128_cos_kernel_pio4(r);
+    case 1:  return -f128_sin_kernel_pio4(r);
+    case 2:  return -f128_cos_kernel_pio4(r);
+    default: return  f128_sin_kernel_pio4(r);
+    }
+}
+FORCE_INLINE f128 sqrt(f128 a)
+{
+    // Match std semantics for negative / zero quickly.
+    if (a.hi <= 0.0)
+    {
+        if (a.hi == 0.0 && a.lo == 0.0) return f128(0.0);
+        return f128(std::numeric_limits<double>::quiet_NaN());
+    }
+
+    double y0 = std::sqrt(a.hi);
+    f128 y(y0);
+
+    // Two Newton refinements
+    y = y + (a - y * y) / (y + y);
+    y = y + (a - y * y) / (y + y);
     return y;
 }
-FAST_INLINE f128 sin(f128 a)
+FORCE_INLINE f128 exp(const f128& a)
 {
-    double s = std::sin(a.hi);
-    double c = std::cos(a.hi);
-    // s + c * a.lo with single rounding in the leading component
-    double hi = fma1(c, a.lo, s);
-    return f128(hi); // trailing error is small; DD normalize occurs in ops
+    // Preserve NaN/Inf behavior in the leading component.
+    if (!std::isfinite(a.hi)) return f128(std::exp(a.hi));
+
+    // Hard overflow/underflow limits for double exponent range.
+    if (a.hi > 709.782712893384) return f128(std::numeric_limits<double>::infinity());
+    if (a.hi < -745.133219101941) return f128(0.0);
+
+    f128 t = a * F128_INV_LN2;
+    double kd = std::nearbyint((double)t);
+
+    // Keep k within exact-in-double integer range (prevents remainder blowups).
+    if (!std::isfinite(kd) || std::fabs(kd) > 9.0e15)
+        return f128(std::exp((double)a));
+
+    int k = (int)kd;
+    f128 r = a - f128((double)k) * F128_LN2;
+
+    // if reduction misbehaved, fall back rather than returning nonsense.
+    if (std::fabs(r.hi) > 0.40)
+        return f128(std::exp((double)a));
+
+    f128 er = f128_exp_kernel_ln2_half(r);
+    return f128_ldexp(er, k);
 }
-FAST_INLINE f128 cos(f128 a)
+FORCE_INLINE f128 atan2(const f128& y, const f128& x)
 {
-    double c = std::cos(a.hi);
-    double s = std::sin(a.hi);
-    double hi = fma1(-s, a.lo, c); // c - s * a.lo
-    return f128(hi);
-}
-FAST_INLINE f128 exp(const f128& a)
-{
-    double yh = std::exp(a.hi);
-    double hi = fma1(yh, a.lo, yh); // yh*(1 + a.lo)
-    return f128{ hi };
-}
-FAST_INLINE f128 atan2(const f128& y, const f128& x)
-{
-    if (x.hi == 0.0 && x.lo == 0.0) {
-        if (y.hi == 0.0 && y.lo == 0.0) return f128(std::numeric_limits<double>::quiet_NaN());
+    // Special cases first (match IEEE / std::atan2 as closely as possible).
+    if (x.hi == 0.0 && x.lo == 0.0)
+    {
+        if (y.hi == 0.0 && y.lo == 0.0)
+            return f128(std::numeric_limits<double>::quiet_NaN());
         return (y.hi > 0.0 || (y.hi == 0.0 && y.lo > 0.0)) ? f128(DD_PI2) : f128(-DD_PI2);
     }
-    f128 v{ std::atan2(y.hi, x.hi) };
-    f128 sv = sin(v);
-    f128 cv = cos(v);
 
-    double f_hi = fma1(x.hi, (double)sv, -(y.hi * (double)cv)); // f = x*sv - y*cv
-    double fp_hi = fma1(x.hi, (double)cv, (y.hi * (double)sv)); // fp = x*cv + y*sv
-
-    f128 f{ f_hi }, fp{ fp_hi };
-    v = v - f / fp;
-    return v;
-}
-#else
-FAST_INLINE f128 sqrt(f128 a)
-{
-    double approx = std::sqrt(a.hi);
-    f128 y{ approx };
-    f128 y_sq = y * y;
-    f128 r = a - y_sq;
-    f128 half{ 0.5 };
-    y += r * (half / y);
-    return y;
-}
-FAST_INLINE f128 sin(f128 a)
-{
-    double s = std::sin(a.hi);
-    double c = std::cos(a.hi);
-    return f128{ s } + f128{ c } * a.lo;
-}
-FAST_INLINE f128 cos(f128 a)
-{
-    double c = std::cos(a.hi);
-    double s = std::sin(a.hi);
-    return f128{ c } - f128{ s } * a.lo;
-}
-FAST_INLINE f128 exp(const f128& a)
-{
-    //  exp(a.hi + a.lo) ≈ exp(a.hi) * (1 + a.lo)   (|a.lo| < 1 ulp) 
-    f128 y(std::exp(a.hi));
-    return y * (f128(1.0) + f128(a.lo));
-}
-FAST_INLINE f128 atan2(const f128& y, const f128& x)
-{
-    /*  Special cases first (match IEEE / std::atan2)  */
-    if (x.hi == 0.0 && x.lo == 0.0) {
-        if (y.hi == 0.0 && y.lo == 0.0)
-            return f128(std::numeric_limits<double>::quiet_NaN());   // undefined
-        return (y.hi > 0.0 || (y.hi == 0.0 && y.lo > 0.0))
-            ? f128(DD_PI2) : f128(-DD_PI2);
-    }
-
-    /* 1) bootstrap with the regular double result (gives correct quadrant) */
+    // Seed from libm (correct quadrant), then refine with Newton on f(v)=x*sin v - y*cos v.
     f128 v(std::atan2(y.hi, x.hi));
 
-    /* 2) one Newton step on  f(v)=x·sin v − y·cos v  */
-    f128 sv = sin(v);
-    f128 cv = cos(v);
-    f128  f = x * sv - y * cv;          // residual
-    f128 fp = x * cv + y * sv;          // f'
-    v = v - f / fp;                         // refined solution
+    for (int i = 0; i < 2; ++i)
+    {
+        f128 sv, cv;
+        if (!f128_sincos(v, sv, cv))
+        {
+            double vd = (double)v;
+            sv = f128(std::sin(vd));
+            cv = f128(std::cos(vd));
+        }
 
+        f128 f = x * sv - y * cv;
+        f128 fp = x * cv + y * sv;
+
+        v = v - f / fp;
+    }
     return v;
 }
-#endif
-
-FAST_INLINE f128 tan(const f128& a) { return sin(a) / cos(a); }
-FAST_INLINE f128 pow(const f128& x, const f128& y) { return exp(y * log(x)); }
-FAST_INLINE f128 atan(const f128& x) { return atan2(x, 1); }
+FORCE_INLINE f128 tan(const f128& a) { return sin(a) / cos(a); }
+FORCE_INLINE f128 pow(const f128& x, const f128& y) { return exp(y * log(x)); }
+FORCE_INLINE f128 atan(const f128& x) { return atan2(x, 1); }
 
 
 /*------------ precise DP rounding -------------------------------------------*/
 
-FAST_INLINE f128 round_to_decimals(f128 v, int prec)
+FORCE_INLINE f128 round_to_decimals(f128 v, int prec)
 {
     if (prec <= 0) return v;
 
@@ -746,22 +958,21 @@ FAST_INLINE f128 round_to_decimals(f128 v, int prec)
 
 /*------------ printing --------------------------------------------------*/
 
-FAST_INLINE f128 pow10_128(int k)
+FORCE_INLINE f128 pow10_128(int k)
 {
     f128 r = 1, ten = 10;
     int n = (k >= 0) ? k : -k;
     for (int i = 0; i < n; ++i) r = r * ten;
     return (k >= 0) ? r : (1 / r);
 }
-FAST_INLINE void normalize10(const f128& x, f128& m, int& exp10)
+FORCE_INLINE void normalize10(const f128& x, f128& m, int& exp10)
 {
-    // x = m * 10^exp10 with m in [1,10)   (seed from binary exponent, then correct)
     if (x.hi == 0.0) { m = 0; exp10 = 0; return; }
 
     f128 ax = abs(x);
 
     int e2 = 0;
-    (void)std::frexp(ax.hi, &e2);             // ax.hi = f * 2^(e2-1)
+    (void)std::frexp(ax.hi, &e2); // ax.hi = f * 2^(e2-1)
     int e10 = (int)std::floor((e2 - 1) * 0.30102999566398114); // ≈ log10(2)
 
     m = ax * pow10_128(-e10);
@@ -770,7 +981,7 @@ FAST_INLINE void normalize10(const f128& x, f128& m, int& exp10)
     exp10 = e10;
 }
 
-FAST_INLINE f128 round_scaled(f128 x, int prec) noexcept {
+FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept {
     /// round x to an integer at scale = 10^prec (ties-to-even)
     if (prec <= 0) return x;
     const f128 scale = pow10_128(prec);
@@ -786,7 +997,7 @@ FAST_INLINE f128 round_scaled(f128 x, int prec) noexcept {
 
     return n;
 }
-FAST_INLINE void emit_uint_rev(std::string& out, f128 n) {
+FORCE_INLINE void emit_uint_rev(std::string& out, f128 n) {
     // n is a non-negative integer in f128
     const f128 base = f128(1000000000.0); // 1e9
 
@@ -823,7 +1034,7 @@ FAST_INLINE void emit_uint_rev(std::string& out, f128 n) {
         n = q;
     }
 
-    // Final (most significant) chunk — no zero padding here
+    // Final (most significant) chunk — no zero padding
     long long last = (long long)floor(n).hi;
     if (last == 0) {
         out.push_back('0');
@@ -837,7 +1048,7 @@ FAST_INLINE void emit_uint_rev(std::string& out, f128 n) {
     }
 }
 
-FAST_INLINE void emit_scientific(std::ostream& os, const f128& x, std::streamsize prec, bool strip_trailing_zeros)
+FORCE_INLINE void emit_scientific(std::ostream& os, const f128& x, std::streamsize prec, bool strip_trailing_zeros)
 {
     if (x.hi == 0.0) { os << "0"; return; }
     if (prec < 1) prec = 1; // total significant digits
@@ -850,9 +1061,9 @@ FAST_INLINE void emit_scientific(std::ostream& os, const f128& x, std::streamsiz
     const f128 ten = 10;
 
     // Collect digits: d[0] is the first significant digit, then fractional digits.
-    // We compute prec digits + 1 lookahead digit for rounding.
+    // compute prec digits + 1 lookahead digit for rounding.
     const int sig = (int)prec;
-    unsigned char dbuf[128]; // supports quite large 'prec'
+    unsigned char dbuf[128]; // supports large 'prec'
     const int max_sig = (int)std::min<int>(sig + 1, (int)(sizeof(dbuf)));
 
     f128 t = m;
@@ -908,16 +1119,16 @@ FAST_INLINE void emit_scientific(std::ostream& os, const f128& x, std::streamsiz
     os.put('e');
     os << e;
 }
-FAST_INLINE void emit_fixed_dec(std::ostream& os, f128 x, int prec, bool strip_trailing_zeros)
+FORCE_INLINE void emit_fixed_dec(std::ostream& os, f128 x, int prec, bool strip_trailing_zeros)
 {
     bool neg = (x.hi < 0.0);
     if (neg) x = f128{ -x.hi, -x.lo };
 
-    // Split into integer and fractional parts without large scaling
+    // split into integer and fractional parts
     f128 ip = floor(x);
     f128 fp = x - ip;
 
-    // ---- emit integer part ----
+    // emit integer part
     std::string rev; rev.reserve(64);
     emit_uint_rev(rev, ip);
     std::string out; out.reserve(rev.size() + 2 + (prec > 0 ? prec : 0));
@@ -928,24 +1139,24 @@ FAST_INLINE void emit_fixed_dec(std::ostream& os, f128 x, int prec, bool strip_t
     {
         out.push_back('.');
 
-        // Generate 'prec' digits with one extra look-ahead for rounding
+        // generate 'prec' digits with one extra look-ahead for rounding
         const f128 ten{ 10.0 };
         const f128 half{ 0.5 };
 
-        // Collect digits into a small buffer
+        // collect digits into a small buffer
         std::string digits; digits.resize(size_t(prec), '0');
 
         f128 frac = fp;
         for (int i = 0; i < prec; ++i) {
-            frac = frac * ten;                // stays in [0,10)
-            int di = (int)floor(frac).hi;     // safe 0..9
+            frac = frac * ten;                // stays in [0,10]
+            int di = (int)floor(frac).hi;     // 0..9
             if (di < 0) di = 0; if (di > 9) di = 9;
             digits[size_t(i)] = char('0' + di);
             frac = frac - f128(di);
         }
 
         // Look-ahead digit to decide rounding
-        f128 nextv = frac * ten;        // in [0,10)
+        f128 nextv = frac * ten;        // in [0,10]
         int next = (int)floor(nextv).hi;      // 0..9
         if (next < 0) next = 0; if (next > 9) next = 9;
         f128 rem = nextv - f128(next); // remainder after next digit
@@ -956,7 +1167,7 @@ FAST_INLINE void emit_fixed_dec(std::ostream& os, f128 x, int prec, bool strip_t
         else if (next < 5) round_up = false;
         else { // next == 5
             if (rem.hi > 0.0 || rem.lo > 0.0) {
-                round_up = true;              // strictly greater than half
+                round_up = true; // strictly greater than half
             }
             else {
                 // exact tie: round to even (last printed digit even stays)
@@ -1019,7 +1230,7 @@ FAST_INLINE void emit_fixed_dec(std::ostream& os, f128 x, int prec, bool strip_t
     os << out;
 }
 
-FAST_INLINE std::string to_string(const f128& x, int precision,
+FORCE_INLINE std::string to_string(const f128& x, int precision,
     bool fixed = false, bool scientific = false,
     bool strip_trailing_zeros = false)
 {
@@ -1057,7 +1268,7 @@ FAST_INLINE std::string to_string(const f128& x, int precision,
     return ss.str();
 }
 
-FAST_INLINE bool   valid_flt128_string(const char* s)
+FORCE_INLINE bool   valid_flt128_string(const char* s)
 {
     for (char* p = (char*)s; *p; ++p) {
         if (!(isdigit(*p) || *p == '.' || *p == 'e' || *p == 'E' || *p=='-'))
@@ -1065,7 +1276,7 @@ FAST_INLINE bool   valid_flt128_string(const char* s)
     }
     return true;
 }
-FAST_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr = nullptr)
+FORCE_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr = nullptr)
 {
     const char* p = s;
 
@@ -1196,7 +1407,7 @@ FAST_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr = 
     if (endptr) *endptr = p;
     return true;
 }
-FAST_INLINE f128 from_string(const char* s)
+FORCE_INLINE f128 from_string(const char* s)
 {
     f128 ret;
     if (parse_flt128(s, ret))
@@ -1204,7 +1415,7 @@ FAST_INLINE f128 from_string(const char* s)
     return 0;
 }
 
-FAST_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
+FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
 {
     int prec = (int)os.precision();
     if (prec <= 0) prec = 6;
@@ -1241,14 +1452,14 @@ FAST_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
 }
 
 //
-//FAST_INLINE constexpr f128 operator"" _f128(unsigned long long v) noexcept {
+//FORCE_INLINE constexpr f128 operator"" _f128(unsigned long long v) noexcept {
 //    return f128(static_cast<uint64_t>(v));
 //}
 //
-//FAST_INLINE constexpr f128 operator"" _f128(long double v) noexcept {
+//FORCE_INLINE constexpr f128 operator"" _f128(long double v) noexcept {
 //    return f128(static_cast<double>(v));
 //}
-//FAST_INLINE constexpr f128 operator"" _f128(const char* s, std::size_t) {
+//FORCE_INLINE constexpr f128 operator"" _f128(const char* s, std::size_t) {
 //    return f128(s);
 //}
 

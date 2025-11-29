@@ -237,9 +237,16 @@ class CameraInfo
     DVec2 viewport_anchor{ 0.5, 0.5 };
     f128  ref_zoom = 1;
 
+    // UI
+    DDVec2 init_pos{ 0, 0 };
+    f128   init_zoom = zoom_128;
+    DVec2  init_stretch = stretch_64;
+    f64    init_rotation = rotation_64;
+    bool   ui_using_relative_zoom = false;
+
     // rather than return a new transform with each const getTransform call, reset and rebuild when dirty
-    mutable WorldStageTransform* t = nullptr;
     mutable bool is_dirty = false;
+    mutable WorldStageTransform* t = nullptr;
     void dirty() { is_dirty = true; }
 
     // helpers for updating cache variables and flagging transform as dirty
@@ -348,12 +355,7 @@ public:
 
 
     // ────── UI ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-private:
-    DDVec2 init_pos{ 0, 0 };
-    f128   init_zoom = zoom_128;
-    DVec2  init_stretch = stretch_64;
-    f64    init_rotation = rotation_64;
-    bool   ui_using_relative_zoom = false;
+
 public:
 
     void populateUI(DRect restrict_world_rect = DRect::max_extent());
@@ -367,7 +369,7 @@ public:
         init_pos.set(x_128, y_128);
         init_stretch = stretch_64;
         init_rotation = rotation_64;
-        init_zoom = zoom_128;
+        init_zoom = relativeZoom<f128>();
     }
 
     // ────── tween ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -391,8 +393,8 @@ struct CameraNavigator
     }
 
     // ────── Pan attributes ──────
-    int    pan_down_touch_x = 0;
-    int    pan_down_touch_y = 0;
+    int pan_down_touch_x = 0;
+    int pan_down_touch_y = 0;
     f64 pan_down_touch_dist = 0;
     f64 pan_down_touch_angle = 0;
 

@@ -296,7 +296,7 @@ void MainWindow::initFonts()
 
 void MainWindow::populateProjectUI()
 {
-    ImGui::BeginPaddedRegion(scale_size(10.0f));
+    ImGui::BeginPaddedRegion(scale_size(6.0f));
     project_worker()->populateAttributes();
     ImGui::EndPaddedRegion();
 }
@@ -1445,7 +1445,7 @@ void MainWindow::populateRecordOptions()
     // Paths
     #ifndef __EMSCRIPTEN__
     {
-        ImGui::GroupBox box("dir_box", "Paths");
+        ImGui::BeginLabelledBox("Paths");
         ImGui::Text("Media Output Directory:");
         ImGui::InputText("##folder", &capture_dir, ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::SameLine();
@@ -1453,6 +1453,7 @@ void MainWindow::populateRecordOptions()
         {
             SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, platform()->sdl_window(), capture_dir.c_str(), false);
         }
+        ImGui::EndLabelledBox();
     }
     #endif
 
@@ -1461,7 +1462,7 @@ void MainWindow::populateRecordOptions()
     // Global Options
     {
         //ImGui::GroupBox box("img_resolution", "Snapshot Resolution");
-        ImGui::GroupBox box("shared_options", "Global Capture Options");
+        ImGui::BeginLabelledBox("Global Capture Options");
 
 
         //bool fixed_time_delta = !use_delta_time_mult;
@@ -1491,12 +1492,14 @@ void MainWindow::populateRecordOptions()
         ImGui::Spacing(); ImGui::Spacing();
         ImGui::Text("Sharpen");
         ImGui::SliderFloat("##sharpen", &snapshot_sharpen, 0.0f, 1.0f, "%.2f");
+
+        ImGui::EndLabelledBox();
     }
 
     // Image Resolution
     {
         //ImGui::GroupBox box("img_resolution", "Snapshot Resolution");
-        ImGui::GroupBox box("img_options", "Image Capture");
+        ImGui::BeginLabelledBox("Image Capture");
 
         static int sel_aspect = -1;
         static int sel_tier = -1;
@@ -1515,6 +1518,7 @@ void MainWindow::populateRecordOptions()
         ///    snapshot_resolution.y = std::clamp(snapshot_resolution.y, 16, 16382);
         ///    snapshot_resolution.y = (snapshot_resolution.y & ~1);
         ///}
+        ImGui::EndLabelledBox();
     }
 
     //ImGui::SeparatorText("Video Capture");
@@ -1522,7 +1526,7 @@ void MainWindow::populateRecordOptions()
     // Video Resolution
     {
         //ImGui::GroupBox box("vid_resolution", "Video Resolution");
-        ImGui::GroupBox box("vid_options", "Video Capture");
+        ImGui::BeginLabelledBox("Video Capture");
 
         ImGui::Spacing();
 
@@ -1609,6 +1613,8 @@ void MainWindow::populateRecordOptions()
         {
             record_frame_count = std::clamp(record_frame_count, 0, 10000000);
         }
+
+        ImGui::EndLabelledBox();
     }
    
     ImGui::EndChild();

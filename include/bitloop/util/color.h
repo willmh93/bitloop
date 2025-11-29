@@ -100,7 +100,7 @@ struct Color
         return *this;
     }
 
-    // Return hue in degrees [0,360).
+    // Return hue in degrees [0,360].
     [[nodiscard]] constexpr float getHue() const
     {
         float rf = r / 255.0f;

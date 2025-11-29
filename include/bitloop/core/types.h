@@ -53,6 +53,8 @@ namespace bl
     template<class T, class U> constexpr T pow(T x, U y)   { if consteval { return gcem::pow(x, y);   } else { return std::pow(x, y);   } }
     template<class T, class U> constexpr T fmod(T x, U y)  { if consteval { return gcem::fmod(x, y);  } else { return std::fmod(x, y);  } }
 
+    template<class T> constexpr T sq(T x) { return (x * x); }
+
     typedef int8_t   i8;
     typedef int16_t  i16;
     typedef int32_t  i32;

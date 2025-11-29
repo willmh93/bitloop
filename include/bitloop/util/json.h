@@ -16,7 +16,7 @@ namespace JSON
 
     template<typename T>
     std::string markCleanFloat(T value, int max_decimals = 6, T precision = 0.0f) {
-        return "CLEANFLOAT(" + TextUtil::floatToCleanString<T>(value, max_decimals, precision) + ")";
+        return "CLEANFLOAT(" + TextUtil::floatToCleanString<T>(value, max_decimals, precision, true, true) + ")";
     }
 
     inline std::string unmarkCleanFloats(const std::string& json)
@@ -24,6 +24,7 @@ namespace JSON
         static const std::regex cleanFloatRegex("\"CLEANFLOAT\\(([^\\)]+)\\)\"");
         return std::regex_replace(json, cleanFloatRegex, "$1");
     }
+
 
     std::string json_add_leading_zeros(const std::string& s);
     std::string json_remove_key_quotes(const std::string& s);

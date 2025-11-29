@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 
+#include <bitloop/util/timer.h>
 #include <bitloop/platform/platform.h>
 #include <bitloop/imguix/imgui_custom.h>
 
@@ -217,7 +218,7 @@ protected:
 
     // -------- Populating Project/Scene ImGui attributes --------
     void _populateAllAttributes();
-    void _populateOverlay();
+    virtual void _populateOverlay();
     virtual void _projectAttributes() {}
 
     // -------- Data Buffers --------
@@ -232,6 +233,9 @@ protected:
     virtual bool changedShadow();
     virtual void markLiveValues();
     virtual void markShadowValues();
+
+    virtual void updateUnchangedShadowVars();
+    virtual void invokeScheduledCalls();
     
 
     // ---- Project Management ----
@@ -424,9 +428,6 @@ public:
 
     virtual void onEvent(Event&) {}
 
-    void pullDataFromShadow();
-    void pollEvents();
-
     void logMessage(const char* fmt, ...);
     void logClear();
 };
@@ -445,6 +446,7 @@ public:
     {
         has_var_buffer = true;
         ui = new ProjectType::UI(static_cast<const ProjectType*>(this));
+        ui->init();
     }
 
     ~Project()
@@ -452,43 +454,59 @@ public:
         delete ui;
     }
 
-    virtual void _projectAttributes() override
+protected:
+
+    void _projectAttributes() override final
     {
         ui->sidebar();
     }
 
-protected:
+    void _populateOverlay() override final
+    {
+        ui->overlay();
+    }
 
     void updateLiveBuffers() override final
     {
-        ProjectBase::updateLiveBuffers();
+        ProjectBase::updateLiveBuffers(); // updates scenes
         VarBuffer<ProjectType>::updateLive();
-        VarBuffer<ProjectType>::runScheduledCalls();
     }
     void updateShadowBuffers() override final
     {
-        ProjectBase::updateShadowBuffers();
+        ProjectBase::updateShadowBuffers(); // updates scenes
         VarBuffer<ProjectType>::updateShadow();
     }
     void markLiveValues() override final
     {
-        ProjectBase::markLiveValues();
+        ProjectBase::markLiveValues(); // marks scenes
         VarBuffer<ProjectType>::markLiveValue();
     }
     void markShadowValues() override final
     {
-        ProjectBase::markShadowValues();
+        ProjectBase::markShadowValues(); // marks scenes
         VarBuffer<ProjectType>::markShadowValue();
     }
     bool changedLive() override final
     {
-        if (ProjectBase::changedLive()) return true;
+        if (ProjectBase::changedLive()) return true; // checks scenes
         return VarBuffer<ProjectType>::liveChanged();
     }
     bool changedShadow() override final
     {
-        if (ProjectBase::changedShadow()) return true;
+        if (ProjectBase::changedShadow()) return true; // checks scenes
         return VarBuffer<ProjectType>::shadowChanged();
+    }
+
+    void updateUnchangedShadowVars() override final
+    {
+        ProjectBase::updateUnchangedShadowVars(); // updates scenes
+        VarBuffer<ProjectType>::updateUnchangedShadowVars();
+    }
+
+    void invokeScheduledCalls() override final
+    {
+        ProjectBase::invokeScheduledCalls(); // invoke scheduled calls for all scenes
+        VarBuffer<ProjectType>::invokeScheduledCalls();
     }
 };
 

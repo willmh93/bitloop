@@ -288,6 +288,7 @@ int bitloop_main(int, char* [])
         project_worker()->startWorker();
     }
 
+    timer_calibrate_overhead();
 
     // ======== Start main gui loop ========
     {

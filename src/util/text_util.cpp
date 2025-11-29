@@ -1,5 +1,6 @@
 #include <bitloop/util/text_util.h>
 #include <unordered_set>
+#include <array>
 
 std::ostream& operator<<(std::ostream& os, const FiniteDouble& fd) {
     return os << fd.value;
@@ -260,6 +261,74 @@ bool contains_only(const std::string& s, const std::string& allowed)
         }
     }
     return true;
+}
+
+std::string format_human_u64(uint64_t value, int sig_figs)
+{
+    if (value == 0)
+        return "0";
+
+    if (sig_figs < 1)
+        sig_figs = 1;
+
+    struct Unit {
+        uint64_t factor;
+        const char* name;
+    };
+
+    static constexpr std::array<Unit, 7> UNITS{ {
+        {                   1ull, ""            },
+        {                1000ull, "thousand"    },
+        {             1000000ull, "million"     },
+        {          1000000000ull, "billion"     },
+        {       1000000000000ull, "trillion"    },
+        {    1000000000000000ull, "quadrillion" },
+        { 1000000000000000000ull, "quintillion" }
+    } };
+
+    // Pick the largest unit such that value >= factor
+    std::size_t idx = 0;
+    for (std::size_t i = 1; i < UNITS.size(); ++i)
+    {
+        if (value >= UNITS[i].factor)
+            idx = i;
+        else
+            break;
+    }
+
+    long double scaled = static_cast<long double>(value) / static_cast<long double>(UNITS[idx].factor);
+
+    // We guarantee scaled < 1000, so integer_digits is 1–3.
+    int integer_digits;
+    if (scaled >= 100.0L)
+        integer_digits = 3;
+    else if (scaled >= 10.0L)
+        integer_digits = 2;
+    else
+        integer_digits = 1;
+
+    int decimals = sig_figs - integer_digits;
+    if (decimals < 0) decimals = 0;
+    if (decimals > 6) decimals = 6; // clamp for sanity / readability
+
+    std::ostringstream oss;
+    oss.setf(std::ios::fixed);
+    oss.precision(decimals);
+    oss << scaled;
+
+    std::string num = oss.str();
+
+    // Trim trailing zeros and a possible trailing dot
+    auto dot_pos = num.find('.');
+    if (dot_pos != std::string::npos) {
+        while (!num.empty() && num.back() == '0') num.pop_back();
+        if (!num.empty() && num.back() == '.') num.pop_back();
+    }
+
+    if (UNITS[idx].name[0] == '\0')
+        return num;
+
+    return num + " " + UNITS[idx].name;
 }
 
 } // End TextUtil NS

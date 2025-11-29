@@ -1274,286 +1274,6 @@ namespace ImGui
         return DragScalarN(label, ImGuiDataType_Double, v, 2, (float)v_speed, &v_min, &v_max, format, flags);
     }
 
-    /*template<typename TYPE, typename SIGNEDTYPE, typename FLOATTYPE>
-    static inline float ScaleRatioFromValue_TowardMax(ImGuiDataType, TYPE v, TYPE v_min, TYPE v_max, float epsilon)
-    {
-        if (v_min == v_max)
-            return 0.0f;
-
-        bool flipped = (v_max < v_min);
-        if (flipped)
-            ImSwap(v_min, v_max);
-
-        const TYPE v_clamped = ImClamp(v, v_min, v_max);
-
-        // u = distance to max
-        const FLOATTYPE Umax = (FLOATTYPE)(v_max - v_min);
-        const FLOATTYPE u = (FLOATTYPE)v_max - (FLOATTYPE)v_clamped;
-
-        // Choose k (shape) to mirror stock intensity where possible.
-        FLOATTYPE k;
-        if (v_min > (TYPE)0 && v_max > (TYPE)0)
-        {
-            k = (FLOATTYPE)v_min;                  // matches log(v_max/v_min)
-        }
-        else if (v_min < (TYPE)0 && v_max < (TYPE)0)
-        {
-            k = (FLOATTYPE)(-(FLOATTYPE)v_max);    // matches log(|v_min|/|v_max|)
-        }
-        else
-        {
-            // Crosses zero: pick smaller magnitude side, clamp by epsilon
-            const FLOATTYPE am = (FLOATTYPE)ImAbs((FLOATTYPE)v_min);
-            const FLOATTYPE aM = (FLOATTYPE)ImAbs((FLOATTYPE)v_max);
-            FLOATTYPE s = (am > (FLOATTYPE)0 && aM > (FLOATTYPE)0) ? ImMin(am, aM) : (am > (FLOATTYPE)0 ? am : aM);
-            if (s <= (FLOATTYPE)0) s = (FLOATTYPE)1;
-            k = s;
-        }
-        k = ImMax(k, (FLOATTYPE)epsilon);
-
-        const FLOATTYPE denom = ImLog((FLOATTYPE)1 + Umax / k);
-        float t;
-        if (denom <= (FLOATTYPE)0)
-        {
-            // Fallback to linear if degenerate
-            t = (Umax > (FLOATTYPE)0) ? (float)(1.0 - (double)(u / Umax)) : 0.0f;
-        }
-        else
-        {
-            const FLOATTYPE t_u = ImLog((FLOATTYPE)1 + u / k) / denom; // 0..1
-            t = 1.0f - (float)ImClamp(t_u, (FLOATTYPE)0, (FLOATTYPE)1);
-        }
-
-        return flipped ? (1.0f - t) : t;
-    }
-
-    template<typename TYPE, typename SIGNEDTYPE, typename FLOATTYPE>
-    static inline TYPE ScaleValueFromRatio_TowardMax(ImGuiDataType data_type, float t, TYPE v_min, TYPE v_max, float epsilon)
-    {
-        using namespace ImGui;
-
-        if (t <= 0.0f || v_min == v_max)
-            return v_min;
-        if (t >= 1.0f)
-            return v_max;
-
-        bool flipped = (v_max < v_min);
-        if (flipped)
-            ImSwap(v_min, v_max);
-
-        float t_with_flip = flipped ? (1.0f - t) : t;
-
-        const FLOATTYPE Umax = (FLOATTYPE)(v_max - v_min);
-
-        // Choose k (shape) consistent with the value->ratio function.
-        FLOATTYPE k;
-        if (v_min > (TYPE)0 && v_max > (TYPE)0)
-        {
-            k = (FLOATTYPE)v_min;
-        }
-        else if (v_min < (TYPE)0 && v_max < (TYPE)0)
-        {
-            k = (FLOATTYPE)(-(FLOATTYPE)v_max);
-        }
-        else
-        {
-            const FLOATTYPE am = (FLOATTYPE)ImAbs((FLOATTYPE)v_min);
-            const FLOATTYPE aM = (FLOATTYPE)ImAbs((FLOATTYPE)v_max);
-            FLOATTYPE s = (am > (FLOATTYPE)0 && aM > (FLOATTYPE)0) ? ImMin(am, aM) : (am > (FLOATTYPE)0 ? am : aM);
-            if (s <= (FLOATTYPE)0) s = (FLOATTYPE)1;
-            k = s;
-        }
-        k = ImMax(k, (FLOATTYPE)epsilon);
-
-        const FLOATTYPE denom = ImLog((FLOATTYPE)1 + Umax / k);
-
-        FLOATTYPE v_f;
-        if (denom <= (FLOATTYPE)0)
-        {
-            // Linear fallback if degenerate
-            v_f = (FLOATTYPE)ImLerp(v_min, v_max, t_with_flip);
-        }
-        else
-        {
-            const FLOATTYPE t_u = (FLOATTYPE)(1.0f - t_with_flip); // 0..1
-            const FLOATTYPE R1 = ImPow((FLOATTYPE)1 + Umax / k, t_u);
-            const FLOATTYPE u = k * (R1 - (FLOATTYPE)1);
-            v_f = (FLOATTYPE)v_max - u;
-        }
-
-        TYPE v_out = (TYPE)v_f;
-
-        // Keep integer types inside range (rounding to format is handled by caller for floats)
-        const bool is_floating_point = (data_type == ImGuiDataType_Float) || (data_type == ImGuiDataType_Double);
-        if (!is_floating_point)
-        {
-            if (v_out < v_min) v_out = v_min;
-            if (v_out > v_max) v_out = v_max;
-        }
-
-        return v_out;
-    }
-
-    // --- Slider behavior using the "toward max" mapping --------------------------
-    template<typename TYPE, typename SIGNEDTYPE, typename FLOATTYPE>
-    bool SliderBehaviorT_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_type,
-        TYPE* v, const TYPE v_min, const TYPE v_max,
-        const char* format, ImGuiSliderFlags flags, ImRect* out_grab_bb)
-    {
-        ImGuiContext& g = *GImGui;
-        const ImGuiStyle& style = g.Style;
-
-        const ImGuiAxis axis = (flags & ImGuiSliderFlags_Vertical) ? ImGuiAxis_Y : ImGuiAxis_X;
-        const bool is_floating_point = (data_type == ImGuiDataType_Float) || (data_type == ImGuiDataType_Double);
-        const float v_range_f = (float)(v_min < v_max ? v_max - v_min : v_min - v_max);
-
-        // Geometry
-        const float grab_padding = 2.0f;
-        const float slider_sz = (bb.Max[axis] - bb.Min[axis]) - grab_padding * 2.0f;
-        float grab_sz = style.GrabMinSize;
-        if (!is_floating_point && v_range_f >= 0.0f)
-            grab_sz = ImMax(slider_sz / (v_range_f + 1), style.GrabMinSize);
-        grab_sz = ImMin(grab_sz, slider_sz);
-        const float slider_usable_sz = slider_sz - grab_sz;
-        const float slider_usable_pos_min = bb.Min[axis] + grab_padding + grab_sz * 0.5f;
-        const float slider_usable_pos_max = bb.Max[axis] - grab_padding - grab_sz * 0.5f;
-
-        // Epsilon picked from the display precision (like imgui's log)
-        const int decimal_precision = is_floating_point ? ImParseFormatPrecision(format, 3) : 1;
-        const float epsilon = ImPow(0.1f, (float)decimal_precision);
-
-        bool value_changed = false;
-
-        if (g.ActiveId == id)
-        {
-            bool set_new_value = false;
-            float clicked_t = 0.0f;
-
-            if (g.ActiveIdSource == ImGuiInputSource_Mouse)
-            {
-                if (!g.IO.MouseDown[0])
-                {
-                    ClearActiveID();
-                }
-                else
-                {
-                    const float mouse_abs_pos = g.IO.MousePos[axis];
-                    if (g.ActiveIdIsJustActivated)
-                    {
-                        float grab_t = ScaleRatioFromValue_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, *v, v_min, v_max, epsilon);
-                        if (axis == ImGuiAxis_Y)
-                            grab_t = 1.0f - grab_t;
-                        const float grab_pos = ImLerp(slider_usable_pos_min, slider_usable_pos_max, grab_t);
-                        const bool clicked_around_grab = (mouse_abs_pos >= grab_pos - grab_sz * 0.5f - 1.0f) && (mouse_abs_pos <= grab_pos + grab_sz * 0.5f + 1.0f);
-                        g.SliderGrabClickOffset = (clicked_around_grab && is_floating_point) ? mouse_abs_pos - grab_pos : 0.0f;
-                    }
-                    if (slider_usable_sz > 0.0f)
-                        clicked_t = ImSaturate((mouse_abs_pos - g.SliderGrabClickOffset - slider_usable_pos_min) / slider_usable_sz);
-                    if (axis == ImGuiAxis_Y)
-                        clicked_t = 1.0f - clicked_t;
-                    set_new_value = true;
-                }
-            }
-            else if (g.ActiveIdSource == ImGuiInputSource_Keyboard || g.ActiveIdSource == ImGuiInputSource_Gamepad)
-            {
-                if (g.ActiveIdIsJustActivated)
-                {
-                    g.SliderCurrentAccum = 0.0f;
-                    g.SliderCurrentAccumDirty = false;
-                }
-
-                float input_delta = (axis == ImGuiAxis_X) ? GetNavTweakPressedAmount(axis) : -GetNavTweakPressedAmount(axis);
-                if (input_delta != 0.0f)
-                {
-                    const bool tweak_slow = IsKeyDown((g.NavInputSource == ImGuiInputSource_Gamepad) ? ImGuiKey_NavGamepadTweakSlow : ImGuiKey_NavKeyboardTweakSlow);
-                    const bool tweak_fast = IsKeyDown((g.NavInputSource == ImGuiInputSource_Gamepad) ? ImGuiKey_NavGamepadTweakFast : ImGuiKey_NavKeyboardTweakFast);
-                    if (decimal_precision > 0)
-                    {
-                        input_delta /= 100.0f;
-                        if (tweak_slow)
-                            input_delta /= 10.0f;
-                    }
-                    else
-                    {
-                        if ((v_range_f >= -100.0f && v_range_f <= 100.0f && v_range_f != 0.0f) || tweak_slow)
-                            input_delta = ((input_delta < 0.0f) ? -1.0f : +1.0f) / v_range_f;
-                        else
-                            input_delta /= 100.0f;
-                    }
-                    if (tweak_fast)
-                        input_delta *= 10.0f;
-
-                    g.SliderCurrentAccum += input_delta;
-                    g.SliderCurrentAccumDirty = true;
-                }
-
-                if (g.NavActivatePressedId == id && !g.ActiveIdIsJustActivated)
-                {
-                    ClearActiveID();
-                }
-                else if (g.SliderCurrentAccumDirty)
-                {
-                    float old_t = ScaleRatioFromValue_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, *v, v_min, v_max, epsilon);
-                    float new_t = ImSaturate(old_t + g.SliderCurrentAccum);
-
-                    // Convert to value, then back to t to see how much we actually moved
-                    TYPE v_new = ScaleValueFromRatio_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, new_t, v_min, v_max, epsilon);
-
-                    if (is_floating_point && !(flags & ImGuiSliderFlags_NoRoundToFormat))
-                        v_new = RoundScalarWithFormatT<TYPE>(format, data_type, v_new);
-
-                    float realized_t = ScaleRatioFromValue_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, v_new, v_min, v_max, epsilon);
-
-                    float delta = g.SliderCurrentAccum;
-                    g.SliderCurrentAccum -= (delta > 0) ? ImMin(realized_t - old_t, delta)
-                        : ImMax(realized_t - old_t, delta);
-                    g.SliderCurrentAccumDirty = false;
-
-                    clicked_t = new_t;
-                    set_new_value = true;
-                }
-            }
-
-            if (set_new_value)
-                if ((g.LastItemData.ItemFlags & ImGuiItemFlags_ReadOnly) || (flags & ImGuiSliderFlags_ReadOnly))
-                    set_new_value = false;
-
-            if (set_new_value)
-            {
-                TYPE v_new = ScaleValueFromRatio_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, clicked_t, v_min, v_max, epsilon);
-
-                if (is_floating_point && !(flags & ImGuiSliderFlags_NoRoundToFormat))
-                    v_new = RoundScalarWithFormatT<TYPE>(format, data_type, v_new);
-
-                if (*v != v_new)
-                {
-                    *v = v_new;
-                    value_changed = true;
-                }
-            }
-        }
-
-        // Grab rect
-        if (slider_sz < 1.0f)
-        {
-            *out_grab_bb = ImRect(bb.Min, bb.Min);
-        }
-        else
-        {
-            float grab_t = ScaleRatioFromValue_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, *v, v_min, v_max, epsilon);
-            if (axis == ImGuiAxis_Y)
-                grab_t = 1.0f - grab_t;
-            const float grab_pos = ImLerp(slider_usable_pos_min, slider_usable_pos_max, grab_t);
-            if (axis == ImGuiAxis_X)
-                *out_grab_bb = ImRect(grab_pos - grab_sz * 0.5f, bb.Min.y + grab_padding, grab_pos + grab_sz * 0.5f, bb.Max.y - grab_padding);
-            else
-                *out_grab_bb = ImRect(bb.Min.x + grab_padding, grab_pos - grab_sz * 0.5f, bb.Max.x - grab_padding, grab_pos + grab_sz * 0.5f);
-        }
-
-        return value_changed;
-    }*/
-
-   
     bool SliderDouble_InvLog(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags)
     {
         return SliderScalar_TowardMax(label, ImGuiDataType_Double, v, &v_min, &v_max, format, flags);
@@ -1582,15 +1302,6 @@ namespace ImGui
         if (format == NULL)
             format = "%f";
 
-        ///if (g.ActiveId == id)
-        ///{
-        ///    if (g.ActiveIdSource == ImGuiInputSource_Mouse && !g.IO.MouseDown[0])
-        ///        ClearActiveID();
-        ///    else if ((g.ActiveIdSource == ImGuiInputSource_Keyboard || g.ActiveIdSource == ImGuiInputSource_Gamepad)
-        ///        && g.NavActivatePressedId == id && !g.ActiveIdIsJustActivated)
-        ///        ClearActiveID();
-        ///}
-
         const bool hovered = ItemHoverable(frame_bb, id, g.LastItemData.ItemFlags);
         bool temp_input_is_active = temp_input_allowed && TempInputIsActive(id);
         if (!temp_input_is_active)
@@ -1612,9 +1323,6 @@ namespace ImGui
                     temp_input_is_active = true;
                 }
 
-            //if (make_active)
-            //    memcpy(&g.ActiveIdValueOnActivation, v, sizeof(f128));
-
             if (make_active && !temp_input_is_active)
             {
                 SetActiveID(id, window);
@@ -1628,8 +1336,6 @@ namespace ImGui
         if (temp_input_is_active)
         {
             const bool clamp_enabled = (flags & ImGuiSliderFlags_ClampOnInput) != 0;
-            //const int precision = ImParseFormatPrecision(format ? format : "%.3f", 3);
-
             return TempInputFlt128(frame_bb, id, label, v, format, clamp_enabled ? &v_min : NULL, clamp_enabled ? &v_max : NULL);
         }
 
@@ -1691,6 +1397,8 @@ namespace ImGui
     bool RevertableSliderDouble(const char* label, double* v, double* initial, double v_min, double v_max, const char* format, ImGuiSliderFlags flags)
     {
         bool ret = false;
+
+        ImGui::BeginGroup();
         ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= SliderScalar(label, ImGuiDataType_Double, v, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
@@ -1702,6 +1410,8 @@ namespace ImGui
             ret |= true;
         }
         ImGui::PopID();
+        ImGui::EndGroup();
+
         return ret;
     }
 
@@ -1709,6 +1419,7 @@ namespace ImGui
     {
         bool ret = false;
 
+        ImGui::BeginGroup();
         ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= DragScalar(label, ImGuiDataType_Double, v, (float)v_speed, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
@@ -1720,6 +1431,8 @@ namespace ImGui
             ret |= true;
         }
         ImGui::PopID();
+        ImGui::EndGroup();
+
         return ret;
     }
 
@@ -1727,6 +1440,7 @@ namespace ImGui
     {
         bool ret = false;
 
+        ImGui::BeginGroup();
         ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= DragFloat128(label, v, v_speed, v_min, v_max, format, flags);
         ImGui::PopItemWidth();
@@ -1738,6 +1452,8 @@ namespace ImGui
             ret |= true;
         }
         ImGui::PopID();
+        ImGui::EndGroup();
+
         return ret;
     }
 
@@ -1745,6 +1461,7 @@ namespace ImGui
     {
         bool ret = false;
 
+        ImGui::BeginGroup();
         ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= SliderScalarN(label, ImGuiDataType_Double, v, 2, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
@@ -1757,12 +1474,16 @@ namespace ImGui
             ret |= true;
         }
         ImGui::PopID();
+        ImGui::EndGroup();
+
         return ret;
     }
 
     bool RevertableSliderAngle(const char* label, double* v_rad, double* initial, double v_rad_min, double v_rad_max, const char* format, ImGuiSliderFlags flags)
     {
         bool ret = false;
+
+        ImGui::BeginGroup();
         ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
         ret |= SliderAngle(label, v_rad, v_rad_min, v_rad_max, format, flags);
         ImGui::PopItemWidth();
@@ -1774,6 +1495,8 @@ namespace ImGui
             ret |= true;
         }
         ImGui::PopID();
+        ImGui::EndGroup();
+
         return ret;
     }
 
@@ -1815,83 +1538,5 @@ namespace ImGui
         region_padding = 0.0f;
     }
 
-    GroupBox::GroupBox(const char* id, const char* _label, float _pad, float _label_pad_x)
-        : label(_label), pad(_pad), label_pad_x(_label_pad_x)
-    {
-        ImVec2 label_height = ImGui::CalcTextSize(label);
-        ImGui::Dummy(ImVec2(0, label_height.y)); // space for title
-
-        // measure full available width of the current row/column
-        start_screen = ImGui::GetCursorScreenPos();
-        span_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x);
-
-        ImGui::PushID(id);
-        dl = ImGui::GetWindowDrawList();
-        text_sz = (label && *label) ? label_height : ImVec2(0, 0);
-        top_extra = (text_sz.y > 0.0f) ? text_sz.y * 0.5f : 0.0f;
-
-        dl->ChannelsSplit(2); // 0 = bg/border, 1 = contents/label
-        dl->ChannelsSetCurrent(1);
-
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        ImGui::SetCursorScreenPos(ImVec2(p.x + pad, p.y + pad + top_extra)); // inner + title
-        ImGui::BeginGroup();
-    }
-
-    GroupBox::~GroupBox()
-    {
-        ImGui::EndGroup();
-
-        // content bounds (tight)
-        content_min = ImGui::GetItemRectMin();
-        content_max = ImGui::GetItemRectMax();
-
-        // outer frame
-        ImVec2 outer_min = content_min - ImVec2(pad, pad + top_extra);
-        ImVec2 outer_max = content_max + ImVec2(pad, pad);
-
-        // force the frame to span the entire parent width
-        outer_min.x = start_screen.x;
-        outer_max.x = start_screen.x + span_w;
-
-        // draw bg/border behind contents
-        ImGuiStyle& style = ImGui::GetStyle();
-        float rounding = style.FrameRounding;
-        float t = style.FrameBorderSize > 0 ? style.FrameBorderSize : 1.0f;
-        ImU32 col_bg = ImGui::GetColorU32(ImGuiCol_TitleBg);
-        ImU32 col_border = ImGui::GetColorU32(ImGuiCol_Border);
-        ImU32 col_text = ImGui::GetColorU32(ImGuiCol_Text);
-
-        // draw bg + full border
-        dl->ChannelsSetCurrent(0);
-        dl->AddRectFilled(outer_min, outer_max, col_bg, rounding);
-        dl->AddRect(outer_min, outer_max, col_border, rounding, 0, t);
-
-        // foreground: title bg + text (channel 1)
-        dl->ChannelsSetCurrent(1);
-        if (label && *label)
-        {
-            float x_text = outer_min.x + pad + label_pad_x;
-            float y_line = outer_min.y; // top border y
-            float text_margin_x = 8.0f;
-            float text_margin_y = 4.0f;
-
-            ImVec2 label_min(x_text - text_margin_x, y_line - text_sz.y * 0.5f - t - text_margin_y);
-            ImVec2 label_max(x_text + text_sz.x + text_margin_x, y_line + text_sz.y * 0.5f + t + text_margin_y);
-
-            // title background (kept inside frame; no special clipping needed)
-            dl->AddRectFilled(label_min, label_max, col_bg);
-            dl->AddRect(label_min, label_max, col_border);
-
-            dl->AddText(ImVec2(x_text, y_line - text_sz.y * 0.5f), col_text, label);
-        }
-
-        dl->ChannelsMerge();
-
-        ImGui::SetCursorScreenPos(ImVec2(start_screen.x, outer_max.y));
-        ImGui::Dummy(ImVec2(span_w, 0.0f));
-
-        ImGui::PopID();
-    }
-
+    
 }

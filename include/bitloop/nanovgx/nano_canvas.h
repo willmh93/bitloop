@@ -949,10 +949,8 @@ public:
     //    SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
     //}
 
-    template<typename T> void drawImage(Image& bmp, Quad<T> q)
+    template<typename T> void drawImage(const Image& bmp, Quad<T> q)
     {
-        //auto _PT = [&](const DDVec2& p) { return camera->transform_coordinates ? camera->toStage<f128>(p.x, p.y) : DVec2(p); };
-
         DQuad quad = { PT(q.a), PT(q.b), PT(q.c), PT(q.d) };
 
         DVec2 a = quad.a;
@@ -971,7 +969,7 @@ public:
 
         nvgRestore(vg);
     }
-    template<typename T> void drawImage(CanvasImageBase<T>& bmp)
+    template<typename T> void drawImage(const CanvasImageBase<T>& bmp)
     {
         drawImage(bmp, bmp.worldQuad());
     }
@@ -1179,48 +1177,31 @@ public:
     {
         const double s = size;
         const double lw = std::max(1.0, s * 0.075);
-        const double sh = std::max(1.0, s * 0.10);
 
         save();
-        translate(x, y);
 
-        beginPath();
-        moveTo(0.0 + sh, 0.0 + sh);
-        lineTo(0.0 + sh, 1.00 * s + sh);
-        lineTo(0.23 * s + sh, 0.78 * s + sh);
-        lineTo(0.33 * s + sh, 1.12 * s + sh);
-        lineTo(0.44 * s + sh, 1.05 * s + sh);
-        lineTo(0.32 * s + sh, 0.70 * s + sh);
-        lineTo(1.00 * s + sh, 0.70 * s + sh);
-        closePath();
-        setFillStyle(0, 0, 0, 96);
-        fill();
+        // Fill
+        auto drawPath = [&]()
+        {
+            beginPath();
+            moveTo(x + 0.0, y + 0.0);
+            lineTo(x + 0.0, y + 0.95 * s); // bottom
+            lineTo(x + 0.30 * s, y + 0.57 * s); // << dip
+            lineTo(x + 0.8 * s, y + 0.50 * s); // right
+            closePath();
+        };
 
-        beginPath();
-        moveTo(0.0, 0.0);
-        lineTo(0.0, 1.00 * s);
-        lineTo(0.23 * s, 0.78 * s);
-        lineTo(0.33 * s, 1.12 * s);
-        lineTo(0.44 * s, 1.05 * s);
-        lineTo(0.32 * s, 0.70 * s);
-        lineTo(1.00 * s, 0.70 * s);
-        closePath();
+        drawPath();
         setFillStyle(255, 255, 255);
         fill();
 
+        // Outline
         setLineWidth(lw);
         setStrokeStyle(0, 0, 0);
         setLineJoin(LineJoin::JOIN_MITER);
         setMiterLimit(6.0);
-        beginPath();
-        moveTo(0.0, 0.0);
-        lineTo(0.0, 1.00 * s);
-        lineTo(0.23 * s, 0.78 * s);
-        lineTo(0.33 * s, 1.12 * s);
-        lineTo(0.44 * s, 1.05 * s);
-        lineTo(0.32 * s, 0.70 * s);
-        lineTo(1.00 * s, 0.70 * s);
-        closePath();
+
+        drawPath();
         stroke();
 
         restore();

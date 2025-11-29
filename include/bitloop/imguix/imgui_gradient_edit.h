@@ -221,8 +221,10 @@ private:
 
         // Match == : size, dragging_uid, selected_uid
         detail::hash_combine(_hash, std::hash<std::size_t>{}(m_marks.size()));
-        //detail::hash_combine(_hash, std::hash<int>{}(dragging_uid));
-        //detail::hash_combine(_hash, std::hash<int>{}(selected_uid));
+
+        // skip hashing dragging/selected marks. hash only changes if gradient itself changes
+        detail::hash_combine(_hash, std::hash<int>{}(dragging_uid));
+        detail::hash_combine(_hash, std::hash<int>{}(selected_uid));
 
         // Match == : order matters; compare position (with eps) and color[0..2] (with eps)
         for (const ImGradientMark& m : m_marks) {

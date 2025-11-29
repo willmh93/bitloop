@@ -10,12 +10,14 @@ BL_BEGIN_NS;
 
 namespace TextUtil
 {
+    // Helper to convert floating-point number to a clean formatted string
+    // - with optional snapping / trim leading/trailing 0's
     template<typename T>
-    std::string floatToCleanString(T value, int max_decimal_places, T precision, bool minimize=true)
+    std::string floatToCleanString(T value, int max_decimal_places, T snap_size, bool trim_trailing_zeros=true, bool trim_leading_zero=false)
     {
         // Optional snapping
-        if (precision > 0)
-            value = round(value / precision) * precision;
+        if (snap_size > 0)
+            value = round(value / snap_size) * snap_size;
 
         // Use fixed formatting
         std::ostringstream oss;
@@ -23,23 +25,26 @@ namespace TextUtil
         std::string str = oss.str();
 
         // Remove trailing zeros
-        size_t dot = str.find('.');
-        if (dot != std::string::npos)
+        if (trim_trailing_zeros)
         {
-            size_t last_non_zero = str.find_last_not_of('0');
-            if (last_non_zero != std::string::npos)
-                str.erase(last_non_zero + 1);
+            size_t dot = str.find('.');
+            if (dot != std::string::npos)
+            {
+                size_t last_non_zero = str.find_last_not_of('0');
+                if (last_non_zero != std::string::npos)
+                    str.erase(last_non_zero + 1);
 
-            // Remove trailing dot
-            if (str.back() == '.')
-                str.pop_back();
+                // Remove trailing dot
+                if (str.back() == '.')
+                    str.pop_back();
+            }
         }
 
-        if (minimize)
-        {
-            if (str == "-0")
-                str = "0";
+        if (str == "-0")
+            str = "0";
 
+        if (trim_leading_zero)
+        {
             // Remove the leading '0' for values between -1 and 1
             // (e.g. 0.7351 -> .7351)
             if (!str.empty())
@@ -67,6 +72,8 @@ namespace TextUtil
     std::string_view trim_view(std::string_view text);
 
     bool contains_only(const std::string& s, const std::string& allowed);
+
+    std::string format_human_u64(uint64_t value, int sig_figs = 5);
 }
 
 BL_END_NS;

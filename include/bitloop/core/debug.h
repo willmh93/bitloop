@@ -9,6 +9,9 @@
 #include <iostream>
 #include <concepts>
 
+#include <mutex>
+#include <unordered_map>
+
 #include <ostream>
 #include <sstream>
 #include <type_traits>
@@ -328,8 +331,8 @@ inline void blPrint(const char* fmt, ...)
 }
 
 #ifdef TIMERS_ENABLED
-#define timer0(name)      auto _timer_##name = std::chrono::high_resolution_clock::now();
-#define timer1(name, ...) auto waited_##name = std::chrono::high_resolution_clock::now() - _timer_##name;\
+#define timer0(name)      auto _timer_##name = std::chrono::steady_clock::now();
+#define timer1(name, ...) auto waited_##name = std::chrono::steady_clock::now() - _timer_##name;\
                       double dt_##name = std::chrono::duration<double, std::milli>(waited_##name).count();\
                       if (dt_##name >= TIMER_ELAPSED_LIMIT) { blPrint("Timer (%s): %.4f", #name, dt_##name); }
 #else

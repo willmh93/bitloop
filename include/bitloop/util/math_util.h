@@ -144,32 +144,39 @@ namespace Math
     template<typename T> [[nodiscard]] constexpr T absAvgPct(T a, T b) { return (abs(a-b)/((a+b)/T{2}))*T{100}; }
 
     // Coordinate offset rotation
-    [[nodiscard]] inline DVec2 rotateOffset(double dx, double dy, double rotation)
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> rotateOffset(T dx, T dy, U rotation)
     {
-        double _cos = std::cos(rotation);
-        double _sin = std::sin(rotation);
+        T _cos = T(bl::cos(rotation));
+        T _sin = T(bl::sin(rotation));
         return {
             (dx * _cos - dy * _sin),
             (dy * _cos + dx * _sin)
         };
     }
-    [[nodiscard]] inline DVec2 rotateOffset(double dx, double dy, double _cos, double _sin)
+
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> rotateOffset(T dx, T dy, U _cos, U _sin)
     {
         return {
             (dx * _cos - dy * _sin),
             (dy * _cos + dx * _sin)
         };
     }
-    [[nodiscard]] inline DVec2 rotateOffset(const DVec2& offset, double rotation)
+    
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> rotateOffset(const Vec2<T>& offset, U rotation)
     {
-        double _cos = std::cos(rotation);
-        double _sin = std::sin(rotation);
+        T _cos = T(bl::cos(rotation));
+        T _sin = T(bl::sin(rotation));
         return {
             (offset.x * _cos - offset.y * _sin),
             (offset.y * _cos + offset.x * _sin)
         };
     }
-    [[nodiscard]] inline DVec2 rotateOffset(const DVec2& offset, double _cos, double _sin)
+
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> rotateOffset(const Vec2<T>& offset, U _cos, U _sin)
     {
         return {
             (offset.x * _cos - offset.y * _sin),
@@ -177,32 +184,39 @@ namespace Math
         };
     }
 
-    [[nodiscard]] inline DVec2 reverseRotateOffset(double dx, double dy, double rotation)
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> reverseRotateOffset(T dx, T dy, U rotation)
     {
-        double _cos = std::cos(rotation);
-        double _sin = std::sin(rotation);
+        T _cos = T(bl::cos(rotation));
+        T _sin = T(bl::sin(rotation));
         return {
             (dx * _cos + dy * _sin),
             (dy * _cos - dx * _sin)
         };
     }
-    [[nodiscard]] inline DVec2 reverseRotateOffset(double dx, double dy, double _cos, double _sin)
+
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> reverseRotateOffset(T dx, T dy, U _cos, U _sin)
     {
         return {
             (dx * _cos + dy * _sin),
             (dy * _cos - dx * _sin)
         };
     }
-    [[nodiscard]] inline DVec2 reverseRotateOffset(const DVec2& offset, double rotation)
+
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> reverseRotateOffset(const Vec2<T>& offset, U rotation)
     {
-        double _cos = std::cos(rotation);
-        double _sin = std::sin(rotation);
+        T _cos = T(bl::cos(rotation));
+        T _sin = T(bl::sin(rotation));
         return {
             (offset.x * _cos + offset.y * _sin),
             (offset.y * _cos - offset.x * _sin)
         };
     }
-    [[nodiscard]] inline DVec2 reverseRotateOffset(const DVec2& offset, double _cos, double _sin)
+
+    template<typename T, typename U>
+    [[nodiscard]] inline Vec2<T> reverseRotateOffset(const Vec2<T>& offset, U _cos, U _sin)
     {
         return {
             (offset.x * _cos + offset.y * _sin),

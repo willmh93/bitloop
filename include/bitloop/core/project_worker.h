@@ -88,11 +88,12 @@ public:
     // ======== Events / Data ========
     void handleProjectCommands(ProjectCommandEvent& e);
 
-    void pushDataToShadow();       // Feed Live data to shadow buffer (i.e. Queue it)
-    void pullDataFromShadow();     // Process queued events
+    void pushDataToShadow();               // Feed Live data to shadow buffer
+    void pushDataToUnchangedShadowVars();  // Feed Live data to shadow buffer (IF shadow var is unchanged)
+    void pullDataFromShadow();             // Process queued events
 
     void queueEvent(const SDL_Event& event); // Feed SDL event to event queue
-    void pollEvents(bool discardBatch);      // Process queued data (*if* modified by ImGui inputs)
+    void pollEvents();                       // Process queued data (if modified by ImGui inputs)
 
     // ======== Project Control ========
     [[nodiscard]] ProjectBase* getActiveProject() { return active_project; }

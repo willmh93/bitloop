@@ -128,10 +128,7 @@ void ProjectWorker::worker_loop()
                 {
                     active_project->markLiveValues();
 
-                    // If shadow data changed (due to ImGui inputs), discard pending SDL events since ImGui
-                    // already processed those events internally and they shouldn't be treated as canvas input
-                    bool discard_event_batch = shadow_changed;
-                    pollEvents(discard_event_batch);
+                    pollEvents();
 
                     // If handled SDL event changed live buffer, immediately push those changes to shadow buffer
                     if (active_project->changedLive())
@@ -152,15 +149,19 @@ void ProjectWorker::worker_loop()
                 if (!active_project->paused)
                     main_window()->captureFrame(true);
 
+                active_project->invokeScheduledCalls();
+
                 /// ────── Process simulation (potentially heavy work) ──────
                 active_project->_projectProcess();
 
                 
                 /// ────── Update shadow buffer with *changed* live variables ──────
                 {
+                    // currently, we push live changes to shadow IF shadow itself wasn't changed by UI
                     shadow_changed = active_project->changedShadow();
-                    if (!shadow_changed)
-                        pushDataToShadow();
+                    ///if (!shadow_changed)
+                    ///  pushDataToShadow();
+                    pushDataToUnchangedShadowVars();
                 }
 
 
@@ -204,6 +205,12 @@ void ProjectWorker::pushDataToShadow()
     active_project->updateShadowBuffers();
 }
 
+void ProjectWorker::pushDataToUnchangedShadowVars()
+{
+    std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+    active_project->updateUnchangedShadowVars();
+}
+
 void ProjectWorker::pullDataFromShadow()
 {
     //if (shared_sync.editing_ui.load())
@@ -232,7 +239,7 @@ void ProjectWorker::queueEvent(const SDL_Event& event)
     // Immediately process events for the overlay
 }
 
-void ProjectWorker::pollEvents(bool discardBatch)
+void ProjectWorker::pollEvents()
 {
     // Grab event queue data (and clear via swap with empty queue)
     std::vector<SDL_Event> local;
@@ -241,14 +248,11 @@ void ProjectWorker::pollEvents(bool discardBatch)
         local.swap(input_event_queue);
     }
 
-    if (!discardBatch)
-    {
-        //if (active_project)
-        //    active_project->_clearEventQueue();
+    //if (active_project)
+    //    active_project->_clearEventQueue();
 
-        for (SDL_Event& e : local)
-            _onEvent(e);
-    }
+    for (SDL_Event& e : local)
+        _onEvent(e);
 }
 
 void ProjectWorker::populateAttributes()

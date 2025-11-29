@@ -68,7 +68,7 @@ void ProjectBase::_populateAllAttributes()
         ImGui::Dummy(scale_size(0, 8));
     }
 	
-    // Scene sections
+    // Populate UI for focused Scene
     if (ctx_focused)
     {
         SceneBase* scene = ctx_focused->scene;
@@ -97,12 +97,8 @@ void ProjectBase::_populateAllAttributes()
 
 void ProjectBase::_populateOverlay()
 {
-    Layout& layout = currentLayout();
-    auto& scenes = layout.scenes();
-    for (SceneBase* scene : scenes)
-    {
+    for (SceneBase* scene : viewports.all_scenes)
         scene->_populateOverlay();
-    }
 }
 
 void ProjectBase::updateLiveBuffers()
@@ -140,6 +136,18 @@ void ProjectBase::markShadowValues()
 {
     for (SceneBase* scene : viewports.all_scenes)
         scene->markShadowValues();
+}
+
+void ProjectBase::updateUnchangedShadowVars()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->updateUnchangedShadowVars();
+}
+
+void ProjectBase::invokeScheduledCalls()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->invokeScheduledCalls();
 }
 
 void ProjectBase::_projectPrepare()
@@ -721,16 +729,6 @@ Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
 bool ProjectBase::isRecording() const
 {
     return main_window()->getRecordManager()->isRecording();
-}
-
-void ProjectBase::pullDataFromShadow()
-{
-    project_worker()->pullDataFromShadow();
-}
-
-void ProjectBase::pollEvents()
-{
-    project_worker()->pollEvents(false);
 }
 
 void ProjectBase::logMessage(const char* fmt, ...)
