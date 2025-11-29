@@ -80,6 +80,9 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
 	//ctx->translate(700.0, 100.0);
     //ctx->scale(2);
 
+    ctx->setFillStyle(Color::white);
+    ctx->fillEllipse((f64)mouse->world_x, (f64)mouse->world_y, 5.0);
+
     ctx->worldCoordinates(transform_coordinates);
     ctx->scalingLines(scale_lines);
     ctx->scalingSizes(scale_sizes);
@@ -89,7 +92,8 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
 
 void Tiger_Scene::onEvent(Event e)
 {
-    navigator.handleWorldNavigation(e, true);
+    if (this->ownsEvent(e))
+        navigator.handleWorldNavigation(e, true);
 }
 
 SIM_END;

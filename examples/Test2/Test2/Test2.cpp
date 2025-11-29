@@ -322,7 +322,8 @@ void Test2_Scene::viewportDraw(Viewport* ctx) const
 
 void Test2_Scene::onEvent(Event e)
 {
-    handleWorldNavigation(e, true);
+    if (this->ownsEvent(e))
+        handleWorldNavigation(e, true);
 }
 
 //void Test_Scene::onPointerDown(PointerEvent e) {}

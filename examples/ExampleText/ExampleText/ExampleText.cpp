@@ -78,7 +78,7 @@ void ExampleText_Scene::sceneMounted(Viewport* ctx)
     // Initialize viewport
     camera.setSurface(ctx);
     camera.setOriginViewportAnchor(Anchor::CENTER);
-    camera.focusWorldRect(-100, -100, 1000, 1000);
+    //camera.focusWorldRect(-100, -100, 1000, 700);
 
     navigator.setTarget(camera);
     navigator.setDirectCameraPanning(true);
@@ -108,7 +108,7 @@ void ExampleText_Scene::viewportDraw(Viewport* ctx) const
     ctx->setTransform(camera.getTransform());
     ctx->drawWorldAxis();
 
-    ctx->scale(10);
+    //ctx->scale(10);
 
     ctx->worldCoordinates(transform_coordinates);
     ctx->scalingLines(scale_lines);
@@ -133,7 +133,8 @@ void ExampleText_Scene::viewportDraw(Viewport* ctx) const
 
 void ExampleText_Scene::onEvent(Event e)
 {
-    navigator.handleWorldNavigation(e, true);
+    if (this->ownsEvent(e))
+        navigator.handleWorldNavigation(e, true);
 }
 
 //void ExampleText_Scene::onPointerDown(PointerEvent e) {{}}

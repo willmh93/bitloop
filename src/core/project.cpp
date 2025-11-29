@@ -279,90 +279,92 @@ void ProjectBase::_projectProcess()
 
     updateViewportRects();
 
+    // 'did_first_process' is only true for the FIRST frame we process (when unpaused) so that we
+    // don't do any drawing until this sets:  done_single_process=true
+    // (this is to prevent recording the anything until the first real frame completes after starting record)
     bool did_first_process = false;
 
-    // Determine whether to process project this frame or not (depends on recording status)
-    //if (!capture_manager.attachingEncoder() && !capture_manager.encoderBusy())
+    // Allow panning/zooming, even when paused
+    for (Viewport* viewport : viewports)
     {
-        // Allow panning/zooming, even when paused
+        double viewport_mx = mouse.client_x - viewport->left();
+        double viewport_my = mouse.client_y - viewport->top();
+
+        auto m = viewport->inverseTransform<f128>();
+
+        if (//cam.panning ||
+            (viewport_mx >= 0 &&
+                viewport_my >= 0 &&
+                viewport_mx <= viewport->width() &&
+                viewport_my <= viewport->height()))
+        {
+            mouse.viewport = viewport;
+            mouse.stage_x = viewport_mx;
+            mouse.stage_y = viewport_my;
+
+            auto world_mouse = static_cast<DDVec2>(m * glm::ddvec3(viewport_mx, viewport_my, 1.0));
+            mouse.world_x = world_mouse.x;
+            mouse.world_y = world_mouse.y;
+        }
+    }
+
+    if (!paused)
+    {
+        auto project_t0 = std::chrono::steady_clock::now();
+
+        // Process each scene
+        for (SceneBase* scene : viewports.all_scenes)
+        {
+            scene->dt_call_index = 0;
+            auto scene_t0 = std::chrono::steady_clock::now();
+
+            scene->mouse = &mouse;
+            scene->sceneProcess();
+
+            auto scene_dt = std::chrono::steady_clock::now() - scene_t0;
+            scene->dt_sceneProcess = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(scene_dt).count()
+            );
+        }
+
+
+        // Allow project to handle process on each Viewport
         for (Viewport* viewport : viewports)
         {
-            double viewport_mx = mouse.client_x - viewport->left();
-            double viewport_my = mouse.client_y - viewport->top();
+            //viewport->camera.panZoomProcess();
 
-            auto m = viewport->inverseTransform<f128>();
+            //viewport->just_resized =
+            //    (viewport->w != viewport->old_w) ||
+            //    (viewport->h != viewport->old_h);
 
-            if (//cam.panning ||
-                (viewport_mx >= 0 &&
-                 viewport_my >= 0 &&
-                 viewport_mx <= viewport->width() &&
-                 viewport_my <= viewport->height()))
-            {
-                mouse.viewport = viewport;
-                mouse.stage_x = viewport_mx;
-                mouse.stage_y = viewport_my;
+            double dt;
+            if (main_window()->getRecordManager()->isRecording() )
+                dt = 1.0 / main_window()->getRecordManager()->fps();
+            else
+                dt = dt_frameProcess / 1000.0;
 
-                auto world_mouse = static_cast<DDVec2>(m * glm::ddvec3(viewport_mx, viewport_my, 1.0));
-                mouse.world_x = world_mouse.x;
-                mouse.world_y = world_mouse.y;
-            }
+            viewport->scene->viewportProcess(viewport, dt);
+
+            //viewport->old_w = viewport->w;
+            //viewport->old_h = viewport->h;
         }
 
-        if (!paused)
-        {
-            auto project_t0 = std::chrono::steady_clock::now();
+        /// --- Post-Process each scene ---
 
-            // Process each scene
-            for (SceneBase* scene : viewports.all_scenes)
-            {
-                scene->dt_call_index = 0;
-                auto scene_t0 = std::chrono::steady_clock::now();
+        // Update 'live' values of all ChangeTracker variables (to compare against next frame)
+        for (SceneBase* scene : viewports.all_scenes)
+            scene->ChangeTracker::updateCurrent();
 
-                scene->mouse = &mouse;
-                scene->sceneProcess();
+        // Measure time taken to process whole project
+        auto project_dt = std::chrono::steady_clock::now() - project_t0;
+        dt_projectProcess = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(project_dt).count()
+        );
 
-                auto scene_dt = std::chrono::steady_clock::now() - scene_t0;
-                scene->dt_sceneProcess = static_cast<int>(
-                    std::chrono::duration_cast<std::chrono::milliseconds>(scene_dt).count()
-                );
-            }
-
-
-            // Allow project to handle process on each Viewport
-            for (Viewport* viewport : viewports)
-            {
-                //viewport->camera.panZoomProcess();
-
-                //viewport->just_resized =
-                //    (viewport->w != viewport->old_w) ||
-                //    (viewport->h != viewport->old_h);
-
-                double dt;
-                if (main_window()->getRecordManager()->isRecording() )
-                    dt = 1.0 / main_window()->getRecordManager()->fps();
-                else
-                    dt = dt_frameProcess / 1000.0;
-
-                viewport->scene->viewportProcess(viewport, dt);
-
-                //viewport->old_w = viewport->w;
-                //viewport->old_h = viewport->h;
-            }
-
-            // Post-Process each scene
-            for (SceneBase* scene : viewports.all_scenes)
-                scene->updateCurrent();
-            
-            auto project_dt = std::chrono::steady_clock::now() - project_t0;
-            dt_projectProcess = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(project_dt).count()
-            );
-
-            // Prepare to encode the next frame
-            ///encode_next_paint = true;
-            if (!done_single_process)
-                did_first_process = true;
-        }
+        // Prepare to encode the next frame
+        ///encode_next_paint = true;
+        if (!done_single_process)
+            did_first_process = true;
     }
 
     if (did_first_process)
@@ -445,10 +447,6 @@ void ProjectBase::_projectDraw()
         }
 
         canvas->stroke();
-
-        //canvas->setLineWidth(1);
-        //canvas->setStrokeStyle(Color::purple);
-        //canvas->strokeRect(viewport->left()+1, viewport->top()+1, viewport->width()-2, viewport->height()-2);
 
         if (ctx_focused == viewport)
         {

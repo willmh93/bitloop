@@ -37,7 +37,6 @@ void Viewport::draw()
 
     // Snapshot default transformation (unscaled unrotated top-left viewport)
     default_viewport_transform = SimplePainter::currentTransform();
-    SimplePainter::resetTransform();
 
     print_stream.str("");
     print_stream.clear();

@@ -520,15 +520,6 @@ namespace bl
 
 } // namespace bl
 
-// -------------------------------------------------------------------------
-// Macros: user-facing API
-// -------------------------------------------------------------------------
-//
-// Each macro caches a TimerGroup* per label using a function-local static.
-// That means:
-//   - only the first call per label hits the global map + mutex
-//   - all subsequent calls are just pointer dereferences.
-//
 
 #if BL_TIMERS_ENABLED
 #define BL_TIMER_GROUP_PTR(name)                                        \
