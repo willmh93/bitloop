@@ -605,6 +605,9 @@ public:
         scale_text = false;
         rotate_text = false;
 
+        // Don't preserve NanoVG transforms, start fresh
+        SimplePainter::resetTransform();
+        SimplePainter::transform(default_viewport_transform);
         setLineWidth(line_width);
     }
     void worldHudMode()
@@ -618,6 +621,7 @@ public:
         setLineWidth(line_width);
     }
 
+    // todo: integrate with save()/load() stack?
     void saveCameraTransform()
     {
         saved_transform_coordinates = transform_coordinates;
@@ -637,15 +641,36 @@ public:
         setLineWidth(line_width);
     }
 
-    void resetTransform() { m.reset(); SimplePainter::resetTransform(); }
-    template<typename T=f128> GlmMat3<T> currentTransform() const { return m.stageTransform<T>(); }
-    template<typename T=f128> GlmMat3<T> inverseTransform() const { return m.worldTransform<T>(); }
+    void resetTransform()
+    {
+        m.reset();
+        SimplePainter::resetTransform();
+    }
 
-    void transform(const glm::ddmat3& _m)         { m.transform(_m); }
-    void setTransform(const glm::ddmat3& _m)      { m.reset(); m.transform(_m); }
-    template<typename T> void translate(T x, T y) { m.translate(x, y); }
-    template<typename T> void scale(T s)          { m.scale(s); }
-    void rotate(double r)                         { m.rotate(r); }
+    template<typename T = f128> GlmMat3<T> currentTransform() const { return m.stageTransform<T>(); }
+    template<typename T = f128> GlmMat3<T> inverseTransform() const { return m.worldTransform<T>(); }
+
+    void transform(const glm::ddmat3& _m) {
+        if (transform_coordinates)
+            m.transform(_m);
+        else
+            SimplePainter::transform(_m);
+    }
+
+    void setTransform(const glm::ddmat3& _m) {
+        if (transform_coordinates) {
+            m.reset();
+            m.transform(_m);
+        }
+        else {
+            SimplePainter::resetTransform();
+            SimplePainter::transform(static_cast<glm::mat3>(_m));
+        }
+    }
+
+    template<typename T> void translate(T x, T y) { if (transform_coordinates) m.translate(x, y); else SimplePainter::translate(x, y); }
+    template<typename T> void scale(T s)          { if (transform_coordinates) m.scale(s);        else SimplePainter::scale(s); }
+    void rotate(double r)                         { if (transform_coordinates) m.rotate(r);       else SimplePainter::rotate(r); }
 
     [[nodiscard]] DVec2 Offset(double stage_offX, double stage_offY) const
     {
@@ -682,6 +707,8 @@ public:
 
     template<typename T> DVec2  PT(T x, T y)    const { return transform_coordinates ? m.toStage<T>(x, y) : Vec2{ (double)x, (double)y }; }
     template<typename T> DVec2  PT(Vec2<T> p)   const { return transform_coordinates ? m.toStage<T>(p) : static_cast<DVec2>(p); }
+    //template<typename T> DVec2  PT(T x, T y)    const { return m.toStage<T>(x, y); }
+    //template<typename T> DVec2  PT(Vec2<T> p)   const { return m.toStage<T>(p); }
 
     template<typename T> DVec2  SIZE(T w, T h)  const { return scale_sizes ? m.toStageSideLengths<T>({w, h}) : DVec2{(double)w, (double)h}; }
     template<typename T> DVec2  SIZE(Vec2<T> s) const { return scale_sizes ? m.toStageSideLengths<T>(s) : s; }

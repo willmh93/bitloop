@@ -71,10 +71,9 @@ void Tiger_Scene::viewportProcess(Viewport*, double)
 
 void Tiger_Scene::viewportDraw(Viewport* ctx) const
 {
-    //ctx->SimplePainter::translate(500.0, 100.0);
     //ctx->rotate(Math::toRadians(30.0));
 	
-    ctx->transform(camera.getTransform());
+    /*ctx->transform(camera.getTransform());
     ctx->drawWorldAxis();
     
 	//ctx->translate(700.0, 100.0);
@@ -85,8 +84,14 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
 
     ctx->worldCoordinates(transform_coordinates);
     ctx->scalingLines(scale_lines);
-    ctx->scalingSizes(scale_sizes);
+    ctx->scalingSizes(scale_sizes);*/
 
+    //ctx->SimplePainter::translate(500.0, 100.0);
+    //ctx->translate(200.0, 200.0);
+
+    ctx->stageMode();
+    ctx->rotate(Math::toRadians(10.0));
+    ctx->translate(100.0, 100.0);
     draw_tiger(ctx);
 }
 

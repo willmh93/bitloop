@@ -21,11 +21,11 @@ class Event
     friend class PointerEvent;
     friend class KeyEvent;
 
+protected:
     Viewport* _focused_ctx = nullptr;
     Viewport* _hovered_ctx = nullptr;
     Viewport* _owner_ctx = nullptr;
 
-protected:
     SDL_Event& sdl_event;
 
     void setFocusedViewport(Viewport* ctx) { _focused_ctx = ctx; }
@@ -65,6 +65,7 @@ public:
 
 
     Event(SDL_Event& e) : sdl_event(e) {}
+    Event(const Event& e) = default;
 
     [[nodiscard]] auto type() const             { return sdl_event.type; }
     [[nodiscard]] Viewport* ctx_focused() const { return _focused_ctx; }
@@ -77,7 +78,7 @@ public:
 class PointerEvent : public Event
 {
 public:
-    PointerEvent(const Event& e) : Event(e.sdl_event) {}
+    PointerEvent(const Event& e) : Event(e) {}
 
     // Mouse
     [[nodiscard]] Uint8 button() { return sdl_event.button.button; }

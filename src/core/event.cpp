@@ -65,38 +65,42 @@ std::string Event::toString()
 
 double PointerEvent::x()
 {
+    double x0 = ctx_owner()->left();
+
     switch (sdl_event.type)
     {
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_MOTION:
-        return (double)(sdl_event.tfinger.x * (float)platform()->fbo_width());
+        return (double)(sdl_event.tfinger.x * (float)platform()->fbo_width()) - x0;
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        return (double)(sdl_event.button.x);
+        return (double)(sdl_event.button.x) - x0;
 
     case SDL_EVENT_MOUSE_MOTION:
-        return (double)(sdl_event.motion.x);
+        return (double)(sdl_event.motion.x) - x0;
     }
     return 0;
 }
 
 double PointerEvent::y()
 {
+    double y0 = ctx_owner()->top();
+
     switch (sdl_event.type)
     {
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_MOTION:
-        return (double)(sdl_event.tfinger.y * (float)platform()->fbo_height());
+        return (double)(sdl_event.tfinger.y * (float)platform()->fbo_height()) - y0;
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        return (double)(sdl_event.button.y);
+        return (double)(sdl_event.button.y) - y0;
 
     case SDL_EVENT_MOUSE_MOTION:
-        return (double)(sdl_event.motion.y);
+        return (double)(sdl_event.motion.y) - y0;
     }
     return 0;
 }

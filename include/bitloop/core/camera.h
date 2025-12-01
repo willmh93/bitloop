@@ -89,12 +89,17 @@ public:
     template<class T = f128>
     Vec2<T> _zoom() const
     {
-        auto& m = stageTransform<T>();
-        T a = m[0][0], b = m[1][0], c = m[0][1], d = m[1][1];
-        T sx = sqrt(a * a + b * b);
-        if (sx == T{ 0.0 }) { return { T{0.0}, T{0.0} }; }
-        T det = a * d - b * c;
-        T sy = det / sx;
+        const auto& m = stageTransform<T>();
+        const T m00 = m[0][0], m01 = m[1][0], m10 = m[0][1], m11 = m[1][1];
+
+        // Column lengths give the local (pre-rotation)
+        const T sx = sqrt(m00 * m00 + m10 * m10);
+        if (sx == T{ 0 }) return { T{0}, T{0} };
+
+        // Preserve reflection sign on Y via determinant
+        const T det = m00 * m11 - m01 * m10;
+        const T sy = det / sx;
+
         return { sx, sy };
     }
 

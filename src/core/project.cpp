@@ -279,6 +279,8 @@ void ProjectBase::_projectProcess()
 
     updateViewportRects();
 
+    
+
     // 'did_first_process' is only true for the FIRST frame we process (when unpaused) so that we
     // don't do any drawing until this sets:  done_single_process=true
     // (this is to prevent recording the anything until the first real frame completes after starting record)
@@ -574,6 +576,9 @@ void ProjectBase::_onEvent(SDL_Event& e)
             case SDL_EVENT_FINGER_DOWN:
             {
                 ctx_owner = ctx_focused;
+
+                // Remember touched-down ctx for touch release/motion event to use same owner
+                event.setOwnerViewport(ctx_owner);
                 PointerEvent pointer_event(event);
 
                 // Add pressed finger
@@ -584,8 +589,6 @@ void ProjectBase::_onEvent(SDL_Event& e)
                 info.y = pointer_event.y();
                 pressed_fingers.push_back(info);
 
-                // Remember touched-down ctx for touch release/motion event to use same owner
-                event.setOwnerViewport(ctx_owner);
             } break;
             case SDL_EVENT_FINGER_MOTION:
             {
@@ -637,6 +640,9 @@ void ProjectBase::_onEvent(SDL_Event& e)
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 ctx_owner = ctx_focused;
+
+                // Remember touched-down ctx for touch release/motion event to use same owner
+                event.setOwnerViewport(ctx_owner);
                 PointerEvent pointer_event(event);
 
                 // Add pressed finger
@@ -647,8 +653,6 @@ void ProjectBase::_onEvent(SDL_Event& e)
                 info.y = pointer_event.y();
                 pressed_fingers.push_back(info);
 
-                // Remember touched-down ctx for touch release/motion event to use same owner
-                event.setOwnerViewport(ctx_owner);
             } break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
