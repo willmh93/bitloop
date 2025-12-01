@@ -162,12 +162,9 @@ void ProjectBase::_projectPrepare()
 
 void ProjectBase::_projectStart()
 {
-    if (paused)
-    {
-        // If paused - just resume, don't restart
-        paused = false;
-        return;
-    }
+    // Starting a project that's already been started/paused shouldn't occur
+    assert(!paused);
+    assert(!started);
 
     done_single_process = false;
 
@@ -204,9 +201,17 @@ void ProjectBase::_projectStart()
         viewport->scene->sceneMounted(viewport);
     }
 
-    setProjectInfoState(ProjectInfo::ACTIVE);
-
     started = true;
+}
+
+void ProjectBase::_projectResume()
+{
+    if (paused)
+    {
+        // If paused - just resume, don't restart
+        paused = false;
+        return;
+    }
 }
 
 void ProjectBase::_projectStop()
@@ -214,9 +219,9 @@ void ProjectBase::_projectStop()
     projectStop();
     ///cache.finalize();
 
-    setProjectInfoState(ProjectInfo::INACTIVE);
     ///shaders_loaded = false;
     started = false;
+    paused = false; // Ensure project can start properly next 'play' (so it doesn't try to simple 'resume')
 }
 
 void ProjectBase::_projectPause()
@@ -226,7 +231,6 @@ void ProjectBase::_projectPause()
 
 void ProjectBase::_projectDestroy()
 {
-    setProjectInfoState(ProjectInfo::INACTIVE);
     projectDestroy();
 }
 
@@ -707,11 +711,6 @@ void ProjectBase::_onEvent(SDL_Event& e)
         // but keep onEvent generic so users can retain full control.
         scene->_onEvent(event);
     }
-}
-
-void ProjectBase::setProjectInfoState(ProjectInfo::State state)
-{
-    getProjectInfo()->state = state;
 }
 
 Layout& ProjectBase::newLayout()

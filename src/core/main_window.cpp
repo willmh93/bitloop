@@ -59,11 +59,11 @@ std::string getPreferredCapturesDirectory() {
         path = project_root;
     } else {
         std::filesystem::path trimmed;
-        if (!project_worker()->getActiveProject()) {
+        if (!project_worker()->getCurrentProject()) {
             DebugBreak();
         }
         std::string active_sim_name =
-            project_worker()->getActiveProject()->getProjectInfo()->name;
+            project_worker()->getCurrentProject()->getProjectInfo()->name;
 
         for (const auto& part : path) {
             trimmed /= part;
@@ -296,6 +296,9 @@ void MainWindow::initFonts()
 
 void MainWindow::populateProjectUI()
 {
+    if (!project_worker()->hasActiveProject())
+        return;
+
     ImGui::BeginPaddedRegion(scale_size(6.0f));
     project_worker()->populateAttributes();
     ImGui::EndPaddedRegion();
@@ -321,13 +324,17 @@ void MainWindow::beginRecording()
     assert(!capture_manager.isRecording());
     assert(!capture_manager.isSnapshotting());
 
+    snapshot.enabled = false;
+    //record.enabled = true; // keep record button enabled. Clicking again ends recording
+    record.toggled = true;
+
     // Don't capture until next frame starts (and sets this true)
     capture_manager.setCaptureEnabled(false);
 
     #ifndef __EMSCRIPTEN__
     std::filesystem::path capture_dir = getPreferredCapturesDirectory();
 
-    std::string active_sim_name = project_worker()->getActiveProject()->getProjectInfo()->name;
+    std::string active_sim_name = project_worker()->getCurrentProject()->getProjectInfo()->name;
 
     // Organize by project name
     capture_dir /= active_sim_name;
@@ -382,18 +389,25 @@ void MainWindow::beginRecording()
     #endif
 }
 
-
-
 void MainWindow::beginSnapshot()
 {
     assert(!capture_manager.isRecording());
     assert(!capture_manager.isSnapshotting());
 
-    // Don't capture until next frame starts (and sets this true)
+    // Disable everything until snapshot complete
+    snapshot.enabled = false;
+    record.enabled = false;
+    pause.enabled = false;
+    stop.enabled = false; 
+
+    snapshot.toggled = true;
+    record.toggled = false;
+
+    // Don't capture until *next* frame starts (when capture_enabled turns true)
     capture_manager.setCaptureEnabled(false);
 
     #ifndef __EMSCRIPTEN__
-    std::string active_sim_name = project_worker()->getActiveProject()->getProjectInfo()->name;
+    std::string active_sim_name = project_worker()->getCurrentProject()->getProjectInfo()->name;
 
     // Organize by project name
     std::filesystem::path dir = getPreferredCapturesDirectory();
@@ -425,8 +439,10 @@ void MainWindow::beginSnapshot()
 
 void MainWindow::endRecording()
 {
+    // called immediately when end recording signalled, even if current frame hasn't finished encoding
     record.toggled = false;
 
+    // signal to capture_manager to finish, so isCaptureToMemoryComplete()==true below
     if (capture_manager.isRecording())
         capture_manager.finalizeCapture();
 }
@@ -445,6 +461,18 @@ void MainWindow::checkCaptureComplete()
         out.write((const char*)data.data(), data.size());
         out.close();
         #endif
+
+        /// assumes the project is still running/active
+
+        // untoggle
+        record.toggled = false;
+        snapshot.toggled = false;
+
+        // re-enable
+        pause.enabled = true;
+        stop.enabled = true;
+        record.enabled = true;
+        snapshot.enabled = true;
     }
 }
 
@@ -453,13 +481,17 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
     // Handle commands which can be initiated by both GUI thread & project-worker thread
     switch (e.type)
     {
-    case MainWindowCommandType::ON_STARTED_PROJECT:
+    case MainWindowCommandType::ON_PLAY_PROJECT:
     {
+        /// note: could be starting OR resuming project
+
         // received from project-worker once project succesfully started
         play.enabled = false;
         stop.enabled = true;
         pause.enabled = true;
-        snapshot.enabled = true;
+
+        record.enabled = true; // may already be recording, but enable in case we're starting new project
+        snapshot.enabled = !capture_manager.isRecording(); // don't re-enable snapshot button if we're still recording (i.e. resuming)
 
         static bool first = true;
         if (first)
@@ -478,17 +510,21 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         if (capture_manager.isRecording())
             capture_manager.finalizeCapture();
 
-        stop.enabled = false;
-        pause.enabled = false;
+        // set states here as well as on toolbar button click, in case
+        // the project gets stopped in some other way.
         play.enabled = true;
+        pause.enabled = false;
+
+        stop.enabled = false;
         record.toggled = false;
         snapshot.enabled = false;
 
         break;
 
     case MainWindowCommandType::ON_PAUSED_PROJECT:
-        pause.enabled = false;
         play.enabled = true;
+        pause.enabled = false;
+        snapshot.enabled = false; // only allow snapshot while project running
         break;
 
 
@@ -628,10 +664,12 @@ void MainWindow::populateToolbar()
         // in response to the project-worker succesfully switching project.
         play.enabled = false;
 
-        // begin recording immediately if record button "on" so we start capturing
-        // from the very first frame
-        if (record.toggled)
-            beginRecording();
+        if (!project_worker()->getCurrentProject()->isPaused())
+        {
+            // not paused/resuming - begin recording immediately if record button "on" so we start capturing from the very first frame
+            if (record.toggled)
+                beginRecording();
+        }
 
         project_worker()->startProject();
     }
@@ -662,19 +700,22 @@ void MainWindow::populateToolbar()
         ImGui::SameLine();
         if (toolbarButton("##record", "record", record, ImVec2(size, size)))
         {
-            if (!play.enabled)
+            //if (!play.enabled)
+            if (project_worker()->hasActiveProject())
             {
-                // sim already running
+                // sim already 'active' (and possibly in 'paused' state)
                 if (!record.toggled)
                 {
                     // Start recording
-                    record.toggled = true;
+                    //record.toggled = true;
                     beginRecording();
                 }
                 else
                 {
-                    record.toggled = false;
-                    capture_manager.finalizeCapture();
+                    /// endRecording() signals finalize_requested=true, so recording finalizes in MainWindow::checkCaptureComplete()
+                    endRecording();
+                    //record.toggled = false;
+                    //capture_manager.finalizeCapture();
                 }
             }
             else
@@ -689,7 +730,6 @@ void MainWindow::populateToolbar()
     ImGui::SameLine();
     if (toolbarButton("##snapshot", "snapshot", snapshot, ImVec2(size, size)))
     {
-        snapshot.toggled = true;
         beginSnapshot();
     }
 
@@ -1081,7 +1121,7 @@ void MainWindow::populateViewport()
         else if (shared_sync.project_thread_started)
         {
             // Launch startup simulation 1 frame late once we have a valid canvas size
-            if (!project_worker()->getActiveProject())
+            if (!project_worker()->getCurrentProject())
             {
                 auto first_project = ProjectBase::projectInfoList().front();
                 project_worker()->setActiveProject(first_project->sim_uid);
@@ -1103,19 +1143,23 @@ void MainWindow::populateViewport()
                 canvas.end();
 
                 // Even if not recording, behave as though we are for testing purposes
-                captured_last_frame = encode_next_sim_frame;
-
-                if (capture_manager.isRecording() || capture_manager.isSnapshotting())
+                if (project_worker()->getCurrentProject() &&
+                    !project_worker()->getCurrentProject()->isPaused())
                 {
-                    if (encode_next_sim_frame)
-                    {
-                        canvas.readPixels(frame_data);
-                        capture_manager.encodeFrame(frame_data.data());
-                    }
-                }
+                    captured_last_frame = encode_next_sim_frame;
 
-                // Force worker to tell us when it wants to encode a new frame
-                encode_next_sim_frame = false;
+                    if (capture_manager.isRecording() || capture_manager.isSnapshotting())
+                    {
+                        if (encode_next_sim_frame)
+                        {
+                            canvas.readPixels(frame_data);
+                            capture_manager.encodeFrame(frame_data.data());
+                        }
+                    }
+
+                    // Force worker to tell us when it wants to encode a new frame
+                    encode_next_sim_frame = false;
+                }
 
                 shared_sync.frame_ready_to_draw = false;
                 shared_sync.frame_consumed = true;

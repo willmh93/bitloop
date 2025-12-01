@@ -12,7 +12,7 @@ struct ImDebugLog;
 enum struct ProjectCommandType
 {
     PROJECT_SET,
-    PROJECT_START,
+    PROJECT_PLAY,
     PROJECT_STOP,
     PROJECT_PAUSE
 };
@@ -46,7 +46,7 @@ class ProjectWorker
     std::mutex event_queue_mutex;
     std::thread worker_thread;
 
-    ProjectBase* active_project = nullptr;
+    ProjectBase* current_project = nullptr;
 
     void _destroyActiveProject();
 
@@ -96,7 +96,8 @@ public:
     void pollEvents();                       // Process queued data (if modified by ImGui inputs)
 
     // ======== Project Control ========
-    [[nodiscard]] ProjectBase* getActiveProject() { return active_project; }
+    [[nodiscard]] ProjectBase* getCurrentProject() { return current_project; }
+    [[nodiscard]] bool hasActiveProject();
 
     std::mutex command_mutex;
     void addProjectCommand(ProjectCommandEvent e)
@@ -106,7 +107,7 @@ public:
     }
 
     void setActiveProject(int uid)  { addProjectCommand({ ProjectCommandType::PROJECT_SET,   uid }); }
-    void startProject()             { addProjectCommand({ ProjectCommandType::PROJECT_START, ProjectID::CURRENT_PROJECT }); }
+    void startProject()             { addProjectCommand({ ProjectCommandType::PROJECT_PLAY, ProjectID::CURRENT_PROJECT }); }
     void stopProject()              { addProjectCommand({ ProjectCommandType::PROJECT_STOP,  ProjectID::CURRENT_PROJECT }); }
     void pauseProject()             { addProjectCommand({ ProjectCommandType::PROJECT_PAUSE, ProjectID::CURRENT_PROJECT }); }
 };

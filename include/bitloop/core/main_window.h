@@ -32,7 +32,7 @@ extern ImDebugLog debug_log;
 
 enum struct MainWindowCommandType
 {
-    ON_STARTED_PROJECT,
+    ON_PLAY_PROJECT,
     ON_STOPPED_PROJECT,
     ON_PAUSED_PROJECT,
     BEGIN_RECORDING,

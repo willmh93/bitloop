@@ -756,8 +756,7 @@ void WebPWorker::process(CaptureManager* capture_manager, CaptureConfig video_co
                 break;
             }
             else if (config.format == CaptureFormat::WEBP_VIDEO &&
-                     config.record_frame_count != 0 &&
-                     frame_index >= config.record_frame_count)
+                     config.record_frame_count != 0 && frame_index >= config.record_frame_count)
             {
                 finalize(capture_manager);
                 break;

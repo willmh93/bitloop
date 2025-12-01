@@ -146,22 +146,18 @@ struct Input
 
 struct ProjectInfo
 {
-    enum State { INACTIVE, ACTIVE, RECORDING };
-
     std::string name;
     std::vector<std::string> path;
     ProjectCreatorFunc creator;
     int sim_uid;
-    State state;
 
     ProjectInfo(
         std::vector<std::string> path,
         std::string name="",
         ProjectCreatorFunc creator = nullptr,
-        int sim_uid = -100,
-        State state = State::INACTIVE
+        int sim_uid = -100
     )
-        : name(name), path(path), creator(creator), sim_uid(sim_uid), state(state)
+        : name(name), path(path), creator(creator), sim_uid(sim_uid)
     {}
 };
 
@@ -243,6 +239,7 @@ protected:
     void _projectStart();
     void _projectStop();
     void _projectPause();
+    void _projectResume();
     void _projectDestroy();
     void _projectProcess();
     void _projectDraw();
@@ -353,8 +350,6 @@ public:
         return findProjectInfo(sim_uid);
     }
 
-    void setProjectInfoState(ProjectInfo::State state);
-
     // Shared Scene creators
 
     template<typename SceneType>
@@ -414,6 +409,8 @@ public:
     }
 
     [[nodiscard]] bool isRecording() const;
+    [[nodiscard]] bool isPaused() const { return paused; }
+    [[nodiscard]] bool isActive() const { return started; } // true even if paused. Indicates project has been started and has a state
 
     virtual std::vector<std::string> categorize()
     {

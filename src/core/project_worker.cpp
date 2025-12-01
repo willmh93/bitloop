@@ -28,11 +28,11 @@ void ProjectWorker::end()
 
 void ProjectWorker::_destroyActiveProject()
 {
-    if (active_project)
+    if (current_project)
     {
-        active_project->_projectDestroy();
-        delete active_project;
-        active_project = nullptr;
+        current_project->_projectDestroy();
+        delete current_project;
+        current_project = nullptr;
     }
 }
 
@@ -47,38 +47,47 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 
         _destroyActiveProject();
 
-        active_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
-        active_project->configure(e.project_uid, main_window()->getCanvas(), &project_log);
-        active_project->_projectPrepare();
+        current_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
+        current_project->configure(e.project_uid, main_window()->getCanvas(), &project_log);
+        current_project->_projectPrepare();
     }
     break;
 
-    case ProjectCommandType::PROJECT_START:
-        if (active_project)
+    case ProjectCommandType::PROJECT_PLAY:
+        if (current_project)
         {
-            active_project->_projectDestroy();
-            active_project->_projectStart();
+            if (current_project->isPaused())
+            {
+                // don't destroy if simply resuming project
+                current_project->_projectResume();
+            }
+            else
+            {
+                current_project->_projectDestroy();
+                current_project->_projectStart();
+            }
 
-            active_project->updateShadowBuffers();
 
-            main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_STARTED_PROJECT });
+            current_project->updateShadowBuffers();
+
+            main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_PLAY_PROJECT });
         }
         break;
 
     case ProjectCommandType::PROJECT_STOP:
-        if (active_project)
+        if (current_project)
         {
-            active_project->_projectDestroy();
-            active_project->_projectStop();
+            current_project->_projectDestroy();
+            current_project->_projectStop();
 
             main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_STOPPED_PROJECT });
         }
         break;
 
     case ProjectCommandType::PROJECT_PAUSE:
-        if (active_project)
+        if (current_project)
         {
-            active_project->_projectPause();
+            current_project->_projectPause();
             main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_PAUSED_PROJECT });
         }
         break;
@@ -117,7 +126,7 @@ void ProjectWorker::worker_loop()
         auto draw_t0 = std::chrono::steady_clock::now();
 
         /// ────── Do heavy work (while GUI thread redraws cached frame) ──────
-        if (active_project && active_project->started) 
+        if (current_project && current_project->started) 
         {
             /// ────── Update live values ──────
             {
@@ -126,12 +135,12 @@ void ProjectWorker::worker_loop()
 
                 /// ────── Event polling ──────
                 {
-                    active_project->markLiveValues();
+                    current_project->markLiveValues();
 
                     pollEvents();
 
                     // If handled SDL event changed live buffer, immediately push those changes to shadow buffer
-                    if (active_project->changedLive())
+                    if (current_project->changedLive())
                         pushDataToShadow();
                 }
                 
@@ -141,24 +150,24 @@ void ProjectWorker::worker_loop()
                 /// ────── Mark buffer states prior to process ──────
                 {
                     std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-                    active_project->markLiveValues();
-                    active_project->markShadowValues();
+                    current_project->markLiveValues();
+                    current_project->markShadowValues();
                 }
 
                 // Capture by default unless sim overrides flag (only has an affect when recording)
-                if (!active_project->paused)
+                if (!current_project->paused)
                     main_window()->captureFrame(true);
 
-                active_project->invokeScheduledCalls();
+                current_project->invokeScheduledCalls();
 
                 /// ────── Process simulation (potentially heavy work) ──────
-                active_project->_projectProcess();
+                current_project->_projectProcess();
 
                 
                 /// ────── Update shadow buffer with *changed* live variables ──────
                 {
                     // currently, we push live changes to shadow IF shadow itself wasn't changed by UI
-                    shadow_changed = active_project->changedShadow();
+                    shadow_changed = current_project->changedShadow();
                     ///if (!shadow_changed)
                     ///  pushDataToShadow();
                     pushDataToUnchangedShadowVars();
@@ -174,8 +183,11 @@ void ProjectWorker::worker_loop()
         // If recording, don't wake GUI until capture_manager is ready to encode a new frame,
         // otherwise the main GUI thread would need to block while it waits for the last frame to encode.
         // We intentionally avoid a frame queue so video encoding stays in sync with simulation.
-        if ((capture_manager->isRecording() || capture_manager->isSnapshotting()) && main_window()->capturingNextFrame())
-            capture_manager->waitUntilReadyForNewFrame();
+        if (main_window()->capturingNextFrame())
+        {
+            if ((capture_manager->isRecording() || capture_manager->isSnapshotting()))
+                capture_manager->waitUntilReadyForNewFrame();
+        }
 
         /// ────── Flag ready to draw ──────
         shared_sync.flag_ready_to_draw();
@@ -202,13 +214,13 @@ void ProjectWorker::pushDataToShadow()
     // While we update the shadow buffer, we should NOT 
     // permit ui updates (force a small stall)
     std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-    active_project->updateShadowBuffers();
+    current_project->updateShadowBuffers();
 }
 
 void ProjectWorker::pushDataToUnchangedShadowVars()
 {
     std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-    active_project->updateUnchangedShadowVars();
+    current_project->updateUnchangedShadowVars();
 }
 
 void ProjectWorker::pullDataFromShadow()
@@ -219,7 +231,7 @@ void ProjectWorker::pullDataFromShadow()
         std::lock_guard<std::mutex> live_buffer_lock(shared_sync.live_buffer_mutex);
         shared_sync.updating_live_buffer.store(true);
 
-        active_project->updateLiveBuffers();
+        current_project->updateLiveBuffers();
 
         shared_sync.updating_live_buffer.store(false, std::memory_order_release);
 
@@ -248,23 +260,28 @@ void ProjectWorker::pollEvents()
         local.swap(input_event_queue);
     }
 
-    //if (active_project)
-    //    active_project->_clearEventQueue();
+    //if (current_project)
+    //    current_project->_clearEventQueue();
 
     for (SDL_Event& e : local)
         _onEvent(e);
 }
 
+bool bl::ProjectWorker::hasActiveProject()
+{
+    return (current_project && current_project->isActive());
+}
+
 void ProjectWorker::populateAttributes()
 {
-    if (active_project)
-        active_project->_populateAllAttributes();
+    if (current_project)
+        current_project->_populateAllAttributes();
 }
 
 void ProjectWorker::populateOverlay()
 {
-    if (active_project)
-        active_project->_populateOverlay();
+    if (current_project)
+        current_project->_populateOverlay();
 }
 
 void ProjectWorker::_onEvent(SDL_Event& e)
@@ -296,14 +313,14 @@ void ProjectWorker::_onEvent(SDL_Event& e)
     }
     #endif
 
-    if (active_project)
-        active_project->_onEvent(e);
+    if (current_project)
+        current_project->_onEvent(e);
 }
 
 void ProjectWorker::draw()
 {
-    if (active_project)
-        active_project->_projectDraw();
+    if (current_project)
+        current_project->_projectDraw();
 }
 
 BL_END_NS
