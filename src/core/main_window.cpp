@@ -3,6 +3,7 @@
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
+#include <bitloop/imguix/imgui_debug_ui.h>
 #include <imgui_stdlib.h>
 
 #ifndef __EMSCRIPTEN__
@@ -1773,7 +1774,7 @@ void MainWindow::populateUI()
         }
         ImGui::End();
 
-        #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
+        #ifdef DEBUG_INCLUDE_LOG_TABS
         ImGui::Begin("Debug"); // Begin Debug Window
         {
             if (ImGui::BeginTabBar("DebugTabs"))
@@ -1788,6 +1789,14 @@ void MainWindow::populateUI()
                 if (ImGui::BeginTabItem("Global Log"))
                 {
                     debug_log.draw();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Display"))
+                {
+                    // Debug DPI
+                    dpiDebugInfo();
+
                     ImGui::EndTabItem();
                 }
 

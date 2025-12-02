@@ -82,7 +82,7 @@ __declspec(noinline) void dbg_keep_ref(const T& x) {
 #endif
 
 // Disable debug flags for Release builds
-#ifdef NDEBUG
+#if defined NDEBUG && !defined(FORCE_DEBUG)
 #undef DEBUG_FINITE_DOUBLE_CHECKS
 #undef DEBUG_SIMULATE_WEB_UI
 #undef DEBUG_SIMULATE_MOBILE

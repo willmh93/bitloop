@@ -6,12 +6,16 @@
 //#define DEBUG_DISABLE_PRINT
 #define DEBUG_INCLUDE_LOG_TABS
 
+#define FORCE_DEBUG
+
 struct DebugDevicePreset { int w; int h; float dpr; };
 
 /// ======== Platform Simulation ========
 //#define DEBUG_SIMULATE_WEB_UI
 //#define DEBUG_SIMULATE_MOBILE
-//#define DEBUG_SIMULATE_DEVICE  DebugDevicePreset{1080, 2424, 2.625f}  // Google Pixel 9a
+//#define DEBUG_SIMULATE_DEVICE  DebugDevicePreset{1080, 2424, 2.625f}  // Google Pixel 9a (fullscreen)
+//#define DEBUG_SIMULATE_DEVICE  DebugDevicePreset{1080, 1998, 2.625f}  // Google Pixel 9a (Chrome)
+//#define DEBUG_SIMULATE_DEVICE  DebugDevicePreset{432, 970, 1.05f}  // Google Pixel 9a (chrome)
 
 
 /// ======== Timer filters ========

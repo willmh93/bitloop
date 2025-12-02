@@ -22,7 +22,7 @@ constexpr double pi = std::numbers::pi;
 #include "imgui_splines.h"
 #include "imgui_gradient_edit.h"
 #include "imgui_log.h"
-#include "imgui_debug_ui.h"
+
 
 #ifdef __EMSCRIPTEN__
 #define SDL_MAIN_HANDLED
