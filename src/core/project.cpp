@@ -250,9 +250,6 @@ void ProjectBase::updateViewportRects()
     // Update viewport rects
     for (Viewport* viewport : viewports)
     {
-        //viewport->x = viewport->viewport_grid_x * viewport_width;
-        //viewport->y = viewport->viewport_grid_y * viewport_height;
-
         viewport->setSurfacePos(
             floor(viewport->viewport_grid_x * (viewport_width + splitter_thickness)),
             floor(viewport->viewport_grid_y * (viewport_height + splitter_thickness))
@@ -262,15 +259,6 @@ void ProjectBase::updateViewportRects()
             ceil(viewport_width),
             ceil(viewport_height)
         );
-
-        //viewport->w = viewport_width - 1;
-        //viewport->h = viewport_height - 1;
-        //
-        //DVec2 old_size = {viewport->start_w, viewport->start_h};
-        //DVec2 new_size = {viewport->w, viewport->h};
-        //double rel_scale = new_size.mag() / old_size.mag();
-        //
-        //viewport->scale_adjust = rel_scale;
     }
 }
 
@@ -565,6 +553,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
         } break;
     }
 
+    if (!ctx_focused && event.isPointerEvent())
+        return; // If no "focused" viewport for mouse event, project has nothing to handle (likely imgui)
 
     // Update pressed_fingers
     {

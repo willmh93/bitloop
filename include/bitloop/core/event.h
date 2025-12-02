@@ -34,6 +34,7 @@ protected:
 
 public:
 
+    // Pointer = mouse/touch
     [[nodiscard]] bool isPointerEvent() const
     {
         switch (sdl_event.type)

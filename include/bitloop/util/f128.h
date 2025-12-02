@@ -836,7 +836,7 @@ FORCE_INLINE f128 exp(const f128& a)
     if (!std::isfinite(a.hi)) return f128(std::exp(a.hi));
 
     // Hard overflow/underflow limits for double exponent range.
-    if (a.hi > 709.782712893384) return f128(std::numeric_limits<double>::infinity());
+    if (a.hi > 709.782712893384) return f128(std::numeric_limits<double>::max());
     if (a.hi < -745.133219101941) return f128(0.0);
 
     f128 t = a * F128_INV_LN2;

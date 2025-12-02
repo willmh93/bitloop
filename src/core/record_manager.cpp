@@ -915,6 +915,7 @@ void CaptureManager::onFinalized()
     // Encoder no longer busy
     encoder_busy.store(false, std::memory_order_release);
 
+    any_capture_complete.store(true, std::memory_order_release);
     clearFinalizeRequest();
 
     // No more work to do - notify waiters.

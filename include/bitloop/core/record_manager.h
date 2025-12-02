@@ -173,6 +173,7 @@ class CaptureManager
 
     // WebPWorker stores final encoded data in encoded_data and sets capture_to_memory_complete=true
     std::atomic<bool> capture_to_memory_complete{ false };
+    std::atomic<bool> any_capture_complete{ false };
     std::mutex encoded_data_mutex;
     bytebuf    encoded_data;
 
@@ -205,12 +206,24 @@ public:
                                         
     bool  isBusy() const                { return encoder_busy.load(std::memory_order_acquire);     }
 
-    // NOT called for encoders which write media directly to filesystem like ffmpeg, 
-    // only for encoders which write directly to memory (which we handle manually on the main thread)
-    bool  isCaptureToMemoryComplete() const     { return capture_to_memory_complete.load(std::memory_order_acquire); }
+    bool  handleCaptureComplete(bool& captured_to_memory)
+    {
+        bool complete = any_capture_complete.load(std::memory_order_acquire);
+        if (complete)
+        {
+            captured_to_memory = capture_to_memory_complete.load(std::memory_order_acquire);
+
+            // reset flags
+            capture_to_memory_complete.store(false, std::memory_order_release);
+            any_capture_complete.store(false, std::memory_order_release);
+        }
+        
+        return complete;
+    }
+
     void  takeCompletedCaptureFromMemory(bytebuf &out)
     {
-        capture_to_memory_complete.store(false, std::memory_order_release);
+        //capture_to_memory_complete.store(false, std::memory_order_release);
         out = std::move(encoded_data);
     }
 

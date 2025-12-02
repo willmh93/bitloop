@@ -3,6 +3,7 @@
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
+#include <bitloop/imguix/imgui_debug_ui.h>
 #include <imgui_stdlib.h>
 
 #ifndef __EMSCRIPTEN__
@@ -204,7 +205,7 @@ void MainWindow::initStyles()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
-    // Corners
+    // base sizes
     style.WindowRounding = 8.0f;
     style.ChildRounding = 8.0f;
     style.FrameRounding = 6.0f;
@@ -212,13 +213,20 @@ void MainWindow::initStyles()
     style.PopupRounding = 3.0f;
     style.GrabRounding = 2.0f;
     style.TabRounding = 6.0f;
-    style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f;
-    style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;
 
-    // Colors
+    style.ScrollbarRounding = 6.0f * platform()->thumbScale();
+    style.ScrollbarSize = 20.0f * platform()->thumbScale();
+
+    //style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f; // Extra scrollbar size for mobile
+    //style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;    // Extra scrollbar size for mobile
+
+    // update by dpr
+    style.ScaleAllSizes(platform()->dpr());
+    //style.ScaleAllSizes(platform()->ui_scale_factor());
+
+    // colors
     ImVec4* colors = ImGui::GetStyle().Colors;
 
-    // Base colors for a pleasant and modern dark theme with dark accents
     colors[ImGuiCol_Text] = ImVec4(0.92f, 0.93f, 0.94f, 1.00f);                  // Light grey text for readability
     colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.52f, 0.54f, 1.00f);          // Subtle grey for disabled text
     colors[ImGuiCol_WindowBg] = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);              // Dark background with a hint of blue
@@ -272,8 +280,6 @@ void MainWindow::initStyles()
     colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f); // Windowing highlight
     colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);     // Dim background for windowing
     colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);      // Dim background for modal windows
-
-    style.ScaleAllSizes(platform()->ui_scale_factor());
 }
 
 void MainWindow::initFonts()
@@ -439,40 +445,64 @@ void MainWindow::beginSnapshot()
 
 void MainWindow::endRecording()
 {
-    // called immediately when end recording signalled, even if current frame hasn't finished encoding
-    record.toggled = false;
-
     // signal to capture_manager to finish, so isCaptureToMemoryComplete()==true below
     if (capture_manager.isRecording())
+    {
+        // called immediately when end recording signalled, even if current frame hasn't finished encoding
+        record.toggled = false;
+
+        // disable everything while finalizing capture
+        play.enabled = false;
+        pause.enabled = false;
+        stop.enabled = false;
+        record.enabled = false;
+        snapshot.enabled = false;
+
         capture_manager.finalizeCapture();
+    }
 }
 
 void MainWindow::checkCaptureComplete()
 {
-    if (capture_manager.isCaptureToMemoryComplete())
+    //if (capture_manager.isCaptureToMemoryComplete())
+    bool captured_to_memory = false;
+    if (capture_manager.handleCaptureComplete(captured_to_memory))
     {
-        bytebuf data;
-        capture_manager.takeCompletedCaptureFromMemory(data);
+        if (captured_to_memory)
+        {
+            bytebuf data;
+            capture_manager.takeCompletedCaptureFromMemory(data);
 
-        #ifdef __EMSCRIPTEN__
-        platform()->download_snapshot_webp(data, "snapshot.webp");
-        #else
-        std::ofstream out(capture_manager.filename(), std::ios::out | std::ios::binary);
-        out.write((const char*)data.data(), data.size());
-        out.close();
-        #endif
-
-        /// assumes the project is still running/active
+            #ifdef __EMSCRIPTEN__
+            platform()->download_snapshot_webp(data, "snapshot.webp");
+            #else
+            std::ofstream out(capture_manager.filename(), std::ios::out | std::ios::binary);
+            out.write((const char*)data.data(), data.size());
+            out.close();
+            #endif
+        }
+        else
+        {
+            // ffmpeg saving to desk handled automatically by encoder...
+        }
 
         // untoggle
         record.toggled = false;
         snapshot.toggled = false;
 
-        // re-enable
-        pause.enabled = true;
-        stop.enabled = true;
-        record.enabled = true;
-        snapshot.enabled = true;
+        bool project_active = project_worker()->hasActiveProject();
+
+        if (project_active)
+        {
+            bool isPaused = project_worker()->getCurrentProject()->isPaused();
+
+            // re-enable
+            play.enabled = isPaused;
+            pause.enabled = !isPaused;
+            stop.enabled = true;
+            record.enabled = true;
+            snapshot.enabled = true;
+        }
     }
 }
 
@@ -507,8 +537,6 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
     break;
 
     case MainWindowCommandType::ON_STOPPED_PROJECT:
-        if (capture_manager.isRecording())
-            capture_manager.finalizeCapture();
 
         // set states here as well as on toolbar button click, in case
         // the project gets stopped in some other way.
@@ -518,6 +546,9 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         stop.enabled = false;
         record.toggled = false;
         snapshot.enabled = false;
+
+        // If recording, finalize
+        endRecording();
 
         break;
 
@@ -1178,7 +1209,7 @@ void MainWindow::populateViewport()
         ///}
 
         ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-        ImVec2 image_size = (ImVec2)canvas_size;
+        ImVec2 image_size = (ImVec2)canvas_size; // stretched size
 
         if (capture_manager.isRecording() || capture_manager.isSnapshotting())
         {
@@ -1202,6 +1233,8 @@ void MainWindow::populateViewport()
 
             canvas_pos = { ox, oy };
             image_size = { sw, sh };
+
+            ///canvas.setRenderedRect({ ox, oy, sw, sh });
         }
 
 
@@ -1741,7 +1774,7 @@ void MainWindow::populateUI()
         }
         ImGui::End();
 
-        #if defined BL_DEBUG && defined DEBUG_INCLUDE_LOG_TABS
+        #ifdef DEBUG_INCLUDE_LOG_TABS
         ImGui::Begin("Debug"); // Begin Debug Window
         {
             if (ImGui::BeginTabBar("DebugTabs"))
@@ -1756,6 +1789,14 @@ void MainWindow::populateUI()
                 if (ImGui::BeginTabItem("Global Log"))
                 {
                     debug_log.draw();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Display"))
+                {
+                    // Debug DPI
+                    dpiDebugInfo();
+
                     ImGui::EndTabItem();
                 }
 
