@@ -6,11 +6,12 @@
 //#define DEBUG_DISABLE_PRINT
 #define DEBUG_INCLUDE_LOG_TABS
 
+struct DebugDevicePreset { int w; int h; float dpr; };
+
 /// ======== Platform Simulation ========
 //#define DEBUG_SIMULATE_WEB_UI
 //#define DEBUG_SIMULATE_MOBILE
-//#define DEBUG_SIMULATE_DPR 2.625f
-//#define DEBUG_SIMULATE_DPR 1.5f
+//#define DEBUG_SIMULATE_DEVICE  DebugDevicePreset{1080, 2424, 2.625f}  // Google Pixel 9a
 
 
 /// ======== Timer filters ========

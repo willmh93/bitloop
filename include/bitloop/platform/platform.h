@@ -74,13 +74,15 @@ public:
     [[nodiscard]] int window_width()  const { return win_w; }
     [[nodiscard]] int window_height() const { return win_h; }
 
+    [[nodiscard]] IVec2 gl_size()     const { return {gl_w, gl_h}; }
     [[nodiscard]] IVec2 fbo_size()    const { return {fb_w, fb_h}; }
+    [[nodiscard]] IVec2 window_size() const { return {win_w, win_h}; }
 
     // Device Info
-    #ifdef DEBUG_SIMULATE_DPR
-    [[nodiscard]] float dpr() const { return DEBUG_SIMULATE_DPR; }
+    #ifdef DEBUG_SIMULATE_DEVICE
+    [[nodiscard]] float dpr() const { return DEBUG_SIMULATE_DEVICE.dpr; }
     #else
-    [[nodiscard]] float dpr() const { return win_dpr; } //{ return (float)gl_w / (float)win_w; }
+    [[nodiscard]] float dpr() const { return win_dpr; }
     #endif
 
     [[nodiscard]] bool device_vertical();
@@ -94,7 +96,7 @@ public:
 
     // Scale
     [[nodiscard]] float font_scale() const;
-    [[nodiscard]] float ui_scale_factor(float extra_mobile_mult=1.0f) const;
+    [[nodiscard]] float thumbScale(float extra_mobile_mult=1.0f) const;
 
     // Layout helpers
     [[nodiscard]] float line_height() const;

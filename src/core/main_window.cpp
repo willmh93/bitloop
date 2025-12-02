@@ -212,8 +212,12 @@ void MainWindow::initStyles()
     style.PopupRounding = 3.0f;
     style.GrabRounding = 2.0f;
     style.TabRounding = 6.0f;
-    style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f; // Extra scrollbar size for mobile
-    style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;    // Extra scrollbar size for mobile
+
+    style.ScrollbarRounding = 6.0f * platform()->thumbScale();
+    style.ScrollbarSize = 20.0f * platform()->thumbScale();
+
+    //style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f; // Extra scrollbar size for mobile
+    //style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;    // Extra scrollbar size for mobile
 
     // update by dpr
     style.ScaleAllSizes(platform()->dpr());

@@ -160,7 +160,7 @@ float PlatformManager::font_scale() const
 }
 
 
-float PlatformManager::ui_scale_factor(float extra_mobile_mult) const
+float PlatformManager::thumbScale(float extra_mobile_mult) const
 {
     return is_mobile() ? (2.0f * extra_mobile_mult) : 1.0f;
 }

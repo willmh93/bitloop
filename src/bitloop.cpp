@@ -221,8 +221,13 @@ int bitloop_main(int, char* [])
             "bitloop";
             #endif
 
-
+        #ifdef DEBUG_SIMULATE_DEVICE
+        fb_w = DEBUG_SIMULATE_DEVICE.w;
+        fb_h = DEBUG_SIMULATE_DEVICE.h;
+        window = SDL_CreateWindow(window_name, fb_w, fb_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        #else
         window = SDL_CreateWindow(window_name, fb_w, fb_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        #endif
 
         if (!window) {
             blPrint() << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
