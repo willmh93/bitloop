@@ -1,3 +1,4 @@
+#include <bitloop/core/config.h>
 #include <bitloop/core/project.h>
 #include <bitloop/imguix/imgui_custom.h>
 
@@ -60,6 +61,7 @@ void PlatformManager::update()
 {
     SDL_GetWindowSizeInPixels(window, &gl_w, &gl_h);
     SDL_GetWindowSize(window, &win_w, &win_h);
+    win_dpr = SDL_GetWindowDisplayScale(window);
 }
 
 void PlatformManager::resized()
@@ -125,7 +127,7 @@ bool PlatformManager::device_orientation_changed(std::function<void(int, int)> o
     #endif
 }
 
-bool PlatformManager::is_mobile()
+bool PlatformManager::is_mobile() const
 {
     #ifdef DEBUG_SIMULATE_MOBILE
     return true;
@@ -134,7 +136,7 @@ bool PlatformManager::is_mobile()
     #endif
 }
 
-bool PlatformManager::is_desktop_native()
+bool PlatformManager::is_desktop_native() const
 {
     #if defined __EMSCRIPTEN__ || defined FORCE_WEB_UI
     return false;
@@ -143,7 +145,7 @@ bool PlatformManager::is_desktop_native()
     #endif
 }
 
-bool PlatformManager::is_desktop_browser()
+bool PlatformManager::is_desktop_browser() const
 {
     #ifdef __EMSCRIPTEN__
     return !is_mobile(); // Assumed desktop browser if mobile screen not detected
@@ -152,42 +154,42 @@ bool PlatformManager::is_desktop_browser()
     #endif
 }
 
-float PlatformManager::font_scale()
+float PlatformManager::font_scale() const
 {
     return is_mobile() ? 1.3f : 1.0f;
 }
 
 
-float PlatformManager::ui_scale_factor(float extra_mobile_mult)
+float PlatformManager::ui_scale_factor(float extra_mobile_mult) const
 {
     return is_mobile() ? (2.0f * extra_mobile_mult) : 1.0f;
 }
 
-float PlatformManager::line_height()
+float PlatformManager::line_height() const
 {
     return ImGui::GetFontSize();
 }
 
-float PlatformManager::input_height()
+float PlatformManager::input_height() const
 {
     ImGuiIO& io = ImGui::GetIO();
     ImGuiStyle& s = ImGui::GetStyle();
     return io.DisplaySize.y / ImGui::GetFontSize() + s.FramePadding.y * 2.0f;
 }
 
-float PlatformManager::max_char_rows()
+float PlatformManager::max_char_rows() const
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.DisplaySize.y / ImGui::GetFontSize();
 }
 
-float PlatformManager::max_char_cols()
+float PlatformManager::max_char_cols() const
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.DisplaySize.x / ImGui::GetFontSize();
 }
 
-std::filesystem::path PlatformManager::executable_dir()
+std::filesystem::path PlatformManager::executable_dir() const
 {
     #if defined(_WIN32)
     std::wstring buf(MAX_PATH, L'\0');
@@ -217,7 +219,7 @@ std::filesystem::path PlatformManager::executable_dir()
     #endif
 }
 
-std::filesystem::path PlatformManager::resource_root()
+std::filesystem::path PlatformManager::resource_root() const
 {
     #ifdef __EMSCRIPTEN__
     return "/";
@@ -226,7 +228,7 @@ std::filesystem::path PlatformManager::resource_root()
     #endif
 }
 
-std::string PlatformManager::path(std::string_view virtual_path)
+std::string PlatformManager::path(std::string_view virtual_path) const
 {
     std::filesystem::path p = resource_root();
 

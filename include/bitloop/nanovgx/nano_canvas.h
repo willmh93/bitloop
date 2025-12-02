@@ -1303,8 +1303,13 @@ public:
 class Canvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
-    int fbo_width = 0, fbo_height = 0;
     bool has_fbo = false;
+
+
+    int fbo_width    = 0, fbo_height    = 0;  // Local Canvas dimensions (FBO size)
+
+    //int render_width = 0, render_height = 0;  // Actual size Canvas gets drawn on to screen
+    ///IRect rendered_rect{};
 
     // The default painter which draws to this canvas
     PainterContext context;
@@ -1313,6 +1318,7 @@ public:
 
     void create(double global_scale);
     bool resize(int w, int h);
+    ///void setRenderedRect(IRect r) { rendered_rect = r; }
 
     void begin(float r, float g, float b, float a = 1.0);
     void end();

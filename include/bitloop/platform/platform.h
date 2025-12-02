@@ -43,6 +43,7 @@ class PlatformManager
     int gl_w=0, gl_h = 0;
     int win_w = 0, win_h = 0;
     int fb_w = 0, fb_h = 0;
+    float win_dpr = 1.0f;
 
     bool is_mobile_device = false;
 
@@ -57,33 +58,29 @@ public:
     {
         singleton = this;
         window = _window;
-        //init();
     }
 
-    void init();
-
     // Required function calls
+    void init();
     void update();
     void resized();
 
-    [[nodiscard]] SDL_Window* sdl_window() { return window; }
+    [[nodiscard]] SDL_Window* sdl_window() const { return window; }
 
-    [[nodiscard]] int gl_width()      { return gl_w; }
-    [[nodiscard]] int gl_height()     { return gl_h; }
-    [[nodiscard]] int fbo_width()     { return fb_w; }
-    [[nodiscard]] int fbo_height()    { return fb_h; }
-    [[nodiscard]] int window_width()  { return win_w; }
-    [[nodiscard]] int window_height() { return win_h; }
+    [[nodiscard]] int gl_width()      const { return gl_w; }
+    [[nodiscard]] int gl_height()     const { return gl_h; }
+    [[nodiscard]] int fbo_width()     const { return fb_w; }
+    [[nodiscard]] int fbo_height()    const { return fb_h; }
+    [[nodiscard]] int window_width()  const { return win_w; }
+    [[nodiscard]] int window_height() const { return win_h; }
 
-    [[nodiscard]] IVec2 fbo_size()    { return {fb_w, fb_h}; }
+    [[nodiscard]] IVec2 fbo_size()    const { return {fb_w, fb_h}; }
 
     // Device Info
-    ///[[nodiscard]] float dpi() { return _dpi; }
-
     #ifdef DEBUG_SIMULATE_DPR
-    [[nodiscard]] float dpr() { return DEBUG_SIMULATE_DPR; }
+    [[nodiscard]] float dpr() const { return DEBUG_SIMULATE_DPR; }
     #else
-    [[nodiscard]] float dpr() { return (float)gl_w / (float)win_w; }
+    [[nodiscard]] float dpr() const { return win_dpr; } //{ return (float)gl_w / (float)win_w; }
     #endif
 
     [[nodiscard]] bool device_vertical();
@@ -91,24 +88,24 @@ public:
     bool device_orientation_changed(std::function<void(int, int)> onChanged);
     
     // Platform detection
-    [[nodiscard]] bool is_mobile();
-    [[nodiscard]] bool is_desktop_native();
-    [[nodiscard]] bool is_desktop_browser();
+    [[nodiscard]] bool is_mobile() const;
+    [[nodiscard]] bool is_desktop_native() const;
+    [[nodiscard]] bool is_desktop_browser() const;
 
     // Scale
-    [[nodiscard]] float font_scale();
-    [[nodiscard]] float ui_scale_factor(float extra_mobile_mult=1.0f);
+    [[nodiscard]] float font_scale() const;
+    [[nodiscard]] float ui_scale_factor(float extra_mobile_mult=1.0f) const;
 
     // Layout helpers
-    [[nodiscard]] float line_height();
-    [[nodiscard]] float input_height();
-    [[nodiscard]] float max_char_rows();
-    [[nodiscard]] float max_char_cols();
+    [[nodiscard]] float line_height() const;
+    [[nodiscard]] float input_height() const;
+    [[nodiscard]] float max_char_rows() const;
+    [[nodiscard]] float max_char_cols() const;
 
     // File system helpers
-    [[nodiscard]] std::filesystem::path executable_dir();
-    [[nodiscard]] std::filesystem::path resource_root();
-    [[nodiscard]] std::string path(std::string_view virtual_path);
+    [[nodiscard]] std::filesystem::path executable_dir() const;
+    [[nodiscard]] std::filesystem::path resource_root() const;
+    [[nodiscard]] std::string path(std::string_view virtual_path) const;
 
 
     // URL helpers
