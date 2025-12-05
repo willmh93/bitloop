@@ -130,7 +130,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-brotli CONFIG REQUIRED)
 
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
-find_path(GCEM_INCLUDE_DIRS "BS_thread_pool.hpp")
+find_path(GCEM_INCLUDE_DIRS "gcem.hpp")
 
 target_link_libraries(bitloop
   PUBLIC
