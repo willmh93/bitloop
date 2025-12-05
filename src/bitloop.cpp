@@ -98,12 +98,21 @@ void gui_loop()
     SDL_Event e;
     while (SDL_PollEvent(&e))
     {
-        ImGui_ImplSDL3_ProcessEvent(&e);
+        SDL_Event es = e;
 
-        //bool imguiWantsMouse = io.WantCaptureMouse;
+        #ifdef SIMULATE_DISPLAY
+        platform()->upscale_mouse_event_to_offscreen(es);
+        #endif
+
+        ImGui_ImplSDL3_ProcessEvent(&es);
+
+        #ifdef SIMULATE_MOBILE
+        platform()->convert_mouse_to_touch(es);
+        #endif
+
         bool imguiWantsKeyboard = io.WantCaptureKeyboard;
 
-        switch (e.type)
+        switch (es.type)
         {
             case SDL_EVENT_QUIT:
                 shared_sync.quit();
@@ -117,13 +126,13 @@ void gui_loop()
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:
             case SDL_EVENT_MOUSE_MOTION:
-                project_worker()->queueEvent(e);
+                project_worker()->queueEvent(es);
                 break;
 
             case SDL_EVENT_MOUSE_WHEEL:
                 // Project ignores scroll events when mouse is over ImGui
                 if (main_window()->viewportHovered())
-                    project_worker()->queueEvent(e);
+                    project_worker()->queueEvent(es);
                 break;
 
             case SDL_EVENT_KEY_DOWN:
@@ -131,11 +140,11 @@ void gui_loop()
             case SDL_EVENT_TEXT_INPUT:
                 // Project ignores key events when ImGui input active
                 if (!imguiWantsKeyboard) 
-                    project_worker()->queueEvent(e);
+                    project_worker()->queueEvent(es);
                 break;
 
             default:
-                project_worker()->queueEvent(e);
+                project_worker()->queueEvent(es);
                 break;
         }
     }
@@ -145,18 +154,28 @@ void gui_loop()
     // ======== Prepare frame ========
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
+
     ImGui::GetIO().DisplaySize = (ImVec2)platform()->fbo_size();
     ImGui::GetIO().DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+
+    platform()->imgui_fix_offscreen_mouse_position();
+
     ImGui::NewFrame();
 
     // ======== Draw window ========
     main_window()->populateUI();
+
+
+    platform()->gl_begin_frame();
 
     // ======== Render ========
     ImGui::Render();
     glClearColor(0.1f, 0.0f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    platform()->gl_end_frame();
+
     SDL_GL_SwapWindow(window);
 
     #ifdef __EMSCRIPTEN__
@@ -221,13 +240,18 @@ int bitloop_main(int, char* [])
             "bitloop";
             #endif
 
-        #ifdef DEBUG_SIMULATE_DEVICE
-        fb_w = DEBUG_SIMULATE_DEVICE.w;
-        fb_h = DEBUG_SIMULATE_DEVICE.h;
-        window = SDL_CreateWindow(window_name, fb_w, fb_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        auto window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+
+        #ifdef SIMULATE_DISPLAY
+        fb_w = SIMULATE_DISPLAY.w;
+        fb_h = SIMULATE_DISPLAY.h;
+        fb_w = (int)((float)fb_w * SIMULATE_DISPLAY_VIEW_SCALE);
+        fb_h = (int)((float)fb_h * SIMULATE_DISPLAY_VIEW_SCALE);
         #else
-        window = SDL_CreateWindow(window_name, fb_w, fb_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        window_flags |= SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE;
         #endif
+
+        window = SDL_CreateWindow(window_name, fb_w, fb_h, window_flags);
 
         if (!window) {
             blPrint() << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";

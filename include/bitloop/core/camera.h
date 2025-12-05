@@ -304,6 +304,7 @@ public:
     bool setX(f128 x)           { if (x_128 != x)        { x_128 = x;         posDirty();  return true; }  return false; }
     bool setY(f128 y)           { if (y_128 != y)        { y_128 = y;         posDirty();  return true; }  return false; }                                                                                               
     bool setPos(f128 x, f128 y) { if (!pos_128.eq(x, y)) { pos_128 = {x, y};  posDirty();  return true; }  return false; }
+    bool setPos(DDVec2 p)       { if (pos_128 != p)      { pos_128 = p;       posDirty();  return true; }  return false; }
     bool setZoom(f128 z)        { if (zoom_128 != z)     { zoom_128 = z;      zoomDirty(); return true; }  return false; }
                                                 
     // ─────── f64 setters ────────────────────────────────────────────────────────────────────────────────────────────────

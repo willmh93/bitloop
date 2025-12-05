@@ -11,8 +11,8 @@ struct MouseInfo
     f64 client_y = 0;
     f64 stage_x = 0;
     f64 stage_y = 0;
-    f128 world_x = 0; // todo: switch to f128
-    f128 world_y = 0; // todo: switch to f128
+    f128 world_x = 0;
+    f128 world_y = 0;
     int scroll_delta = 0;
     bool pressed = false;
 };

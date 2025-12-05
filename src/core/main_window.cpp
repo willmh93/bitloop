@@ -165,6 +165,13 @@ static inline double choose_bitrate_mbps_from_range(const BitrateRange& r, int q
 }
 #endif
 
+static void on_folder_chosen([[maybe_unused]] void* userdata, const char* const* filelist, [[maybe_unused]] int filter)
+{
+    if (!filelist) { SDL_Log("Dialog error"); return; }
+    if (!*filelist) { SDL_Log("User canceled"); return; }
+    blPrint() << "Chosen folder: " << filelist[0]; // first (and only) entry for folder dialog
+}
+
 void MainWindow::init()
 {
     ImGui::LoadIniSettingsFromMemory("");
@@ -215,14 +222,14 @@ void MainWindow::initStyles()
     style.TabRounding = 6.0f;
 
     style.ScrollbarRounding = 6.0f * platform()->thumbScale();
-    style.ScrollbarSize = 20.0f * platform()->thumbScale();
+    style.ScrollbarSize = 20.0f * platform()->thumbScale(0.85f);
+    style.GrabMinSize = 35.0f * platform()->thumbScale(0.85f);
 
     //style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f; // Extra scrollbar size for mobile
     //style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;    // Extra scrollbar size for mobile
 
     // update by dpr
     style.ScaleAllSizes(platform()->dpr());
-    //style.ScaleAllSizes(platform()->ui_scale_factor());
 
     // colors
     ImVec4* colors = ImGui::GetStyle().Colors;
@@ -281,7 +288,6 @@ void MainWindow::initStyles()
     colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);     // Dim background for windowing
     colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);      // Dim background for modal windows
 }
-
 void MainWindow::initFonts()
 {
     // Update FreeType fonts
@@ -305,11 +311,10 @@ void MainWindow::populateProjectUI()
     if (!project_worker()->hasActiveProject())
         return;
 
-    ImGui::BeginPaddedRegion(scale_size(6.0f));
+    ImGui::BeginPaddedRegion(scale_size(3.0f));
     project_worker()->populateAttributes();
     ImGui::EndPaddedRegion();
 }
-
 void MainWindow::populateOverlay()
 {
     project_worker()->populateOverlay();
@@ -319,7 +324,6 @@ void MainWindow::queueBeginRecording()
 {
     queueMainWindowCommand({ MainWindowCommandType::BEGIN_RECORDING });
 }
-
 void MainWindow::queueEndRecording()
 {
     queueMainWindowCommand({ MainWindowCommandType::END_RECORDING });
@@ -394,7 +398,6 @@ void MainWindow::beginRecording()
         true);
     #endif
 }
-
 void MainWindow::beginSnapshot()
 {
     assert(!capture_manager.isRecording());
@@ -442,7 +445,6 @@ void MainWindow::beginSnapshot()
         0, 0, 0, 100.0f, true, 100, true);
     #endif
 }
-
 void MainWindow::endRecording()
 {
     // signal to capture_manager to finish, so isCaptureToMemoryComplete()==true below
@@ -461,7 +463,6 @@ void MainWindow::endRecording()
         capture_manager.finalizeCapture();
     }
 }
-
 void MainWindow::checkCaptureComplete()
 {
     //if (capture_manager.isCaptureToMemoryComplete())
@@ -629,7 +630,6 @@ void MainWindow::drawToolbarButton(ImDrawList* drawList, ImVec2 pos, ImVec2 size
         drawList->AddCircleFilled(nub, ImMax(1.0f, u * 0.02f), color);
     }
 }
-
 bool MainWindow::toolbarButton(const char* id, const char* symbol, const ToolbarButtonState& state, ImVec2 size, float inactive_alpha)
 {
     auto icon_col =
@@ -662,7 +662,6 @@ bool MainWindow::toolbarButton(const char* id, const char* symbol, const Toolbar
 
     return false;
 }
-
 void MainWindow::populateToolbar()
 {
     //if (platform()->is_mobile())
@@ -673,7 +672,7 @@ void MainWindow::populateToolbar()
     ImGui::Spacing();
     ImGui::Spacing();
 
-    float size = scale_size(30.0f);
+    float size = scale_size(36.0f);
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImVec2 toolbarSize(avail.x, size); // Outer frame size
     ImVec4 frameColor = ImVec4(0, 0, 0, 0); // Toolbar background color
@@ -767,11 +766,9 @@ void MainWindow::populateToolbar()
     ImGui::EndChild();
 
     ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(3);
 
-    ImGui::PopStyleVar();
-    ImGui::Spacing();
-    ImGui::Spacing();
+    ImGui::Dummy(scale_size(0, 6));
 }
 
 /// ======== Project Tree ========
@@ -780,8 +777,7 @@ void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i,
 {
     //if (!node.visible)
     //    return;
-
-    ImGui::PushID(i++);
+    ImGui::PushID(node.uid);
     if (node.project_info)
     {
         // Leaf project node
@@ -806,7 +802,6 @@ void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i,
     }
     ImGui::PopID();
 }
-
 void MainWindow::populateProjectTree(bool expand_vertical)
 {
     if (ProjectBase::projectInfoList().size() <= 1)
@@ -814,33 +809,56 @@ void MainWindow::populateProjectTree(bool expand_vertical)
 
     ImVec2 frameSize = ImVec2(0.0f, expand_vertical ? 0 : 170.0f); // Let height auto-expand
     ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
-    //ImVec4 dim_bg = bg * 0.9f;
-    ImVec4 dim_bg = ImVec4(bg.x * 0.9f, bg.y * 0.9f, bg.x * 0.9f, bg.w * 0.9f);
-    dim_bg.w = bg.w;
+    ImVec4 dim_bg = ImVec4(bg.x * 0.8f, bg.y * 0.8f, bg.x * 0.8f, bg.w);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+
     {
-        ImGui::BeginChild("TreeFrame", frameSize, 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+        ImGui::BeginChild("TreeFrame", frameSize, 0, ImGuiChildFlags_AlwaysUseWindowPadding);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, scale_size(6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, scale_size(3.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, platform()->thumbScale(0.7f) * scale_size(4.0f)));
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg, dim_bg);
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.5f, 1.0f));
 
-        ImGui::BeginChild("TreeFrameInner", ImVec2(0.0f, 0.0f), true);
+        const float margin = 6.0f;
+        const ImVec2 win_pos = ImGui::GetWindowPos();
+        ImVec2 clip_min = win_pos + ImGui::GetWindowContentRegionMin();
+        ImVec2 clip_max = win_pos + ImGui::GetWindowContentRegionMax();
 
-        auto& tree = ProjectBase::projectTreeRootInfo();
-        int i = 0;
-        for (size_t child_i = 0; child_i < tree.children.size(); child_i++)
+        clip_min.x += margin; clip_min.y += margin;
+        clip_max.x -= margin; clip_max.y -= margin;
+
         {
-            int depth = 0;
-            populateProjectTreeNodeRecursive(tree.children[child_i], i, depth);
+            ImGui::BeginChild("TreeFrameInner", ImVec2(0.0f, 0.0f), true);
+
+            ImGui::BeginPaddedRegion(scale_size(6.0f));
+            ImGui::PushClipRect(clip_min, clip_max, true);
+
+            auto& tree = ProjectBase::projectTreeRootInfo();
+            int i = 0; // for unique ID's
+            for (size_t child_i = 0; child_i < tree.children.size(); child_i++)
+            {
+                int depth = 0; // track recursion depth
+                populateProjectTreeNodeRecursive(tree.children[child_i], i, depth);
+            }
+
+            ImGui::PopClipRect();
+            ImGui::EndPaddedRegion();
+
+            ImGui::EndChild();
         }
 
+
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar(3);
+
         ImGui::EndChild();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar();
     }
-    ImGui::EndChild();
     ImGui::PopStyleVar(2);
 }
 
@@ -930,7 +948,6 @@ bool MainWindow::manageDockingLayout()
     }
     return true;
 }
-
 bool MainWindow::focusWindow(const char* id)
 {
     // SetWindowFocus doesn't switch focused tab unless second frame, so 
@@ -970,7 +987,6 @@ void ScrollWhenDraggingOnVoid(const ImVec2& delta)
     if (/*held && */scroll_amount != 0.0f)
         ImGui::SetScrollY(window, window->Scroll.y + scroll_amount);
 }
-
 static void SwipeScrollWindow(float decay = 0.93f, float drag_threshold = scale_size(20.0f))
 {
     if (!platform()->is_mobile())
@@ -1072,7 +1088,7 @@ void MainWindow::populateCollapsedLayout()
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(8.0f, 8.0f));
         ImGui::BeginChild("AttributesFrameInner", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         populateToolbar();
-        ImGui::Dummy(scale_size(0, 6));
+        
 
         populateProjectUI();
         SwipeScrollWindow();
@@ -1083,7 +1099,6 @@ void MainWindow::populateCollapsedLayout()
 
     ImGui::End();
 }
-
 void MainWindow::populateExpandedLayout()
 {
     // Show both windows
@@ -1104,7 +1119,6 @@ void MainWindow::populateExpandedLayout()
 
     ImGui::End();
 }
-
 void MainWindow::populateViewport()
 {
     if (!command_queue.empty())
@@ -1200,75 +1214,52 @@ void MainWindow::populateViewport()
             shared_sync.cv.notify_one();
         }
 
-        ///else if (resized)
-        ///{
-        ///    canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-        ///    canvas.setFillStyle(0, 0, 0);
-        ///    canvas.fillRect(0, 0, (float)canvas.fboWidth(), (float)canvas.fboHeight());
-        ///    canvas.end();
-        ///}
-
-        ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-        ImVec2 image_size = (ImVec2)canvas_size; // stretched size
+        // "canvas" refers to internal canvas dimensions
+        // "image" in this context = ImGui image
+        // "client" viewport size (max image size)
+        ImVec2 image_pos = ImGui::GetCursorScreenPos();
+        ImVec2 image_size;
 
         if (capture_manager.isRecording() || capture_manager.isSnapshotting())
         {
-            float w  = (float)client_size.x, h  = (float)client_size.y; // render size
-            float rw = (float)canvas_size.x, rh = (float)canvas_size.y; // client size
-            float sw = w, sh = h, ox = 0, oy = 0;
+            float sw = client_size.x, sh = client_size.y; // calculates to image size (after scaling)
+            float ox = 0, oy = 0;
 
-            float client_aspect = (w / h);
-            float render_aspect = (rw / rh);
+            float client_aspect  = (client_size.x / client_size.y);
+            float canvas_aspect = ((float)canvas_size.x / (float)canvas_size.y);
 
-            if (render_aspect > client_aspect)
+            if (canvas_aspect > client_aspect)
             {
-                sh = h * (client_aspect / render_aspect); // Render aspect is too wide
-                oy = 0.5f * (client_size.y - sh);         // Center vertically
+                sh = client_size.y * (client_aspect / canvas_aspect); // Render aspect is too wide
+                oy = 0.5f * (client_size.y - sh);                     // Center vertically
             }
             else
             {
-                sw = w * (render_aspect / client_aspect); // Render aspect is too tall
-                ox = 0.5f * (client_size.x - sw);         // Center horizontally
+                sw = client_size.x * (canvas_aspect / client_aspect); // Render aspect is too tall
+                ox = 0.5f * (client_size.x - sw);                     // Center horizontally
             }
 
-            canvas_pos = { ox, oy };
+            image_pos = { ox, oy };
             image_size = { sw, sh };
 
-            ///canvas.setRenderedRect({ ox, oy, sw, sh });
+            canvas.setClientRect(IRect((int)ox, (int)oy, (int)(ox + sw), (int)(oy + sh)));
+        }
+        else
+        {
+            image_size = (ImVec2)canvas_size;
+            canvas.setClientRect(IRect(0, 0, canvas_size.x, canvas_size.y));
         }
 
-
         // Draw cached (or freshly generated) frame
-        ImGui::SetCursorScreenPos(canvas_pos);
+        ImGui::SetCursorScreenPos(image_pos);
         ImGui::Image(canvas.texture(), image_size, ImVec2(0,1), ImVec2(1,0));
-
-        //ImGui::SetItemAllowOverlap();              // allow next item to overlap this one
-        //ImGui::SetCursorScreenPos(canvas_pos);
-        //ImGui::Image(overlay.texture(), client_size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
         viewport_hovered = ImGui::IsWindowHovered();
     }
     ImGui::End();
     ImGui::PopStyleVar();
 }
-
-static void on_folder_chosen(
-    [[maybe_unused]] void* userdata,
-    const char* const* filelist,
-    [[maybe_unused]] int filter)
-{
-    if (!filelist) { SDL_Log("Dialog error"); return; }
-    if (!*filelist) { SDL_Log("User canceled"); return; }
-    blPrint() << "Chosen folder: " << filelist[0]; // first (and only) entry for folder dialog
-}
-
-void MainWindow::populateResolutionOptions(
-    IVec2& targ_res,
-    bool& first,
-    int& sel_aspect,
-    int& sel_tier,
-    u64 max_pixels
-    )
+void MainWindow::populateResolutionOptions(IVec2& targ_res, bool& first, int& sel_aspect, int& sel_tier, u64 max_pixels)
 {
     struct Aspect { const char* label; bool portrait; };
     struct Preset { int w, h; const char* label; bool HEVC_only = false; };
@@ -1513,14 +1504,13 @@ void MainWindow::populateResolutionOptions(
         if ((i + 1) % per_row != 0 && (i + 1) < preset_list.x265_count) ImGui::SameLine(0, 6);
     }
 }
-
 void MainWindow::populateRecordOptions()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
     ImGui::BeginChild("RecordingFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
 
     // Paths
-    #ifndef __EMSCRIPTEN__
+    if (platform()->is_desktop_native())
     {
         ImGui::BeginLabelledBox("Paths");
         ImGui::Text("Media Output Directory:");
@@ -1532,19 +1522,14 @@ void MainWindow::populateRecordOptions()
         }
         ImGui::EndLabelledBox();
     }
-    #endif
-
-    //ImGui::SeparatorText("Image Capture");
 
     // Global Options
     {
-        //ImGui::GroupBox box("img_resolution", "Snapshot Resolution");
         ImGui::BeginLabelledBox("Global Capture Options");
-
-
-        //bool fixed_time_delta = !use_delta_time_mult;
-        ImGui::Checkbox("Fixed time-delta", &fixed_time_delta);
-        //use_delta_time_mult = !fixed_time_delta;
+        if (!platform()->is_mobile())
+        {
+            ImGui::Checkbox("Fixed time-delta", &fixed_time_delta);
+        }
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -1575,7 +1560,6 @@ void MainWindow::populateRecordOptions()
 
     // Image Resolution
     {
-        //ImGui::GroupBox box("img_resolution", "Snapshot Resolution");
         ImGui::BeginLabelledBox("Image Capture");
 
         static int sel_aspect = -1;
@@ -1585,24 +1569,14 @@ void MainWindow::populateRecordOptions()
         static bool first = true;
         populateResolutionOptions(snapshot_resolution, first, sel_aspect, sel_tier, max_pixels);
 
-        ///ImGui::Text("X:"); ImGui::SameLine();
-        ///if (ImGui::InputInt("##img_res_x", &snapshot_resolution.x, 10)) {
-        ///    snapshot_resolution.x = std::clamp(snapshot_resolution.x, 16, 16382);
-        ///    snapshot_resolution.x = (snapshot_resolution.x & ~1);
-        ///}
-        ///ImGui::Text("Y:"); ImGui::SameLine();
-        ///if (ImGui::InputInt("##img_res_y", &snapshot_resolution.y, 10)) {
-        ///    snapshot_resolution.y = std::clamp(snapshot_resolution.y, 16, 16382);
-        ///    snapshot_resolution.y = (snapshot_resolution.y & ~1);
-        ///}
         ImGui::EndLabelledBox();
     }
 
     //ImGui::SeparatorText("Video Capture");
 
     // Video Resolution
+    if (!platform()->is_mobile())
     {
-        //ImGui::GroupBox box("vid_resolution", "Video Resolution");
         ImGui::BeginLabelledBox("Video Capture");
 
         ImGui::Spacing();
@@ -1697,14 +1671,6 @@ void MainWindow::populateRecordOptions()
     ImGui::EndChild();
     ImGui::PopStyleVar();
 }
-
-void threadsDebugInfo()
-{
-    ImGui::Begin("Threads Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-    ImGui::Text("BSL Threads: %d", (int)Thread::pool().get_thread_count());
-    ImGui::End();
-}
-
 void MainWindow::populateUI()
 {
     if (!manageDockingLayout())

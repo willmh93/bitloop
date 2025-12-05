@@ -77,15 +77,20 @@ void ProjectBase::_populateAllAttributes()
         std::string section_id = sceneName + "_section";
 
         bool showSceneUI = (viewports.count() == 1) || ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
-
         if (showSceneUI)
         {
             // Allow Scene to populate inputs for section
             ImGui::PushID(section_id.c_str());
 
-            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.6f, 0.3f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(7.0f, 0.4f, 0.4f, 1.0f));
+            // blue
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.35f, 0.60f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.35f, 0.42f, 0.7f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+
+            // red
+            //ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
+            //ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.6f, 0.3f, 0.3f, 1.0f));
+            //ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
 
             scene->_sceneAttributes();
 
@@ -94,7 +99,6 @@ void ProjectBase::_populateAllAttributes()
         }
     }
 }
-
 void ProjectBase::_populateOverlay()
 {
     for (SceneBase* scene : viewports.all_scenes)
@@ -110,6 +114,11 @@ void ProjectBase::updateShadowBuffers()
 {
     for (SceneBase* scene : viewports.all_scenes)
         scene->updateShadowBuffers();
+}
+void ProjectBase::updateUnchangedShadowVars()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->updateUnchangedShadowVars();
 }
 bool ProjectBase::changedLive()
 {
@@ -137,13 +146,6 @@ void ProjectBase::markShadowValues()
     for (SceneBase* scene : viewports.all_scenes)
         scene->markShadowValues();
 }
-
-void ProjectBase::updateUnchangedShadowVars()
-{
-    for (SceneBase* scene : viewports.all_scenes)
-        scene->updateUnchangedShadowVars();
-}
-
 void ProjectBase::invokeScheduledCalls()
 {
     for (SceneBase* scene : viewports.all_scenes)
@@ -159,7 +161,6 @@ void ProjectBase::_projectPrepare()
     scene_counter = 0;
     projectPrepare(newLayout());
 }
-
 void ProjectBase::_projectStart()
 {
     // Starting a project that's already been started/paused shouldn't occur
@@ -203,7 +204,6 @@ void ProjectBase::_projectStart()
 
     started = true;
 }
-
 void ProjectBase::_projectResume()
 {
     if (paused)
@@ -213,7 +213,6 @@ void ProjectBase::_projectResume()
         return;
     }
 }
-
 void ProjectBase::_projectStop()
 {
     projectStop();
@@ -223,12 +222,10 @@ void ProjectBase::_projectStop()
     started = false;
     paused = false; // Ensure project can start properly next 'play' (so it doesn't try to simple 'resume')
 }
-
 void ProjectBase::_projectPause()
 {
     paused = true;
 }
-
 void ProjectBase::_projectDestroy()
 {
     projectDestroy();
@@ -238,7 +235,13 @@ void ProjectBase::updateViewportRects()
 {
     assert(viewports.count() > 0);
 
+    DRect client_rect = (DRect)canvas->clientRect();
+
     DVec2 surface_size = canvas->fboSize();
+    DVec2 client_size = client_rect.size();
+
+    // stretch factor from surface_size to rendered client_size
+    DVec2 sf = client_size / surface_size; 
 
     double visible_client_w = surface_size.x - ((viewports.cols-1) * splitter_thickness);
     double visible_client_h = surface_size.y - ((viewports.rows-1) * splitter_thickness);
@@ -258,6 +261,13 @@ void ProjectBase::updateViewportRects()
         viewport->setSurfaceSize(
             ceil(viewport_width),
             ceil(viewport_height)
+        );
+
+        viewport->setClientRect(
+            client_rect.x1 + (viewport->left() * sf.x),
+            client_rect.y1 + (viewport->top() * sf.y),
+            viewport->width() * sf.x,
+            viewport->height() * sf.y
         );
     }
 }
@@ -281,9 +291,8 @@ void ProjectBase::_projectProcess()
     // Allow panning/zooming, even when paused
     for (Viewport* viewport : viewports)
     {
-        double viewport_mx = mouse.client_x - viewport->left();
-        double viewport_my = mouse.client_y - viewport->top();
-
+        double viewport_mx = viewport->toSurfaceX(mouse.client_x);
+        double viewport_my = viewport->toSurfaceY(mouse.client_y);
         auto m = viewport->inverseTransform<f128>();
 
         if (//cam.panning ||
@@ -364,7 +373,6 @@ void ProjectBase::_projectProcess()
     if (did_first_process)
         done_single_process = true;
 }
-
 void ProjectBase::_projectDraw()
 {
     if (!done_single_process) return;
@@ -424,6 +432,8 @@ void ProjectBase::_projectDraw()
         canvas->setStrokeStyle(30, 30, 40);
         canvas->beginPath();
 
+        
+
         // Draw vert line
         if (viewport->viewport_grid_x < viewports.cols - 1)
         {
@@ -444,8 +454,17 @@ void ProjectBase::_projectDraw()
 
         if (ctx_focused == viewport)
         {
+            int flash_extra = 0;
+            if (viewport->focused_dt > 0)
+            {
+                viewport->focused_dt -= 1.0f;
+
+                float focus_flash_brightness = viewport->focused_dt / Viewport::focus_flash_frames;
+                flash_extra = (int)(focus_flash_brightness * 155.0f);
+            }
+
             canvas->setLineWidth(1);
-            canvas->setStrokeStyle(75, 75, 100);
+            canvas->setStrokeStyle(75 + flash_extra, 75, 100 + flash_extra);
             canvas->strokeRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
         }
     }
@@ -461,7 +480,6 @@ void ProjectBase::_clearEventQueue()
     //    scene->input.clear();
     //}
 }
-
 void ProjectBase::_onEvent(SDL_Event& e)
 {
     // If viewport not hovered (e.g. Mouse over a popup window),
@@ -476,8 +494,13 @@ void ProjectBase::_onEvent(SDL_Event& e)
     } break;
     }
 
+    /// TODO: Is "hovered" viewport really necessary? Stick with focused viewport?
+
     // Wrap SDL event
     Event event(e);
+
+    // If we focus on a different viewport, ignore that touch event
+    bool captured_focus_event = false;
 
     //TouchInput s;
 
@@ -524,9 +547,14 @@ void ProjectBase::_onEvent(SDL_Event& e)
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
-                if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
+                if (ctx->clientRect().hitTest(mouse.client_x, mouse.client_y))
                 {
-                    ctx_focused = ctx;
+                    if (ctx != ctx_focused)
+                    {
+                        ctx_focused = ctx;
+                        captured_focus_event = true;
+                        ctx->focused_dt = Viewport::focus_flash_frames;
+                    }
                     captured = true;
                     break;
                 }
@@ -541,7 +569,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
             bool captured = false;
             for (Viewport* ctx : viewports)
             {
-                if (ctx->viewportRect().hitTest(mouse.client_x, mouse.client_y))
+                if (ctx->clientRect().hitTest(mouse.client_x, mouse.client_y))
                 {
                     ctx_hovered = ctx;
                     captured = true;
@@ -553,20 +581,20 @@ void ProjectBase::_onEvent(SDL_Event& e)
         } break;
     }
 
-    if (!ctx_focused && event.isPointerEvent())
-        return; // If no "focused" viewport for mouse event, project has nothing to handle (likely imgui)
+    if (captured_focus_event || (!ctx_focused && event.isPointerEvent()))
+        return; // If switched focus, or there is no "focused" viewport for mouse event, project has nothing to handle (likely imgui)
 
     // Update pressed_fingers
     {
-        if (platform()->is_mobile())
-        {
-            // Does this finger already have an "owner" viewport?
-            // If so, loop over fingers and restore it for 
-            Viewport* ctx_owner = nullptr;
 
-            // Support both single-finger pan & 2 finger transform
-            switch (e.type)
-            {
+        // Does this finger already have an "owner" viewport?
+        // If so, loop over fingers and restore it for 
+        Viewport* ctx_owner = nullptr;
+
+        // Support both single-finger pan & 2 finger transform
+        switch (e.type)
+        {
+            // ----- MOBILE -----
             case SDL_EVENT_FINGER_DOWN:
             {
                 ctx_owner = ctx_focused;
@@ -623,14 +651,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
                 event.setOwnerViewport(ctx_owner);
             } break;
-            }
-        }
-        else
-        {
-            Viewport* ctx_owner = nullptr;
 
-            switch (e.type)
-            {
+            // ----- DESKTOP -----
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 ctx_owner = ctx_focused;
@@ -681,8 +703,12 @@ void ProjectBase::_onEvent(SDL_Event& e)
             {
                 event.setOwnerViewport(ctx_hovered);
             } break;
-            }
         }
+    }
+
+    if (platform()->is_mobile())
+    {
+        mouse.pressed = pressed_fingers.size() > 0;
     }
     
     event.setFocusedViewport(ctx_focused);
@@ -708,7 +734,6 @@ Layout& ProjectBase::newLayout()
     viewports.clear();
     return viewports;
 }
-
 Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
 {
     viewports.clear();
@@ -729,7 +754,6 @@ void ProjectBase::logMessage(const char* fmt, ...)
     project_log->vlog(fmt, ap);
     va_end(ap);
 }
-
 void ProjectBase::logClear()
 {
     project_log->clear();

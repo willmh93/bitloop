@@ -84,8 +84,6 @@ __declspec(noinline) void dbg_keep_ref(const T& x) {
 // Disable debug flags for Release builds
 #if defined NDEBUG && !defined(FORCE_DEBUG)
 #undef DEBUG_FINITE_DOUBLE_CHECKS
-#undef DEBUG_SIMULATE_WEB_UI
-#undef DEBUG_SIMULATE_MOBILE
 #endif
 
 #ifndef BL_BEGIN_NS
@@ -452,10 +450,6 @@ namespace std {
 }
 
 /// --- Debug & Release ---
-
-#if defined DEBUG_SIMULATE_WEB_UI || defined __EMSCRIPTEN__
-#define FORCE_WEB_UI
-#endif
 
 #if defined NDEBUG
 
