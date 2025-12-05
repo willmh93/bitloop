@@ -130,6 +130,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-brotli CONFIG REQUIRED)
 
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
+find_path(GCEM_INCLUDE_DIRS "BS_thread_pool.hpp")
 
 target_link_libraries(bitloop
   PUBLIC
@@ -148,9 +149,8 @@ target_link_libraries(bitloop
     unofficial::brotli::brotlidec
     unofficial::brotli::brotlienc
 )
-target_include_directories(bitloop PRIVATE
-    ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
-)
+target_include_directories(bitloop PRIVATE ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS})
+target_include_directories(bitloop PRIVATE ${GCEM_INCLUDE_DIRS})
 
 if (NOT EMSCRIPTEN)
     message(STATUS "Non-web build - permitting FFmpeg")
