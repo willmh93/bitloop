@@ -404,11 +404,9 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
 
     PointerEvent e(event);
 
-    if (platform()->is_mobile())
+    // Support both single-finger pan & 2 finger transform
+    switch (e.type())
     {
-        // Support both single-finger pan & 2 finger transform
-        switch (e.type())
-        {
         case SDL_EVENT_FINGER_DOWN:
         {
             if (fingers.size() >= 2)
@@ -442,7 +440,7 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
                 panBegin((int)avg_x, (int)avg_y, touchDist(), touchAngle());
             }
 
-            return true;
+            //return true;
         }
         break;
         case SDL_EVENT_FINGER_UP:
@@ -479,8 +477,6 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
                 if (single_touch_pan)
                     panBegin((int)fingers.front().x, (int)fingers.front().y, 0.0, 0.0);
             }
-
-            return false;
         }
         break;
         case SDL_EVENT_FINGER_MOTION:
@@ -504,23 +500,10 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
             }
 
             return panZoomProcess();
-
-            ///if (fingers.size() == 1)
-            ///{
-            ///    panDrag((int)e.x(), (int)e.y(), 0.0, 0.0);
-            ///}
-            ///else if (fingers.size() == 2)
-            ///{
-            ///    double avg_x = (fingers[0].x + fingers[1].x) / 2.0;
-            ///    double avg_y = (fingers[0].y + fingers[1].y) / 2.0;
-            ///    panDrag((int)avg_x, (int)avg_y, touchDist(), touchAngle());
-            ///}
         }
         break;
         }
-    }
-    else
-    {
+
         switch (e.type())
         {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -587,7 +570,6 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
             }
         }
         break;
-        }
     }
     return false;
 }

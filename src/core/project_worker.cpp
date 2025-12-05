@@ -286,33 +286,6 @@ void ProjectWorker::populateOverlay()
 
 void ProjectWorker::_onEvent(SDL_Event& e)
 {
-    #ifdef DEBUG_SIMULATE_MOBILE
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
-    {
-        SDL_Event me = e;
-        e.type = SDL_EVENT_FINGER_DOWN;
-        e.tfinger.fingerID = 0;
-        e.tfinger.x = me.button.x / (float)platform()->fbo_width();
-        e.tfinger.y = me.button.y / (float)platform()->fbo_height();
-    }
-    else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
-    {
-        SDL_Event me = e;
-        e.type = SDL_EVENT_FINGER_UP;
-        e.tfinger.fingerID = 0;
-        e.tfinger.x = me.button.x / (float)platform()->fbo_width();
-        e.tfinger.y = me.button.y / (float)platform()->fbo_height();
-    }
-    else if (e.type == SDL_EVENT_MOUSE_MOTION)
-    {
-        SDL_Event me = e;
-        e.type = SDL_EVENT_FINGER_MOTION;
-        e.tfinger.fingerID = 0;
-        e.tfinger.x = me.button.x / (float)platform()->fbo_width();
-        e.tfinger.y = me.button.y / (float)platform()->fbo_height();
-    }
-    #endif
-
     if (current_project)
         current_project->_onEvent(e);
 }

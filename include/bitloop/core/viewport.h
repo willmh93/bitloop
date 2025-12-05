@@ -30,6 +30,9 @@ protected:
     Layout* layout = nullptr; // owner
     SceneBase* scene = nullptr; // mounted scene
 
+    static inline float focus_flash_frames = 20.0f;
+    float focused_dt = 0;
+
 public:
     
     Viewport(

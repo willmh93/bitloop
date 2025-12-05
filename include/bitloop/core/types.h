@@ -719,6 +719,9 @@ struct Rect
     constexpr Rect(T _x1, T _y1, T _x2, T _y2) { set(_x1, _y1, _x2, _y2); }
     constexpr Rect(const Vec2<T>& _a, const Vec2<T>& _b) { set(_a, _b); }
 
+    template<typename T2>
+    explicit constexpr operator Rect<T2>() const { return Rect<T2>((T2)x1, (T2)y1, (T2)x2, (T2)y2); }
+
     constexpr operator Quad<T>() const { return Quad<T>(x1, y1, x2, y1, x2, y2, x1, y2); }
 
     constexpr void set(const Rect& r) { a = r.a; b = r.b; }

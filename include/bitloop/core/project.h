@@ -166,6 +166,7 @@ struct ProjectInfoNode
     std::shared_ptr<ProjectInfo> project_info = nullptr;
     std::vector<ProjectInfoNode> children;
     std::string name;
+    int uid = -1;
 
     ProjectInfoNode(std::string node_name) : name(node_name) {}
     ProjectInfoNode(std::shared_ptr<ProjectInfo> project)
@@ -173,7 +174,16 @@ struct ProjectInfoNode
         project_info = project;
         name = project->path.back();
     }
+
+    int count_nodes() const
+    {
+        int count = 1u;
+        for (const auto& child : children)
+            count += child.count_nodes();
+        return count;
+    }
 };
+
 
 class ProjectBase
 {
@@ -225,12 +235,11 @@ protected:
 
     virtual void updateLiveBuffers();
     virtual void updateShadowBuffers();
+    virtual void updateUnchangedShadowVars();
     virtual bool changedLive();
     virtual bool changedShadow();
     virtual void markLiveValues();
     virtual void markShadowValues();
-
-    virtual void updateUnchangedShadowVars();
     virtual void invokeScheduledCalls();
     
 
@@ -317,6 +326,7 @@ public:
             if (is_leaf)
             {
                 current->children.push_back(ProjectInfoNode(project_info));
+                current->children.back().uid = current->count_nodes();
                 break;
             }
             else
@@ -339,6 +349,8 @@ public:
                 else
                 {
                     current->children.push_back(ProjectInfoNode(insert_name));
+                    current->children.back().uid = current->count_nodes();
+
                     current = &current->children.back();
                 }
             }

@@ -2,9 +2,16 @@
 
 #include <imgui.h>
 #include <bitloop/platform/platform.h>
-//#include <SDL3/SDL.h>
+#include <bitloop/core/threads.h>
 
 BL_BEGIN_NS;
+
+void threadsDebugInfo()
+{
+    ImGui::Begin("Threads Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Text("BSL Threads: %d", (int)Thread::pool().get_thread_count());
+    ImGui::End();
+}
 
 inline void dpiDebugInfo()
 {
@@ -30,29 +37,20 @@ inline void dpiDebugInfo()
     else
         ImGui::Text("Handheld:               FALSE");
 
-    //if (platform()->is_touch_device())
-    //    ImGui::Text("Touchscreen:           TRUE");
-    //else
-    //    ImGui::Text("Touchscreen:           FALSE");
-
     if (platform()->device_vertical())
         ImGui::Text("Vertical:                   TRUE");
     else
         ImGui::Text("Vertical:                   FALSE");
 
     ImGui::Text("FontSize                  %.1f", io.Fonts->Fonts[0]->FontSize);
-    //ImGui::Text("Touch Accuracy       %.2f", Platform()->touch_accuracy());
 
     ImGui::Text("---- Scales ----");
     ImGui::Text("Character Rows       %.1f", io.DisplaySize.y / io.Fonts->Fonts[0]->FontSize);
     ImGui::Text("Character Cols       %.1f", io.DisplaySize.x / io.Fonts->Fonts[0]->FontSize);
     ImGui::Text("FontGlobalScale      %.2f", io.FontGlobalScale);
     ImGui::Text("FramebufferScale    %.3f x %.3f", io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-    //ImGui::Text("---- Dimensions ----");
-    //ImGui::Text("Width                     %.1f inches", platform()->window_width_inches());
-    //ImGui::Text("Height                    %.1f inches", platform()->window_height_inches());
+
     ImGui::Text("---- DPI ----");
-    //ImGui::Text("DPI:                         %.1f", platform()->dpi());
     ImGui::Text("DPR:                        %.3f", platform()->dpr());
     ImGui::Text("DisplaySize:            %.1f x %.1f", io.DisplaySize.x, io.DisplaySize.y);
     ImGui::Text("WindowSize:           %d x %d",

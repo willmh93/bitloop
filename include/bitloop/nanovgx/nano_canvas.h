@@ -476,19 +476,21 @@ public:
 
 class SurfaceInfo
 {
-    double x = 0;
-    double y = 0;
-
-    double w = 0;
-    double h = 0;
+    // ----- "local" rect info (not necessarily client-space) -----
+    double x = 0, y = 0;
+    double w = 0, h = 0;
 
     double start_w = 0;
     double start_h = 0;
-
     double old_w = 0;
     double old_h = 0;
 
+    // If surface resized, keep track of the scale factor from the "start" size
     double scale_adjust = 1;
+
+    // ----- "client" rect info (for SDL event coordinate conversions) -----
+    double client_x = 0, client_y = 0;
+    double client_w = 0, client_h = 0;
 
 public:
 
@@ -522,6 +524,14 @@ public:
         scale_adjust = std::min(new_size.x / start_size.x, new_size.y / start_size.y);
     }
 
+    void setClientRect(double _x, double _y, double _w, double _h)
+    {
+        client_x = _x;
+        client_y = _y;
+        client_w = _w;
+        client_h = _h;
+    }
+
     [[nodiscard]] constexpr double left() const { return x; }
     [[nodiscard]] constexpr double top() const { return y; }
     [[nodiscard]] constexpr double right() const { return x + w; }
@@ -530,10 +540,14 @@ public:
     [[nodiscard]] constexpr double width() const { return w; }
     [[nodiscard]] constexpr double height() const { return h; }
     [[nodiscard]] constexpr DVec2  size() const { return DVec2(w, h); }
-    [[nodiscard]] constexpr DRect  viewportRect() const { return DRect(x, y, x + w, y + h); }
+    [[nodiscard]] constexpr DRect  surfaceRect() const { return DRect(x, y, x + w, y + h); }
+    [[nodiscard]] constexpr DRect  clientRect() const { return DRect(client_x, client_y, client_x + client_w, client_y + client_h); }
 
     [[nodiscard]] constexpr double initialSizeScale() { return scale_adjust; }
     [[nodiscard]] constexpr bool   resized() { return (w != old_w) || (h != old_h); }
+
+    [[nodiscard]] double toSurfaceX(double client_posX) { return ((client_posX - client_x) / client_w) * w; }
+    [[nodiscard]] double toSurfaceY(double client_posY) { return ((client_posY - client_y) / client_h) * h; }
 };
 
 // ==================================
@@ -569,7 +583,7 @@ class Painter : private SimplePainter
     bool saved_scale_text = scale_text;
     bool saved_rotate_text = rotate_text;
 
-    SurfaceInfo* surface;
+    SurfaceInfo* surface = nullptr;
     WorldStageTransform m;
 
 public:
@@ -1304,12 +1318,10 @@ class Canvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
     bool has_fbo = false;
-
-
-    int fbo_width    = 0, fbo_height    = 0;  // Local Canvas dimensions (FBO size)
+    int fbo_width = 0, fbo_height = 0;  // Local Canvas dimensions (FBO size)
 
     //int render_width = 0, render_height = 0;  // Actual size Canvas gets drawn on to screen
-    ///IRect rendered_rect{};
+    IRect client_rect{};
 
     // The default painter which draws to this canvas
     PainterContext context;
@@ -1318,7 +1330,9 @@ public:
 
     void create(double global_scale);
     bool resize(int w, int h);
-    ///void setRenderedRect(IRect r) { rendered_rect = r; }
+
+    IRect clientRect() const { return client_rect; }
+    void setClientRect(IRect r) { client_rect = r; }
 
     void begin(float r, float g, float b, float a = 1.0);
     void end();

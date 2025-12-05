@@ -47,6 +47,13 @@ class PlatformManager
 
     bool is_mobile_device = false;
 
+
+    GLuint offscreen_fbo = 0;
+    GLuint offscreen_color = 0;
+    GLuint offscreen_depth = 0;
+    int    offscreen_w = 0;
+    int    offscreen_h = 0;
+
 public:
 
     static constexpr PlatformManager* instance()
@@ -75,15 +82,42 @@ public:
     [[nodiscard]] int window_height() const { return win_h; }
 
     [[nodiscard]] IVec2 gl_size()     const { return {gl_w, gl_h}; }
-    [[nodiscard]] IVec2 fbo_size()    const { return {fb_w, fb_h}; }
     [[nodiscard]] IVec2 window_size() const { return {win_w, win_h}; }
 
     // Device Info
-    #ifdef DEBUG_SIMULATE_DEVICE
-    [[nodiscard]] float dpr() const { return DEBUG_SIMULATE_DEVICE.dpr; }
+    #ifdef SIMULATE_DISPLAY
+    [[nodiscard]] float dpr() const { return SIMULATE_DISPLAY.dpr; }
     #else
     [[nodiscard]] float dpr() const { return win_dpr; }
     #endif
+
+    [[nodiscard]] bool offscreen_active() const
+    {
+        #ifdef SIMULATE_DISPLAY
+        return true;
+        #else
+        return false;
+        #endif
+    }
+
+    // what the app should render to (offscreen, or direct)
+    [[nodiscard]] IVec2 fbo_size() const
+    {
+        if (offscreen_active()) return { offscreen_w, offscreen_h };
+        return { gl_w, gl_h };
+    }
+
+    // input scaling to fbo-space
+    [[nodiscard]] float input_scale_x() const { return (gl_w > 0) ? (float)fbo_size().x / (float)gl_w : 1.0f; }
+    [[nodiscard]] float input_scale_y() const { return (gl_h > 0) ? (float)fbo_size().y / (float)gl_h : 1.0f; }
+
+    void imgui_fix_offscreen_mouse_position();
+    void upscale_mouse_event_to_offscreen(SDL_Event& e);
+    void convert_mouse_to_touch(SDL_Event& e);
+
+    // begin gl (for offscreen, or direct)
+    void gl_begin_frame();
+    void gl_end_frame();
 
     [[nodiscard]] bool device_vertical();
     void device_orientation(int* orientation_angle, int* orientation_index = nullptr);

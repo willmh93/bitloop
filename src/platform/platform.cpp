@@ -80,6 +80,145 @@ void PlatformManager::resized()
     platform()->update();
 }
 
+
+
+static void destroy_offscreen_fbo(GLuint& fbo, GLuint& color, GLuint& depth)
+{
+    if (depth) { glDeleteRenderbuffers(1, &depth); depth = 0; }
+    if (color) { glDeleteTextures(1, &color);      color = 0; }
+    if (fbo)   { glDeleteFramebuffers(1, &fbo);    fbo = 0; }
+}
+
+static void ensure_offscreen_fbo(GLuint& fbo, GLuint& color, GLuint& depth, int w, int h)
+{
+    destroy_offscreen_fbo(fbo, color, depth);
+
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    glGenTextures(1, &color);
+    glBindTexture(GL_TEXTURE_2D, color);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
+
+    glGenRenderbuffers(1, &depth);
+    glBindRenderbuffer(GL_RENDERBUFFER, depth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depth);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void PlatformManager::gl_begin_frame()
+{
+    #ifdef SIMULATE_DISPLAY
+    offscreen_w = SIMULATE_DISPLAY.w;
+    offscreen_h = SIMULATE_DISPLAY.h;
+
+    // ensure offscreen FBO exists
+    if (!offscreen_fbo)
+        ensure_offscreen_fbo(offscreen_fbo, offscreen_color, offscreen_depth, offscreen_w, offscreen_h);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fbo);
+    glViewport(0, 0, offscreen_w, offscreen_h);
+    #else
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, gl_w, gl_h);
+    #endif
+}
+
+void PlatformManager::gl_end_frame()
+{
+    #ifdef SIMULATE_DISPLAY
+    // downscale into the real window backbuffer
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, offscreen_fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(
+        0, 0, offscreen_w, offscreen_h,
+        0, 0, gl_w, gl_h,
+        GL_COLOR_BUFFER_BIT, GL_LINEAR
+    );
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    #endif
+}
+
+void PlatformManager::imgui_fix_offscreen_mouse_position()
+{
+    #ifdef SIMULATE_DISPLAY
+    // imgui_impl_sdl3 calls UpdateMouseData() in NewFrame and queries global mouse state,
+    // which can overwrite scaled coordinates
+    float mx = 0.0f, my = 0.0f;
+    SDL_GetMouseState(&mx, &my);
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMousePosEvent(mx * input_scale_x(), my * input_scale_y());
+    #endif
+}
+
+void PlatformManager::upscale_mouse_event_to_offscreen(SDL_Event& e)
+{
+    // upscale mouse position from screen space to offscreen
+    const float sx = platform()->input_scale_x();
+    const float sy = platform()->input_scale_y();
+
+    switch (e.type)
+    {
+    case SDL_EVENT_MOUSE_MOTION:
+        e.motion.x *= sx;
+        e.motion.y *= sy;
+        e.motion.xrel *= sx;
+        e.motion.yrel *= sy;
+        break;
+
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        e.button.x *= sx;
+        e.button.y *= sy;
+        break;
+
+    case SDL_EVENT_MOUSE_WHEEL:
+        e.wheel.mouse_x *= sx;
+        e.wheel.mouse_y *= sy;
+        break;
+
+    default:
+        break;
+    }
+}
+
+void PlatformManager::convert_mouse_to_touch(SDL_Event& e)
+{
+    // emulate touch (from mouse)
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+    {
+        SDL_Event me = e;
+        e.type = SDL_EVENT_FINGER_DOWN;
+        e.tfinger.fingerID = 0;
+        e.tfinger.x = (me.button.x / (float)platform()->fbo_width());
+        e.tfinger.y = (me.button.y / (float)platform()->fbo_height());
+    }
+    else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
+    {
+        SDL_Event me = e;
+        e.type = SDL_EVENT_FINGER_UP;
+        e.tfinger.fingerID = 0;
+        e.tfinger.x = (me.button.x / (float)platform()->fbo_width());
+        e.tfinger.y = (me.button.y / (float)platform()->fbo_height());
+    }
+    else if (e.type == SDL_EVENT_MOUSE_MOTION)
+    {
+        SDL_Event me = e;
+        e.type = SDL_EVENT_FINGER_MOTION;
+        e.tfinger.fingerID = 0;
+        e.tfinger.x = (me.button.x / (float)platform()->fbo_width());
+        e.tfinger.y = (me.button.y / (float)platform()->fbo_height());
+    }
+}
+
 bool PlatformManager::device_vertical()
 {
     #ifdef __EMSCRIPTEN__
@@ -88,7 +227,12 @@ bool PlatformManager::device_vertical()
         return abs(orientation.orientationAngle % 180) < 90;
     #endif
 
+    // todo: Add do DebugDevicePreset
+    #ifdef SIMULATE_MOBILE
+    return true;
+    #else
     return false;
+    #endif
 }
 
 void PlatformManager::device_orientation(int* orientation_angle, int* orientation_index)
@@ -129,7 +273,7 @@ bool PlatformManager::device_orientation_changed(std::function<void(int, int)> o
 
 bool PlatformManager::is_mobile() const
 {
-    #ifdef DEBUG_SIMULATE_MOBILE
+    #ifdef SIMULATE_MOBILE
     return true;
     #else
     return is_mobile_device;
@@ -138,7 +282,7 @@ bool PlatformManager::is_mobile() const
 
 bool PlatformManager::is_desktop_native() const
 {
-    #if defined __EMSCRIPTEN__ || defined FORCE_WEB_UI
+    #if defined __EMSCRIPTEN__ || defined SIMULATE_BROWSER
     return false;
     #else
     return !is_mobile();
@@ -147,10 +291,20 @@ bool PlatformManager::is_desktop_native() const
 
 bool PlatformManager::is_desktop_browser() const
 {
-    #ifdef __EMSCRIPTEN__
-    return !is_mobile(); // Assumed desktop browser if mobile screen not detected
+    #ifdef SIMULATE_BROWSER
+        // simulating browser
+        #ifdef SIMULATE_MOBILE
+        return false;
+        #else
+        return true;
+        #endif
     #else
-    return false; // Native desktop application
+        // detect real environment
+        #ifdef __EMSCRIPTEN__
+        return !is_mobile(); // Assumed desktop browser if mobile screen not detected
+        #else
+        return false; // Native desktop application
+        #endif
     #endif
 }
 
