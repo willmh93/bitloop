@@ -1,18 +1,15 @@
-#include <SDL3/SDL_dialog.h>
-
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
 #include <bitloop/imguix/imgui_debug_ui.h>
 #include <imgui_stdlib.h>
+#include <filesystem>
 
 #ifndef __EMSCRIPTEN__
-#include <filesystem>
 #include <fstream>
 #endif
 
 #include <regex>
-
 
 BL_BEGIN_NS
 
@@ -20,8 +17,6 @@ MainWindow* MainWindow::singleton = nullptr;
 
 ImDebugLog project_log;
 ImDebugLog debug_log;
-
-
 
 void ImDebugPrint(const char* fmt, ...)
 {
@@ -35,8 +30,8 @@ void ImDebugPrint(const char* fmt, ...)
 static bool path_contains(const std::filesystem::path& root, const std::filesystem::path& p)
 {
     std::error_code ec1, ec2;
-    std::filesystem::path pc   = std::filesystem::weakly_canonical(p, ec1);
-    std::filesystem::path rootc= std::filesystem::weakly_canonical(root,ec2);
+    std::filesystem::path pc    = std::filesystem::weakly_canonical(p, ec1);
+    std::filesystem::path rootc = std::filesystem::weakly_canonical(root,ec2);
 
     if (ec1 || ec2)
     {
@@ -76,41 +71,154 @@ std::string getPreferredCapturesDirectory() {
     return path.lexically_normal().string();
 }
 
-static int find_max_clip_index(const std::filesystem::path& directory_path, const char* name, const char* extension)
+static inline char bl_tolower(char c) {
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+}
+
+static bool ends_with_ci(std::string_view s, std::string_view suffix)
+{
+    if (suffix.size() > s.size()) return false;
+    s = s.substr(s.size() - suffix.size());
+    for (size_t i = 0; i < suffix.size(); ++i)
+        if (bl_tolower(s[i]) != bl_tolower(suffix[i])) return false;
+    return true;
+}
+
+static bool starts_with_ci(std::string_view s, std::string_view prefix)
+{
+    if (prefix.size() > s.size()) return false;
+    for (size_t i = 0; i < prefix.size(); ++i)
+        if (bl_tolower(s[i]) != bl_tolower(prefix[i])) return false;
+    return true;
+}
+
+static bool try_parse_indexed_name(
+    std::string_view filename,
+    std::string_view name,
+    std::string_view alias,      // empty = no alias
+    std::string_view extension,  // e.g. ".webp" (case-insensitive)
+    int& out_index)
+{
+    // Must end with extension
+    if (!ends_with_ci(filename, extension)) return false;
+
+    // Strip extension
+    std::string_view core = filename.substr(0, filename.size() - extension.size());
+
+    // If alias is provided, must end with "_" + alias
+    if (!alias.empty())
+    {
+        // Build the suffix "_alias" without allocating: check manually
+        if (core.size() <= alias.size() + 1) return false;
+        if (bl_tolower(core[core.size() - alias.size() - 1]) != '_') return false;
+
+        std::string_view tail = core.substr(core.size() - alias.size(), alias.size());
+        if (!starts_with_ci(tail, alias)) return false;
+
+        core = core.substr(0, core.size() - (alias.size() + 1));
+    }
+
+    // Now core must be: name + digits
+    if (!starts_with_ci(core, name)) return false;
+    if (core.size() <= name.size()) return false;
+
+    std::string_view digits = core.substr(name.size());
+    for (char c : digits) if (c < '0' || c > '9') return false;
+
+    int idx = 0;
+    auto* b = digits.data();
+    auto* e = digits.data() + digits.size();
+    auto [ptr, ec] = std::from_chars(b, e, idx);
+    if (ec != std::errc{} || ptr != e) return false;
+
+    out_index = idx;
+    return true;
+}
+
+static int find_max_clip_index(
+    const std::filesystem::path& directory_path,
+    const char* name,
+    const char* alias,       // may be nullptr
+    const char* extension)
 {
     int max_clip_index = 0;
-    std::error_code io_error;
-    std::string regex = "^" + std::string(name) + "(\\d+)\\" + extension + "$";
-    std::regex filename_pattern(regex, std::regex::icase);
-    //std::regex filename_pattern("^clip(\\d+)\\.mp4$", std::regex::icase);
 
-    for (const auto& dir_entry : std::filesystem::directory_iterator(
-        directory_path, std::filesystem::directory_options::skip_permission_denied, io_error))
-    {
-        if (io_error) break; // stop on catastrophic error
-        if (!dir_entry.is_regular_file()) continue;
+    const std::string_view sv_name = name ? std::string_view(name) : std::string_view();
+    const std::string_view sv_alias = alias ? std::string_view(alias) : std::string_view();
+    std::string_view sv_ext = extension ? std::string_view(extension) : std::string_view();
 
-        const std::string filename = dir_entry.path().filename().string();
-        std::smatch match;
-        if (std::regex_match(filename, match, filename_pattern)) {
-            try {
-                const int clip_index = std::stoi(match[1].str());
-                if (clip_index > max_clip_index) max_clip_index = clip_index;
-            }
-            catch (...) {
-                // ignore invalid numbers
-            }
-        }
+    // Be tolerant if caller passes "webp" instead of ".webp"
+    std::string ext_storage;
+    if (!sv_ext.empty() && sv_ext[0] != '.') {
+        ext_storage.reserve(sv_ext.size() + 1);
+        ext_storage.push_back('.');
+        ext_storage.append(sv_ext);
+        sv_ext = ext_storage;
     }
+
+    std::error_code ec;
+    std::filesystem::directory_iterator it(
+        directory_path,
+        std::filesystem::directory_options::skip_permission_denied,
+        ec
+    );
+    const std::filesystem::directory_iterator end;
+
+    for (; it != end; it.increment(ec))
+    {
+        if (ec) break; // stop on catastrophic error
+
+        std::error_code ec2;
+        if (!it->is_regular_file(ec2) || ec2) continue;
+
+        const std::string filename = it->path().filename().string();
+
+        int clip_index = 0;
+        if (try_parse_indexed_name(filename, sv_name, sv_alias, sv_ext, clip_index))
+            if (clip_index > max_clip_index) max_clip_index = clip_index;
+    }
+
     return max_clip_index;
 }
 
-static std::filesystem::path make_next_clip_path(const std::filesystem::path& capture_dir, const char* name, const char* extension)
+static std::filesystem::path make_next_clip_path(
+    const std::filesystem::path& capture_dir,
+    const char* name,
+    const char* alias,      // may be nullptr
+    const char* extension)
 {
     std::error_code io_error;
     std::filesystem::create_directories(capture_dir, io_error); // no-op if exists
-    const int next_index = find_max_clip_index(capture_dir, name, extension) + 1;
-    return (name + std::to_string(next_index) + extension);
+
+    const int next_index = find_max_clip_index(capture_dir, name, alias, extension) + 1;
+
+    std::string filename;
+    filename.reserve(
+        (name ? std::char_traits<char>::length(name) : 0) +
+        16 +
+        (alias ? (1 + std::char_traits<char>::length(alias)) : 0) +
+        (extension ? std::char_traits<char>::length(extension) : 0) + 1
+    );
+
+    if (name) filename += name;
+    filename += std::to_string(next_index);
+    if (alias && *alias) { filename += '_'; filename += alias; }
+
+    if (extension && *extension) {
+        if (extension[0] == '.') filename += extension;
+        else { filename += '.'; filename += extension; }
+    }
+
+    return capture_dir / filename;
+}
+
+// Convenience overload (no alias)
+static std::filesystem::path make_next_clip_path(
+    const std::filesystem::path& capture_dir,
+    const char* name,
+    const char* extension)
+{
+    return make_next_clip_path(capture_dir, name, nullptr, extension);
 }
 
 static bool ensure_parent_directories_exist(const std::filesystem::path& file_path, std::error_code& ec)
@@ -121,56 +229,9 @@ static bool ensure_parent_directories_exist(const std::filesystem::path& file_pa
     return std::filesystem::create_directories(parent, ec);
 }
 
-static inline bool is_x265(const char* s)
-{
-    if (!s) return false;
-    std::string t(s); for (auto& c : t) c = (char)tolower(c);
-    return (t == "x265" || t == "hevc" || t == "h265");
-}
 
-static inline double lerp_log(double a, double b, double t) {
-    return std::exp(std::log(a) + t * (std::log(b) - std::log(a)));
-}
-
-// Range depends ONLY on resolution, fps, codec
-static inline BitrateRange recommended_bitrate_range_mbps(IVec2 res, int fps, const char* codec)
-{
-    int w = std::max(16, res.x);
-    int h = std::max(16, res.y);
-    fps = std::clamp(fps, 1, 120);
-
-    // Broad coverage band for simple->extreme screen content
-    // (bppf = bits per pixel per frame)
-    const double bppf_min = 0.006; // very simple scenes
-    const double bppf_max = 0.70;  // near-lossless-ish, extreme detail/motion
-
-    // Codec efficiency: x265 typically ~30% less for same quality
-    const double eff = is_x265(codec) ? 0.70 : 1.00;
-
-    const double ppf = (double)w * (double)h * (double)fps;
-    double min_bps = ppf * bppf_min * eff;
-    double max_bps = ppf * bppf_max * eff;
-
-    BitrateRange r;
-    r.min_mbps = std::clamp(min_bps / 1e6, 0.05, 1000.0);
-    r.max_mbps = std::clamp(max_bps / 1e6, r.min_mbps, 1000.0);
-    return r;
-}
-
-static inline double choose_bitrate_mbps_from_range(const BitrateRange& r, int quality_0_to_100)
-{
-    int q = std::clamp(quality_0_to_100, 0, 100);
-    double t = q / 100.0;                  // 0..1
-    return lerp_log(r.min_mbps, r.max_mbps, t); // same curve/endpoints as before
-}
 #endif
 
-static void on_folder_chosen([[maybe_unused]] void* userdata, const char* const* filelist, [[maybe_unused]] int filter)
-{
-    if (!filelist) { SDL_Log("Dialog error"); return; }
-    if (!*filelist) { SDL_Log("User canceled"); return; }
-    blPrint() << "Chosen folder: " << filelist[0]; // first (and only) entry for folder dialog
-}
 
 void MainWindow::init()
 {
@@ -187,10 +248,7 @@ void MainWindow::init()
     //canvas.create(5.0);
     //canvas.create(0.75);
 
-    #if BITLOOP_FFMPEG_ENABLED
-    bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
-    record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
-    #endif
+    settings_panel.init();
 }
 
 void MainWindow::checkChangedDPR()
@@ -320,6 +378,13 @@ void MainWindow::populateOverlay()
     project_worker()->populateOverlay();
 }
 
+void MainWindow::queueBeginSnapshot(const SnapshotPresetList& presets, const char* relative_filename)
+{
+    MainWindowCommand_SnapshotPayload payload;
+    payload.path = relative_filename;
+    payload.presets = presets;
+    queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT, payload });
+}
 void MainWindow::queueBeginRecording()
 {
     queueMainWindowCommand({ MainWindowCommandType::BEGIN_RECORDING });
@@ -349,7 +414,7 @@ void MainWindow::beginRecording()
     // Organize by project name
     capture_dir /= active_sim_name;
 
-    switch ((CaptureFormat)record_format)
+    switch ((CaptureFormat)getSettingsConfig()->getRecordFormat())
     {
         case CaptureFormat::x264:
         case CaptureFormat::x265:
@@ -367,38 +432,67 @@ void MainWindow::beginRecording()
 
     int64_t bitrate = 0;
     #if BITLOOP_FFMPEG_ENABLED
-    bitrate = record_bitrate;
+    bitrate = getSettingsConfig()->record_bitrate;
     #endif
 
     capture_manager.startCapture(
-        (CaptureFormat)record_format,
+        getSettingsConfig()->getRecordFormat(),
         capture_dir.string(),
-        record_resolution,
-        snapshot_supersample_factor,
-        snapshot_sharpen,
-        record_fps,
-        record_frame_count,
+        getSettingsConfig()->record_resolution,
+        getSettingsConfig()->default_ssaa,
+        getSettingsConfig()->default_sharpen,
+        getSettingsConfig()->record_fps,
+        getSettingsConfig()->record_frame_count,
         bitrate,
-        (float)record_quality,
-        record_lossless,
-        record_near_lossless,
+        (float)getSettingsConfig()->record_quality,
+        getSettingsConfig()->record_lossless,
+        getSettingsConfig()->record_near_lossless,
         true);
     #else
     capture_manager.startCapture(
-        (CaptureFormat)record_format,
-        record_resolution,
-        snapshot_supersample_factor,
-        snapshot_sharpen,
-        record_fps,
-        record_frame_count,
+        getSettingsConfig()->getRecordFormat(),
+        getSettingsConfig()->record_resolution,
+        getSettingsConfig()->default_ssaa,
+        getSettingsConfig()->default_sharpen,
+        getSettingsConfig()->record_fps,
+        getSettingsConfig()->record_frame_count,
         0,
-        record_quality,
-        record_lossless,
-        record_near_lossless,
+        getSettingsConfig()->record_quality,
+        getSettingsConfig()->record_lossless,
+        getSettingsConfig()->record_near_lossless,
         true);
     #endif
 }
-void MainWindow::beginSnapshot()
+std::string MainWindow::prepareFullCapturePath(const SnapshotPreset& preset, const char* relative_filepath_noext)
+{
+    namespace fs = std::filesystem;
+
+    fs::path rel_filepath = relative_filepath_noext;
+
+    std::string base_filename      = rel_filepath.filename().string();     // e.g. "seahorse_valley"
+
+    #ifdef __EMSCRIPTEN__
+    std::string qualified_filename = (base_filename + '_') + preset.alias; // e.g. "seahorse_valley_1920x1080"
+    return qualified_filename + ".webp";
+    #else
+    // Organize by project name
+    fs::path dir = getPreferredCapturesDirectory();                                                            // e.g. "C:/dev/bitloop-gallery/captures/"
+    dir /= project_worker()->getCurrentProject()->getProjectInfo()->name;                                      // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/"
+    dir /= "image";                                                                                            // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/"
+                                                                                               
+    // relative to project capture dir                                                         
+    fs::path relative_dir = dir / rel_filepath.parent_path();                                                  // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/backgrounds/"
+    fs::path filename = relative_dir / make_next_clip_path(relative_dir, base_filename.c_str(), preset.alias, ".webp"); // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/backgrounds/seahorse_valley_1920x1080.webp"
+
+    filename = filename.lexically_normal();
+
+    std::error_code ec;
+    ensure_parent_directories_exist(filename, ec);
+
+    return filename.string();
+    #endif
+}
+void MainWindow::beginSnapshot(const char* full_filepath, IVec2 res, int ssaa, float sharpen)
 {
     assert(!capture_manager.isRecording());
     assert(!capture_manager.isSnapshotting());
@@ -416,34 +510,34 @@ void MainWindow::beginSnapshot()
     capture_manager.setCaptureEnabled(false);
 
     #ifndef __EMSCRIPTEN__
-    std::string active_sim_name = project_worker()->getCurrentProject()->getProjectInfo()->name;
-
-    // Organize by project name
-    std::filesystem::path dir = getPreferredCapturesDirectory();
-    dir /= active_sim_name;
-    dir /= "image";
-
-    std::filesystem::path filename = dir;
-    filename /= make_next_clip_path(dir, "snap", ".webp");
-
-    std::error_code ec;
-    ensure_parent_directories_exist(filename, ec);
-
     capture_manager.startCapture(
-        (CaptureFormat)snapshot_format,
-        filename.string(),
-        snapshot_resolution,
-        snapshot_supersample_factor,
-        snapshot_sharpen,
+        getSettingsConfig()->getSnapshotFormat(),
+        full_filepath,
+        res, ssaa, sharpen,
         0, 0, 0, 100.0f, true, 100, true);
     #else
     capture_manager.startCapture(
-        (CaptureFormat)snapshot_format,
-        snapshot_resolution,
-        snapshot_supersample_factor,
-        snapshot_sharpen,
+        getSettingsConfig()->getSnapshotFormat(),
+        res, ssaa, sharpen,
         0, 0, 0, 100.0f, true, 100, true);
     #endif
+}
+void MainWindow::beginSnapshot(const SnapshotPreset& preset, const char* relative_filepath_noext)
+{
+    std::string full_path = prepareFullCapturePath(preset, relative_filepath_noext);
+    int ssaa      = (preset.ssaa > 0)    ? preset.ssaa :    getSettingsConfig()->default_ssaa;
+    float sharpen = (preset.sharpen > 0) ? preset.sharpen : getSettingsConfig()->default_sharpen;
+
+    beginSnapshot(full_path.c_str(), preset.size, ssaa, sharpen);
+}
+void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_proj_path)
+{
+    enabled_capture_presets = presets;
+    is_snapshotting = true;
+    active_capture_preset = 0;
+    active_capture_rel_proj_path = rel_proj_path;
+
+    beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_proj_path.c_str());
 }
 void MainWindow::endRecording()
 {
@@ -465,12 +559,12 @@ void MainWindow::endRecording()
 }
 void MainWindow::checkCaptureComplete()
 {
-    //if (capture_manager.isCaptureToMemoryComplete())
     bool captured_to_memory = false;
     if (capture_manager.handleCaptureComplete(captured_to_memory))
     {
         if (captured_to_memory)
         {
+            // capture to memory is currently always webp... (still OR webp animation)
             bytebuf data;
             capture_manager.takeCompletedCaptureFromMemory(data);
 
@@ -481,6 +575,23 @@ void MainWindow::checkCaptureComplete()
             out.write((const char*)data.data(), data.size());
             out.close();
             #endif
+
+            // todo: When you include other snapshot types (PNG, JPEG, etc) use a more robust "is snapshot" check
+            if (capture_manager.format() == CaptureFormat::WEBP_SNAPSHOT)
+            {
+                // Do we have another preset to capture?
+                active_capture_preset++;
+                if (active_capture_preset < enabled_capture_presets.size())
+                {
+                    // todo: maybe queue to begin capture at more suitable time
+                    //beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_proj_path.c_str());
+                    queueMainWindowCommand({ MainWindowCommandType::TAKE_ACTIVE_PRESET_SNAPSHOT });
+                }
+                else
+                {
+                    is_snapshotting = false;
+                }
+            }
         }
         else
         {
@@ -529,7 +640,7 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         {
             // set initial preferred folder once
             #ifndef __EMSCRIPTEN__
-            capture_dir = getPreferredCapturesDirectory();
+            getSettingsConfig()->capture_dir = getPreferredCapturesDirectory();
             #endif
 
             first = false;
@@ -559,6 +670,21 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         snapshot.enabled = false; // only allow snapshot while project running
         break;
 
+    case MainWindowCommandType::BEGIN_SNAPSHOT:
+        if (e.payload.has_value())
+        {
+            MainWindowCommand_SnapshotPayload payload = std::any_cast<MainWindowCommand_SnapshotPayload>(e.payload);
+            beginSnapshotList(payload.presets, payload.path.c_str()); // e.g. "backgrounds/seahorse_valley"
+        }
+        else
+            beginSnapshotList(getSnapshotPresetManager()->enabledPresets(), "snap");
+        break;
+
+    case MainWindowCommandType::TAKE_ACTIVE_PRESET_SNAPSHOT:
+    {
+        beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_proj_path.c_str());
+    }
+    break;
 
     case MainWindowCommandType::BEGIN_RECORDING:
         beginRecording();
@@ -760,7 +886,7 @@ void MainWindow::populateToolbar()
     ImGui::SameLine();
     if (toolbarButton("##snapshot", "snapshot", snapshot, ImVec2(size, size)))
     {
-        beginSnapshot();
+        beginSnapshotList(getSnapshotPresetManager()->enabledPresets(), "snap");
     }
 
     ImGui::EndChild();
@@ -963,108 +1089,6 @@ bool MainWindow::focusWindow(const char* id)
     return ret;
 }
 
-void ScrollWhenDraggingOnVoid(const ImVec2& delta)
-{
-    ImGuiContext& g = *ImGui::GetCurrentContext();
-    ImGuiWindow* window = g.CurrentWindow;
-    bool hovered = false;
-    bool held = false;
-    ImGuiID id = window->GetID("##scrolldraggingoverlay");
-    ImGui::KeepAliveID(id);
-
-    static float vy = 0.0;
-    static float scroll_amount = 0.0;
-
-    //if (g.HoveredId == 0) // If nothing hovered so far in the frame (not same as IsAnyItemHovered()!)
-        ImGui::ButtonBehavior(window->Rect(), id, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
-    //if (held && delta.x != 0.0f)
-    //    ImGui::SetScrollX(window, window->Scroll.x + delta.x);
-
-    if (held) vy = delta.y;
-    scroll_amount = vy;
-    vy *= 0.93f;
-
-    if (/*held && */scroll_amount != 0.0f)
-        ImGui::SetScrollY(window, window->Scroll.y + scroll_amount);
-}
-static void SwipeScrollWindow(float decay = 0.93f, float drag_threshold = scale_size(20.0f))
-{
-    if (!platform()->is_mobile())
-        return;
-
-    ImGuiContext& g = *ImGui::GetCurrentContext();
-    ImGuiIO& io = g.IO;
-    ImGuiWindow* window = g.CurrentWindow;
-    if (!window) return;
-
-    // State - TODO: global for now, make per-window
-    static bool   scrolling = false;
-    static ImVec2 press_pos = ImVec2(0, 0);
-    static float  vy = 0.0f;
-
-    const bool hovered_anyhow = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-    const bool down = io.MouseDown[0];
-    const bool up = !down;
-
-    // Begin potential gesture
-    if (!scrolling && hovered_anyhow && ImGui::IsMouseClicked(0))
-    {
-        press_pos = io.MousePos;
-        vy = 0.0f;
-    }
-
-    // Decide when to take over
-    if (!scrolling && down && hovered_anyhow)
-    {
-        const float dy = io.MousePos.y - press_pos.y;
-        if (fabsf(dy) >= drag_threshold)
-        {
-            // Take over: cancel the currently active item so it won't trigger on release
-            if (g.ActiveId != 0)
-                ImGui::ClearActiveID();
-
-            // Optionally set ourselves as active (not strictly required but keeps ID bookkeeping tidy)
-            ImGuiID id = window->GetID("##swipe_scroll_captor");
-            ImGui::SetActiveID(id, window);
-
-            scrolling = true;
-        }
-    }
-
-    // While dragging, update velocity and scroll
-    if (scrolling && down)
-    {
-        vy = -io.MouseDelta.y; // swipe up -> scroll down; adjust sign to taste
-        if (vy != 0.0f)
-            ImGui::SetScrollY(window, window->Scroll.y + vy);
-    }
-
-    // On release, keep inertia; while idle, decay velocity
-    if (scrolling && up)
-    {
-        // free active id if we grabbed it
-        if (g.ActiveId != 0 && g.ActiveId == window->GetID("##swipe_scroll_captor"))
-            ImGui::ClearActiveID();
-
-        // keep scrolling with decay until velocity dies
-        if (fabsf(vy) < 0.01f)
-        {
-            vy = 0.0f;
-            scrolling = false;
-        }
-    }
-
-    // Apply inertial decay when not dragging
-    if (vy != 0.0f && !down)
-    {
-        ImGui::SetScrollY(window, window->Scroll.y + vy);
-        vy *= decay;
-        if (fabsf(vy) < 0.01f)
-            vy = 0.0f;
-    }
-}
-
-
 void MainWindow::populateCollapsedLayout()
 {
     // Collapse layout
@@ -1075,7 +1099,7 @@ void MainWindow::populateCollapsedLayout()
         populateToolbar();
 
         populateProjectTree(true);
-        SwipeScrollWindow();
+        ImGui::SwipeScrollWindow();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();
@@ -1091,7 +1115,7 @@ void MainWindow::populateCollapsedLayout()
         
 
         populateProjectUI();
-        SwipeScrollWindow();
+        ImGui::SwipeScrollWindow();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();
@@ -1111,7 +1135,7 @@ void MainWindow::populateExpandedLayout()
         populateProjectTree(false);
         populateProjectUI();
 
-        SwipeScrollWindow();
+        ImGui::SwipeScrollWindow();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();
@@ -1259,418 +1283,6 @@ void MainWindow::populateViewport()
     ImGui::End();
     ImGui::PopStyleVar();
 }
-void MainWindow::populateResolutionOptions(IVec2& targ_res, bool& first, int& sel_aspect, int& sel_tier, u64 max_pixels)
-{
-    struct Aspect { const char* label; bool portrait; };
-    struct Preset { int w, h; const char* label; bool HEVC_only = false; };
-
-    static const Aspect aspects[] = {
-        {"16:9", false},
-        {"21:9", false},
-        {"32:9", false},
-        {"4:3",  false},
-        {"3:2",  false},
-        {"1:1",  false},
-        {"9:16", true },
-    };
-
-    // 16:9 — compact, common
-    static const Preset presets_16_9[] = {
-        {1280,  720, "720p"},
-        {1920, 1080, "1080p"},
-        {2560, 1440, "1440p"},
-        {3840, 2160, "4K"},
-        {5120, 2880, "5K", true},
-        {7680, 4320, "8K", true},
-    };
-
-    // 21:9 — ultrawide
-    static const Preset presets_21_9[] = {
-        {2560, 1080, "FHD"},
-        {3440, 1440, "QHD"},
-        {3840, 1600, "WQHD+"},
-        {5120, 2160, "5K2K", true},
-    };
-
-    // 32:9 — super-ultrawide (dual-monitor equiv.)
-    static const Preset presets_32_9[] = {
-        {3840, 1080, "FHD"},
-        {5120, 1440, "QHD"},
-        {7680, 2160, "8K-wide", true},
-    };
-
-    // 4:3 — classic VESA
-    static const Preset presets_4_3[] = {
-        {1024,  768, "XGA"},
-        {1600, 1200, "UXGA"},
-        {2048, 1536, "QXGA"},
-    };
-
-    // 3:2 — laptop/document
-    static const Preset presets_3_2[] = {
-        {1920, 1280, "1280p"},
-        {2160, 1440, "1440p"},
-        {3000, 2000, "3K"},
-    };
-
-    // 1:1 — square
-    static const Preset presets_1_1[] = {
-        {1080, 1080, "Square 1080"},
-        {1440, 1440, "Square 1440"},
-        {2160, 2160, "Square 2160"},
-    };
-
-    // 9:16 — vertical/social
-    static const Preset presets_9_16[] = {
-        {1080, 1920, "1080p"},
-        {1440, 2560, "1440p"},
-        {2160, 3840, "4K"},
-    };
-
-    struct PresetList { const Preset* preset; int x264_count;  int x265_count; };
-    auto get_preset_list = [&](int aspect_index) -> PresetList {
-        switch (aspect_index) {
-        case 0: return { presets_16_9, 4, 6 };
-        case 1: return { presets_21_9, 3, 4 };
-        case 2: return { presets_32_9, 2, 3 };
-        case 3: return { presets_4_3,  3, 3 };
-        case 4: return { presets_3_2,  3, 3 };
-        case 5: return { presets_1_1,  3, 3 };
-        case 6: return { presets_9_16, 3, 3 };
-        default: return { nullptr, 0 };
-        }
-    };
-
-    // highlight colors
-    static const ImVec4 sel = ImVec4(0.18f, 0.55f, 0.95f, 1.00f);
-    static const ImVec4 sel_hover = ImVec4(0.22f, 0.62f, 1.00f, 1.00f);
-    static const ImVec4 sel_active = ImVec4(0.14f, 0.45f, 0.85f, 1.00f);
-    auto pushSelected = [](bool selected) {
-        if (!selected) return 0;
-        ImGui::PushStyleColor(ImGuiCol_Button, sel);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sel_hover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, sel_active);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-        return 4;
-    };
-
-    auto set_even = [](int v) { return v & ~1; };
-
-    // apply current selection (bounds-checked)
-    auto apply_selection = [&](IVec2& out) {
-        if (sel_aspect < 0 || sel_tier < 0) return;
-        PresetList preset_list = get_preset_list(sel_aspect);
-        if (!preset_list.preset || sel_tier >= preset_list.x265_count) return; // safety
-        out.x = set_even(preset_list.preset[sel_tier].w);
-        out.y = set_even(preset_list.preset[sel_tier].h);
-        //bitrate_mbps_range = recommended_bitrate_range_mbps(targ_res, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
-        //record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
-    };
-
-    // auto-select from current resolution
-    auto try_select_from_resolution = [&](int w, int h)
-    {
-        sel_aspect = -1;
-        sel_tier = -1;
-
-        //bitrate_mbps_range = recommended_bitrate_range_mbps(targ_res, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
-        //record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
-
-        for (int ai = 0; ai < IM_ARRAYSIZE(aspects); ++ai)
-        {
-            PresetList L = get_preset_list(ai);
-            for (int ti = 0; ti < L.x265_count; ++ti) {
-                if (L.preset[ti].w == w && L.preset[ti].h == h) {
-                    sel_aspect = ai;
-                    sel_tier = ti;
-                    return;
-                }
-            }
-        }
-
-    };
-
-    bool changed = false;
-
-    ImGui::Text("X:"); ImGui::SameLine();
-    if (ImGui::InputInt("##res_x", &targ_res.x, 10)) {
-        targ_res.x = std::clamp(targ_res.x, 16, 16384);
-        targ_res.x = (targ_res.x & ~1); // force even
-        changed = true;
-    }
-    ImGui::Text("Y:"); ImGui::SameLine();
-    if (ImGui::InputInt("##res_y", &targ_res.y, 10)) {
-        targ_res.y = std::clamp(targ_res.y, 16, 16384);
-        targ_res.y = (targ_res.y & ~1); // force even
-        changed = true;
-    }
-
-    //static bool first = true;
-    if (first) { try_select_from_resolution(targ_res.x, targ_res.y); first = false; }
-    if (changed) try_select_from_resolution(targ_res.x, targ_res.y);
-
-    // Helper: choose the closest tier (by height) to current H for a given aspect list
-    auto pick_closest_tier = [&](int aspect_index, int current_h) -> int
-    {
-        PresetList preset_list = get_preset_list(aspect_index);
-        if (!preset_list.preset || preset_list.x265_count == 0) return -1;
-        int best = 0;
-        int best_d = INT_MAX;
-        for (int i = 0; i < preset_list.x265_count; ++i) {
-            int h = preset_list.preset[i].h; // works for portrait lists too (we stored exact WxH)
-            int d = std::abs(h - current_h);
-            if (d < best_d) { best_d = d; best = i; }
-        }
-        return best;
-    };
-
-    ImGui::Spacing();
-    ImGui::Spacing();
-    ImGui::TextUnformatted("Aspect:");
-    for (int i = 0; i < (int)IM_ARRAYSIZE(aspects); ++i)
-    {
-        bool is_selected = (sel_aspect == i);
-        int pushed = pushSelected(is_selected);
-
-        if (ImGui::Button(aspects[i].label))
-        {
-            int old_aspect = sel_aspect;
-            sel_aspect = i;
-
-            // Get new list
-            PresetList new_preset_list = get_preset_list(sel_aspect);
-
-            // If switching portrait <-> landscape or tier is out of range, choose a tier
-            bool switched_portrait =
-                (old_aspect >= 0) &&
-                (aspects[old_aspect].portrait != aspects[sel_aspect].portrait);
-
-            bool tier_invalid = (sel_tier < 0 || !new_preset_list.preset || sel_tier >= new_preset_list.x265_count);
-
-            if (switched_portrait || tier_invalid)
-            {
-                // Prefer closest tier to current height; fallback to 0
-                int current_h = targ_res.y;
-                int t = pick_closest_tier(sel_aspect, current_h);
-                sel_tier = (t >= 0 ? t : 0);
-            }
-            else
-            {
-                int valid_tier_count = (record_format == (int)CaptureFormat::x264) ?
-                    new_preset_list.x264_count :
-                    new_preset_list.x265_count;
-
-
-                // Clamp to new list length just in case
-                sel_tier = (sel_tier >= valid_tier_count) ? (valid_tier_count - 1) : sel_tier;
-            }
-
-            // Apply the (aspect, tier) to actually change WxH
-            apply_selection(targ_res);
-        }
-        if (pushed) ImGui::PopStyleColor(pushed);
-        if (i + 1 < (int)IM_ARRAYSIZE(aspects)) ImGui::SameLine(0, 6);
-    }
-
-    ImGui::Spacing();
-    ImGui::Spacing();
-    ImGui::TextUnformatted("Resolution tier:");
-
-    int ai = (sel_aspect >= 0) ? sel_aspect : 0;
-    PresetList preset_list = get_preset_list(ai);
-
-    // compact grid
-    int per_row = 6;
-    for (int i = 0; i < preset_list.x265_count; ++i) {
-        bool is_selected = (sel_aspect == ai && sel_tier == i);
-        int pushed = pushSelected(is_selected);
-        bool unsupported = (record_format == (int)CaptureFormat::x264) && preset_list.preset[i].HEVC_only;
-
-        //const PresetList& list = get_preset_list(ai);
-        const Preset& preset = preset_list.preset[i];
-        IVec2 res = { preset.w, preset.h };
-        u64 res_pixels = (u64)res.x * (u64)res.y * (u64)snapshot_supersample_factor;
-        if (res_pixels > max_pixels)
-            unsupported = true;
-
-        if (unsupported) ImGui::BeginDisabled();
-        if (ImGui::Button(preset_list.preset[i].label)) {
-            sel_aspect = ai;
-            sel_tier = i;
-            apply_selection(targ_res);
-        }
-        if (unsupported) ImGui::EndDisabled();
-        if (pushed) ImGui::PopStyleColor(pushed);
-        if ((i + 1) % per_row != 0 && (i + 1) < preset_list.x265_count) ImGui::SameLine(0, 6);
-    }
-}
-void MainWindow::populateRecordOptions()
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
-    ImGui::BeginChild("RecordingFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
-
-    // Paths
-    if (platform()->is_desktop_native())
-    {
-        ImGui::BeginLabelledBox("Paths");
-        ImGui::Text("Media Output Directory:");
-        ImGui::InputText("##folder", &capture_dir, ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::SameLine();
-        if (ImGui::Button("..."))
-        {
-            SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, platform()->sdl_window(), capture_dir.c_str(), false);
-        }
-        ImGui::EndLabelledBox();
-    }
-
-    // Global Options
-    {
-        ImGui::BeginLabelledBox("Global Capture Options");
-        if (!platform()->is_mobile())
-        {
-            ImGui::Checkbox("Fixed time-delta", &fixed_time_delta);
-        }
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Text("FPS:");
-        if (ImGui::InputInt("##fps", &record_fps, 1))
-        {
-            record_fps = std::clamp(record_fps, 1, 100);
-
-            ///#if BITLOOP_FFMPEG_ENABLED
-            ///bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
-            ///record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
-            ///#endif
-        }
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Text("Supersample Factor (SSAA)");
-        ImGui::SliderInt("##ssaa", &snapshot_supersample_factor, 1, 8, "%dx");
-        //if (ImGui::InputInt("##ssaa", &snapshot_supersample_factor, 1, 1))
-        //    snapshot_supersample_factor = std::clamp(snapshot_supersample_factor, 1, 3);
-
-        ImGui::Spacing(); ImGui::Spacing();
-        ImGui::Text("Sharpen");
-        ImGui::SliderFloat("##sharpen", &snapshot_sharpen, 0.0f, 1.0f, "%.2f");
-
-        ImGui::EndLabelledBox();
-    }
-
-    // Image Resolution
-    {
-        ImGui::BeginLabelledBox("Image Capture");
-
-        static int sel_aspect = -1;
-        static int sel_tier = -1;
-        constexpr IVec2 pixels_8k{ 7680, 4320 };
-        static u64 max_pixels = (u64)pixels_8k.x * (u64)pixels_8k.y;
-        static bool first = true;
-        populateResolutionOptions(snapshot_resolution, first, sel_aspect, sel_tier, max_pixels);
-
-        ImGui::EndLabelledBox();
-    }
-
-    //ImGui::SeparatorText("Video Capture");
-
-    // Video Resolution
-    if (!platform()->is_mobile())
-    {
-        ImGui::BeginLabelledBox("Video Capture");
-
-        ImGui::Spacing();
-
-        ImGui::Text("Codec:");
-        ImGui::Combo("##codec", &record_format, "H.264 (x264)\0H.265 / HEVC (x265)\0WebP Animation\0");
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Spacing();
-
-        #if BITLOOP_FFMPEG_ENABLED
-        if (record_format != (int)CaptureFormat::WEBP_VIDEO)
-        {
-            // ffmpeg video
-            static int sel_aspect = -1;
-            static int sel_tier = -1;
-
-            constexpr IVec2 pixels_4k{ 3840, 2160 };
-            constexpr IVec2 pixels_8k{ 7680, 4320 };
-            u64 max_pixels;
-
-            if (record_format == (int)CaptureFormat::x265)
-                max_pixels = (u64)pixels_8k.x * (u64)pixels_8k.y;
-            else
-                max_pixels = (u64)pixels_4k.x * (u64)pixels_4k.y;
-
-            static bool first = true;
-            populateResolutionOptions(record_resolution, first, sel_aspect, sel_tier, max_pixels);
-
-            bitrate_mbps_range = recommended_bitrate_range_mbps(record_resolution, record_fps, VideoCodecFromCaptureFormat((CaptureFormat)record_format));
-            record_bitrate = (i64)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
-        }
-        else
-        #endif
-        {
-            ImGui::Text("X:"); ImGui::SameLine();
-            if (ImGui::InputInt("##vid_res_x", &record_resolution.x, 10)) {
-                record_resolution.x = std::clamp(record_resolution.x, 16, 1024);
-                record_resolution.x = (record_resolution.x & ~1); // force even
-            }
-            ImGui::Text("Y:"); ImGui::SameLine();
-            if (ImGui::InputInt("##vid_res_y", &record_resolution.y, 10)) {
-                record_resolution.y = std::clamp(record_resolution.y, 16, 1024);
-                record_resolution.y = (record_resolution.y & ~1); // force even
-            }
-
-            ImGui::Spacing();
-            ImGui::Spacing();
-        }
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Text("Quality:");
-
-        if (ImGui::SliderInt("##quality", &record_quality, 0, 100))
-        {
-            /// TODO: Apply quality to WebP
-
-            #if BITLOOP_FFMPEG_ENABLED
-            record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(bitrate_mbps_range, record_quality));
-            #endif
-        }
-
-        #if BITLOOP_FFMPEG_ENABLED
-        ImGui::Text("= %.1f Mbps", (double)record_bitrate / 1000000.0);
-        #endif
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Checkbox("Lossless", &record_lossless);
-
-        if (record_lossless)
-        {
-            ImGui::Spacing();
-            ImGui::Spacing();
-            ImGui::Text("Lossless quality:");
-            ImGui::SliderInt("##near_lossless", &record_near_lossless, 0, 100);
-        }
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Text("Frame Count (0 = No Limit):");
-        if (ImGui::InputInt("##frame_count", &record_frame_count, 1))
-        {
-            record_frame_count = std::clamp(record_frame_count, 0, 10000000);
-        }
-
-        ImGui::EndLabelledBox();
-    }
-   
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-}
 void MainWindow::populateUI()
 {
     if (!manageDockingLayout())
@@ -1736,7 +1348,7 @@ void MainWindow::populateUI()
     {
         ImGui::Begin("Settings");
         {
-            populateRecordOptions();
+            settings_panel.populateSettings();
         }
         ImGui::End();
 
@@ -1807,3 +1419,5 @@ void MainWindow::populateUI()
 }
 
 BL_END_NS
+
+

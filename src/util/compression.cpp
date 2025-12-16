@@ -39,6 +39,7 @@ namespace Compression {
     // ========== Base64 encode ==========
     std::string b64_encode(std::string_view bytes)
     {
+        
         const unsigned char* src = reinterpret_cast<const unsigned char*>(bytes.data());
         size_t len = bytes.size();
         if (len == 0) return {};
@@ -235,6 +236,75 @@ namespace Compression {
         return out;
     }
 
+    // Always returns 11 chars
+    std::string b64_encode_u64(std::uint64_t hash)
+    {
+        // write hash as 8 bytes big-endian
+        unsigned char b[8] = {
+            (unsigned char)(hash >> 56),
+            (unsigned char)(hash >> 48),
+            (unsigned char)(hash >> 40),
+            (unsigned char)(hash >> 32),
+            (unsigned char)(hash >> 24),
+            (unsigned char)(hash >> 16),
+            (unsigned char)(hash >> 8),
+            (unsigned char)(hash >> 0),
+        };
+
+        std::string out;
+        out.resize(11);
+
+        // First 10 chars cover first 60 bits; last char covers remaining 4 bits (top-aligned).
+        std::uint64_t x = 0;
+        for (int i = 0; i < 8; ++i) x = (x << 8) | b[i];
+
+        // Emit 11 sextets from MSB downward. For the last sextet, only top 4 bits are data.
+        out[0] = lookup[(x >> 58) & 63];
+        out[1] = lookup[(x >> 52) & 63];
+        out[2] = lookup[(x >> 46) & 63];
+        out[3] = lookup[(x >> 40) & 63];
+        out[4] = lookup[(x >> 34) & 63];
+        out[5] = lookup[(x >> 28) & 63];
+        out[6] = lookup[(x >> 22) & 63];
+        out[7] = lookup[(x >> 16) & 63];
+        out[8] = lookup[(x >> 10) & 63];
+        out[9] = lookup[(x >> 4) & 63];
+        out[10] = lookup[(x & 0xF) << 2]; // remaining 4 bits, shifted to top of sextet
+
+        return out;
+    }
+
+    // Decodes 11-char
+    std::uint64_t b64_decode_u64(std::string_view b64)
+    {
+        if (b64.size() != 11) return 0;
+
+        unsigned char v[11];
+        for (int i = 0; i < 11; ++i) {
+            unsigned char c = static_cast<unsigned char>(b64[i]);
+            v[i] = b64_value(c);
+            if (v[i] == 0xFF) return 0;
+        }
+
+        // The last sextet must have its low 2 bits zero (because encoder did (low4 << 2)).
+        if ((v[10] & 0x03u) != 0) return 0;
+
+        std::uint64_t x = 0;
+        x |= (std::uint64_t(v[0]) & 63) << 58;
+        x |= (std::uint64_t(v[1]) & 63) << 52;
+        x |= (std::uint64_t(v[2]) & 63) << 46;
+        x |= (std::uint64_t(v[3]) & 63) << 40;
+        x |= (std::uint64_t(v[4]) & 63) << 34;
+        x |= (std::uint64_t(v[5]) & 63) << 28;
+        x |= (std::uint64_t(v[6]) & 63) << 22;
+        x |= (std::uint64_t(v[7]) & 63) << 16;
+        x |= (std::uint64_t(v[8]) & 63) << 10;
+        x |= (std::uint64_t(v[9]) & 63) << 4;
+        x |= (std::uint64_t(v[10]) >> 2) & 0x0Fu; // recover the last 4 bits
+
+        return x;
+    }
+
     // ========== Brotli + Base64 ==========
     std::string brotli_b64_compress(std::string_view input, int quality, int window)
     {
@@ -270,7 +340,8 @@ namespace Compression {
         BROTLI_BOOL ok = BrotliEncoderCompress(
             quality,                               // 0..11
             window,                                // 10..24
-            BROTLI_MODE_GENERIC,
+            BROTLI_MODE_TEXT,
+            //BROTLI_MODE_GENERIC,
             input.size(),
             reinterpret_cast<const uint8_t*>(input.data()),
             &out_size,

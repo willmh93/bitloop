@@ -15,6 +15,21 @@ set(BL_SIM_CMAKE "${CMAKE_CURRENT_LIST_DIR}/cmake/bitloopSimulation.cmake")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${BL_SIM_CMAKE}")
 include(${BL_SIM_CMAKE})
 
+# ----------------------------
+# Discovery mode: provide bitloop::bitloop and stop here
+# ----------------------------
+if (BITLOOP_DISCOVERY)
+  if (NOT TARGET bitloop::bitloop)
+    add_library(bitloop INTERFACE)
+    add_library(bitloop::bitloop ALIAS bitloop)
+
+    # Match your normal public include root ($<BUILD_INTERFACE:.../include>)
+    target_include_directories(bitloop INTERFACE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
+    )
+  endif()
+  return()
+endif()
 
 # ──────────────────────────────────────────────────────────────────
 # ──────────────────────  Framework Sources  ───────────────────────
@@ -153,7 +168,8 @@ target_include_directories(bitloop PRIVATE ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 target_include_directories(bitloop PRIVATE ${GCEM_INCLUDE_DIRS})
 
 if (NOT EMSCRIPTEN)
-    message(STATUS "Non-web build - permitting FFmpeg")
+    #message(STATUS "Non-web build - permitting FFmpeg")
+    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "" FORCE)
     find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil swscale)
 
     # BITLOOP_WITH_FFMPEG
@@ -172,11 +188,10 @@ if (NOT EMSCRIPTEN)
        set(BITLOOP_WITH_FFMPEG_X265 FALSE)
      endif()
 
-    message(STATUS "BITLOOP_WITH_FFMPEG:        ${BITLOOP_WITH_FFMPEG}")
-    message(STATUS "BITLOOP_WITH_FFMPEG_X265:   ${BITLOOP_WITH_FFMPEG_X265}")
+    #message(STATUS "BITLOOP_WITH_FFMPEG:        ${BITLOOP_WITH_FFMPEG}")
+    #message(STATUS "BITLOOP_WITH_FFMPEG_X265:   ${BITLOOP_WITH_FFMPEG_X265}")
 
     if(FFMPEG_FOUND)
-        message(STATUS "FFmpeg found")
         target_link_libraries(bitloop PUBLIC ${FFMPEG_LIBRARIES})
         set(BITLOOP_WITH_FFMPEG ON)
     endif()
@@ -218,7 +233,7 @@ install(EXPORT bitloopTargets
 )
 
 # ──────── Install framework main entry‐point template ────────
-message(STATUS "Creating: ${CMAKE_CURRENT_SOURCE_DIR}/src/bitloop_main.cpp")
+#message(STATUS "Creating: ${CMAKE_CURRENT_SOURCE_DIR}/src/bitloop_main.cpp")
 install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/bitloop_main.cpp"
     DESTINATION share/bitloop/src

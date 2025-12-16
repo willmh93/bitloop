@@ -64,26 +64,6 @@ function(_apply_common_settings _TARGET)
 	endif()
 endfunction()
 
-	#elseif(EMSCRIPTEN)
-	#	# Where your outputs go for this preset
-	#	set(APP_DATA_DIR "$<IF:$<BOOL:${CMAKE_CONFIGURATION_TYPES}>, ${CMAKE_BINARY_DIR}/$<CONFIG>/app/data, ${CMAKE_BINARY_DIR}/app/data>")
-	#
-	#	# Add only if the folder exists at link time; pass raw to emcc with SHELL:
-	#	set(APP_DATA_DIR_SC "${CMAKE_BINARY_DIR}/app/data")                  # single-config
-	#	set(APP_DATA_DIR_MC "${CMAKE_BINARY_DIR}/$<CONFIG>/app/data")        # multi-config
-	#
-	#	target_link_options(${_TARGET} PRIVATE
-	#	  "$<$<OR:$<PATH_EXISTS:${APP_DATA_DIR_MC}>,$<PATH_EXISTS:${APP_DATA_DIR_SC}>>:
-	#		SHELL:--preload-file $<IF:$<PATH_EXISTS:${APP_DATA_DIR_MC}>,${APP_DATA_DIR_MC},${APP_DATA_DIR_SC}>@/data
-	#	  >"
-	#	)
-	#
-	#	target_link_options(${_TARGET} PRIVATE "SHELL:--shell-file=${BL_COMMON}/static/shell.html")
-	#
-	#	set_target_properties(${_TARGET} PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
-	#	_optimize_wasm(${_TARGET})
-	#	endif()
-
 function(_apply_main_settings _TARGET)
 	if (MSVC)
 		set_target_properties(${_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -238,7 +218,20 @@ endfunction()
 # ──────────────────────────────────────────────────────────
 
 function(bitloop_new_project sim_name)
-	
+	if (BITLOOP_DISCOVERY)
+		# Record this project's manifest (only if this directory is actually configured)
+		if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg.json")
+
+			get_property(_m GLOBAL PROPERTY BL_CHILD_MANIFESTS)
+			if (NOT _m)
+				set(_m "")
+			endif()
+			list(APPEND _m "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg.json")
+			list(REMOVE_DUPLICATES _m)
+			set_property(GLOBAL PROPERTY BL_CHILD_MANIFESTS "${_m}")
+		endif()
+	endif()
+
 	# collect the other args as source files
 	set(SIM_SOURCES ${ARGN})
 
@@ -322,13 +315,14 @@ function(bitloop_new_project sim_name)
 		endif()
 	endif()
 
-	# If root project, start printing project tree digram
-	if (IS_ROOT_PROJECT)
-		message(STATUS "")
-		message(STATUS "────────── Project Tree ──────────")
-		message(STATUS "[${sim_name}]")
-	else()
-		msg(STATUS "[${sim_name}]")
+	# If root project, start printing project tree diagram
+	if (NOT BITLOOP_DISCOVERY)
+		if (IS_ROOT_PROJECT)
+			message(STATUS "────────── Project Tree ──────────")
+			message(STATUS "[${sim_name}]")
+		else()
+			msg(STATUS "[${sim_name}]")
+		endif()
 	endif()
 
 	if (NOT _type STREQUAL "INTERFACE")
@@ -393,12 +387,31 @@ function(bitloop_add_dependency _TARGET _SIM_DIR)
 
 	# Grab simulation name from path
 	get_filename_component(sim_name "${_SIM_DIR}" NAME)
+	
+	# Resolve the subproject source dir robustly
+	get_filename_component(_sim_abs "${_SIM_DIR}" REALPATH BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+	set(_child_manifest "${_sim_abs}/vcpkg.json")
+	set(_child_config   "${_sim_abs}/vcpkg-configuration.json")
 
 	if(NOT TARGET ${sim_name}::${sim_name})
+		# Register configure dependencies so edits to child manifests/config trigger reconfigure
+		if(EXISTS "${_child_manifest}")
+			set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_child_manifest}")
+		endif()
+		if(EXISTS "${_child_config}")
+			set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_child_config}")
+		endif()
+
 		# Only called once, includes dependency project, which in turn calls:  bitloop_add_project()
 		msg_indent_push()
 		add_subdirectory(${_SIM_DIR} "${CMAKE_BINARY_DIR}/${sim_name}_build")
 		msg_indent_pop()
+	endif()
+
+	# In discovery we only care about building the project tree + manifest list.
+	# We do NOT need link interfaces.
+	if (BITLOOP_DISCOVERY)
+		return()
 	endif()
 
 	# Link dependency into our target
@@ -411,6 +424,35 @@ endfunction()
 
 # Auto-generated finalization step; adds includes to autogen header and bundles data into executable
 macro(bitloop_finalize)
+# -------------------------
+	# Discovery mode: write out discovered manifests (root only) and stop processing
+	# -------------------------
+	if (BITLOOP_DISCOVERY)
+		get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)
+
+		if (CMAKE_CURRENT_SOURCE_DIR STREQUAL BL_ROOT_PROJECT)
+			# Write a tiny cmake file the toolchain can include
+			if (DEFINED BITLOOP_DISCOVERY_OUT AND NOT BITLOOP_DISCOVERY_OUT STREQUAL "")
+				get_property(_m GLOBAL PROPERTY BL_CHILD_MANIFESTS)
+
+				if (NOT _m)
+					set(_m "")
+				endif()
+
+				file(WRITE  "${BITLOOP_DISCOVERY_OUT}" "set(BL_CHILD_MANIFESTS\n")
+
+				foreach(_p IN LISTS _m)
+					file(APPEND "${BITLOOP_DISCOVERY_OUT}" "  \"${_p}\"\n")
+				endforeach()
+
+				file(APPEND "${BITLOOP_DISCOVERY_OUT}" ")\n")
+			endif()
+		endif()
+
+		# Critical: stop processing the remainder of this CMakeLists.txt
+		return()
+	endif()
+
 	get_property(_TARGET DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BL_TARGET_PROJECT)
 
 	get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)

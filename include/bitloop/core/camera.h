@@ -418,7 +418,7 @@ struct CameraNavigator
     std::vector<FingerInfo> fingers;
 
     // Clamp the relative zoom range (relative to the reference)
-    void restrictRelativeZoomRange(f64 min, f64 max);
+    void restrictRelativeZoomRange(f128 min, f128 max);
 
     void setDirectCameraPanning(bool b) { direct_cam_panning = b; }
     void panBegin(int _x, int _y, f64 touch_dist, f64 touch_angle);

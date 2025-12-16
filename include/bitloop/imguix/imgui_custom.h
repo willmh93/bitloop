@@ -11,6 +11,7 @@ constexpr double pi = std::numbers::pi;
 #define IMGUI_DEFINE_MATH_OPERATORS
 
 #include <bitloop/core/project.h>
+#include <bitloop/core/image_loader.h>
 
 #include <imgui_internal.h>
 #include <imgui_freetype.h>
@@ -31,10 +32,6 @@ constexpr double pi = std::numbers::pi;
 #include "glad/glad.h"
 #endif
 
-// Image load helpers
-bool LoadPixelsRGBA(const char* path, int* outW, int* outH, std::vector<unsigned char>& outPixels);
-GLuint CreateGLTextureRGBA8(const void* pixels, int w, int h);
-void DestroyTexture(GLuint tex);
 
 inline ImTextureID ToImTextureID(GLuint tex)
 {
@@ -275,7 +272,7 @@ namespace ImGui
     // CollapsingHeaderBox / EndCollapsingHeaderBox
     // -------------------------
 
-    inline bool CollapsingHeaderBox(const char* id, bool open_by_default, float pad = bl::scale_size(10.0f), float extra = 3.0f)
+    inline bool CollapsingHeaderBox(const char* id, bool open_by_default=false, float pad = bl::scale_size(10.0f), float extra = 3.0f)
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         DlCtx& c = box_dlctx(dl);
@@ -383,7 +380,9 @@ namespace ImGui
         c.depth++;
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
         const bool open = ImGui::BeginTabItem(id);
+
         ImGui::PopStyleVar();
 
         const ImVec2 hmin = ImGui::GetItemRectMin();
@@ -594,6 +593,108 @@ namespace ImGui
         DlCtx& c = box_dlctx(st.dl);
         c.depth--;
         box_maybe_merge(st.dl, c);
+    }
+
+    inline void ScrollWhenDraggingOnVoid(const ImVec2& delta)
+    {
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        ImGuiWindow* window = g.CurrentWindow;
+        bool hovered = false;
+        bool held = false;
+        ImGuiID id = window->GetID("##scrolldraggingoverlay");
+        ImGui::KeepAliveID(id);
+
+        static float vy = 0.0;
+        static float scroll_amount = 0.0;
+
+        //if (g.HoveredId == 0) // If nothing hovered so far in the frame (not same as IsAnyItemHovered()!)
+        ImGui::ButtonBehavior(window->Rect(), id, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
+        //if (held && delta.x != 0.0f)
+        //    ImGui::SetScrollX(window, window->Scroll.x + delta.x);
+
+        if (held) vy = delta.y;
+        scroll_amount = vy;
+        vy *= 0.93f;
+
+        if (/*held && */scroll_amount != 0.0f)
+            ImGui::SetScrollY(window, window->Scroll.y + scroll_amount);
+    }
+
+    inline void SwipeScrollWindow(float decay = 0.93f, float drag_threshold = bl::scale_size(20.0f))
+    {
+        if (!bl::platform()->is_mobile())
+            return;
+
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        ImGuiIO& io = g.IO;
+        ImGuiWindow* window = g.CurrentWindow;
+        if (!window) return;
+
+        // State - TODO: global for now, make per-window
+        static bool   scrolling = false;
+        static ImVec2 press_pos = ImVec2(0, 0);
+        static float  vy = 0.0f;
+
+        const bool hovered_anyhow = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        const bool down = io.MouseDown[0];
+        const bool up = !down;
+
+        // Begin potential gesture
+        if (!scrolling && hovered_anyhow && ImGui::IsMouseClicked(0))
+        {
+            press_pos = io.MousePos;
+            vy = 0.0f;
+        }
+
+        // Decide when to take over
+        if (!scrolling && down && hovered_anyhow)
+        {
+            const float dy = io.MousePos.y - press_pos.y;
+            if (fabsf(dy) >= drag_threshold)
+            {
+                // Take over: cancel the currently active item so it won't trigger on release
+                if (g.ActiveId != 0)
+                    ImGui::ClearActiveID();
+
+                // Optionally set ourselves as active (not strictly required but keeps ID bookkeeping tidy)
+                ImGuiID id = window->GetID("##swipe_scroll_captor");
+                ImGui::SetActiveID(id, window);
+
+                scrolling = true;
+            }
+        }
+
+        // While dragging, update velocity and scroll
+        if (scrolling && down)
+        {
+            vy = -io.MouseDelta.y; // swipe up -> scroll down; adjust sign to taste
+            if (vy != 0.0f)
+                ImGui::SetScrollY(window, window->Scroll.y + vy);
+        }
+
+        // On release, keep inertia; while idle, decay velocity
+        if (scrolling && up)
+        {
+            // free active id if we grabbed it
+            if (g.ActiveId != 0 && g.ActiveId == window->GetID("##swipe_scroll_captor"))
+                ImGui::ClearActiveID();
+
+            // keep scrolling with decay until velocity dies
+            if (fabsf(vy) < 0.01f)
+            {
+                vy = 0.0f;
+                scrolling = false;
+            }
+        }
+
+        // Apply inertial decay when not dragging
+        if (vy != 0.0f && !down)
+        {
+            ImGui::SetScrollY(window, window->Scroll.y + vy);
+            vy *= decay;
+            if (fabsf(vy) < 0.01f)
+                vy = 0.0f;
+        }
     }
 }
 

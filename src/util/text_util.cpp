@@ -2,6 +2,7 @@
 #include <unordered_set>
 #include <array>
 
+
 std::ostream& operator<<(std::ostream& os, const FiniteDouble& fd) {
     return os << fd.value;
 }
@@ -329,6 +330,31 @@ std::string format_human_u64(uint64_t value, int sig_figs)
         return num;
 
     return num + " " + UNITS[idx].name;
+}
+
+std::vector<std::string_view> split(std::string_view s, char delim, bool skip_empty)
+{
+    std::vector<std::string_view> out;
+    std::size_t pos = 0;
+
+    while (true)
+    {
+        const std::size_t next = s.find(delim, pos);
+
+        std::string_view tok = (next == std::string_view::npos)
+            ? s.substr(pos)
+            : s.substr(pos, next - pos);
+
+        if (!skip_empty || !tok.empty())
+            out.push_back(tok);
+
+        if (next == std::string_view::npos)
+            break;
+
+        pos = next + 1;
+    }
+
+    return out;
 }
 
 } // End TextUtil NS

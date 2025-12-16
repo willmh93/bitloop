@@ -251,7 +251,7 @@ void CameraInfo::populateUI(DRect restrict_world_rect)
     return;
 }
 
-void CameraNavigator::restrictRelativeZoomRange(double min, double max)
+void CameraNavigator::restrictRelativeZoomRange(f128 min, f128 max)
 {
     min_zoom = min;
     max_zoom = max;

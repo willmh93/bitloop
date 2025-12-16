@@ -3,13 +3,17 @@
 #include <iomanip>
 #include <string>
 #include <string_view>
+#include <vector>
 #include <sstream>
 
 
 BL_BEGIN_NS;
 
+typedef std::vector<std::string_view> string_view_list;
+
 namespace TextUtil
 {
+
     // Helper to convert floating-point number to a clean formatted string
     // - with optional snapping / trim leading/trailing 0's
     template<typename T>
@@ -74,6 +78,8 @@ namespace TextUtil
     bool contains_only(const std::string& s, const std::string& allowed);
 
     std::string format_human_u64(uint64_t value, int sig_figs = 5);
+
+    std::vector<std::string_view> split(std::string_view s, char delim, bool skip_empty = false);
 }
 
 BL_END_NS;
