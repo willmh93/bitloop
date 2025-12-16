@@ -105,22 +105,44 @@ double SceneBase::fpsFactor() const
     }
 }
 
+bool SceneBase::isSnapshotting() const
+{
+    bool ret = main_window()->isSnapshotting();
+    if (ret) initiating_snapshot = false;
+    return ret || initiating_snapshot;
+}
+
 bool SceneBase::isRecording() const
 {
-    return main_window()->getRecordManager()->isRecording();
+    bool ret = main_window()->getRecordManager()->isRecording();
+    if (ret) initiating_recording = false;
+    return ret || initiating_recording;
 }
 
-void SceneBase::queueBeginRecording()
+bool SceneBase::isCapturing() const
+{
+    return isSnapshotting() || isRecording();
+}
+
+void SceneBase::beginSnapshot(const SnapshotPresetList& presets, const char* relative_path)
+{
+    main_window()->queueBeginSnapshot(presets, relative_path);
+    initiating_snapshot = true;
+}
+
+void SceneBase::beginRecording()
 {
     main_window()->queueBeginRecording();
+    initiating_recording = true;
 }
 
-void SceneBase::queueEndRecording()
+void SceneBase::endRecording()
 {
     main_window()->queueEndRecording();
+    initiating_recording = false;
 }
 
-void SceneBase::captureFrame(bool b)
+void SceneBase::permitCaptureFrame(bool b)
 {
     main_window()->captureFrame(b);
 }

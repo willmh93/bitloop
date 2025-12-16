@@ -20,8 +20,22 @@ constexpr u32 pack_rgba(u8 r, u8 g, u8 b, u8 a = 255) {
     #endif
 }
 
+constexpr std::uint8_t hex_nibble(char c)
+{
+    return (c >= '0' && c <= '9') ? std::uint8_t(c - '0') :
+        (c >= 'a' && c <= 'f') ? std::uint8_t(c - 'a' + 10) :
+        (c >= 'A' && c <= 'F') ? std::uint8_t(c - 'A' + 10) :
+        std::uint8_t(0);
+}
+
+constexpr std::uint8_t parse_byte(std::string_view s, std::size_t i)
+{
+    return std::uint8_t((hex_nibble(s[i]) << 4) | hex_nibble(s[i + 1]));
+}
+
 struct Color
 {
+
     // Core
     static constexpr u32 transparent = pack_rgba(0, 0, 0, 0);
     static constexpr u32 black = pack_rgba(0, 0, 0);
@@ -87,6 +101,16 @@ struct Color
     constexpr Color(const float(&c)[3]) : r(int(c[0] * 255.f)), g(int(c[1] * 255.f)), b(int(c[2] * 255.f)), a(255) {}
     constexpr Color(const float(&c)[4]) : r(int(c[0] * 255.f)), g(int(c[1] * 255.f)), b(int(c[2] * 255.f)), a(int(c[3] * 255.f)) {}
     constexpr Color(u8 _r, u8 _g, u8 _b, u8 _a = 255) : r(_r), g(_g), b(_b), a(_a) {}
+    constexpr Color(std::string_view hex) : r(0), g(0), b(0), a(255)
+    {
+        if (!hex.empty() && hex.front() == '#') hex.remove_prefix(1);
+        if (hex.size() != 6 && hex.size() != 8) return;
+
+        r = parse_byte(hex, 0);
+        g = parse_byte(hex, 2);
+        b = parse_byte(hex, 4);
+        a = (hex.size() == 8) ? parse_byte(hex, 6) : std::uint8_t(255);
+    }
 
     constexpr Color& operator =(const Color& rhs) { rgba = rhs.rgba; return *this; }
     [[nodiscard]] constexpr bool operator ==(const Color& rhs) const { return rgba == rhs.rgba; }

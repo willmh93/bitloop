@@ -21,7 +21,8 @@ void {SIM_NAME}_Project::UI::sidebar()
 void {SIM_NAME}_Project::projectPrepare(Layout& layout)
 {
     /// create multiple instance of a single Scene, mount to separate viewports
-    layout << create<{SIM_NAME}_Scene>(viewport_count);
+    for (int i = 0; i < viewport_count; i++)
+        layout << create<{SIM_NAME}_Scene>(viewport_count);
 
     /// or create a single Scene instance and view on multiple Viewports
     //auto* scene = create<{SIM_NAME}_Scene>();
@@ -39,11 +40,12 @@ void {SIM_NAME}_Scene::UI::sidebar()
     ///   - an operator==(const T&) overload to avoid unnecessary syncing (use hashing if possible)
     ///   - an assignment overload and copy constructor
 
-    if (ImGui::Section("View", true))
+    if (ImGui::CollapsingHeaderBox("View", true))
     {
         // imgui camera controls
         bl_scoped(camera);
         camera.populateUI();
+        ImGui::EndCollapsingHeaderBox();
     }
 
     /// example: Scene variable input

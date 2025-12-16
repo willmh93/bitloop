@@ -12,6 +12,13 @@
 #include <cstdint>
 #include <cstring>
 
+enum ImSplineFlags_
+{
+	ImSplineFlags_None,
+	ImSplineFlags_InvertY
+};
+typedef int ImSplineFlags;
+
 enum struct SplineSerializationMode
 {
 	COMPRESS_BASE64,
@@ -323,7 +330,8 @@ namespace ImSpline
 {
 	// Forward declare
 	class Spline;
-	bool SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
+	bool BeginSplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
+	void EndSplineEditor();
 
 	// "Spline" object manages knots/handles (from external "points" float array)
 	// generates spline "path", holds editor states, and provides efficient value 
@@ -1523,7 +1531,8 @@ namespace ImSpline
 			}
 		}
 
-		friend bool SplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size);
+		friend bool BeginSplineEditor(const char* label, Spline* spline, ImRect* grid_r, float max_editor_size, ImSplineFlags _flags);
+		friend void EndSplineEditor();
 	};
 
 
@@ -1534,9 +1543,77 @@ namespace ImSpline
 	//	return ret;
 	//}
 
-	inline bool SplineEditor(const char* label, Spline* spline, ImRect* view_rect, float max_editor_size=300.0f)
+	
+
+	static inline ImColor green(0.0f, 1.0f, 0.0f, 1.0);
+	static inline ImColor pink(1.0f, 0.0f, 0.75f, 1.0);
+	static inline ImColor red_dim(1.0f, 0.0f, 0.0f, 0.5);
+	static inline ImColor red(1.0f, 0.0f, 0.0f, 1.0);
+	static inline ImColor blue(0.2f, 0.1f, 1.0f, 1.0);
+	static inline ImColor cyan_inactive(0.00f, 0.5f, 1.0f, 1.0f);
+	static inline ImColor cyan_active(0.0f, 0.75f, 1.0f, 1.0f);
+	static inline ImColor grid_color(1.0f, 1.0f, 1.0f, 0.1f);
+	static inline ImColor bright_grid_color(1.0f, 1.0f, 1.0f, 0.3f);
+	static inline ImColor white(1.0f, 1.0f, 1.0f, 1.0f);
+	static inline ImColor white_faded(1.0f, 1.0f, 1.0f, 0.4f);
+	static inline ImColor light_gray(0.7f, 0.7f, 0.7f, 1.0f);
+
+	static inline ImColor spline_path_color = white_faded;// GetColorU32(ImGuiCol_SliderGrab, 1);
+	static inline ImColor handle_line_color = white;
+	static inline ImColor handle_grabber_color = white;
+	static inline ImColor handle_grabber_pressed_color = light_gray;
+
+	using GraphTransformFn = ImVec2(*)(ImVec2);
+	static inline GraphTransformFn fromGraph = nullptr;
+	static inline GraphTransformFn toGraph = nullptr;
+
+	static inline Spline* spline = nullptr;
+	static inline ImRect* view_rect = nullptr;
+	static inline ImRect bb{};
+	static inline const char* label = nullptr;
+	static inline bool active = false;
+	static inline bool spline_changed = false;
+	static inline ImSplineFlags flags = 0;
+
+	inline ImVec2 fromGraphNegY(ImVec2 p)
+	{
+		ImVec2 r = (p - view_rect->Min) / (view_rect->Max - view_rect->Min);
+		return bb.Min + (r * bb.GetSize());
+	};
+	inline ImVec2 toGraphNegY(ImVec2 p)
+	{
+		ImVec2 r = (p - bb.Min) / (bb.Max - bb.Min);
+		return view_rect->Min + (r * view_rect->GetSize());
+	};
+	inline ImVec2 fromGraphY(ImVec2 p)
+	{
+		ImVec2 r = (p - view_rect->Min) / (view_rect->Max - view_rect->Min);
+		r.y = 1.0f - r.y;
+		return bb.Min + (r * bb.GetSize());
+	}
+	inline ImVec2 toGraphY(ImVec2 p)
+	{
+		ImVec2 r = (p - bb.Min) / (bb.Max - bb.Min);
+		r.y = 1.0f - r.y;
+		return view_rect->Min + (r * view_rect->GetSize());
+	}
+
+	inline void snap(ImVec2& p, float step)
+	{
+		p.x = floor(p.x / step) * step;
+		p.y = floor(p.y / step) * step;
+	};
+
+	inline bool BeginSplineEditor(const char* _label, Spline* _spline, ImRect* _view_rect, float max_editor_size = 300.0f, ImSplineFlags _flags=0)
 	{
 		using namespace ImGui;
+
+		label = _label;
+		spline = _spline;
+		view_rect = _view_rect;
+		flags = _flags;
+
+		const bool invert_y = (_flags & ImSplineFlags_InvertY) != 0;
 
 		//const ImGuiStyle& Style = GetStyle();
 		const ImGuiIO& IO = GetIO();
@@ -1551,10 +1628,10 @@ namespace ImSpline
 			dim = max_editor_size;
 
 		ImVec2 Canvas(dim, dim);
-		ImRect bb(Window->DC.CursorPos, Window->DC.CursorPos + Canvas);
+		bb = ImRect(Window->DC.CursorPos, Window->DC.CursorPos + Canvas);
 		ItemSize(bb);
 		if (!ItemAdd(bb, 0))
-			return 0;
+			return false;
 
 
 
@@ -1564,10 +1641,10 @@ namespace ImSpline
 
 		ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
 		ImVec4 dim_bg = ImVec4(bg.x * 0.85f, bg.y * 0.85f, bg.z * 0.85f, bg.w);
-		
+
 		const ImGuiID id = Window->GetID(label);
 
-		bool hovered, active;
+		bool hovered;
 		ButtonBehavior(bb, id, &hovered, &active, ImGuiButtonFlags_MouseButtonLeft);
 
 		active |= (spline->dragging_index >= 0);
@@ -1575,50 +1652,20 @@ namespace ImSpline
 		// draw with Window->ClipRect automatically clipping anything outside the window
 		RenderFrame(bb.Min, bb.Max, GetColorU32(dim_bg));
 
-		ImColor green(0.0f, 1.0f, 0.0f, 1.0);
-		ImColor pink(1.0f, 0.0f, 0.75f, 1.0);
-		ImColor red_dim(1.0f, 0.0f, 0.0f, 0.5);
-		ImColor red(1.0f, 0.0f, 0.0f, 1.0);
-		ImColor blue(0.2f, 0.1f, 1.0f, 1.0);
-		ImColor cyan_inactive(0.00f, 0.5f, 1.0f, 1.0f);
-		ImColor cyan_active(0.0f, 0.75f, 1.0f, 1.0f);
-		ImColor grid_color(1.0f, 1.0f, 1.0f, 0.1f);
-		ImColor bright_grid_color(1.0f, 1.0f, 1.0f, 0.3f);
-		ImColor white(1.0f, 1.0f, 1.0f, 1.0f);
-		ImColor white_faded(1.0f, 1.0f, 1.0f, 0.4f);
-		ImColor light_gray(0.7f, 0.7f, 0.7f, 1.0f);
+		
+		spline_changed = false;
 
-		ImColor spline_path_color = white_faded;// GetColorU32(ImGuiCol_SliderGrab, 1);
-		ImColor handle_line_color = white;
-		ImColor handle_grabber_color = white;
-		ImColor handle_grabber_pressed_color = light_gray;
+		fromGraph = (_flags & ImSplineFlags_InvertY) ? &fromGraphY : &fromGraphNegY;
+		toGraph = (_flags & ImSplineFlags_InvertY) ? &toGraphY : &toGraphNegY;
 
 		//float* points = spline->points;
 		int numPoints = spline->point_arr.Size;
 
 		ImVec2 pointer = IO.MousePos;
-		bool spline_changed = false;
-
-		auto fromGraph = [&bb, view_rect](ImVec2 p)
-		{
-			ImVec2 r = (p - view_rect->Min) / (view_rect->Max - view_rect->Min);
-			return bb.Min + (r * bb.GetSize());
-		};
-		auto toGraph = [&bb, view_rect](ImVec2 p)
-		{
-			ImVec2 r = (p - bb.Min) / (bb.Max - bb.Min);
-			return view_rect->Min + (r * view_rect->GetSize());
-		};
-		auto snap = [](ImVec2& p, float step)
-		{
-			p.x = floor(p.x / step) * step;
-			p.y = floor(p.y / step) * step;
-		};
-
 		ImVec2 graph_mouse = toGraph(pointer);
 
 		// Handle knot/handle dragging
-		float handle_size = ImGui::GetFontSize() / 4.0f;
+		//float handle_size = ImGui::GetFontSize() / 4.0f;
 		//float handle_size_sq = handle_size * handle_size;
 
 		// Cast float* to ImVec2*
@@ -1659,7 +1706,13 @@ namespace ImSpline
 			if (spline->panning)
 			{
 				ImVec2 pixel_offset = (pointer - spline->pan_mouse_down_pos);
-				ImVec2 graph_offset = pixel_offset * (view_rect->Max - view_rect->Min) / bb.GetSize();
+				//ImVec2 graph_offset = pixel_offset * (view_rect->Max - view_rect->Min) / bb.GetSize();
+
+				ImVec2 view_span = (view_rect->Max - view_rect->Min);
+				ImVec2 bb_size = bb.GetSize();
+				ImVec2 graph_offset = pixel_offset * view_span / bb_size;
+				if (invert_y) graph_offset.y = -graph_offset.y;
+
 				view_rect->Min = spline->pan_mouse_down_vr.Min - graph_offset;
 				view_rect->Max = spline->pan_mouse_down_vr.Max - graph_offset;
 			}
@@ -1791,7 +1844,7 @@ namespace ImSpline
 			spline->onChanged();
 		}
 
-		ImVector<ImVec2>& path = spline->path;
+		//ImVector<ImVec2>& path = spline->path;
 		ImVec2 clip_min = bb.Min;
 		ImVec2 clip_max = bb.Max;
 		DrawList->PushClipRect(clip_min, clip_max, true);
@@ -1799,8 +1852,8 @@ namespace ImSpline
 		// Draw grid
 		//ImGui::GetFont()->Scale = bb.GetWidth() / 200.0f;
 		float old_font_scale = GetCurrentWindow()->FontWindowScale;
-		ImGui::SetWindowFontScale(std::min(old_font_scale, std::max(0.5f*old_font_scale, old_font_scale*(bb.GetWidth() / 200.0f))));
-		
+		ImGui::SetWindowFontScale(std::min(old_font_scale, std::max(0.5f * old_font_scale, old_font_scale * (bb.GetWidth() / 200.0f))));
+
 		auto roundStep = [](float ideal_step)
 		{
 			float abs_ideal_step = fabs(ideal_step);
@@ -1818,13 +1871,15 @@ namespace ImSpline
 			return niceMultiplier * factor * (ideal_step < 0.0f ? -1.0f : 1.0f);
 		};
 
-		float step_x = roundStep(view_rect->GetWidth() / (bb.GetWidth()/100.0f));
-		float step_y = roundStep(view_rect->GetHeight() / (bb.GetHeight()/100.0f));
+		float step_x = roundStep(view_rect->GetWidth() / (bb.GetWidth() / 100.0f));
+		float step_y = roundStep(view_rect->GetHeight() / (bb.GetHeight() / 100.0f));
 		float grid_x = floor(view_rect->Min.x / step_x) * step_x;
 		float grid_y = floor(view_rect->Min.y / step_y) * step_y;
 		int grid_count_x = 2 + static_cast<int>(floor(fabs(view_rect->GetWidth()) / fabs(step_x)));
 		int grid_count_y = 2 + static_cast<int>(floor(fabs(view_rect->GetHeight()) / fabs(step_y)));
 		float eps = 1e-5f;
+		float y_denom = (view_rect->Max.y - view_rect->Min.y);
+
 		for (int i = 0; i < grid_count_x; i++)
 		{
 			bool is_origin = fabs(grid_x) < eps;
@@ -1849,9 +1904,15 @@ namespace ImSpline
 			bool is_origin = fabs(grid_y) < eps;
 			ImColor color = is_origin ? ImColor(bright_grid_color) : grid_color;
 
-			float py = bb.Min.y + ((grid_y - view_rect->Min.y) / (view_rect->Max.y - view_rect->Min.y) * bb.GetHeight());
+			//float py = bb.Min.y + ((grid_y - view_rect->Min.y) / (view_rect->Max.y - view_rect->Min.y) * bb.GetHeight());
+			//py = floorf(py);
+
+			float t = (grid_y - view_rect->Min.y) / y_denom; // _ChatGPT_ 0..1 in normal mode
+			if (invert_y) t = 1.0f - t;                      // _ChatGPT_ flip for Y-up
+
+			float py = bb.Min.y + t * bb.GetHeight();
 			py = floorf(py);
-			
+
 			DrawList->AddLine(ImVec2(bb.Min.x, py), ImVec2(bb.Max.x, py), color, 1);
 
 			if (py > bb.Min.y + 10)
@@ -1866,6 +1927,15 @@ namespace ImSpline
 
 		ImGui::SetWindowFontScale(old_font_scale);
 
+		return true;// spline_changed;
+	}
+
+	inline void EndSplineEditor()
+	{
+		using namespace ImGui;
+
+		ImDrawList* DrawList = GetWindowDrawList();
+
 		if (spline->equation)
 		{
 			float eq_inc = view_rect->GetWidth() / 100.0f;
@@ -1879,6 +1949,16 @@ namespace ImSpline
 		}
 
 		//float spline_thickness = ImGui::GetFontSize() / 10.0f;
+		const ImGuiIO& IO = GetIO();
+		ImGuiWindow* Window = GetCurrentWindow();
+		const ImGuiID id = Window->GetID(label);
+
+		ImVec2* point_arr = spline->pointVecArray();
+		ImVector<ImVec2>& path = spline->path;
+		int numPoints = spline->point_arr.Size;
+		float handle_size = ImGui::GetFontSize() / 4.0f;
+		ImVec2 pointer = IO.MousePos;
+		ImVec2 graph_mouse = toGraph(pointer);
 
 		// Draw Spline
 		ImVector<ImVec2> spline_path;
@@ -1925,52 +2005,63 @@ namespace ImSpline
 			if (spline_changed)
 				MarkItemEdited(id);
 		}
-
-		return spline_changed;
-		return false;
 	}
 
-	inline bool SplineEditorPair(
-		const char* label,
-		Spline* spline1,
-		Spline* spline2,
-		ImRect* view_rect,
-		float max_graph_width = 500.0f,
-		float min_graph_wrap_width = 150.0f)
+	inline void PlotPoint(float x, float y, float r=3.0f, ImColor col=red)
 	{
-		UNUSED(label);
-		UNUSED(spline1);
-		UNUSED(spline2);
-		UNUSED(view_rect);
-		UNUSED(max_graph_width);
-		UNUSED(min_graph_wrap_width);
-
-
-		float avail_width = ImGui::GetContentRegionAvail().x;
-		float spacing = ImGui::GetStyle().ItemSpacing.x;
-
-		// Clamp the available width to max_graph_width if necessary.
-		float clamped_width = (avail_width > max_graph_width) ? max_graph_width : avail_width;
-		float graph_size = (clamped_width - spacing) / 2.0f;
-
-
-		char label1[128], label2[128];
-		snprintf(label1, sizeof(label1), "%s##1", label);
-		snprintf(label2, sizeof(label2), "%s##2", label);
-
-		if (graph_size < min_graph_wrap_width)
-		{
-			bool ret1 = SplineEditor(label1, spline1, view_rect, avail_width);
-			bool ret2 = SplineEditor(label2, spline2, view_rect, avail_width);
-			return ret1 || ret2;
-		}
-		else
-		{
-			bool ret1 = SplineEditor(label1, spline1, view_rect, graph_size);
-			ImGui::SameLine(0, spacing);
-			bool ret2 = SplineEditor(label2, spline2, view_rect, graph_size);
-			return ret1 || ret2;
-		}
-		return false;
+		using namespace ImGui;
+		ImDrawList* DrawList = GetWindowDrawList();
+		DrawList->AddCircleFilled(fromGraph(ImVec2(x,y)), r, col);
 	}
+
+	inline bool SplineEditor(const char* _label, Spline* _spline, ImRect* _view_rect, float max_editor_size = 300.0f, ImSplineFlags _flags = 0)
+	{
+		bool changed = BeginSplineEditor(_label, _spline, _view_rect, max_editor_size, _flags);
+		EndSplineEditor();
+		return changed;
+	}
+
+	//inline bool SplineEditorPair(
+	//	const char* label,
+	//	Spline* spline1,
+	//	Spline* spline2,
+	//	ImRect* view_rect,
+	//	float max_graph_width = 500.0f,
+	//	float min_graph_wrap_width = 150.0f)
+	//{
+	//	UNUSED(label);
+	//	UNUSED(spline1);
+	//	UNUSED(spline2);
+	//	UNUSED(view_rect);
+	//	UNUSED(max_graph_width);
+	//	UNUSED(min_graph_wrap_width);
+	//
+	//
+	//	float avail_width = ImGui::GetContentRegionAvail().x;
+	//	float spacing = ImGui::GetStyle().ItemSpacing.x;
+	//
+	//	// Clamp the available width to max_graph_width if necessary.
+	//	float clamped_width = (avail_width > max_graph_width) ? max_graph_width : avail_width;
+	//	float graph_size = (clamped_width - spacing) / 2.0f;
+	//
+	//
+	//	char label1[128], label2[128];
+	//	snprintf(label1, sizeof(label1), "%s##1", label);
+	//	snprintf(label2, sizeof(label2), "%s##2", label);
+	//
+	//	if (graph_size < min_graph_wrap_width)
+	//	{
+	//		bool ret1 = SplineEditor(label1, spline1, view_rect, avail_width);
+	//		bool ret2 = SplineEditor(label2, spline2, view_rect, avail_width);
+	//		return ret1 || ret2;
+	//	}
+	//	else
+	//	{
+	//		bool ret1 = SplineEditor(label1, spline1, view_rect, graph_size);
+	//		ImGui::SameLine(0, spacing);
+	//		bool ret2 = SplineEditor(label2, spline2, view_rect, graph_size);
+	//		return ret1 || ret2;
+	//	}
+	//	return false;
+	//}
 }

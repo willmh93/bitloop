@@ -1,7 +1,7 @@
 #include <bitloop/core/project_worker.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project.h>
-#include <bitloop/core/record_manager.h>
+#include <bitloop/core/capture_manager.h>
 
 BL_BEGIN_NS
 

@@ -1,4 +1,4 @@
-#include <bitloop/core/record_manager.h>
+#include <bitloop/core/capture_manager.h>
 #include <bitloop/util/math_util.h>
 #include <webp/encode.h>
 #include <webp/mux.h>

@@ -121,18 +121,21 @@ template<typename T> struct GlmVec3Type;
 template<typename T> struct GlmVec4Type;
 template<typename T> struct GlmMat3Type;
 
-template<> struct GlmVec2Type<f32>   { using type = glm::vec2;   };
-template<> struct GlmVec2Type<f64>   { using type = glm::dvec2;  };
-template<> struct GlmVec2Type<f128>  { using type = glm::ddvec2; };
-template<> struct GlmVec2Type<int>   { using type = glm::ivec2;  };
-template<> struct GlmVec3Type<f32>   { using type = glm::vec3;   };
-template<> struct GlmVec3Type<f64>   { using type = glm::dvec3;  };
-template<> struct GlmVec3Type<f128>  { using type = glm::ddvec3; };
-template<> struct GlmVec3Type<int>   { using type = glm::ivec3;  };
-template<> struct GlmVec4Type<f32>   { using type = glm::vec4;   };
-template<> struct GlmVec4Type<f64>   { using type = glm::dvec4;  };
-template<> struct GlmVec4Type<f128>  { using type = glm::ddvec4; };
-template<> struct GlmVec4Type<int>   { using type = glm::ivec4;  };
+template<> struct GlmVec2Type<f32>   { using type = glm::vec2;    };
+template<> struct GlmVec2Type<f64>   { using type = glm::dvec2;   };
+template<> struct GlmVec2Type<f128>  { using type = glm::ddvec2;  };
+template<> struct GlmVec2Type<i16>   { using type = glm::i16vec2; };
+template<> struct GlmVec2Type<int>   { using type = glm::ivec2;   };
+template<> struct GlmVec3Type<f32>   { using type = glm::vec3;    };
+template<> struct GlmVec3Type<f64>   { using type = glm::dvec3;   };
+template<> struct GlmVec3Type<f128>  { using type = glm::ddvec3;  };
+template<> struct GlmVec3Type<i16>   { using type = glm::i16vec3; };
+template<> struct GlmVec3Type<int>   { using type = glm::ivec3;   };
+template<> struct GlmVec4Type<f32>   { using type = glm::vec4;    };
+template<> struct GlmVec4Type<f64>   { using type = glm::dvec4;   };
+template<> struct GlmVec4Type<f128>  { using type = glm::ddvec4;  };
+template<> struct GlmVec4Type<i16>   { using type = glm::i16vec4; };
+template<> struct GlmVec4Type<int>   { using type = glm::ivec4;   };
 
 template<> struct GlmMat3Type<f32>   { using type = glm::fmat3; };
 template<> struct GlmMat3Type<f64>   { using type = glm::dmat3; };
@@ -897,6 +900,7 @@ struct Quad
     constexpr Quad(const Rect<T>& r)              { set(r.x1, r.y1, r.x2, r.y2); }
     constexpr Quad(const AngledRect<T>& r)        { set(r.cx, r.cy, r.w, r.h, r.angle); }
 
+    [[nodiscard]] constexpr Vec2<T>* data() { return &a; }
 
     [[nodiscard]] constexpr Segment<T> ab() const { return Segment<T>(a, b); }
     [[nodiscard]] constexpr Segment<T> bc() const { return Segment<T>(b, c); }
@@ -1004,6 +1008,7 @@ struct Quad
 
 typedef std::vector<uint8_t>  bytebuf;
 
+typedef Vec2<i16>          SVec2;
 typedef Vec2<int>          IVec2;
 typedef Vec2<f32>          FVec2;
 typedef Vec2<f64>          DVec2;

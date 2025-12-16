@@ -1,6 +1,7 @@
 #pragma once
 #include <bitloop/core/debug.h>
 #include <bitloop/core/types.h>
+#include <bitloop/util/hashable.h>
 
 #include <string>
 #include <mutex>
@@ -52,6 +53,7 @@ struct BitrateRange
     double max_mbps;
 };
 
+// CaptureManager input config
 struct CaptureConfig
 {
     CaptureFormat   format;
@@ -194,10 +196,11 @@ public:
     // CaptureManager should exist for entire MainWindow lifecycle, but finalize recording in case of forceful exit.
     ~CaptureManager()                { finalizeCapture(); }
                                      
-    IVec2        srcResolution() const  { return config.resolution * config.ssaa; }
-    IVec2        dstResolution() const  { return config.resolution; }
-    int          fps() const            { return config.fps;        }
-    std::string  filename() const       { return config.filename;   }
+    IVec2          srcResolution() const  { return config.resolution * config.ssaa; }
+    IVec2          dstResolution() const  { return config.resolution; }
+    int            fps() const            { return config.fps;        }
+    std::string    filename() const       { return config.filename;   }
+    CaptureFormat  format() const         { return config.format;     }
                                      
     bool  isRecording() const           { return recording.load(std::memory_order_acquire);        }
     bool  isSnapshotting() const        { return snapshotting.load(std::memory_order_acquire);     }

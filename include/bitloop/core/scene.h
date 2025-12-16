@@ -3,6 +3,8 @@
 #include <random>
 
 #include <bitloop/platform/platform.h>
+#include <bitloop/core/capture_manager.h>
+#include <bitloop/core/snapshot_presets.h>
 #include <bitloop/util/math_util.h>
 #include <bitloop/util/change_tracker.h>
 #include <bitloop/nanovgx/nano_canvas.h>
@@ -34,6 +36,9 @@ class SceneBase : public ChangeTracker
     mutable size_t dt_call_index = 0;
     mutable size_t dt_process_call_index = 0;
     //size_t dt_draw_call_index = 0;
+
+    mutable bool initiating_snapshot = false;
+    mutable bool initiating_recording = false;
 
 
 protected:
@@ -137,15 +142,18 @@ public:
     [[nodiscard]] double project_dt(int average_samples = 1) const;
 
     [[nodiscard]] double fps(int average_samples = 1) const { return 1000.0 / frame_dt(average_samples); }
-
     [[nodiscard]] double fpsFactor() const;
 
+    [[nodiscard]] bool isSnapshotting() const;
     [[nodiscard]] bool isRecording() const;
+    [[nodiscard]] bool isCapturing() const;
     [[nodiscard]] bool capturedLastFrame();
 
-    void queueBeginRecording();
-    void queueEndRecording();
-    void captureFrame(bool b);
+    void beginSnapshot(const SnapshotPresetList& presets, const char* relative_filepath = nullptr);
+    void beginRecording();
+    void endRecording();
+
+    void permitCaptureFrame(bool b);
    
     [[nodiscard]] double random(double min = 0, double max = 1) const
     {
