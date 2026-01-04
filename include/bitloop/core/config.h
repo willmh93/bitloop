@@ -3,7 +3,7 @@
 /// ======== Debug Features ========
 //#define BL_DEBUG_FINITE_DOUBLE_CHECKS
 //#define BL_FORCE_RELEASE_FINITE_DOUBLE_CHECKS
-//#define BL_DEBUG_INCLUDE_LOG_TABS
+#define BL_DEBUG_INCLUDE_LOG_TABS
 
 //#define BL_FORCE_DEBUG
 #define BL_DEBUG_OWNERSHIP 0

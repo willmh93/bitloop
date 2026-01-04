@@ -109,7 +109,7 @@ class MainWindow
 
     SharedSync& shared_sync;
 
-    const int window_flags = ImGuiWindowFlags_NoBackground;// 0;
+    const int window_flags = 0;
         // ImGuiWindowFlags_NoTitleBar |
         // ImGuiWindowFlags_NoDecoration;// |
         //ImGuiWindowFlags_NoMove;

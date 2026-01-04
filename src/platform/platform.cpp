@@ -126,8 +126,8 @@ void PlatformManager::gl_begin_frame()
     glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fbo);
     glViewport(0, 0, offscreen_w, offscreen_h);
     #else
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, gl_w, gl_h);
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //glViewport(0, 0, gl_w, gl_h);
     #endif
 }
 

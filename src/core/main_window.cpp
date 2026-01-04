@@ -1397,7 +1397,8 @@ bool MainWindow::manageDockingLayout()
         ImGuiID dock_main_id = dockspace_id;
         ImGuiID dock_sidebar = ImGui::DockBuilderSplitNode(
             dock_main_id,
-            vertical_layout ? ImGuiDir_Down : ImGuiDir_Right,
+            //vertical_layout ? ImGuiDir_Down : ImGuiDir_Right,
+            vertical_layout ? ImGuiDir_Down : ImGuiDir_Left,
             vertical_layout ? 0.4f : 0.25f,
             nullptr,
             &dock_main_id
@@ -1685,8 +1686,13 @@ void MainWindow::populateUI()
                 else
                     populateExpandedLayout();
 
+                #ifdef BL_DEBUG_INCLUDE_LOG_TABS
+                if (!done_first_focus && focusWindow("Debug"))
+                    done_first_focus = true;
+                #else
                 if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
                     done_first_focus = true;
+                #endif
             }
 
             //populateOverlay();
@@ -1722,6 +1728,13 @@ void MainWindow::populateUI()
         {
             if (ImGui::BeginTabBar("DebugTabs"))
             {
+                if (ImGui::BeginTabItem("Display"))
+                {
+                    // Debug DPI
+                    dpiDebugInfo();
+
+                    ImGui::EndTabItem();
+                }
 
                 if (ImGui::BeginTabItem("Project Log"))
                 {
@@ -1732,14 +1745,6 @@ void MainWindow::populateUI()
                 if (ImGui::BeginTabItem("Global Log"))
                 {
                     debug_log.draw();
-                    ImGui::EndTabItem();
-                }
-
-                if (ImGui::BeginTabItem("Display"))
-                {
-                    // Debug DPI
-                    dpiDebugInfo();
-
                     ImGui::EndTabItem();
                 }
 
