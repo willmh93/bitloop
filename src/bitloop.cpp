@@ -240,7 +240,7 @@ int bitloop_main(int, char* [])
             "bitloop";
             #endif
 
-        auto window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+        auto window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
 
         #ifdef BL_SIMULATE_DISPLAY
         fb_w = BL_SIMULATE_DISPLAY.w;
@@ -248,7 +248,7 @@ int bitloop_main(int, char* [])
         fb_w = (int)((float)fb_w * BL_SIMULATE_DISPLAY_VIEW_SCALE);
         fb_h = (int)((float)fb_h * BL_SIMULATE_DISPLAY_VIEW_SCALE);
         #else
-        window_flags |= SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE;
+        window_flags |= SDL_WINDOW_MAXIMIZED;
         #endif
 
         window = SDL_CreateWindow(window_name, fb_w, fb_h, window_flags);

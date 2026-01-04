@@ -88,7 +88,8 @@ public:
     #ifdef BL_SIMULATE_DISPLAY
     [[nodiscard]] float dpr() const { return BL_SIMULATE_DISPLAY.dpr; }
     #else
-    [[nodiscard]] float dpr() const { return win_dpr; }
+    //[[nodiscard]] float dpr() const { return win_dpr; }
+    [[nodiscard]] float dpr() { return (float)gl_w / (float)win_w; }
     #endif
 
     [[nodiscard]] bool offscreen_active() const
