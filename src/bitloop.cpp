@@ -100,13 +100,13 @@ void gui_loop()
     {
         SDL_Event es = e;
 
-        #ifdef SIMULATE_DISPLAY
+        #ifdef BL_SIMULATE_DISPLAY
         platform()->upscale_mouse_event_to_offscreen(es);
         #endif
 
         ImGui_ImplSDL3_ProcessEvent(&es);
 
-        #ifdef SIMULATE_MOBILE
+        #ifdef BL_SIMULATE_MOBILE
         platform()->convert_mouse_to_touch(es);
         #endif
 
@@ -170,7 +170,7 @@ void gui_loop()
 
     // ======== Render ========
     ImGui::Render();
-    glClearColor(0.1f, 0.0f, 0.1f, 1.0f);
+    glClearColor(0.160784f, 0.160784f, 0.180392f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -242,11 +242,11 @@ int bitloop_main(int, char* [])
 
         auto window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
-        #ifdef SIMULATE_DISPLAY
-        fb_w = SIMULATE_DISPLAY.w;
-        fb_h = SIMULATE_DISPLAY.h;
-        fb_w = (int)((float)fb_w * SIMULATE_DISPLAY_VIEW_SCALE);
-        fb_h = (int)((float)fb_h * SIMULATE_DISPLAY_VIEW_SCALE);
+        #ifdef BL_SIMULATE_DISPLAY
+        fb_w = BL_SIMULATE_DISPLAY.w;
+        fb_h = BL_SIMULATE_DISPLAY.h;
+        fb_w = (int)((float)fb_w * BL_SIMULATE_DISPLAY_VIEW_SCALE);
+        fb_h = (int)((float)fb_h * BL_SIMULATE_DISPLAY_VIEW_SCALE);
         #else
         window_flags |= SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE;
         #endif

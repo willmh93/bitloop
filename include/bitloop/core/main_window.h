@@ -33,16 +33,18 @@ enum struct MainWindowCommandType
     ON_PLAY_PROJECT,
     ON_STOPPED_PROJECT,
     ON_PAUSED_PROJECT,
-    BEGIN_SNAPSHOT,
-    TAKE_ACTIVE_PRESET_SNAPSHOT,
+    BEGIN_SNAPSHOT_PRESET_LIST,
+    BEGIN_SNAPSHOT_ACTIVE_PRESET,
     BEGIN_RECORDING,
     END_RECORDING
 };
 
-struct MainWindowCommand_SnapshotPayload
+struct SnapshotPresetsArgs
 {
-    std::string path; // path format (relative to project capture dir, no extension)
+    std::string rel_path_fmt; // path format (relative to project capture dir, no extension)
     SnapshotPresetList presets; // which presets to target
+    int request_id;
+    std::string xmp_data;
 };
 
 struct MainWindowCommandEvent
@@ -77,6 +79,7 @@ class MainWindow
     //ImRect viewport_rect;
     ImVec2 client_size{};
     bool viewport_hovered = false;
+    bool is_editing_ui = false;
 
     ToolbarButtonState play     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(0.4f, 1.0f, 0.4f, 1.0f), true };
     ToolbarButtonState pause    = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f), false };
@@ -86,28 +89,30 @@ class MainWindow
 
     CaptureManager capture_manager;
     
-
     SettingsPanel    settings_panel;
     CaptureConfig    config;
 
     SnapshotPresetList enabled_capture_presets;
     bool               is_snapshotting = false; // remains true for whole batch
     int                active_capture_preset = 0;
-    std::string        active_capture_rel_proj_path;
-                                     
-    ///bool          window_capture = false;
-    bool             encode_next_sim_frame = false;
-    bool             captured_last_frame = false;
+    int                active_capture_preset_request_id = 0;
+    std::string        active_capture_rel_path_fmt;
+    std::string        active_capture_xmp_data;
+    int                shared_batch_fileindex = 0; // dir scanned for next highest index, used for batch
+    
+    ///bool            window_capture = false;
+    bool               encode_next_sim_frame = false;
+    bool               captured_last_frame = false;
 
     Canvas canvas;
     std::vector<uint8_t> frame_data; // intermediate buffer to read canvas pixels before encoding
 
     SharedSync& shared_sync;
 
-    const int window_flags =
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoMove;
+    const int window_flags = ImGuiWindowFlags_NoBackground;// 0;
+        // ImGuiWindowFlags_NoTitleBar |
+        // ImGuiWindowFlags_NoDecoration;// |
+        //ImGuiWindowFlags_NoMove;
 
 public:
 
@@ -122,7 +127,6 @@ public:
         singleton = this;
     }
 
-    /// todo: switch to refs?
     [[nodiscard]] Canvas* getCanvas() { return &canvas; }
     [[nodiscard]] CaptureManager* getRecordManager() { return &capture_manager; }
     [[nodiscard]] SettingsConfig* getSettingsConfig() { return &settings_panel.getConfig(); }
@@ -138,21 +142,42 @@ public:
     void setFixedFrameTimeDelta(bool b) { getSettingsConfig()->fixed_time_delta = b; }
     bool isFixedFrameTimeDelta() const { return getSettingsConfig()->fixed_time_delta; }
 
-    void queueBeginSnapshot(const SnapshotPresetList& presets, const char* relative_filename = nullptr);
+    void queueBeginSnapshot(
+        const SnapshotPresetList& presets,
+        std::string_view rel_path_fmt = {},
+        int request_id = 0,
+        std::string_view xmp_data = {}
+    );
+
     void queueBeginRecording();
     void queueEndRecording();
 
-    void beginRecording();
+    void beginRecording(const SnapshotPreset& preset, const char* rel_path_fmt);
 
+    #ifndef __EMSCRIPTEN__
+    std::filesystem::path getProjectSnapshotsDir();
+    std::filesystem::path getProjectVideosDir();
+    std::filesystem::path getProjectAnimationsDir();
+    #endif
+    
     // e.g. for a given preset 'backgrounds/seahorse_valley' may create missing dirs and return:
     //     'captures/Mandelbrot/backgrounds/seahorse_valley_1920x1080.webp'
-    std::string prepareFullCapturePath(const SnapshotPreset& preset, const char* relative_filepath_noext);
+    std::string prepareFullCapturePath(
+        const SnapshotPreset& preset,
+        std::filesystem::path base_dir,
+        const char* rel_path_fmt,
+        int file_idx,
+        const char* fallback_extension);
 
-    void beginSnapshot(const char* rel_proj_path, IVec2 res, int ssaa=1, float sharpen=0.0f);
-    void beginSnapshot(const SnapshotPreset& preset, const char* relative_filepath_noext);
+private:
+    // uses provided args and exact path (lowest level, no awareness of presets)
+    void _beginSnapshot(const char* filepath, IVec2 res, int ssaa=1, float sharpen=0.0f, std::string_view xmp_data = {});
+public:
+    // begins snapshot using preset (uses default global ssaa/sharpen unless explicitly set in preset)
+    void beginSnapshot(const SnapshotPreset& preset, const char* rel_path_fmt, int file_idx, std::string_view xmp_data = {});
 
     // relative to project capture dir - if nullptr, name chosen automatically, e.g. For a given preset:
-    void beginSnapshotList(const SnapshotPresetList& presets, const char* rel_proj_path);
+    void beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id, std::string_view xmp_data={});
 
     void endRecording();
     void checkCaptureComplete();
@@ -160,6 +185,8 @@ public:
     void captureFrame(bool b) { encode_next_sim_frame = b; }
     bool capturingNextFrame() const { return encode_next_sim_frame; }
     bool capturedLastFrame() const { return captured_last_frame; }
+
+    bool isEditingUI();
 
     void init();
     void checkChangedDPR();

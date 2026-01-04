@@ -42,7 +42,7 @@ void   destroyGLTexture(GLuint tex);
 // Generic GL load-image in to texture wrapper
 GLuint loadGLTextureRGBA8(
     const char* path,
-    int* outW, int* outH,
+    int* outW = 0, int* outH = 0,
     int svgTargetW = 0, int svgTargetH = 0,
     std::string* err = nullptr);
 

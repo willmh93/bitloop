@@ -24,9 +24,9 @@ struct Tiger_Scene : public Scene<Tiger_Scene>
         // : speed(info.speed)  /// Initialize your Scene variables below from config
     {}
 
-    struct UI : Interface
+    struct UI : ViewModel
     {
-        using Interface::Interface;
+        using ViewModel::ViewModel;
         void sidebar();
     };
 
@@ -56,9 +56,9 @@ struct Tiger_Project : public Project<Tiger_Project>
         return ProjectInfo({ "Tests", "Draw Tiger (vector graphics)" });
     }
 
-    struct UI : Interface
+    struct UI : ViewModel
     {
-        using Interface::Interface;
+        using ViewModel::ViewModel;
         void sidebar();
     };
 

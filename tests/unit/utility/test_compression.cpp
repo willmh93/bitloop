@@ -74,8 +74,8 @@ TEST_CASE("base64_compress / base64_decompress")
 
 
     for (const auto& test_data : edge_cases) {
-        std::string compressed = Compression::brotli_ascii_compress(test_data);
-        std::string decompressed = Compression::brotli_ascii_decompress(compressed);
+        std::string compressed = compression::brotli_ascii_compress(test_data);
+        std::string decompressed = compression::brotli_ascii_decompress(compressed);
 
         // Round-trip must hold
         REQUIRE(decompressed == test_data);
@@ -102,8 +102,8 @@ TEST_CASE("base64_compress / base64_decompress")
         for (int i = 0; i < 250; ++i) {
             const auto len = static_cast<std::size_t>(len_dist(rng()));
             const auto test_data = random_printable_string(len);
-            const auto compressed = Compression::brotli_ascii_compress(test_data);
-            const auto decompressed = Compression::brotli_ascii_decompress(compressed);
+            const auto compressed = compression::brotli_ascii_compress(test_data);
+            const auto decompressed = compression::brotli_ascii_decompress(compressed);
             REQUIRE(decompressed == test_data);
             if (!test_data.empty()) REQUIRE(compressed != test_data);
         }
@@ -115,8 +115,8 @@ TEST_CASE("base64_compress / base64_decompress")
         for (int i = 0; i < 250; ++i) {
             const auto len = static_cast<std::size_t>(len_dist(rng()));
             const auto test_data = random_binary_string(len);
-            const auto compressed = Compression::brotli_ascii_compress(test_data);
-            const auto decompressed = Compression::brotli_ascii_decompress(compressed);
+            const auto compressed = compression::brotli_ascii_compress(test_data);
+            const auto decompressed = compression::brotli_ascii_decompress(compressed);
             REQUIRE(decompressed == test_data);
             if (!test_data.empty()) REQUIRE(compressed != test_data);
         }

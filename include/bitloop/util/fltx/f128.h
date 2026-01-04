@@ -256,9 +256,6 @@ namespace std
 
 namespace bl {
 
-static constexpr double DD_PI = 3.141592653589793238462643383279502884;
-static constexpr double DD_PI2 = 1.570796326794896619231321691639751442;
-
 /// ======== Helpers ========
 
 FORCE_INLINE constexpr f128 renorm(double hi, double lo)
@@ -858,6 +855,8 @@ FORCE_INLINE f128 exp(const f128& a)
 }
 FORCE_INLINE f128 atan2(const f128& y, const f128& x)
 {
+    static constexpr double DD_PI2 = 1.570796326794896619231321691639751442;
+
     // Special cases first (match IEEE / std::atan2 as closely as possible).
     if (x.hi == 0.0 && x.lo == 0.0)
     {

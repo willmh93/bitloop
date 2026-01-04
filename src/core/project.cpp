@@ -156,6 +156,8 @@ void ProjectBase::_projectPrepare()
 {
     viewports.clear();
 
+    active_project = this;
+
     // Prepare project and create layout
     // Note: This is where old viewports get replaced
     scene_counter = 0;
@@ -229,6 +231,8 @@ void ProjectBase::_projectPause()
 void ProjectBase::_projectDestroy()
 {
     projectDestroy();
+
+    active_project = nullptr;
 }
 
 void ProjectBase::updateViewportRects()
@@ -473,6 +477,7 @@ void ProjectBase::_projectDraw()
         viewport->setOldSize();
 }
 
+
 void ProjectBase::_clearEventQueue()
 {
     //for (SceneBase* scene : viewports.all_scenes)
@@ -703,6 +708,14 @@ void ProjectBase::_onEvent(SDL_Event& e)
             {
                 event.setOwnerViewport(ctx_hovered);
             } break;
+
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP:
+            {
+                ctx_owner = ctx_focused;
+                event.setOwnerViewport(ctx_owner);
+            }
+            break;
         }
     }
 
@@ -742,10 +755,12 @@ Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
     return viewports;
 }
 
-bool ProjectBase::isRecording() const
+void ProjectBase::_onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset)
 {
-    return main_window()->getRecordManager()->isRecording();
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->_onEncodeFrame(data, request_id, preset);
 }
+
 
 void ProjectBase::logMessage(const char* fmt, ...)
 {

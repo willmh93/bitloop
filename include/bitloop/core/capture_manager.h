@@ -29,9 +29,9 @@ extern "C" {
 *    of it being incrementally generated over several frames at the requested
 *    resolution (e.g. Mandelbrot).
 *
-*    It waits for a simulation to call captureFrame(true) and is treated
-*    like a single-frame video but fed to an Image encoder (e.g. AVIF/WEBP_SNAPSHOT) 
-*    instead of the FFmpeg video encoder.
+*    It waits for a simulation to call captureFrame(true) when ready, and is treated
+*    like a single-frame video but fed to an Image encoder (CaptureFormat::WEBP_SNAPSHOT) 
+*    instead of the WEBP/FFmpeg multi-frame encoder.
 */
 
 BL_BEGIN_NS;
@@ -69,6 +69,7 @@ struct CaptureConfig
     // WebP generic
     bool            lossless = true;
     int             near_lossless = 100;
+    std::string     save_payload; // optional metadata
 
     // Video generic
     int             fps = 0;
@@ -114,6 +115,8 @@ class FFmpegWorker
     bool finalize(CaptureManager* capture_manager);
 };
 #endif
+
+bool webp_extract_save_from_xmp(const std::vector<uint8_t>& webp, std::string& out_save);
 
 class WebPWorker
 {
@@ -230,49 +233,14 @@ public:
         out = std::move(encoded_data);
     }
 
-    
-
     // sim worker calls this avoid triggering a draw a frame until ffmpeg worker is ready for it
     void  waitUntilReadyForNewFrame();
 
-    // ────── [start capture] => [encode frames] => [end capture] ──────
+    // ────── [start capture] => [encode frames] => [finalize capture] ──────
 
-    bool  startCapture(
-        CaptureFormat format,
-        std::string file,
-        IVec2 resolution,
-        int supersample_factor=1,
-        float sharpen=0.0f,
-        int fps=0,
-        int record_frame_count = 0,
-        int64_t bitrate=0,
-        float quality=100.0,
-        bool lossless=true,
-        int near_lossless=100,
-        bool flip=false);
-
-    bool  startCapture(
-        CaptureFormat format,
-        IVec2 resolution,
-        int supersample_factor = 1,
-        float sharpen = 0.0f,
-        int fps = 0,
-        int record_frame_count=0,
-        int64_t bitrate = 0,
-        float quality = 100.0,
-        bool lossless = true,
-        int near_lossless = 100,
-        bool flip = false)
-    {
-        return startCapture(
-            format, "", resolution, supersample_factor,
-            sharpen, fps, record_frame_count, bitrate,
-            quality, lossless, near_lossless, flip);
-    }
-
-    bool  encodeFrame(const uint8_t* data);
-
-    void  finalizeCapture();
+    bool startCapture(CaptureConfig _config);
+    bool encodeFrame(const uint8_t* data, std::function<void(bytebuf&)> onPreprocessed=nullptr);
+    void finalizeCapture();
 
 };
 

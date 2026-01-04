@@ -2,7 +2,7 @@
 #include <string>
 #include <string_view>
 
-namespace Compression
+namespace compression
 {
     std::string b64_encode(std::string_view bytes);
     std::string b64_decode(std::string_view b64);

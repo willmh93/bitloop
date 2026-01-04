@@ -4,7 +4,6 @@
 #include <brotli/decode.h>
 #include <stdexcept>
 #include <vector>
-#include <cctype>
 
 namespace
 {
@@ -34,9 +33,9 @@ namespace
 }
 
 
-namespace Compression {
+namespace compression {
 
-    // ========== Base64 encode ==========
+    // ========== Base62/Base64 encode ==========
     std::string b64_encode(std::string_view bytes)
     {
         
@@ -109,7 +108,7 @@ namespace Compression {
         return out;
     }
 
-    // ========== Base64 decode ==========
+    // ========== Base62/Base64 decode ==========
     bool valid_b62(std::string_view s)
     {
         for (char c : s) {
@@ -394,4 +393,4 @@ namespace Compression {
         return out;
     }
 
-} // namespace Compression
+} // namespace compression

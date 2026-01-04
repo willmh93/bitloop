@@ -5,66 +5,104 @@
 
 BL_BEGIN_NS;
 
-/// todo: Move to SnapshotPresetManager (snapshot_preset.h)
-// Snapshot presets (reusable display description / render opts)
-struct SnapshotPreset : public Hashable
+template <std::size_t N>
+inline void assign_fixed_string(char(&dest)[N], std::string_view src)
 {
-    char name[64]{}; // must be unique
-    char alias[32]{};
+    static_assert(N > 0, "Buffer must have space for null terminator.");
 
+    const std::size_t len = std::min<std::size_t>(N - 1, src.size());
+    if (len != 0)
+        std::memcpy(dest, src.data(), len);
+
+    dest[len] = '\0';
+}
+
+// Snapshot presets (reusable display description / render opts)
+class SnapshotPreset : public Hashable
+{
+    char  alias[32]{}; // must be unique
+    char  name[64]{};
     IVec2 size{};
-    int ssaa = 0;
+    int   ssaa = 0;
     float sharpen = -1.0f;
 
     std::string list_name;
-    bl::hash_t hashed_name = 0;
+    bl::hash_t  hashed_alias = 0;
+
+public:
 
     SnapshotPreset() {}
-    SnapshotPreset(const char* _name, const char* _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f)
+    SnapshotPreset(const SnapshotPreset& rhs)
     {
-        strcpy(name, _name);
-        strcpy(alias, _alias);
+        strcpy(alias, rhs.alias);
+        strcpy(name, rhs.name);
+        size = rhs.size;
+        ssaa = rhs.ssaa;
+        sharpen = rhs.sharpen;
+        updateCache();
+    }
+    SnapshotPreset(std::string_view _name, std::string_view _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f)
+    {
+        strcpy(alias, _alias.data());
+        strcpy(name, _name.data());
         size = _size;
         ssaa = _ssaa;
         sharpen = _sharpen;
-
         updateCache();
     }
 
+    // getters
+    [[nodiscard]] std::string_view getAlias() const noexcept { return std::string_view{ alias, std::char_traits<char>::length(alias) }; }
+    [[nodiscard]] std::string_view getName()  const noexcept { return std::string_view{ name, std::char_traits<char>::length(name) }; }
+    [[nodiscard]] IVec2 getResolution()       const noexcept { return size; }
+    [[nodiscard]] int width()                 const noexcept { return size.x; }
+    [[nodiscard]] int height()                const noexcept { return size.y; }
+    [[nodiscard]] int getSSAA()               const noexcept { return ssaa; }
+    [[nodiscard]] float getSharpening()       const noexcept { return sharpen; }
+
+    [[nodiscard]] const char* alias_cstr()    const noexcept { return alias; }
+    [[nodiscard]] const char* name_cstr()     const noexcept { return name; }
+    [[nodiscard]] const char* description()   const noexcept { return list_name.c_str(); }
+
+    [[nodiscard]] int maxAliasSize()          const noexcept { return sizeof(alias); }
+    [[nodiscard]] int maxNameSize()           const noexcept { return sizeof(name); }
+                                            
+    [[nodiscard]] hash_t hashedAlias()        const noexcept { return hashed_alias; }
+
+    // setters
+    void setAlias(std::string_view value) { assign_fixed_string(alias, value); updateCache(); }
+    void setName(std::string_view value)  { assign_fixed_string(name, value);  updateCache(); }
+    void setResolution(IVec2 res)         { size = res;                        updateCache(); }
+    void setResolution(int w, int h)      { size = { w, h };                   updateCache(); }
+    void setSSAA(int _ssaa)               { ssaa = _ssaa;                      updateCache(); }
+    void setSharpening(float _sharpen)    { sharpen = _sharpen;                updateCache(); }
+
     // compute hash for entire preset info
-    bl::hash_t compute_hash() const noexcept override
+    hash_t compute_hash() const noexcept override
     {
-        bl::hash_t seed = 0;
-        hash_combine(seed, hash_string(name));
-        hash_combine(seed, hash_string(alias));
-        hash_combine(seed, hash_one(size.x));
-        hash_combine(seed, hash_one(size.y));
-        hash_combine(seed, hash_one(ssaa));
-        hash_combine(seed, hash_one(sharpen));
-        return seed;
+        StableHasher h;
+        h.add_string(alias);
+        h.add_string(name);
+        h.add(size.x);
+        h.add(size.y);
+        h.add(ssaa);
+        h.add(sharpen);
+        return h.finish();
     }
 
     void updateCache()
     {
         invalidate_hash();
 
-        hashed_name = hash_string(alias);
-        list_name = name;
+        hashed_alias = Hasher::hash_string(alias);
+        list_name = std::format("{} [{}x{}]", name, size.x, size.y);
 
-        list_name += " [";
-        list_name += std::to_string(size.x);
-        list_name += "x";
-        list_name += std::to_string(size.y);
-        list_name += "]";
-
-        if (ssaa > 0)
-        {
+        if (ssaa > 0) {
             list_name += " ssaa:";
             list_name += std::to_string(ssaa);
         }
 
-        if (sharpen > 0)
-        {
+        if (sharpen > 0) {
             list_name += " sharp:";
             list_name += std::to_string(sharpen);
         }
@@ -73,36 +111,44 @@ struct SnapshotPreset : public Hashable
 
 typedef std::unordered_map<bl::hash_t, bool> SnapshotPresetHashMap;
 
+using SnapshotCompleteCallback       = std::function<void(bytebuf&, const SnapshotPreset& preset)>;
+using SnapshotBatchCompleteCallback  = std::function<void()>;
+
+struct SnapshotBatchCallbacks
+{
+    SnapshotCompleteCallback       on_snapshot_complete;
+    SnapshotBatchCompleteCallback  on_batch_complete;
+};
+
 class SnapshotPresetList
 {
     bool lookup_dirty = false;
-
-    std::string list_name;
 
     std::vector<SnapshotPreset> items;
     std::unordered_map<bl::hash_t, SnapshotPreset*> lookup;
 
 public:
 
-    /// todo: Replace with "lookup dirty" flag - update lookup on item hash access - keep lookup/items private
+    SnapshotPresetList() = default;
+    SnapshotPresetList(const SnapshotPreset& item) { add(item); }
+    SnapshotPresetList(const std::vector<SnapshotPreset>& _items)
+    {
+        for (const SnapshotPreset& item : _items)
+            add(item);
+    }
+
+    // only refreshes hashed lookup on demand
     void updateLookup() {
         lookup.clear();
         for (auto& item : items)
-            lookup[item.hashed_name] = &item;
+            lookup[item.hashedAlias()] = &item;
 
         lookup_dirty = false;
     }
 
-    // by index
-    SnapshotPreset& operator[](int i) { return items[i]; }
-    SnapshotPreset* operator[](std::string_view alias) { return findByAlias(alias); }
-    SnapshotPreset* at_safe(int i) { return (i < 0 || i >= (int)items.size()) ? nullptr : &items[i]; }
-
-    // by hash
-    SnapshotPreset* find(bl::hash_t hash) {
-        if (lookup_dirty) updateLookup();
-        if (lookup.count(hash) == 0) return nullptr;
-        return lookup[hash];
+    void add(const SnapshotPreset& preset) {
+        items.push_back(preset);
+        lookup_dirty = true;
     }
 
     std::size_t count(bl::hash_t hash) {
@@ -110,11 +156,35 @@ public:
         return lookup.count(hash);
     }
 
-    // by alias
+    // find by: hash
+    SnapshotPreset* find(bl::hash_t hash) {
+        if (lookup_dirty) updateLookup();
+        if (lookup.count(hash) == 0) return nullptr;
+        return lookup[hash];
+    }
+
+    // find by: index
+    SnapshotPreset& operator[](int i)                   { return items[i]; }
+    const SnapshotPreset& operator[](int i) const       { return items[i]; }
+    SnapshotPreset& at(int i)                           { return items[i]; }
+    const SnapshotPreset& at(int i) const               { return items[i]; }
+    SnapshotPreset* at_safe(int i)                      { return (i < 0 || i >= (int)items.size()) ? nullptr : &items[i]; }
+
+    // find by: alias
+    SnapshotPreset* operator[](std::string_view alias)             { return findByAlias(alias); }
+    const SnapshotPreset* operator[](std::string_view alias) const { return findByAlias(alias); }
     SnapshotPreset* findByAlias(std::string_view alias) {
         // hash alias, find(hash)?
         for (int i = 0; i < size(); i++) {
-            if (items[i].alias == alias)
+            if (items[i].getAlias() == alias)
+                return &items[i];
+        }
+        return nullptr;
+    }
+    const SnapshotPreset* findByAlias(std::string_view alias) const {
+        // hash alias, find(hash)?
+        for (int i = 0; i < size(); i++) {
+            if (items[i].getAlias() == alias)
                 return &items[i];
         }
         return nullptr;
@@ -128,37 +198,35 @@ public:
     auto cbegin() const noexcept { return items.cbegin(); }
     auto cend()   const noexcept { return items.cend(); }
 
-    void add(const SnapshotPreset& preset) {
-        items.push_back(preset);
-        lookup_dirty = true;
-    }
-
     bool isUniqueAliasChange(int idx, const char* new_alias) const
     {
         for (int i = 0; i < size(); i++)
         {
             if (i == idx) continue;
-            if (strcmp(items[i].alias, new_alias) == 0) return false;
+            if (items[i].getAlias() == new_alias) return false;
+            //if (strcmp(items[i].alias, new_alias) == 0) return false;
         }
         return true;
     }
 
-    SnapshotPresetList filtered(std::unordered_map<bl::hash_t, bool>& filter) const
+    SnapshotPresetList filtered(SnapshotPresetHashMap& filter) const
     {
         SnapshotPresetList filtered_presets;
         for (auto& item : items)
         {
-            if (filter.count(item.hashed_name) && filter.at(item.hashed_name))
+            if (filter.count(item.hashedAlias()) && filter.at(item.hashedAlias()))
                 filtered_presets.add(item);
         }
         return filtered_presets;
     }
 };
 
+class SettingsPanel;
 class SnapshotPresetManager
 {
-    SnapshotPresetList capture_presets;
-    std::unordered_map<bl::hash_t, bool> enabled_presets;
+    friend class SettingsPanel;
+
+    SnapshotPresetList    capture_presets;
 
 public:
 
@@ -236,34 +304,15 @@ public:
         capture_presets.add(SnapshotPreset("Thumbnail (HD)", "thumb128x72_hd", { 128, 72 }, 9));
 
         capture_presets.updateLookup();
-
-        //enabled_presets[capture_presets.findByAlias("fhd")->hashed_name] = true;
-        enabled_presets[capture_presets["fhd"]->hashed_name] = true;
     }
 
     SnapshotPresetList& allPresets()
     {
         return capture_presets;
     }
-
-    SnapshotPresetHashMap& enabledHashes()
+    const SnapshotPresetList& allPresets() const
     {
-        return enabled_presets;
-    }
-
-    //std::vector<SnapshotPreset> enabledPresets() const
-    SnapshotPresetList enabledPresets() const
-    {
-        // todo: make capture_presets atomic in case of rare change while accessing in loop
-        SnapshotPresetList ret;
-        for (const auto& p : capture_presets)
-        {
-            //if (p.enabled)
-            if (enabled_presets.count(p.hashed_name) > 0)
-                ret.add(p);
-        }
-        ret.updateLookup();
-        return ret;
+        return capture_presets;
     }
 };
 

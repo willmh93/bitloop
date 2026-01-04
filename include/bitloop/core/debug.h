@@ -36,15 +36,8 @@
 
 #include <bitloop/platform/platform_macros.h>
 
-
 /// ======== Config ========
 #include "config.h"
-
-
-struct Global
-{
-    static inline bool break_condition = false;
-};
 
 
 /// ========================= ///
@@ -82,8 +75,8 @@ __declspec(noinline) void dbg_keep_ref(const T& x) {
 #endif
 
 // Disable debug flags for Release builds
-#if defined NDEBUG && !defined(FORCE_DEBUG)
-#undef DEBUG_FINITE_DOUBLE_CHECKS
+#if defined NDEBUG && !defined(BL_FORCE_DEBUG)
+#undef BL_DEBUG_FINITE_DOUBLE_CHECKS
 #endif
 
 #ifndef BL_BEGIN_NS
@@ -454,7 +447,7 @@ namespace std {
 #if defined NDEBUG
 
 /// --- Release Mode ---
-#if defined FORCE_RELEASE_FINITE_DOUBLE_CHECKS
+#if defined BL_FORCE_RELEASE_FINITE_DOUBLE_CHECKS
 #define finite_double FiniteDouble
 #else
 #define finite_double double
@@ -463,10 +456,12 @@ namespace std {
 #else
 
 /// --- Debug Mode ---
-#if defined DEBUG_FINITE_DOUBLE_CHECKS
+#if defined BL_DEBUG_FINITE_DOUBLE_CHECKS
 #define finite_double FiniteDouble
 #else
 #define finite_double double
 #endif
 
 #endif
+
+#include <bitloop/util/debug_ownership.h>

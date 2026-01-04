@@ -44,7 +44,7 @@ inline f128 niceStepDivisible(f128 ideal, f128& coarse, f128& fade)
     coarse = step * 2.0; // fallback
     for (int i = 0; i < n; ++i) 
     {
-        if (candidates[i] > step && Math::divisible(candidates[i], step)) 
+        if (candidates[i] > step && math::divisible(candidates[i], step)) 
         { 
             coarse = candidates[i];
             break;
@@ -103,7 +103,7 @@ void Painter::drawWorldAxis(
             const f128 a1     = isX ? wMaxX : wMaxY;
 
             // Loop over each gridline
-            for (f128 w = Math::roundUp(a0, step); w < a1; w += step)
+            for (f128 w = math::roundUp(a0, step); w < a1; w += step)
             {
                 const bool major = abs((w / coarse) - round(w / coarse)) < f128::eps();
                 const f128 alpha = major ? 1 : kMinorFactor;
@@ -148,7 +148,7 @@ void Painter::drawWorldAxis(
             DVec2 perpDir = m.axisStagePerpDirection(isX);
             const f128 wStart = isX ? wMinX : wMinY;
             const f128 wEnd = isX ? wMaxX : wMaxY;
-            double txt_sample_angle = isX ? angle : (angle + Math::HALF_PI);
+            double txt_sample_angle = isX ? angle : (angle + math::half_pi);
             double txt_size_weight_x = std::abs(std::cos(txt_sample_angle));
             double txt_size_weight_y = std::abs(std::sin(txt_sample_angle));
 
@@ -156,15 +156,15 @@ void Painter::drawWorldAxis(
             if (isX)
             {
                 if (zoom.x > 1.0)
-                    decimals = (1 + Math::countWholeDigits(zoom.x * 0.0125));
+                    decimals = (1 + math::countWholeDigits(zoom.x * 0.0125));
             }
             else
             {
                 if (zoom.y > 1.0)
-                    decimals = (1 + Math::countWholeDigits(zoom.y * 0.0125));
+                    decimals = (1 + math::countWholeDigits(zoom.y * 0.0125));
             }
 
-            for (f128 w = Math::roundUp(wStart, step); w < wEnd; w += step)
+            for (f128 w = math::roundUp(wStart, step); w < wEnd; w += step)
             {
                 //if (abs(w) < f128::eps()) continue;
                 if (abs(w) < 1e-31) continue;

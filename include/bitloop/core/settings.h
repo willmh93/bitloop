@@ -25,18 +25,47 @@ struct SettingsConfig
 
     int     record_fps = 60;
     int     record_frame_count = 0;
-    IVec2   record_resolution{ 1920, 1080 };
     int     record_quality = 100;
     bool    record_lossless = true;
     int     record_near_lossless = 100;
+
+    SnapshotPresetHashMap target_image_presets;
+    int                   target_video_preset = 0; // idx
 
     #if BITLOOP_FFMPEG_ENABLED
     int64_t        record_bitrate = 128000000ll;
     BitrateRange   record_bitrate_mbps_range{ 1, 1000 };
     #endif
 
+    SettingsConfig()
+    {
+        const SnapshotPresetList& capture_presets = snapshot_preset_manager.allPresets();
+        target_image_presets[capture_presets["fhd"]->hashedAlias()] = true;
+    }
+
+    SnapshotPresetList enabledImagePresets() const
+    {
+        const SnapshotPresetList& capture_presets = snapshot_preset_manager.allPresets();
+        SnapshotPresetList ret;
+        for (const auto& p : capture_presets)
+        {
+            if (target_image_presets.count(p.hashedAlias()) > 0)
+                ret.add(p);
+        }
+        ret.updateLookup();
+        return ret;
+    }
+
+    SnapshotPreset enabledVideoPreset() const
+    {
+        const SnapshotPresetList& capture_presets = snapshot_preset_manager.allPresets();
+        return capture_presets.at(target_video_preset);
+    }
+
     CaptureFormat getRecordFormat() const { return (CaptureFormat)record_format; }
+
     CaptureFormat getSnapshotFormat() const { return (CaptureFormat)snapshot_format; }
+    IVec2         getRecordResolution() const { return enabledVideoPreset().getResolution(); }
 };
 
 // Settings UI
@@ -46,12 +75,20 @@ class SettingsPanel
 
     SettingsConfig config;
 
-    // temporary buffers (prevents accepting values when duplicate detected)
-    char input_name[64]{};
-    char input_alias[32]{};
-    char revert_name[64]{};
+    // input buffers (avoids direct access to SnapshotPreset)
+    char   input_name[64]{};
+    char   input_alias[32]{};
+    IVec2  input_resolution;
+    int    input_ssaa = 1;
+    float  input_sharpen = 0.0f;
+
+    // revert back to old alias if attempting to set to an existing alias
     char revert_alias[32]{};
-    int selected_capture_preset = -1;
+
+    int selected_capture_preset = 0;
+    int selected_image_preset = -1;
+
+    
 
 public:
 
@@ -59,20 +96,41 @@ public:
     {}
 
     void init();
+    void setInputPreset(SnapshotPreset* p)
+    {
+        if (!p) return;
+        input_resolution = p->getResolution();
+        input_ssaa = p->getSSAA();
+        input_sharpen = p->getSharpening();
+        strcpy(input_name, p->name_cstr());
+        strcpy(input_alias, p->alias_cstr());
+        strcpy(revert_alias, p->alias_cstr());
+    }
 
     SettingsConfig& getConfig() { return config; }
     const SettingsConfig& getConfig() const { return config; }
 
     void populateCapturePresets();
-    void populateResolutionOptions(IVec2& targ_res, bool& first, int& sel_aspect, int& sel_tier, u64 max_pixels);
     void populateSettings();
 };
 
-// returns idx when selection changes (otherwise -1)
-template<typename Callback>
+enum struct CapturePresetsSelectMode
+{
+    NONE,
+    MULTI,
+    SINGLE
+};
+
+// flexible preset picker
+// > getPresetRefFromIdx:   items provided by callback, e.g. [&](int i)->SnapshotPreset& { return presets[i]; }
+// > count:                 number of items provided by callback
+// > enabled_preset:        enabled presets provided by hash lookup
+//   - Useful if a sim saves a list of "valid" render targets but can't guarantee they exist in the provided list
+// > returns idx when selection changes (otherwise -1)
+template<CapturePresetsSelectMode select_mode=CapturePresetsSelectMode::NONE, typename Callback>
 int populateCapturePresetsList(
     Callback&& getPresetRefFromIdx, int count,
-    std::unordered_map<bl::hash_t, bool>& enabled_presets,
+    SnapshotPresetHashMap* enabled_presets,
     int& selected_capture_preset)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 2.0f));
@@ -80,11 +138,24 @@ int populateCapturePresetsList(
 
     int changed_selected_index = -1;
 
+    // dim listbox bg so checkboxes are still visible
+    ImVec4 lb = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
+    lb.x *= 0.85f;
+    lb.y *= 0.85f;
+    lb.z *= 0.85f;
+    lb.w = 1.0f;
+
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, lb);
+
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    if (ImGui::BeginListBox("##Presets", ImVec2(0.0f, 0.0f)))
+    const bool open = ImGui::BeginListBox("##Presets", ImVec2(0.0f, 0.0f));
+
+    // pop immediately so the listbox contents keep normal FrameBg
+    ImGui::PopStyleColor(1);
+
+    if (open)
     {
         ImGuiListClipper clipper;
-        //clipper.Begin(presets.size());
         clipper.Begin(count);
 
         while (clipper.Step())
@@ -93,34 +164,45 @@ int populateCapturePresetsList(
             {
                 ImGui::PushID(i);
 
-                //SnapshotPreset& preset = presets[i];
                 SnapshotPreset& preset = getPresetRefFromIdx(i);
-                bool enabled = enabled_presets.count(preset.hashed_name) > 0;
+                bool enabled = enabled_presets && enabled_presets->count(preset.hashedAlias()) > 0;
                 bool was_enabled = enabled;
 
                 // Checkbox at start of row
                 ImGui::AlignTextToFramePadding();
-                ImGui::Checkbox("##enabled", &enabled);
-                ImGui::SameLine();
+                if constexpr (select_mode == CapturePresetsSelectMode::SINGLE)
+                {
+                    ImGui::RadioButton("##enabled", &selected_capture_preset, i);
+                    ImGui::SameLine();
+                }
+                else if constexpr (select_mode == CapturePresetsSelectMode::MULTI)
+                {
+                    ImGui::Checkbox("##enabled", &enabled);
+                    ImGui::SameLine();
+                }
 
                 // dim disabled rows
-                ///if (!preset.enabled)
                 if (!enabled)
                     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.6f);
 
                 const bool is_selected = (selected_capture_preset == i);
-                if (ImGui::Selectable(preset.list_name.c_str(), is_selected, ImGuiSelectableFlags_SpanAvailWidth))
+                if (ImGui::Selectable(preset.description(), is_selected, ImGuiSelectableFlags_SpanAvailWidth))
                 {
                     selected_capture_preset = i;
                     changed_selected_index = i;
                 }
 
-                ///if (!preset.enabled)
                 if (!enabled)
                     ImGui::PopStyleVar();
 
-                if (!was_enabled && enabled) enabled_presets[preset.hashed_name] = true;
-                if (was_enabled && !enabled) enabled_presets.erase(preset.hashed_name);
+                if constexpr (select_mode == CapturePresetsSelectMode::MULTI)
+                {
+                    if (enabled_presets)
+                    {
+                        if (!was_enabled && enabled) (*enabled_presets)[preset.hashedAlias()] = true;
+                        if (was_enabled && !enabled) enabled_presets->erase(preset.hashedAlias());
+                    }
+                }
 
                 ImGui::PopID();
             }
@@ -132,41 +214,42 @@ int populateCapturePresetsList(
 
     ImGui::Spacing();
 
+    if (enabled_presets)
     {
         auto enable_idx = [&](int i) {
-            bl::hash_t hash = getPresetRefFromIdx(i).hashed_name;
-            if (enabled_presets.count(hash) == 0)
-                enabled_presets[hash] = true;
+            bl::hash_t hash = getPresetRefFromIdx(i).hashedAlias();
+            if (enabled_presets->count(hash) == 0)
+                (*enabled_presets)[hash] = true;
         };
 
         auto disable_idx = [&](int i) {
-            bl::hash_t hash = getPresetRefFromIdx(i).hashed_name;
-            if (enabled_presets.count(hash) > 0)
-                enabled_presets.erase(hash);
+            bl::hash_t hash = getPresetRefFromIdx(i).hashedAlias();
+            if (enabled_presets->count(hash) > 0)
+                enabled_presets->erase(hash);
         };
 
         auto enable_hash = [&](bl::hash_t hash) {
-            if (enabled_presets.count(hash) == 0)
-                enabled_presets[hash] = true;
+            if (enabled_presets->count(hash) == 0)
+                (*enabled_presets)[hash] = true;
         };
 
         auto disable_hash = [&](bl::hash_t hash) {
-            if (enabled_presets.count(hash) > 0)
-                enabled_presets.erase(hash);
+            if (enabled_presets->count(hash) > 0)
+                enabled_presets->erase(hash);
         };
 
         auto is_enabled = [&](bl::hash_t hash) {
-            return enabled_presets.count(hash) > 0;
+            return enabled_presets->count(hash) > 0;
         };
 
         auto set_enabled = [&](bl::hash_t hash, bool b) {
             if (b) {
-                if (enabled_presets.count(hash) == 0)
-                    enabled_presets[hash] = true;
+                if (enabled_presets->count(hash) == 0)
+                    (*enabled_presets)[hash] = true;
             }
             else if (!b) {
-                if (enabled_presets.count(hash) > 0)
-                    enabled_presets.erase(hash);
+                if (enabled_presets->count(hash) > 0)
+                    enabled_presets->erase(hash);
             }
         };
 
@@ -182,44 +265,38 @@ int populateCapturePresetsList(
         {
             for (int i = 0; i < count; i++) {
                 SnapshotPreset& p = getPresetRefFromIdx(i);
-                if (pred(p)) enable_hash(p.hashed_name);
-                //if (pred(p)) p.enabled = true;
+                if (pred(p)) enable_hash(p.hashedAlias());
             }
-            //for (auto& p : presets) if (pred(p)) p.enabled = true;
         };
 
         auto disable_if = [&](auto&& pred)
         {
             for (int i = 0; i < count; i++) {
                 SnapshotPreset& p = getPresetRefFromIdx(i);
-                if (pred(p)) disable_hash(p.hashed_name);
-                //if (pred(p)) p.enabled = false;
+                if (pred(p)) disable_hash(p.hashedAlias());
             }
-            //for (auto& p : presets) if (pred(p)) p.enabled = false;
         };
 
         auto set_only = [&](auto&& pred)
         {
-            //for (auto& p : presets) p.enabled = pred(p);
             for (int i = 0; i < count; i++) {
                 SnapshotPreset& p = getPresetRefFromIdx(i);
-                if (pred(p)) enable_hash(p.hashed_name);
-                else         disable_hash(p.hashed_name);
-                //p.enabled = pred(p);
+                if (pred(p)) enable_hash(p.hashedAlias());
+                else         disable_hash(p.hashedAlias());
             }
         };
 
-        auto max_dim = [](const SnapshotPreset& p) { return (p.size.x > p.size.y) ? p.size.x : p.size.y; };
-        auto min_dim = [](const SnapshotPreset& p) { return (p.size.x < p.size.y) ? p.size.x : p.size.y; };
+        auto max_dim = [](const SnapshotPreset& p) { return (p.width() > p.height()) ? p.width() : p.height(); };
+        auto min_dim = [](const SnapshotPreset& p) { return (p.width() < p.height()) ? p.width() : p.height(); };
 
-        auto is_square = [&](const SnapshotPreset& p) { return p.size.x == p.size.y; };
-        auto is_portrait = [&](const SnapshotPreset& p) { return p.size.y > p.size.x; };
-        auto is_landscape = [&](const SnapshotPreset& p) { return p.size.x > p.size.y; };
+        auto is_square = [&](const SnapshotPreset& p) { return p.width() == p.height(); };
+        auto is_portrait = [&](const SnapshotPreset& p) { return p.height() > p.width(); };
+        auto is_landscape = [&](const SnapshotPreset& p) { return p.width() > p.height(); };
 
         auto aspect = [&](const SnapshotPreset& p) -> float
         {
-            const float w = (float)((p.size.x > 0) ? p.size.x : 1);
-            const float h = (float)((p.size.y > 0) ? p.size.y : 1);
+            const float w = (float)((p.width() > 0) ? p.width() : 1);
+            const float h = (float)((p.height() > 0) ? p.height() : 1);
             return w / h;
         };
 
@@ -275,11 +352,9 @@ int populateCapturePresetsList(
 
             if (ImGui::MenuItem("Invert Enabled"))
             {
-                //for (auto& p : presets) p.enabled = !p.enabled;
                 for (int i = 0; i < count; i++) {
                     SnapshotPreset& p = getPresetRefFromIdx(i);
-                    set_enabled(p.hashed_name, !is_enabled(p.hashed_name));
-                    //p.enabled = !p.enabled;
+                    set_enabled(p.hashedAlias(), !is_enabled(p.hashedAlias()));
                 }
             }
 

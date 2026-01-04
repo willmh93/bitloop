@@ -9,7 +9,7 @@ std::ostream& operator<<(std::ostream& os, const FiniteDouble& fd) {
 
 BL_BEGIN_NS;
 
-namespace TextUtil {
+namespace text {
 
 std::string wrapString(std::string_view input, size_t width)
 {
@@ -163,7 +163,7 @@ std::string indent(std::string_view text, int count, std::string_view indent_uni
 }
 
 // Indent by N columns using spaces. For tabs, pass indent() with indent_unit = "\t".
-std::string indent_cols(std::string_view text, int cols, bool indent_empty)
+std::string indentCols(std::string_view text, int cols, bool indent_empty)
 {
     if (cols <= 0) return std::string{ text };
     return indent(text, 1, std::string(static_cast<std::size_t>(cols), ' '), indent_empty);
@@ -210,7 +210,7 @@ std::string dedent(std::string_view text, int tab_width)
     return out;
 }
 
-std::string dedent_max(std::string_view text)
+std::string dedentMax(std::string_view text)
 {
     std::string out;
     out.reserve(text.size());
@@ -242,7 +242,7 @@ std::string dedent_max(std::string_view text)
     return out;
 }
 
-std::string_view trim_view(std::string_view text)
+std::string_view trimStringView(std::string_view text)
 {
     // left
     while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())))
@@ -253,7 +253,7 @@ std::string_view trim_view(std::string_view text)
     return text;
 }
 
-bool contains_only(const std::string& s, const std::string& allowed)
+bool containsOnly(const std::string& s, const std::string& allowed)
 {
     std::unordered_set<char> allowedSet(allowed.begin(), allowed.end());
     for (char c : s) {
@@ -264,7 +264,7 @@ bool contains_only(const std::string& s, const std::string& allowed)
     return true;
 }
 
-std::string format_human_u64(uint64_t value, int sig_figs)
+std::string formatHumanU64(uint64_t value, int sig_figs)
 {
     if (value == 0)
         return "0";
@@ -357,6 +357,6 @@ std::vector<std::string_view> split(std::string_view s, char delim, bool skip_em
     return out;
 }
 
-} // End TextUtil NS
+} // End text NS
 
 BL_END_NS;

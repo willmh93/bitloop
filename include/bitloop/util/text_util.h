@@ -11,7 +11,7 @@ BL_BEGIN_NS;
 
 typedef std::vector<std::string_view> string_view_list;
 
-namespace TextUtil
+namespace text
 {
 
     // Helper to convert floating-point number to a clean formatted string
@@ -68,18 +68,28 @@ namespace TextUtil
     std::string unwrapString(std::string_view input);
 
     std::string indent(std::string_view text, int count = 1, std::string_view indent_unit = "    ", bool indent_empty = false);
-    std::string indent_cols(std::string_view text, int cols, bool indent_empty = false);
+    std::string indentCols(std::string_view text, int cols, bool indent_empty = false);
 
     std::string dedent(std::string_view text, int tab_width = 4);
-    std::string dedent_max(std::string_view text);
+    std::string dedentMax(std::string_view text);
 
-    std::string_view trim_view(std::string_view text);
+    std::string_view trimStringView(std::string_view text);
 
-    bool contains_only(const std::string& s, const std::string& allowed);
+    bool containsOnly(const std::string& s, const std::string& allowed);
 
-    std::string format_human_u64(uint64_t value, int sig_figs = 5);
+    std::string formatHumanU64(uint64_t value, int sig_figs = 5);
 
     std::vector<std::string_view> split(std::string_view s, char delim, bool skip_empty = false);
+
+    inline char tolower(char c) { return (char)std::tolower((unsigned char)c); }
+    inline bool eqInsensitive(char a, char b) { return tolower(a) == tolower(b); }
+    inline bool eqInsensitive(std::string_view a, std::string_view b)
+    {
+        if (a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (!eqInsensitive(a[i], b[i])) return false;
+        return true;
+    }
 }
 
 BL_END_NS;

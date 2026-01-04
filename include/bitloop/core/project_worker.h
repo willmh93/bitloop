@@ -1,5 +1,8 @@
 #pragma once
-#include "threads.h"
+#include <bitloop/core/threads.h>
+#include <bitloop/core/types.h>
+#include <bitloop/core/snapshot_presets.h>
+
 #include <SDL3/SDL.h>
 
 BL_BEGIN_NS
@@ -64,6 +67,8 @@ protected:
     void draw();
     void populateAttributes();
     void populateOverlay();
+
+    void onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset);
 
 public:
 

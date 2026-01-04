@@ -7,6 +7,7 @@
 #include <bitloop/util/timer.h>
 #include <bitloop/platform/platform.h>
 #include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/core/snapshot_presets.h>
 
 #include "input.h"
 #include "layout.h"
@@ -144,10 +145,16 @@ struct Input
 */
 /// =================
 
+
+class ProjectBase;
+using ProjectCreatorFunc = std::function<ProjectBase* ()>;
+
 struct ProjectInfo
 {
     std::string name;
     std::vector<std::string> path;
+    const char* dev_root; // nullptr if not BITLOOP_DEV_MODE
+
     ProjectCreatorFunc creator;
     int sim_uid;
 
@@ -184,7 +191,6 @@ struct ProjectInfoNode
     }
 };
 
-
 class ProjectBase
 {
     Layout viewports;
@@ -203,6 +209,8 @@ class ProjectBase
     Viewport* ctx_focused = nullptr;
     Viewport* ctx_hovered = nullptr;
 
+    static inline ProjectBase* active_project = nullptr;
+
 protected:
 
     friend class ProjectWorker;
@@ -213,7 +221,7 @@ protected:
     Canvas* canvas = nullptr;
     ImDebugLog* project_log = nullptr;
 
-    // ----------- States -----------
+    // ----- states -----
     bool started = false;
     bool paused = false;
     bool done_single_process = false;
@@ -222,12 +230,32 @@ protected:
 
     void updateViewportRects();
 
-    // -------- Populating Project/Scene ImGui attributes --------
+    // ----- populating Project/Scene ImGui attributes -----
     void _populateAllAttributes();
     virtual void _populateOverlay();
     virtual void _projectAttributes() {}
+    
+    // ----- Project management (internal, invokes public virtual methods) -----
+    void _projectPrepare();
+    void _projectStart();
+    void _projectStop();
+    void _projectPause();
+    void _projectResume();
+    void _projectDestroy();
+    void _projectProcess();
+    void _projectDraw();
 
-    // -------- Data Buffers --------
+    // ----- capturing -----
+
+    void _onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset);
+
+    // ----- input -----
+    std::vector<FingerInfo> pressed_fingers;
+    void _clearEventQueue();
+    void _onEvent(SDL_Event& e);
+
+
+    // ----- data buffers -----
     bool has_var_buffer = false;
 
     virtual void updateProjectLiveBuffer() {}
@@ -241,21 +269,6 @@ protected:
     virtual void markLiveValues();
     virtual void markShadowValues();
     virtual void invokeScheduledCalls();
-    
-
-    // ---- Project Management ----
-    void _projectPrepare();
-    void _projectStart();
-    void _projectStop();
-    void _projectPause();
-    void _projectResume();
-    void _projectDestroy();
-    void _projectProcess();
-    void _projectDraw();
-
-    std::vector<FingerInfo> pressed_fingers;
-    void _clearEventQueue();
-    void _onEvent(SDL_Event& e);
 
 public:
 
@@ -263,19 +276,18 @@ public:
 
     virtual ~ProjectBase() = default;
     
-    // BasicProject Factory methods
+    /// ----- Project factory -----
+
     [[nodiscard]] static std::vector<std::shared_ptr<ProjectInfo>>& projectInfoList()
     {
         static std::vector<std::shared_ptr<ProjectInfo>> info_list;
         return info_list;
     }
-
     [[nodiscard]] static ProjectInfoNode& projectTreeRootInfo()
     {
         static ProjectInfoNode root("root");
         return root;
     }
-
     [[nodiscard]] static std::shared_ptr<ProjectInfo> findProjectInfo(int sim_uid)
     {
         for (auto& info : projectInfoList())
@@ -285,7 +297,6 @@ public:
         }
         return nullptr;
     }
-
     [[nodiscard]] static std::shared_ptr<ProjectInfo> findProjectInfo(const char *name)
     {
         for (auto& info : projectInfoList())
@@ -299,13 +310,13 @@ public:
     static inline int factory_sim_index = 0;
 
     template<typename T>
-    static std::shared_ptr<ProjectInfo> createProjectFactoryInfo(std::string name)
+    static std::shared_ptr<ProjectInfo> createProjectFactoryInfo(std::string name, const char* dev_root = nullptr)
     {
         auto project_info = std::make_shared<ProjectInfo>(T::info());
         project_info->creator = []() -> ProjectBase* { return new T(); };
         project_info->name = name;
         project_info->sim_uid = ProjectBase::factory_sim_index++;
-
+        project_info->dev_root = dev_root;
         return project_info;
     }
 
@@ -357,13 +368,19 @@ public:
         }
     }
 
-    [[nodiscard]] std::shared_ptr<ProjectInfo> getProjectInfo()
+    [[nodiscard]] std::shared_ptr<ProjectInfo> getProjectInfo() const
     {
         return findProjectInfo(sim_uid);
     }
 
-    // Shared Scene creators
+    static ProjectBase* activeProject()
+    {
+        return active_project;
+    }
 
+    /// ----- Scene factory -----
+
+    // create Scene with default config
     template<typename SceneType>
     [[nodiscard]] SceneType* create()
     {
@@ -374,17 +391,16 @@ public:
         {
             scene = new SceneType(*config);
             scene->active_config = config;
-
         }
         else
             scene = new SceneType();
 
         scene->project = this;
         scene->scene_index = scene_counter++;
-
         return scene;
     }
 
+    // create Scene with a provided initial config
     template<typename SceneType>
     [[nodiscard]] SceneType* create(typename SceneType::Config config)
     {
@@ -394,11 +410,10 @@ public:
         scene->active_config = config_ptr;
         scene->scene_index = scene_counter++;
         scene->project = this;
-
         return scene;
     }
 
-    // reuse active_config from another Scene
+    // overload to support using active_config from an existing Scene
     template<typename SceneType>
     [[nodiscard]] SceneType* create(std::shared_ptr<typename SceneType::Config> config)
     {
@@ -409,9 +424,10 @@ public:
         scene->active_config = config;
         scene->scene_index = scene_counter++;
         scene->project = this;
-
         return scene;
     }
+
+    /// ----- layout -----
 
     Layout& newLayout();
     Layout& newLayout(int _viewports_x, int _viewports_y);
@@ -420,9 +436,44 @@ public:
         return viewports;
     }
 
-    [[nodiscard]] bool isRecording() const;
+    /// ----- states -----
+
     [[nodiscard]] bool isPaused() const { return paused; }
     [[nodiscard]] bool isActive() const { return started; } // true even if paused. Indicates project has been started and has a state
+
+    #ifdef BITLOOP_DEV_MODE
+    [[nodiscard]] std::string proj_path(std::string_view virtual_path) const
+    {
+        std::filesystem::path p = getProjectInfo()->dev_root;
+
+        if (!virtual_path.empty() && virtual_path.front() == '/')
+            virtual_path.remove_prefix(1); // trim leading '/'
+
+        p /= virtual_path; // join
+        p = p.lexically_normal(); // clean up
+        return p.string();
+    }
+    #endif
+
+    /// TODO: add IDBFS support for virtual file system on web?
+    //
+    // root_path("/path/to/file")
+    // - useful to modify source data during development, but still behaves in release builds where no project folder exist
+    // - for web builds, files are read-only
+    // 
+    // If DEFINED     (BITLOOP_DEV_MODE):  "root" = project folder
+    // If NOT DEFINED (BITLOOP_DEV_MODE):  "root" = exe folder
+    //
+    [[nodiscard]] std::string root_path(std::string_view virtual_path) const
+    {
+        #ifdef BITLOOP_DEV_MODE
+        return proj_path(virtual_path);
+        #else
+        return platform()->path(virtual_path);
+        #endif
+    }
+
+    /// ----- overridable virtual methods -----
 
     virtual std::vector<std::string> categorize()
     {
@@ -437,6 +488,8 @@ public:
 
     virtual void onEvent(Event&) {}
 
+    /// ----- logging -----
+
     void logMessage(const char* fmt, ...);
     void logClear();
 };
@@ -448,16 +501,17 @@ class Project : public ProjectBase, public VarBuffer<ProjectType>
 
 public:
 
-    using Interface = VarBufferInterface<ProjectType>;
-    Interface* ui = nullptr;
+    using ViewModel = ViewModel<ProjectType>;
+    ViewModel* ui = nullptr;
 
     Project() : ProjectBase()
     {
         has_var_buffer = true;
+
+        // todo: Move virtual populate methods into new class derived from ViewModel
         ui = new ProjectType::UI(static_cast<const ProjectType*>(this));
         ui->init();
     }
-
     ~Project()
     {
         delete ui;
@@ -469,7 +523,6 @@ protected:
     {
         ui->sidebar();
     }
-
     void _populateOverlay() override final
     {
         ui->overlay();

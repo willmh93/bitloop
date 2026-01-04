@@ -8,6 +8,8 @@
 #include <bitloop/core/viewport.h>
 #include <bitloop/core/main_window.h>
 
+#include <bitloop/core/physics2d.h>
+
 // imgui
 #include <bitloop/imguix/imgui_custom.h>
 

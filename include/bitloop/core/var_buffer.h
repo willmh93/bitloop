@@ -146,7 +146,7 @@ struct __PushGuard
 };
 
 template<typename TargetType>
-class VarBufferInterface
+class ViewModel
 {
 public:
 
@@ -196,8 +196,8 @@ public:
 
     const TargetType& __target;
 
-    VarBufferInterface(const TargetType* _target) : __target(*_target) {}
-    virtual ~VarBufferInterface() = default;
+    ViewModel(const TargetType* _target) : __target(*_target) {}
+    virtual ~ViewModel() = default;
 
     virtual void init() {}
     virtual void sidebar() {}
@@ -406,6 +406,9 @@ struct VarBuffer
 
     void invokeScheduledCalls()
     {
+        BL_TAKE_OWNERSHIP("live");
+        BL_TAKE_OWNERSHIP("ui");
+
         std::vector<Task> tasks;
         tasks.swap(post_commit_tasks);
 

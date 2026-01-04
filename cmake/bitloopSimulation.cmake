@@ -9,8 +9,6 @@ set(BL_COMMON		"${BL_SHARE}/common"				CACHE INTERNAL "")
 set(BL_PROJECTS				""	CACHE INTERNAL "included projected")
 set(BL_DATA_DEPENDENCIES	""	CACHE INTERNAL "Ordered list of dependency data directories")
 
-
-
 # ──────────────────────────────────────────────────────────
 # ──────────────────────── Private ─────────────────────────
 # ──────────────────────────────────────────────────────────
@@ -213,6 +211,44 @@ function(_bitloop_get_project_visibility name out_var)
 	set(${out_var} "${_v}" PARENT_SCOPE)
 endfunction()
 
+function(_init_root_dev_mode)
+  get_property(_inited GLOBAL PROPERTY BL_DEV_MODE_INITIALIZED)
+  if (_inited)
+    return()
+  endif()
+
+  get_property(_root GLOBAL PROPERTY BL_ROOT_PROJECT)
+  if (NOT _root)
+    set_property(GLOBAL PROPERTY BL_ROOT_PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
+    set(_root "${CMAKE_CURRENT_SOURCE_DIR}")
+  endif()
+
+  if (CMAKE_CURRENT_SOURCE_DIR STREQUAL _root)
+
+    # Remove any stale cached value so dev-mode is NOT "sticky".
+    if (DEFINED CACHE{BITLOOP_DEV_MODE})
+      unset(BITLOOP_DEV_MODE CACHE)
+    endif()
+
+    # TRUE only if the root explicitly set a normal variable to TRUE.
+    if (DEFINED BITLOOP_DEV_MODE AND BITLOOP_DEV_MODE)
+      set_property(GLOBAL PROPERTY BL_DEV_MODE_EFFECTIVE 1)
+    else()
+      set_property(GLOBAL PROPERTY BL_DEV_MODE_EFFECTIVE 0)
+    endif()
+
+    set_property(GLOBAL PROPERTY BL_DEV_MODE_INITIALIZED 1)
+  endif()
+endfunction()
+
+function(_get_dev_mode out_var)
+  get_property(_v GLOBAL PROPERTY BL_DEV_MODE_EFFECTIVE)
+  if (_v STREQUAL "")
+    set(_v 0)
+  endif()
+  set(${out_var} "${_v}" PARENT_SCOPE)
+endfunction()
+
 # ──────────────────────────────────────────────────────────
 # ───────────────────────── Public ─────────────────────────
 # ──────────────────────────────────────────────────────────
@@ -295,6 +331,17 @@ function(bitloop_new_project sim_name)
 	if (NOT _type STREQUAL "INTERFACE")
 		target_link_libraries(${_TARGET} PRIVATE bitloop::bitloop)
 
+		if (BITLOOP_DEV_MODE AND CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+			set(BITLOOP_DEV_MODE FALSE)
+		endif()
+
+		_init_root_dev_mode()
+		_get_dev_mode(_dev)
+
+		if (_dev)
+			target_compile_definitions(${_TARGET} PRIVATE BITLOOP_DEV_MODE=1)
+		endif()
+
 		# Add project names to list in order of inclusion
 		if (SIM_SOURCES_PROVIDED)
 			get_property(_project_names GLOBAL PROPERTY BL_PROJECTS)
@@ -302,6 +349,7 @@ function(bitloop_new_project sim_name)
 				list(APPEND _project_names ${sim_name})
 			endif()
 			set_property(GLOBAL PROPERTY BL_PROJECTS	${_project_names})
+			set_property(GLOBAL PROPERTY "BL_PROJECT_DIR_${sim_name}" "${CMAKE_CURRENT_SOURCE_DIR}")
 		endif()
 
 		# Write include wrapper
@@ -318,6 +366,7 @@ function(bitloop_new_project sim_name)
 	# If root project, start printing project tree diagram
 	if (NOT BITLOOP_DISCOVERY)
 		if (IS_ROOT_PROJECT)
+			message(STATUS "")
 			message(STATUS "────────── Project Tree ──────────")
 			message(STATUS "[${sim_name}]")
 		else()
@@ -326,59 +375,57 @@ function(bitloop_new_project sim_name)
 	endif()
 
 	if (NOT _type STREQUAL "INTERFACE")
-		#if (SIM_SOURCES_PROVIDED)
-			# Include tree (include wrappers that define project namespace macros)
-			file(GLOB_RECURSE _pub_headers
-			  "${CMAKE_CURRENT_SOURCE_DIR}/${sim_name}/*.h"
-			  "${CMAKE_CURRENT_SOURCE_DIR}/${sim_name}/*.hpp"
-			)
+		# Include tree (include wrappers that define project namespace macros)
+		file(GLOB_RECURSE _pub_headers
+			"${CMAKE_CURRENT_SOURCE_DIR}/${sim_name}/*.h"
+			"${CMAKE_CURRENT_SOURCE_DIR}/${sim_name}/*.hpp"
+		)
 
-			# Project include wrapper root
-			set(_wrap_root "${CMAKE_CURRENT_BINARY_DIR}/include")
-			set(_wrap_ns_root "${_wrap_root}/${sim_name}")
-			file(MAKE_DIRECTORY "${_wrap_ns_root}")
+		# Project include wrapper root
+		set(_wrap_root "${CMAKE_CURRENT_BINARY_DIR}/include")
+		set(_wrap_ns_root "${_wrap_root}/${sim_name}")
+		file(MAKE_DIRECTORY "${_wrap_ns_root}")
 
-			# Generate one wrapper per public header
-			foreach(_hdr IN LISTS _pub_headers)
-				# path relative to project root
-				file(RELATIVE_PATH _rel "${CMAKE_CURRENT_SOURCE_DIR}" "${_hdr}")
-				file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
+		# Generate one wrapper per public header
+		foreach(_hdr IN LISTS _pub_headers)
+			# path relative to project root
+			file(RELATIVE_PATH _rel "${CMAKE_CURRENT_SOURCE_DIR}" "${_hdr}")
+			file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
 	
-				set(INCLUDE_HEADER_PATH "${_wrap_root}/${_rel}")
+			set(INCLUDE_HEADER_PATH "${_wrap_root}/${_rel}")
 
-				file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
+			file(TO_CMAKE_PATH "${_hdr}" _hdr_abs)
 
-				file(WRITE  ${INCLUDE_HEADER_PATH} "// Auto wrapper for ${_rel}\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma once\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma push_macro(\"SIM_NAME\")\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#undef SIM_NAME\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#define SIM_NAME ${sim_name}\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#include <bitloop/core/project.h>\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#line 1 \"${_hdr_abs}\"\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${_hdr_abs}\"\n")
-				file(APPEND ${INCLUDE_HEADER_PATH} "#pragma pop_macro(\"SIM_NAME\")\n")
-			endforeach()
+			file(WRITE  ${INCLUDE_HEADER_PATH} "// Auto wrapper for ${_rel}\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#pragma once\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#pragma push_macro(\"SIM_NAME\")\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#undef SIM_NAME\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#define SIM_NAME ${sim_name}\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#include <bitloop/core/project.h>\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#line 1 \"${_hdr_abs}\"\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#include \"${_hdr_abs}\"\n")
+			file(APPEND ${INCLUDE_HEADER_PATH} "#pragma pop_macro(\"SIM_NAME\")\n")
+		endforeach()
 
 
-			# Expose wrapper include tree publicly; keep real headers private
-			target_include_directories(${_TARGET}
-			 PUBLIC
-				 $<BUILD_INTERFACE:${_wrap_root}>
-				 $<INSTALL_INTERFACE:include>
-			 PRIVATE
-				 ${CMAKE_CURRENT_SOURCE_DIR}
-			)
+		# Expose wrapper include tree publicly; keep real headers private
+		target_include_directories(${_TARGET}
+			PUBLIC
+				$<BUILD_INTERFACE:${_wrap_root}>
+				$<INSTALL_INTERFACE:include>
+			PRIVATE
+				${CMAKE_CURRENT_SOURCE_DIR}
+		)
 
-			# Add target "/data" (if provided)
-			get_property(_data_dirs GLOBAL PROPERTY BL_DATA_DEPENDENCIES)
-			if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data")
-				list(APPEND _data_dirs "${CMAKE_CURRENT_SOURCE_DIR}/data")
-			endif()
-			set_property(GLOBAL PROPERTY BL_DATA_DEPENDENCIES ${_data_dirs})
+		# Add target "/data" (if provided)
+		get_property(_data_dirs GLOBAL PROPERTY BL_DATA_DEPENDENCIES)
+		if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data")
+			list(APPEND _data_dirs "${CMAKE_CURRENT_SOURCE_DIR}/data")
+		endif()
+		set_property(GLOBAL PROPERTY BL_DATA_DEPENDENCIES ${_data_dirs})
 
-			# Apply settings for all projects
-			_apply_common_settings(${_TARGET})
-		#endif()
+		# Apply settings for all projects
+		_apply_common_settings(${_TARGET})
 	endif()
 endfunction()
 
@@ -457,12 +504,18 @@ macro(bitloop_finalize)
 
 	get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)
 	if (CMAKE_CURRENT_SOURCE_DIR STREQUAL BL_ROOT_PROJECT)
-		#message(STATUS "")
-		#message(STATUS "──────── Finalizing ────────")
+		message(STATUS "")
+		message(STATUS "──────── Finalizing ────────")
 		#get_property(_global_projects GLOBAL PROPERTY BL_PROJECTS)
 		#foreach(project_name IN LISTS _global_projects)
 		#	msg(STATUS "<<<${project_name}>>>")
 		#endforeach()
+
+		if (BITLOOP_DEV_MODE)
+			message(STATUS "BITLOOP_DEV_MODE = true")
+		else()
+			message(STATUS "BITLOOP_DEV_MODE = false")
+		endif()
 
 		# Begin auto-generated header file
 		file(MAKE_DIRECTORY			"${BL_AUTOGEN_DIR}")
@@ -492,14 +545,26 @@ macro(bitloop_finalize)
 		#####  bitloop_simulation.h - project factories #####
 		#####################################################
 
+		_get_dev_mode(_dev)
+
 		file(APPEND "${BL_AUTOGEN_INCLUDES}" "\nvoid initialize_simulations() {\n")
 		file(APPEND "${BL_AUTOGEN_INCLUDES}" "    using namespace bl;\n")
 
+
 		foreach(project_name IN LISTS _project_names)
+
 			_bitloop_get_project_visibility(${project_name} project_visible)
 			if (project_visible)
-				file(APPEND "${BL_AUTOGEN_INCLUDES}"
-					"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>(\"${project_name}\"));\n")
+				get_property(_pdir GLOBAL PROPERTY "BL_PROJECT_DIR_${project_name}")
+				file(TO_CMAKE_PATH "${_pdir}" _pdir_norm)
+
+				if (_dev)
+					file(APPEND "${BL_AUTOGEN_INCLUDES}"
+						"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>(\"${project_name}\", \"${_pdir_norm}\"));\n")
+				else()
+					file(APPEND "${BL_AUTOGEN_INCLUDES}"
+						"    ProjectBase::addProjectFactoryInfo( ProjectBase::createProjectFactoryInfo<${project_name}_Project>(\"${project_name}\"));\n")
+				endif()
 			endif()
 		endforeach()
 		file(APPEND "${BL_AUTOGEN_INCLUDES}" "}\n")

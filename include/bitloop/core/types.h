@@ -1,25 +1,27 @@
 #pragma once
-#include <functional>
-#include <string>
-#include <sstream>
-#include <iomanip>
+
+// dependencies:
+// - imgui
+// - glm
+// - gcem
+// - fltx
+
 #include <cmath>
 #include <limits>
 #include <type_traits>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <tuple>
-
-#include <bitloop/util/f128.h>
-//#include <bitloop/util/f256.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_UNRESTRICTED_GENTYPE
 #define GLM_FORCE_CTOR_INIT
 #include "glm/glm.hpp"
-#include "glm/gtx/transform2.hpp"
+
+// including gcem before custom float types (for potential constexpr support)
 #include <gcem.hpp>
+
+#include <bitloop/util/fltx/fltx.h>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
@@ -30,6 +32,8 @@
 
 namespace bl
 {
+    // drop gcem functions in 'bl' namespace where overloads already exist for f128/... (constexpr used where supported)
+
     using std::isnan; // already constexpr
     using std::isinf; // already constexpr
     using std::remainder; // no gcem equivelant
@@ -71,7 +75,7 @@ namespace bl
 
 }
 
-// Extend GLM types for f128
+// Extend GLM types for f128/...
 
 namespace glm
 {
@@ -87,17 +91,15 @@ template<typename T> concept is_floating_point_v = std::is_floating_point_v<T> |
 template<class T>    concept is_arithmetic_v     = std::is_arithmetic_v<T> || std::is_same_v<T, f128>;
 template<typename T> concept is_integral_v       = std::is_integral_v<T>;
 
-class ProjectBase;
-using ProjectCreatorFunc = std::function<ProjectBase*()>;
 
 // Forward declare math helpers for access
 
-namespace Math {
+namespace math {
     template<typename T>
     T avgAngle(T a, T b);
 }
 
-// Enums
+/// ================= Enums =================
 
 enum struct Anchor
 {
@@ -106,6 +108,7 @@ enum struct Anchor
     BOTTOM_LEFT,  BOTTOM,  BOTTOM_RIGHT
 };
 
+// list of currently supported number types for all types in this header
 enum struct FloatingPointType
 {
     F32,
@@ -114,7 +117,7 @@ enum struct FloatingPointType
     COUNT
 };
 
-// Vec2, Vec3, Vec4
+/// ================= glm type mapping (with custom float support) =================
 
 template<typename T> struct GlmVec2Type;
 template<typename T> struct GlmVec3Type;
@@ -145,6 +148,9 @@ template<typename T> using GlmVec2 = typename GlmVec2Type<T>::type;
 template<typename T> using GlmVec3 = typename GlmVec3Type<T>::type;
 template<typename T> using GlmVec4 = typename GlmVec4Type<T>::type;
 template<typename T> using GlmMat3 = typename GlmMat3Type<T>::type;
+
+
+// ----- Vec2 -----
 
 template<typename T>
 struct Vec2
@@ -206,6 +212,7 @@ struct Vec2
     [[nodiscard]] constexpr T mag2() const { return x * x + y * y; }
     [[nodiscard]] constexpr T dot(const Vec2& other) const { return x * other.x + y * other.y; }
     [[nodiscard]] constexpr T angleTo(const Vec2& b) const { return atan2(b.y - y, b.x - x); }
+    [[nodiscard]] constexpr bool isZero() const { return x == (T)0 && y == (T)0; }
 
     // operators
     [[nodiscard]] constexpr Vec2 snapped(T step) const { return { round(x/step)*step, round(y/step)*step }; }
@@ -225,63 +232,7 @@ struct Vec2
     }
 };
 
-/*
-namespace std {
-    template<class T>
-    struct std::tuple_size<bl::Vec2<T>> : std::integral_constant<size_t, 2> {};
-
-    template<class T>
-    struct std::tuple_element<0, bl::Vec2<T>> { using type = T; };
-
-    template<class T>
-    struct std::tuple_element<1, bl::Vec2<T>> { using type = T; };
-}
-
-template<std::size_t I, class T>
-decltype(auto) get(bl::Vec2<T>& v) {
-    static_assert(I < 2);
-    if constexpr (I == 0) return (v.x);
-    else                   return (v.y);
-}
-template<std::size_t I, class T>
-decltype(auto) get(const bl::Vec2<T>& v) {
-    static_assert(I < 2);
-    if constexpr (I == 0) return (v.x);
-    else                   return (v.y);
-}
-template<std::size_t I, class T>
-decltype(auto) get(bl::Vec2<T>&& v) {
-    static_assert(I < 2);
-    if constexpr (I == 0) return std::move(v.x);
-    else                   return std::move(v.y);
-}
-
-*/
-
-// run for all T that get instantiated
-template<class T>
-inline void _vec2_tests()
-{
-    static_assert(std::is_standard_layout_v<Vec2<T>>, "Vec2<T> must be standard layout");
-    static_assert(sizeof(Vec2<T>) == 2 * sizeof(T), "Vec2<T> must be exactly two Ts");
-    static_assert(offsetof(Vec2<T>, x) == 0);
-    static_assert(offsetof(Vec2<T>, y) == sizeof(T));
-}
-
-// Trigger checks for the types you actually use:
-inline void _type_tests() {
-    static_assert(std::is_trivially_constructible_v<f128>, "f128 must be trivially constructible");
-
-    _vec2_tests<f32>();
-    _vec2_tests<f64>();
-    _vec2_tests<f128>();
-}
-
-struct VecTests
-{
-    VecTests() { _type_tests(); }
-};
-static inline VecTests tests;
+// ----- Vec3 -----
 
 template<typename T>
 struct Vec3
@@ -340,6 +291,8 @@ struct Vec3
     [[nodiscard]] static constexpr Vec3 lerp(const Vec3& a, const Vec3& b, T ratio) { return a + (b - a) * ratio; }
 };
 
+// ----- Vec4 -----
+
 template<typename T>
 struct Vec4
 {
@@ -397,99 +350,114 @@ struct Vec4
     [[nodiscard]] static constexpr Vec4 lerp(const Vec4& a, const Vec4& b, T ratio) { return a + (b - a) * ratio; }
 };
 
-// global arithmetic
+// ----- Complex -----
 
-//template<typename T> inline Vec2<T> operator*(T s, const Vec2<T>& v) { return v * s; }
-//template<typename T> inline Vec2<T> operator*(const Vec2<T>& v, T s) { return v * s; }
-//template<typename T> inline Vec2<T> operator/(T s, const Vec2<T>& v) { return v / s; }
-//template<typename T> inline Vec2<T> operator/(const Vec2<T>& v, T s) { return v / s; }
-//template<typename T> inline Vec2<T> operator+(T s, const Vec2<T>& v) { return v + s; }
-//template<typename T> inline Vec2<T> operator+(const Vec2<T>& v, T s) { return v + s; }
-//template<typename T> inline Vec2<T> operator-(T s, const Vec2<T>& v) { return v - s; }
-//template<typename T> inline Vec2<T> operator-(const Vec2<T>& v, T s) { return v - s; }
+template<typename T>
+struct Complex
+{
+    T x, y; // x = real, y = imag
 
-template<class X> struct is_vec2 : std::false_type {};
-template<class T> struct is_vec2<Vec2<T>> : std::true_type {};
-template<class X> inline constexpr bool is_vec2_v = is_vec2<std::remove_cvref_t<X>>::value;
+    // constructors
+    Complex() = default;
+    constexpr Complex(T v) : x{ v }, y{ v } {}
+    constexpr Complex(T _x, T _y) : x{ _x }, y{ _y } {}
+    constexpr Complex(const Vec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
+    constexpr Complex(const ImVec2 rhs) : x{ (T)rhs.x }, y{ (T)rhs.y } {}
+    constexpr Complex(const GlmVec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
 
-template<class T, class U> using plus_t  = decltype(std::declval<T>() + std::declval<U>());
-template<class T, class U> using minus_t = decltype(std::declval<T>() - std::declval<U>());
-template<class T, class U> using mul_t   = decltype(std::declval<T>() * std::declval<U>());
-template<class T, class U> using div_t   = decltype(std::declval<T>() / std::declval<U>());
+    template<typename T2>
+    constexpr explicit Complex(const GlmVec3<T2>& rhs) : x((T)rhs.x), y((T)rhs.y) {} // discards z for 2D
 
-// Vec2 op scalar
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a + b; })
-constexpr auto operator+(const Vec2<T>& v, const U& s) -> Vec2<plus_t<T, U>> {
-    using R = plus_t<T, U>; return { R(v.x) + s, R(v.y) + s };
-}
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a - b; })
-constexpr auto operator-(const Vec2<T>& v, const U& s) -> Vec2<minus_t<T, U>> {
-    using R = minus_t<T, U>; return { R(v.x) - s, R(v.y) - s };
-}
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a* b; })
-constexpr auto operator*(const Vec2<T>& v, const U& s) -> Vec2<mul_t<T, U>> {
-    using R = mul_t<T, U>; return { R(v.x) * s, R(v.y) * s };
-}
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a / b; })
-constexpr auto operator/(const Vec2<T>& v, const U& s) -> Vec2<div_t<T, U>> {
-    using R = div_t<T, U>; return { R(v.x) / s, R(v.y) / s };
-}
+    // convenience
+    constexpr void set(T _x, T _y) { x = _x; y = _y; }
+    constexpr void set(const Complex<T>& rhs) { x = rhs.x; y = rhs.y; }
+    [[nodiscard]] constexpr bool eq(T _x, T _y) const { return (x == _x && y == _y); }
 
-// scalar op Vec2
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a + b; })
-constexpr auto operator+(const T& s, const Vec2<U>& v) -> Vec2<plus_t<T, U>> {
-    using R = plus_t<T, U>; return { s + R(v.x), s + R(v.y) };
-}
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a - b; })
-constexpr auto operator-(const T& s, const Vec2<U>& v) -> Vec2<minus_t<T, U>> {
-    using R = minus_t<T, U>; return { s - R(v.x), s - R(v.y) };
-}
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a* b; })
-constexpr auto operator*(const T& s, const Vec2<U>& v) -> Vec2<mul_t<T, U>> {
-    using R = mul_t<T, U>; return { s * R(v.x), s * R(v.y) };
-}
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a / b; })
-constexpr auto operator/(const T& s, const Vec2<U>& v) -> Vec2<div_t<T, U>> {
-    using R = div_t<T, U>; return { s / R(v.x), s / R(v.y) };
-}
+    // conversions
+    [[nodiscard]] constexpr explicit operator ImVec2()                          const { return ImVec2((f32)x, (f32)y); }
+    template<typename T2> [[nodiscard]] constexpr explicit operator Vec2<T2>()  const { return Vec2<T2>(x, y); }
+    template<typename T2> [[nodiscard]] constexpr operator Complex<T2>()        const { return Complex<T2>{ (T2)x, (T2)y }; }
+    template<typename T2> [[nodiscard]] constexpr operator GlmVec2<T2>()        const { return GlmVec2<T2>{ (T2)x, (T2)y }; }
 
-// Vec2 op Vec2 (elementwise)
-template<class T, class U> requires requires(T a, U b) { a + b; }
-constexpr auto operator+(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<plus_t<T, U>> {
-    using R = plus_t<T, U>; return { R(a.x) + b.x, R(a.y) + b.y };
-}
-template<class T, class U> requires requires(T a, U b) { a - b; }
-constexpr auto operator-(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<minus_t<T, U>> {
-    using R = minus_t<T, U>; return { R(a.x) - b.x, R(a.y) - b.y };
-}
-template<class T, class U> requires requires(T a, U b) { a* b; }
-constexpr auto operator*(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<mul_t<T, U>> {
-    using R = mul_t<T, U>; return { R(a.x) * b.x, R(a.y) * b.y };
-}
-template<class T, class U> requires requires(T a, U b) { a / b; }
-constexpr auto operator/(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<div_t<T, U>> {
-    using R = div_t<T, U>; return { R(a.x) / b.x, R(a.y) / b.y };
-}
+    // access
+    [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
+    [[nodiscard]] constexpr T& operator[](int i) { return (&x)[i]; }
+    [[nodiscard]] constexpr T* data() { return &x; }
 
-template<typename T> inline Vec3<T> operator*(T s, const Vec3<T>& v) { return v * s; }
-template<typename T> inline Vec3<T> operator*(const Vec3<T>& v, T s) { return v * s; }
-template<typename T> inline Vec3<T> operator/(T s, const Vec3<T>& v) { return v / s; }
-template<typename T> inline Vec3<T> operator/(const Vec3<T>& v, T s) { return v / s; }
-template<typename T> inline Vec3<T> operator+(T s, const Vec3<T>& v) { return v + s; }
-template<typename T> inline Vec3<T> operator+(const Vec3<T>& v, T s) { return v + s; }
-template<typename T> inline Vec3<T> operator-(T s, const Vec3<T>& v) { return v - s; }
-template<typename T> inline Vec3<T> operator-(const Vec3<T>& v, T s) { return v - s; }
+    // operator (complex arithmetic)
+    [[nodiscard]] constexpr Complex operator-() const { return Complex(-x, -y); }
+    [[nodiscard]] constexpr bool operator==(const Complex& rhs) const { return x == rhs.x && y == rhs.y; }
+    [[nodiscard]] constexpr bool operator!=(const Complex& rhs) const { return x != rhs.x || y != rhs.y; }
 
-template<typename T> inline Vec4<T> operator*(T s, const Vec4<T>& v) { return v * s; }
-template<typename T> inline Vec4<T> operator*(const Vec4<T>& v, T s) { return v * s; }
-template<typename T> inline Vec4<T> operator/(T s, const Vec4<T>& v) { return v / s; }
-template<typename T> inline Vec4<T> operator/(const Vec4<T>& v, T s) { return v / s; }
-template<typename T> inline Vec4<T> operator+(T s, const Vec4<T>& v) { return v + s; }
-template<typename T> inline Vec4<T> operator+(const Vec4<T>& v, T s) { return v + s; }
-template<typename T> inline Vec4<T> operator-(T s, const Vec4<T>& v) { return v - s; }
-template<typename T> inline Vec4<T> operator-(const Vec4<T>& v, T s) { return v - s; }
+    [[nodiscard]] constexpr Complex operator+(const Complex& rhs) const { return { x + rhs.x, y + rhs.y }; }
+    [[nodiscard]] constexpr Complex operator-(const Complex& rhs) const { return { x - rhs.x, y - rhs.y }; }
 
-// Segment
+    // (a+bi)(c+di) = (ac-bd) + (ad+bc)i
+    [[nodiscard]] constexpr Complex operator*(const Complex& rhs) const {
+        return { x * rhs.x - y * rhs.y, x * rhs.y + y * rhs.x };
+    }
+
+    // (a+bi)/(c+di) = ((a+bi)(c-di)) / (c^2+d^2)
+    [[nodiscard]] constexpr Complex operator/(const Complex& rhs) const {
+        const T denom = rhs.x * rhs.x + rhs.y * rhs.y;
+        return { (x * rhs.x + y * rhs.y) / denom, (y * rhs.x - x * rhs.y) / denom };
+    }
+
+    // compound ops
+    constexpr void operator+=(Complex rhs) { x += rhs.x; y += rhs.y; }
+    constexpr void operator-=(Complex rhs) { x -= rhs.x; y -= rhs.y; }
+
+    constexpr void operator*=(Complex rhs)
+    {
+        const T rx = x * rhs.x - y * rhs.y;
+        const T ry = x * rhs.y + y * rhs.x;
+        x = rx; y = ry;
+    }
+
+    constexpr void operator/=(Complex rhs)
+    {
+        const T denom = rhs.x * rhs.x + rhs.y * rhs.y;
+        const T rx = (x * rhs.x + y * rhs.y) / denom;
+        const T ry = (y * rhs.x - x * rhs.y) / denom;
+        x = rx; y = ry;
+    }
+
+    // scalar ops (treat scalar as real number)
+    constexpr void operator+=(T v) { x += v; }
+    constexpr void operator-=(T v) { x -= v; }
+    constexpr void operator*=(T v) { x *= v; y *= v; }
+    constexpr void operator/=(T v) { x /= v; y /= v; }
+
+    // properties
+    [[nodiscard]] constexpr T real() const { return x; }
+    [[nodiscard]] constexpr T imag() const { return y; }
+
+    [[nodiscard]] constexpr T mag() const { return sqrt(x * x + y * y); }
+    [[nodiscard]] constexpr T mag2() const { return x * x + y * y; }
+    [[nodiscard]] constexpr T arg() const { return atan2(y, x); }
+    [[nodiscard]] constexpr T dot(const Complex& other) const { return x * other.x + y * other.y; }
+
+    [[nodiscard]] constexpr Complex conj() const { return { x, -y }; }
+    [[nodiscard]] constexpr bool isZero() const { return x == (T)0 && y == (T)0; }
+
+    // helpers
+    [[nodiscard]] constexpr Complex normalized() const { return (*this) / mag(); }
+    [[nodiscard]] constexpr Complex squared() const {
+        return { x * x - y * y, (T)2 * x * y }; // (a+bi)^2 = (a^2-b^2) + (2ab)i
+    }
+
+    // static
+    [[nodiscard]] static constexpr Complex lerp(const Complex& a, const Complex& b, T ratio) { return a + (b - a) * ratio; }
+    [[nodiscard]] static constexpr Complex lowest()  { return Complex{ std::numeric_limits<T>::lowest(), std::numeric_limits<T>::lowest() }; }
+    [[nodiscard]] static constexpr Complex highest() { return Complex{ std::numeric_limits<T>::max(), std::numeric_limits<T>::max() }; }
+
+    friend std::ostream& operator<<(std::ostream& os, const Complex& z)
+    {
+        return os << "(re: " << z.x << ", im: " << z.y << ")";
+    }
+};
+
+// ----- Segment -----
 
 template<typename T>
 struct Segment
@@ -603,7 +571,7 @@ struct Segment
     }
 };
 
-// Ray
+// ----- Ray -----
 
 template<typename T>
 struct Ray : public Vec2<T> // todo: Some methods maybe aren't ideal for inheriting
@@ -623,7 +591,7 @@ struct Ray : public Vec2<T> // todo: Some methods maybe aren't ideal for inherit
     }
 };
 
-// Triangle
+// ----- Triangle -----
 
 template <typename VecT>
 struct Triangle 
@@ -708,10 +676,9 @@ struct TriangleEqual
     }
 };
 
-// Rect
+// ----- Rect -----
 
-template<typename T> struct Quad;
-
+template<typename T> struct Quad; // forward declare for Rect->Quad conversion support
 template<typename T>
 struct Rect
 {
@@ -785,12 +752,10 @@ struct Rect
     }
 };
 
-// AngledRect
+// ----- AngledRect -----
 
 template<typename T> struct Quad;
 template<typename T> struct AngledRect;
-
-
 
 template<typename T>
 struct AngledRect
@@ -878,12 +843,12 @@ struct AngledRect
     {
         cx = (a.cx + b.cx) * T{0.5};
         cy = (a.cy + b.cy) * T{0.5};
-        angle = Math::avgAngle<T>(a.angle, b.angle);
+        angle = math::avgAngle<T>(a.angle, b.angle);
         size = AngledRect<T>::enclosingSize(a, b, angle, fixed_aspect_ratio);
     }
 };
 
-// Quad
+// ----- Quad -----
 
 template<typename T>
 struct Quad
@@ -1004,7 +969,200 @@ struct Quad
     }
 };
 
-// Typedefs
+/// ================= free operator overloads =================
+
+/// ----- Complex overloads -----
+
+template<class X> struct is_cplx : std::false_type {};
+template<class T> struct is_cplx<Complex<T>> : std::true_type {};
+template<class X> inline constexpr bool is_cplx_v = is_cplx<std::remove_cvref_t<X>>::value;
+
+template<class T, class U> using plus_t = decltype(std::declval<T>() + std::declval<U>());
+template<class T, class U> using minus_t = decltype(std::declval<T>() - std::declval<U>());
+template<class T, class U> using mul_t = decltype(std::declval<T>()* std::declval<U>());
+template<class T, class U> using div_t = decltype(std::declval<T>() / std::declval<U>());
+
+// Complex op scalar (scalar treated as real)
+template<class T, class U> requires (!is_cplx_v<U>&& requires(T a, U b) { a + b; })
+constexpr auto operator+(const Complex<T>& z, const U& s) -> Complex<plus_t<T, U>>
+{
+    // z + s  => (re+s, im)
+    using R = plus_t<T, U>;
+    return { R(z.x) + s, R(z.y) };
+}
+template<class T, class U> requires (!is_cplx_v<U>&& requires(T a, U b) { a - b; })
+constexpr auto operator-(const Complex<T>& z, const U& s) -> Complex<minus_t<T, U>>
+{
+    // z - s  => (re-s, im)
+    using R = minus_t<T, U>;
+    return { R(z.x) - s, R(z.y) };
+}
+template<class T, class U> requires (!is_cplx_v<U>&& requires(T a, U b) { a* b; })
+constexpr auto operator*(const Complex<T>& z, const U& s) -> Complex<mul_t<T, U>>
+{
+    // z * s  => (re*s, im*s)
+    using R = mul_t<T, U>;
+    return { R(z.x) * s, R(z.y) * s };
+}
+template<class T, class U> requires (!is_cplx_v<U>&& requires(T a, U b) { a / b; })
+constexpr auto operator/(const Complex<T>& z, const U& s) -> Complex<div_t<T, U>>
+{
+    // z / s  => (re/s, im/s)
+    using R = div_t<T, U>;
+    return { R(z.x) / s, R(z.y) / s };
+}
+
+// scalar op Complex (scalar treated as real)
+template<class T, class U> requires (!is_cplx_v<T>&& requires(T a, U b) { a + b; })
+constexpr auto operator+(const T& s, const Complex<U>& z) -> Complex<plus_t<T, U>>
+{
+    // s + z  => (s+re, im)
+    using R = plus_t<T, U>;
+    return { s + R(z.x), R(z.y) };
+}
+template<class T, class U> requires (!is_cplx_v<T>&& requires(T a, U b) { a - b; })
+constexpr auto operator-(const T& s, const Complex<U>& z) -> Complex<minus_t<T, U>>
+{
+    // s - z  => (s-re, -im)
+    using R = minus_t<T, U>;
+    return { s - R(z.x), -R(z.y) };
+}
+template<class T, class U> requires (!is_cplx_v<T>&& requires(T a, U b) { a* b; })
+constexpr auto operator*(const T& s, const Complex<U>& z) -> Complex<mul_t<T, U>>
+{
+    // s * z  => (s*re, s*im)
+    using R = mul_t<T, U>;
+    return { s * R(z.x), s * R(z.y) };
+}
+template<class T, class U> requires (!is_cplx_v<T>&& requires(T a, U b) { a / b; a* b; a + b; a - b; })
+constexpr auto operator/(const T& s, const Complex<U>& z) -> Complex<div_t<T, U>>
+{
+    // s / z  => s*(conj z)/|z|^2  => (s*re/den, -s*im/den)
+    using R = div_t<T, U>;
+    const auto denom = z.x * z.x + z.y * z.y;
+    return { R(s) * R(z.x) / denom, -R(s) * R(z.y) / denom };
+}
+
+// true complex arithmetic
+template<class T, class U> requires requires(T a, U b) { a + b; a - b; a* b; }
+constexpr auto operator+(const Complex<T>& a, const Complex<U>& b) -> Complex<plus_t<T, U>>
+{
+    using R = plus_t<T, U>;
+    return { R(a.x) + b.x, R(a.y) + b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a - b; }
+constexpr auto operator-(const Complex<T>& a, const Complex<U>& b) -> Complex<minus_t<T, U>>
+{
+    using R = minus_t<T, U>;
+    return { R(a.x) - b.x, R(a.y) - b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a* b; a + b; a - b; }
+constexpr auto operator*(const Complex<T>& a, const Complex<U>& b) -> Complex<mul_t<T, U>>
+{
+    // (a+ai*i)(b+bi*i) = (ab - ai*bi) + (a*bi + ai*b)i
+    using R = mul_t<T, U>;
+    const R rx = R(a.x) * b.x - R(a.y) * b.y;
+    const R ry = R(a.x) * b.y + R(a.y) * b.x;
+    return { rx, ry };
+}
+template<class T, class U> requires requires(T a, U b) { a* b; a + b; a - b; a / b; }
+constexpr auto operator/(const Complex<T>& a, const Complex<U>& b) -> Complex<div_t<T, U>>
+{
+    // (a+ai*i)/(b+bi*i) = ((a+ai*i)(b-bi*i)) / (b^2+bi^2)
+    using R = div_t<T, U>;
+    const auto denom = b.x * b.x + b.y * b.y;
+    const R rx = (R(a.x) * b.x + R(a.y) * b.y) / denom;
+    const R ry = (R(a.y) * b.x - R(a.x) * b.y) / denom;
+    return { rx, ry };
+}
+
+/// ----- Vec2 overloads -----
+
+template<class X> struct is_vec2 : std::false_type {};
+template<class T> struct is_vec2<Vec2<T>> : std::true_type {};
+template<class X> inline constexpr bool is_vec2_v = is_vec2<std::remove_cvref_t<X>>::value;
+
+template<class T, class U> using plus_t  = decltype(std::declval<T>() + std::declval<U>());
+template<class T, class U> using minus_t = decltype(std::declval<T>() - std::declval<U>());
+template<class T, class U> using mul_t   = decltype(std::declval<T>() * std::declval<U>());
+template<class T, class U> using div_t   = decltype(std::declval<T>() / std::declval<U>());
+
+// Vec2 op scalar
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a + b; })
+constexpr auto operator+(const Vec2<T>& v, const U& s) -> Vec2<plus_t<T, U>> {
+    using R = plus_t<T, U>; return { R(v.x) + s, R(v.y) + s };
+}
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a - b; })
+constexpr auto operator-(const Vec2<T>& v, const U& s) -> Vec2<minus_t<T, U>> {
+    using R = minus_t<T, U>; return { R(v.x) - s, R(v.y) - s };
+}
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a* b; })
+constexpr auto operator*(const Vec2<T>& v, const U& s) -> Vec2<mul_t<T, U>> {
+    using R = mul_t<T, U>; return { R(v.x) * s, R(v.y) * s };
+}
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a / b; })
+constexpr auto operator/(const Vec2<T>& v, const U& s) -> Vec2<div_t<T, U>> {
+    using R = div_t<T, U>; return { R(v.x) / s, R(v.y) / s };
+}
+
+// scalar op Vec2
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a + b; })
+constexpr auto operator+(const T& s, const Vec2<U>& v) -> Vec2<plus_t<T, U>> {
+    using R = plus_t<T, U>; return { s + R(v.x), s + R(v.y) };
+}
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a - b; })
+constexpr auto operator-(const T& s, const Vec2<U>& v) -> Vec2<minus_t<T, U>> {
+    using R = minus_t<T, U>; return { s - R(v.x), s - R(v.y) };
+}
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a* b; })
+constexpr auto operator*(const T& s, const Vec2<U>& v) -> Vec2<mul_t<T, U>> {
+    using R = mul_t<T, U>; return { s * R(v.x), s * R(v.y) };
+}
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a / b; })
+constexpr auto operator/(const T& s, const Vec2<U>& v) -> Vec2<div_t<T, U>> {
+    using R = div_t<T, U>; return { s / R(v.x), s / R(v.y) };
+}
+
+// Vec2 op Vec2 (elementwise)
+template<class T, class U> requires requires(T a, U b) { a + b; }
+constexpr auto operator+(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<plus_t<T, U>> {
+    using R = plus_t<T, U>; return { R(a.x) + b.x, R(a.y) + b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a - b; }
+constexpr auto operator-(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<minus_t<T, U>> {
+    using R = minus_t<T, U>; return { R(a.x) - b.x, R(a.y) - b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a* b; }
+constexpr auto operator*(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<mul_t<T, U>> {
+    using R = mul_t<T, U>; return { R(a.x) * b.x, R(a.y) * b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a / b; }
+constexpr auto operator/(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<div_t<T, U>> {
+    using R = div_t<T, U>; return { R(a.x) / b.x, R(a.y) / b.y };
+}
+
+
+/// ----- Vec3 overloads -----
+template<typename T> inline Vec3<T> operator*(T s, const Vec3<T>& v) { return v * s; }
+template<typename T> inline Vec3<T> operator*(const Vec3<T>& v, T s) { return v * s; }
+template<typename T> inline Vec3<T> operator/(T s, const Vec3<T>& v) { return v / s; }
+template<typename T> inline Vec3<T> operator/(const Vec3<T>& v, T s) { return v / s; }
+template<typename T> inline Vec3<T> operator+(T s, const Vec3<T>& v) { return v + s; }
+template<typename T> inline Vec3<T> operator+(const Vec3<T>& v, T s) { return v + s; }
+template<typename T> inline Vec3<T> operator-(T s, const Vec3<T>& v) { return v - s; }
+template<typename T> inline Vec3<T> operator-(const Vec3<T>& v, T s) { return v - s; }
+
+/// ----- Vec4 overloads -----
+template<typename T> inline Vec4<T> operator*(T s, const Vec4<T>& v) { return v * s; }
+template<typename T> inline Vec4<T> operator*(const Vec4<T>& v, T s) { return v * s; }
+template<typename T> inline Vec4<T> operator/(T s, const Vec4<T>& v) { return v / s; }
+template<typename T> inline Vec4<T> operator/(const Vec4<T>& v, T s) { return v / s; }
+template<typename T> inline Vec4<T> operator+(T s, const Vec4<T>& v) { return v + s; }
+template<typename T> inline Vec4<T> operator+(const Vec4<T>& v, T s) { return v + s; }
+template<typename T> inline Vec4<T> operator-(T s, const Vec4<T>& v) { return v - s; }
+template<typename T> inline Vec4<T> operator-(const Vec4<T>& v, T s) { return v - s; }
+
+// ================= typedefs =================
 
 typedef std::vector<uint8_t>  bytebuf;
 
@@ -1045,16 +1203,37 @@ typedef AngledRect<f64>    DAngledRect;
 typedef AngledRect<f128>   DDAngledRect;
 
 
-#pragma once
+// ================= statitic layout tests =================
+
+template<class T>
+inline void _vec2_tests()
+{
+    static_assert(std::is_standard_layout_v<Vec2<T>>, "Vec2<T> must be standard layout");
+    static_assert(sizeof(Vec2<T>) == 2 * sizeof(T), "Vec2<T> must be exactly two Ts");
+    static_assert(offsetof(Vec2<T>, x) == 0);
+    static_assert(offsetof(Vec2<T>, y) == sizeof(T));
+}
+
+inline void _type_tests() {
+    static_assert(std::is_trivially_constructible_v<f128>, "f128 must be trivially constructible");
+
+    _vec2_tests<f32>();
+    _vec2_tests<f64>();
+    _vec2_tests<f128>();
+}
+
+struct VecTests
+{
+    VecTests() { _type_tests(); }
+};
+static inline VecTests tests;
 
 
 // ================= core utilities =================
 
 // nth_type<N, Ts...> -> the Nth type from Ts...
-template<std::size_t N, class T0, class... Ts>
-struct nth_type : nth_type<N - 1, Ts...> {};
-template<class T0, class... Ts>
-struct nth_type<0, T0, Ts...> { using type = T0; };
+template<std::size_t N, class T0, class... Ts> struct nth_type : nth_type<N - 1, Ts...> {};
+template<class T0, class... Ts> struct nth_type<0, T0, Ts...> { using type = T0; };
 
 // index_of<T, Ts...> -> first index of T, or npos
 constexpr std::size_t type_npos = static_cast<std::size_t>(-1);
@@ -1221,46 +1400,38 @@ using min_float_t = typename min_float<A, B>::type;
 
 // ================= upgrade/downgrade =================
 
+
 // integers
-template<class T> using upgrade_int_t    = upgrade_from_list_t<T, signed_int_types>;
-template<class T> using downgrade_int_t  = downgrade_from_list_t<T, signed_int_types>;
-template<class T> using upgrade_uint_t   = upgrade_from_list_t<T, unsigned_int_types>;
-template<class T> using downgrade_uint_t = downgrade_from_list_t<T, unsigned_int_types>;
+template<class T> using upgrade_int_t          = upgrade_from_list_t<T, signed_int_types>;
+template<class T> using downgrade_int_t        = downgrade_from_list_t<T, signed_int_types>;
+template<class T> using upgrade_uint_t         = upgrade_from_list_t<T, unsigned_int_types>;
+template<class T> using downgrade_uint_t       = downgrade_from_list_t<T, unsigned_int_types>;
 
 // floats
-template<class T> using upgrade_float_t = upgrade_from_list_t<T, float_types>;
-template<class T> using downgrade_float_t = downgrade_from_list_t<T, float_types>;
+template<class T> using upgrade_float_t        = upgrade_from_list_t<T, float_types>;
+template<class T> using downgrade_float_t      = downgrade_from_list_t<T, float_types>;
 
 // vec
 template<class T> using downgrade_vec2_float_t = downgrade_template_t<Vec2<T>, float_types>;
 template<class T> using downgrade_vec3_float_t = downgrade_template_t<Vec3<T>, float_types>;
 template<class T> using downgrade_vec4_float_t = downgrade_template_t<Vec4<T>, float_types>;
 
-template<class T> using upgrade_vec2_float_t = upgrade_template_t<Vec2<T>, float_types>;
-template<class T> using upgrade_vec3_float_t = upgrade_template_t<Vec3<T>, float_types>;
-template<class T> using upgrade_vec4_float_t = upgrade_template_t<Vec4<T>, float_types>;
+template<class T> using upgrade_vec2_float_t   = upgrade_template_t<Vec2<T>, float_types>;
+template<class T> using upgrade_vec3_float_t   = upgrade_template_t<Vec3<T>, float_types>;
+template<class T> using upgrade_vec4_float_t   = upgrade_template_t<Vec4<T>, float_types>;
+                                                   
+template<class T> using upgrade_vec2_int_t     = upgrade_template_t<Vec2<T>, signed_int_types>;
+template<class T> using upgrade_vec3_int_t     = upgrade_template_t<Vec3<T>, signed_int_types>;
+template<class T> using upgrade_vec4_int_t     = upgrade_template_t<Vec4<T>, signed_int_types>;
+                                                   
+template<class T> using downgrade_vec2_int_t   = upgrade_template_t<Vec2<T>, signed_int_types>;
+template<class T> using downgrade_vec3_int_t   = upgrade_template_t<Vec3<T>, signed_int_types>;
+template<class T> using downgrade_vec4_int_t   = upgrade_template_t<Vec4<T>, signed_int_types>;
 
-template<class T> using upgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signed_int_types>;
-template<class T> using upgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
-template<class T> using upgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
-
-template<class T> using downgrade_vec2_int_t = upgrade_template_t<Vec2<T>, signed_int_types>;
-template<class T> using downgrade_vec3_int_t = upgrade_template_t<Vec3<T>, signed_int_types>;
-template<class T> using downgrade_vec4_int_t = upgrade_template_t<Vec4<T>, signed_int_types>;
 
 template<class F, class... Args> using return_type = std::invoke_result_t<std::decay_t<F>, Args...>;
 
-// Physics types
 
-struct MassForceParticle : public DVec2
-{
-    f64 r;
-    f64 fx;
-    f64 fy;
-    f64 vx;
-    f64 vy;
-    f64 mass;
-};
 
 // Global std::ostream overloads
 
@@ -1291,7 +1462,7 @@ BL_END_NS
     template<> struct enable_enum_bitops<E> : std::true_type {}
 
 template<class E>
-struct enable_enum_bitops : std::false_type {}; // specialize as needed: template<> struct enable_enum_bitops<YourEnum> : std::true_type {};
+struct enable_enum_bitops : std::false_type {};
 
 template<class E>
 concept bitmask_enum = std::is_enum_v<E> && enable_enum_bitops<E>::value;

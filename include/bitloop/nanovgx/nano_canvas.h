@@ -944,8 +944,8 @@ public:
         double dx = b.x - a.x;
         double dy = b.y - a.y;
         double angle = std::atan2(dy, dx);
-        const double tip_sharp_angle = Math::toRadians(180.0 - tip_angle);// 145.0 * Math::PI / 180.0;
-        double arrow_size;// = (line_width * 4) / (camera->scale_lines ? _avgZoom() : 1);
+        const double tip_sharp_angle = math::toRadians(180.0 - tip_angle);
+        double arrow_size;
 
         if (transform_coordinates)
         {

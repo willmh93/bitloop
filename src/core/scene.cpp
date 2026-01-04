@@ -67,7 +67,7 @@ bool SceneBase::ownsEvent(const Event& e)
 double SceneBase::frame_dt(int average_samples) const
 {
     if (dt_call_index >= dt_scene_ma_list.size())
-        dt_scene_ma_list.push_back(Math::MovingAverage::MA<double>(average_samples));
+        dt_scene_ma_list.push_back(math::SMA<double>(average_samples));
 
     auto& ma = dt_scene_ma_list[dt_call_index++];
     return ma.push(project->dt_frameProcess);
@@ -76,7 +76,7 @@ double SceneBase::frame_dt(int average_samples) const
 double SceneBase::scene_dt(int average_samples) const
 {
     if (dt_call_index >= dt_scene_ma_list.size())
-        dt_scene_ma_list.push_back(Math::MovingAverage::MA<double>(average_samples));
+        dt_scene_ma_list.push_back(math::SMA<double>(average_samples));
 
     auto& ma = dt_scene_ma_list[dt_call_index++];
     return ma.push(dt_sceneProcess);
@@ -85,7 +85,7 @@ double SceneBase::scene_dt(int average_samples) const
 double SceneBase::project_dt(int average_samples) const
 {
     if (dt_process_call_index >= dt_project_ma_list.size())
-        dt_project_ma_list.push_back(Math::MovingAverage::MA<double>(average_samples));
+        dt_project_ma_list.push_back(math::SMA<double>(average_samples));
 
     auto& ma = dt_project_ma_list[dt_process_call_index++];
     return ma.push(project->dt_projectProcess);
@@ -124,9 +124,40 @@ bool SceneBase::isCapturing() const
     return isSnapshotting() || isRecording();
 }
 
-void SceneBase::beginSnapshot(const SnapshotPresetList& presets, const char* relative_path)
+void SceneBase::_onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset)
 {
-    main_window()->queueBeginSnapshot(presets, relative_path);
+    onEncodeFrame(data, request_id, preset);
+
+    for (size_t i = 0; i < snapshot_callbacks.size(); i++)
+    {
+        const auto& [callback_id, batch_callbacks] = snapshot_callbacks[i];
+        const auto& [on_snapshot_complete, on_batch_complete] = batch_callbacks;
+
+        if (callback_id == request_id)
+        {
+            on_snapshot_complete(data, preset);
+
+            if (on_batch_complete && i == snapshot_callbacks.size() - 1)
+                on_batch_complete();
+
+            snapshot_callbacks.erase(snapshot_callbacks.begin() + i);
+            return;
+        }
+    }
+}
+
+void SceneBase::beginSnapshotList(
+    const SnapshotPresetList& presets,
+    std::string_view rel_path_fmt,
+    SnapshotCompleteCallback on_snapshot_complete,
+    SnapshotBatchCompleteCallback on_batch_complete,
+    std::string_view xmp_data)
+{
+    snapshot_callbacks.push_back(std::make_pair(capture_request_id, SnapshotBatchCallbacks{ on_snapshot_complete, on_batch_complete }));
+
+    main_window()->queueBeginSnapshot(presets, rel_path_fmt, capture_request_id, xmp_data);
+
+    capture_request_id++;
     initiating_snapshot = true;
 }
 

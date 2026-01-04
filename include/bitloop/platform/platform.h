@@ -85,15 +85,15 @@ public:
     [[nodiscard]] IVec2 window_size() const { return {win_w, win_h}; }
 
     // Device Info
-    #ifdef SIMULATE_DISPLAY
-    [[nodiscard]] float dpr() const { return SIMULATE_DISPLAY.dpr; }
+    #ifdef BL_SIMULATE_DISPLAY
+    [[nodiscard]] float dpr() const { return BL_SIMULATE_DISPLAY.dpr; }
     #else
     [[nodiscard]] float dpr() const { return win_dpr; }
     #endif
 
     [[nodiscard]] bool offscreen_active() const
     {
-        #ifdef SIMULATE_DISPLAY
+        #ifdef BL_SIMULATE_DISPLAY
         return true;
         #else
         return false;

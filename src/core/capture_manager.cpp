@@ -23,6 +23,8 @@ static inline uint8_t linear_to_srgb_u8(float l) {
 }
 static void downscale_box_integer_rgba8_linear(const uint8_t* src, uint8_t* dst, int dst_w, int dst_h, int N)
 {
+    /// TODO: Make multi-threaded or use shader render pass
+
     // Integer-factor box downscale in linear light (N×N average)
     int src_w = dst_w * N;
     //int src_h = dst_h * N;
@@ -369,6 +371,118 @@ bool webp_anim_encode_simple(
     WebPDataClear(&webp);
     return true;
 }
+
+std::string xml_escape(std::string_view s)
+{
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s)
+    {
+        switch (c)
+        {
+        case '&':  out += "&amp;";  break;
+        case '<':  out += "&lt;";   break;
+        case '>':  out += "&gt;";   break;
+        case '"':  out += "&quot;"; break;
+        case '\'': out += "&apos;"; break;
+        default:   out += c;        break;
+        }
+    }
+    return out;
+}
+
+std::string make_xmp_packet_with_save(std::string_view save_text)
+{
+    const std::string escaped = xml_escape(save_text);
+
+    std::string xmp;
+    xmp.reserve(300 + escaped.size());
+    xmp += "<?xpacket begin='\xEF\xBB\xBF' id='W5M0MpCehiHzreSzNTczkc9d'?>\n";
+    xmp += "<x:xmpmeta xmlns:x='adobe:ns:meta/'>\n";
+    xmp += "  <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>\n";
+    xmp += "    <rdf:Description xmlns:bl='https://bitloop.dev/ns/1.0/'>\n";
+    xmp += "      <bl:save>";
+    xmp += escaped;
+    xmp += "</bl:save>\n";
+    xmp += "    </rdf:Description>\n";
+    xmp += "  </rdf:RDF>\n";
+    xmp += "</x:xmpmeta>\n";
+    xmp += "<?xpacket end='w'?>\n";
+    return xmp;
+}
+
+bool webp_set_chunk_inplace(std::vector<uint8_t>& io_webp,
+   const char fourcc[4],
+   const uint8_t* payload,
+   size_t payload_size)
+{
+    if (io_webp.empty()) return false;
+
+    WebPData webp_data{ io_webp.data(), io_webp.size() };
+    WebPMux* mux = WebPMuxCreate(&webp_data, 1 /* copy_data */);
+    if (!mux) return false;
+
+    WebPData chunk{ payload, payload_size };
+    const WebPMuxError set_err = WebPMuxSetChunk(mux, fourcc, &chunk, 1 /* copy_data */);
+    if (set_err != WEBP_MUX_OK) { WebPMuxDelete(mux); return false; }
+
+    WebPData out_data{ nullptr, 0 };
+    const WebPMuxError asm_err = WebPMuxAssemble(mux, &out_data);
+    WebPMuxDelete(mux);
+
+    if (asm_err != WEBP_MUX_OK || !out_data.bytes || out_data.size == 0) {
+        WebPDataClear(&out_data);
+        return false;
+    }
+
+    io_webp.assign(out_data.bytes, out_data.bytes + out_data.size);
+    WebPDataClear(&out_data);
+    return true;
+}
+
+bool webp_set_save_string_as_xmp_inplace(std::vector<uint8_t>& io_webp,
+    std::string_view save_text)
+{
+    const std::string xmp = make_xmp_packet_with_save(save_text);
+    static constexpr char kXMP[4] = { 'X','M','P',' ' };
+    return webp_set_chunk_inplace(io_webp, kXMP,
+        reinterpret_cast<const uint8_t*>(xmp.data()),
+        xmp.size());
+}
+
+bool webp_extract_save_from_xmp(const std::vector<uint8_t>& webp, std::string& out_save)
+{
+    if (webp.empty()) return false;
+
+    WebPData webp_data{ webp.data(), webp.size() };
+    WebPMux* mux = WebPMuxCreate(&webp_data, 1 /* copy_data */);
+    if (!mux) return false;
+
+    WebPData chunk{ nullptr, 0 };
+    const WebPMuxError err = WebPMuxGetChunk(mux, "XMP ", &chunk);
+    if (err != WEBP_MUX_OK || !chunk.bytes || chunk.size == 0) {
+        WebPMuxDelete(mux);
+        return false;
+    }
+
+    // Copy while mux is alive
+    const std::string xmp(reinterpret_cast<const char*>(chunk.bytes), chunk.size);
+
+    WebPMuxDelete(mux);
+
+    const std::string open = "<bl:save>";
+    const std::string close = "</bl:save>";
+
+    const size_t a = xmp.find(open);
+    if (a == std::string::npos) return false;
+
+    const size_t b = xmp.find(close, a + open.size());
+    if (b == std::string::npos) return false;
+
+    out_save = xmp.substr(a + open.size(), b - (a + open.size()));
+    return true;
+}
+
 
 // ────── FFmpegWorker ──────
 
@@ -806,6 +920,9 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
 
     if (config.format == CaptureFormat::WEBP_SNAPSHOT)
     {
+        if (!config.save_payload.empty())
+            webp_set_save_string_as_xmp_inplace(encoded_data, config.save_payload);
+
         std::lock_guard<std::mutex> lock(capture_manager->encoded_data_mutex);
         capture_manager->encoded_data = std::move(encoded_data);
         capture_manager->capture_to_memory_complete.store(true, std::memory_order_release);
@@ -824,6 +941,9 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
             encoded_data
         );
 
+        if (!config.save_payload.empty())
+            webp_set_save_string_as_xmp_inplace(encoded_data, config.save_payload);
+
         std::lock_guard<std::mutex> lock(capture_manager->encoded_data_mutex);
         capture_manager->encoded_data = std::move(encoded_data);
         capture_manager->capture_to_memory_complete.store(true, std::memory_order_release);
@@ -836,36 +956,37 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
 
 // ────── CaptureManager ──────
 
-bool CaptureManager::startCapture(
-    CaptureFormat format,
-    std::string filename,
-    IVec2 resolution,
-    int supersample_factor,
-    float sharpen,
-    int fps,
-    int record_frame_count,
-    int64_t bitrate,
-    float quality,
-    bool lossless,
-    int near_lossless,
-    bool flip)
+bool CaptureManager::startCapture(CaptureConfig _config)
+    //CaptureFormat format,
+    //std::string filename,
+    //IVec2 resolution,
+    //int supersample_factor,
+    //float sharpen,
+    //int fps,
+    //int record_frame_count,
+    //int64_t bitrate,
+    //float quality,
+    //bool lossless,
+    //int near_lossless,
+    //bool flip)
 {
-    config.format = format;
-    config.filename = filename;
-    config.resolution = resolution;
-    config.sharpen = sharpen;
-    config.ssaa = supersample_factor;
-    config.flip = flip;
-    config.record_frame_count = record_frame_count;
-    config.fps = fps;
-    config.bitrate = bitrate;
-    config.quality = quality;
-    config.lossless = lossless;
-    config.near_lossless = near_lossless;
+    config = _config;
+    ///config.format = format;
+    ///config.filename = filename;
+    ///config.resolution = resolution;
+    ///config.sharpen = sharpen;
+    ///config.ssaa = supersample_factor;
+    ///config.flip = flip;
+    ///config.record_frame_count = record_frame_count;
+    ///config.fps = fps;
+    ///config.bitrate = bitrate;
+    ///config.quality = quality;
+    ///config.lossless = lossless;
+    ///config.near_lossless = near_lossless;
 
     capture_to_memory_complete.store(false, std::memory_order_release);
 
-    if (format == CaptureFormat::x264 || format == CaptureFormat::x265)
+    if (config.format == CaptureFormat::x264 || config.format == CaptureFormat::x265)
     {
         #if BITLOOP_FFMPEG_ENABLED
         recording.store(true, std::memory_order_release);
@@ -875,13 +996,13 @@ bool CaptureManager::startCapture(
         blPrint() << "Error: FFmpeg not enabled";
         #endif
     }
-    else if (format == CaptureFormat::WEBP_VIDEO)
+    else if (config.format == CaptureFormat::WEBP_VIDEO)
     {
         recording.store(true, std::memory_order_release);
 
         encoder_thread = std::jthread(&WebPWorker::process, &webp_worker, this, config);
     }
-    else if (format == CaptureFormat::WEBP_SNAPSHOT)
+    else if (config.format == CaptureFormat::WEBP_SNAPSHOT)
     {
         snapshotting.store(true, std::memory_order_release);
 
@@ -984,7 +1105,7 @@ void CaptureManager::preProcessFrameForEncoding(const uint8_t* src_data, bytebuf
     }
 }
 
-bool CaptureManager::encodeFrame(const uint8_t* data)
+bool CaptureManager::encodeFrame(const uint8_t* data, std::function<void(bytebuf&)> onPreprocessed)
 {
     if (!isCaptureEnabled())
         return false;
@@ -994,6 +1115,7 @@ bool CaptureManager::encodeFrame(const uint8_t* data)
     blPrint() << "preProcessFrameForEncoding()...";
     bytebuf preprocessed_frame;
     preProcessFrameForEncoding(data, preprocessed_frame);
+    onPreprocessed(preprocessed_frame);
 
     // If encoder still busy with previous frame, do not block here
     if (encoder_busy.load(std::memory_order_acquire))
