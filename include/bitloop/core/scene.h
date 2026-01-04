@@ -29,9 +29,9 @@ class SceneBase : public ChangeTracker
 
     int dt_sceneProcess = 0;
 
-    mutable std::vector<Math::MovingAverage::MA<double>> dt_scene_ma_list;
-    mutable std::vector<Math::MovingAverage::MA<double>> dt_project_ma_list;
-    //mutable std::vector<Math::MovingAverage::MA> dt_project_draw_ma_list;
+    mutable std::vector<math::SMA<double>> dt_scene_ma_list;
+    mutable std::vector<math::SMA<double>> dt_project_ma_list;
+    //mutable std::vector<math::SMA> dt_project_draw_ma_list;
 
     mutable size_t dt_call_index = 0;
     mutable size_t dt_process_call_index = 0;
@@ -71,7 +71,10 @@ protected:
     virtual void invokeScheduledCalls() {}
 
     //
-    
+
+    void _onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset);
+
+    //
 
     void _onEvent(Event e) 
     {
@@ -149,7 +152,33 @@ public:
     [[nodiscard]] bool isCapturing() const;
     [[nodiscard]] bool capturedLastFrame();
 
-    void beginSnapshot(const SnapshotPresetList& presets, const char* relative_filepath = nullptr);
+
+    int capture_request_id = 1; // 0 reserved for "no callback"
+    std::vector<std::pair<int, SnapshotBatchCallbacks>> snapshot_callbacks;
+
+    virtual void onBeginSnapshot() {}
+    virtual void onEncodeFrame(
+        bytebuf& data [[maybe_unused]],
+        int request_id [[maybe_unused]],
+        const SnapshotPreset& preset [[maybe_unused]]
+    ) {}
+
+    void beginSnapshotList(
+        const SnapshotPresetList& presets,
+        std::string_view relative_filepath = {},
+        SnapshotCompleteCallback on_snapshot_complete = nullptr,
+        SnapshotBatchCompleteCallback on_batch_complete = nullptr,
+        std::string_view xmp_data = {});
+
+    void beginSnapshot(
+        const SnapshotPreset& preset,
+        std::string_view relative_filepath = {},
+        SnapshotCompleteCallback on_snapshot_complete = nullptr,
+        std::string_view xmp_data = {})
+    {
+        beginSnapshotList(SnapshotPresetList(preset), relative_filepath, on_snapshot_complete, nullptr, xmp_data);
+    }
+
     void beginRecording();
     void endRecording();
 
@@ -172,30 +201,41 @@ class Scene : public SceneBase, public VarBuffer<SceneType>
 
 public:
 
-    using Interface = VarBufferInterface<SceneType>;
-    Interface* ui = nullptr;
+    using ViewModel = ViewModel<SceneType>;
+    ViewModel* ui = nullptr;
 
     Scene() : SceneBase()
     {
         has_var_buffer = true;
-        ui = new SceneType::UI(static_cast<const SceneType*>(this));
-        ui->init();
     }
 
     ~Scene()
     {
-        delete ui;
+        if (ui)
+            delete ui;
     }
 
 protected:
 
     void _sceneAttributes() override final
     {
+        if (!ui) {
+            // safer to initialize UI on same thread as UI populate
+            ui = new SceneType::UI(static_cast<const SceneType*>(this));
+            ui->init();
+        }
+
         ui->sidebar();
     }
 
     void _populateOverlay() override final
     {
+        if (!ui) {
+            // safer to initialize UI on same thread as UI populate
+            ui = new SceneType::UI(static_cast<const SceneType*>(this));
+            ui->init();
+        }
+
         ui->overlay();
     }
 

@@ -71,7 +71,7 @@ void Tiger_Scene::viewportProcess(Viewport*, double)
 
 void Tiger_Scene::viewportDraw(Viewport* ctx) const
 {
-    //ctx->rotate(Math::toRadians(30.0));
+    //ctx->rotate(math::toRadians(30.0));
 	
     /*ctx->transform(camera.getTransform());
     ctx->drawWorldAxis();
@@ -90,7 +90,7 @@ void Tiger_Scene::viewportDraw(Viewport* ctx) const
     //ctx->translate(200.0, 200.0);
 
     ctx->stageMode();
-    ctx->rotate(Math::toRadians(10.0));
+    ctx->rotate(math::toRadians(10.0));
     ctx->translate(100.0, 100.0);
     draw_tiger(ctx);
 }

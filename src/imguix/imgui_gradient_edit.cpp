@@ -31,13 +31,7 @@ ImGradient::ImGradient(bool empty)
 
 ImGradient& ImGradient::operator=(const ImGradient& rhs)
 {
-    m_marks = rhs.m_marks;
-    dragging_uid = rhs.dragging_uid;
-    selected_uid = rhs.selected_uid;
-    memcpy(m_cachedValues, rhs.m_cachedValues, sizeof(m_cachedValues));
-    memcpy(m_cachedColors, rhs.m_cachedColors, sizeof(m_cachedColors));
-    _hash = rhs._hash;
-
+    deserialize(rhs.serialize());
     return *this;
 }
 

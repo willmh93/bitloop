@@ -588,7 +588,7 @@ static f128 ScaleValueFromRatio_flt128(float t, f128 v_min, f128 v_max, bool is_
     }
 
     // linear
-    return bl::Math::lerp(v_min, v_max, f128(t));
+    return bl::math::lerp(v_min, v_max, f128(t));
 }
 
 static int DataTypeCompareFlt128(const f128* lhs, const f128* rhs)
@@ -852,6 +852,83 @@ namespace ImGui
         ImGui::SameLine();
         bool ret = ResetBtn(id);
         return ret;
+    }
+
+    bool ImageButtonCentered(
+        const char* str_id,
+        ImTextureID user_texture_id,
+        const ImVec2& image_size,
+        const ImVec2& uv0,
+        const ImVec2& uv1,
+        const ImVec4& bg_col,
+        const ImVec4& tint_col)
+    {
+        ImGuiWindow* window = ImGui::GetCurrentWindow();
+        if (window->SkipItems)
+            return false;
+
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImDrawList* dl = window->DrawList;
+
+        // make the button the same size ImageButton would use
+        ImVec2 button_size(
+            image_size.x + style.FramePadding.x * 2.0f,
+            image_size.y + style.FramePadding.y * 2.0f
+        );
+
+        // width actually available in this cell *before* adding the item
+        float cell_width = ImGui::GetContentRegionAvail().x;
+        if (cell_width <= 0.0f)
+            cell_width = button_size.x; // fallback (non-table or odd layout)
+
+        // standard InvisibleButton for layout + hit test
+        if (!ImGui::InvisibleButton(str_id, button_size))
+        {
+            // still need rect for drawing, even if not pressed
+        }
+        bool pressed = ImGui::IsItemActivated(); // same as return value
+
+        ImVec2 p_min = ImGui::GetItemRectMin();
+        ImVec2 p_max = ImGui::GetItemRectMax();
+
+        // ---- draw button frame (like a normal Button) ----
+        ImGuiCol col_idx = ImGuiCol_Button;
+        if (ImGui::IsItemActive())      col_idx = ImGuiCol_ButtonActive;
+        else if (ImGui::IsItemHovered()) col_idx = ImGuiCol_ButtonHovered;
+
+        ImU32 frame_col = ImGui::GetColorU32(col_idx);
+        dl->AddRectFilled(p_min, p_max, frame_col, style.FrameRounding);
+
+        if (style.FrameBorderSize > 0.0f)
+        {
+            ImU32 border_col = ImGui::GetColorU32(ImGuiCol_Border);
+            dl->AddRect(p_min, p_max, border_col, style.FrameRounding, 0, style.FrameBorderSize);
+        }
+
+        // ---- center the image in the *cell*, not the button ----
+
+        // horizontal: center in the cell width (even if button extends beyond)
+        float visible_width = cell_width;
+        float cell_center_x = p_min.x + visible_width * 0.5f;
+
+        // vertical: center inside the inner (padded) region of the button
+        float inner_h = button_size.y - style.FramePadding.y * 2.0f;
+
+        ImVec2 img_min(
+            cell_center_x - image_size.x * 0.5f,
+            p_min.y + style.FramePadding.y + (inner_h - image_size.y) * 0.5f
+        );
+        ImVec2 img_max(
+            img_min.x + image_size.x,
+            img_min.y + image_size.y
+        );
+
+        if (bg_col.w > 0.0f)
+            dl->AddRectFilled(img_min, img_max, ImGui::GetColorU32(bg_col));
+
+        dl->AddImage(user_texture_id, img_min, img_max, uv0, uv1, ImGui::GetColorU32(tint_col));
+
+        return pressed;
     }
 
     bool SliderDouble(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags)

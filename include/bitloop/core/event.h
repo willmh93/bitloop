@@ -92,6 +92,7 @@ public:
 };
 
 typedef SDL_Keycode KeyCode;
+typedef SDL_Keymod KeyMod;
 typedef SDL_Scancode ScanCode;
 
 class KeyEvent : public Event
@@ -101,6 +102,8 @@ public:
 
     [[nodiscard]] KeyCode keyCode()     { return static_cast<KeyCode>(sdl_event.key.key); }
     [[nodiscard]] ScanCode scanCode()   { return static_cast<ScanCode>(sdl_event.key.scancode); }
+    [[nodiscard]] SDL_Keymod keyMod()   { return static_cast<KeyMod>(sdl_event.key.mod); }
+
     [[nodiscard]] const char* keyName() { return SDL_GetKeyName(keyCode()); }
 };
 

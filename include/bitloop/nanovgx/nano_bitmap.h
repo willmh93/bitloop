@@ -9,6 +9,9 @@
 
 #include "nanovg.h"
 #include <vector>
+#include <atomic>
+#include <chrono>
+#include <algorithm>
 
 #include <bitloop/util/math_util.h>
 #include <bitloop/util/color.h>
@@ -116,7 +119,6 @@ public:
         // Make sure uv vectors span 2D area
         T det = u.x * v.y - u.y * v.x;
         if (det == 0) return  Vec2<T>{ 0.0, 0.0 };
-        //if (std::abs(det) < std::numeric_limits<double>::epsilon()) return { 0.0, 0.0 };
 
         // solve for a,b
         T inv_det = 1.0 / det;
@@ -364,12 +366,7 @@ protected:
     }*/
 };
 
-#include <atomic>
-#include <vector>
-#include <chrono>
-#include <algorithm>
-
-struct Block {
+struct TileBlock {
     int tile_index;
     int x0, y0, x1, y1;
 };
@@ -382,7 +379,7 @@ struct TileBlockProgress {
     int tiles_x = 0, tiles_y = 0;
 
     // Work decomposition (one micro-block = one job)
-    std::vector<Block> blocks;         // size = sum over tiles of ceil(tile_w/block_w)*ceil(tile_h/block_h)
+    std::vector<TileBlock> blocks;         // size = sum over tiles of ceil(tile_w/block_w)*ceil(tile_h/block_h)
     std::atomic<int>  next_block{ 0 };   // global cursor (persists across frames)
 
     // Per-tile progress
@@ -406,72 +403,74 @@ struct TileBlockProgress {
     }
 };
 
-inline double now_ms()
+namespace detail
 {
-    #ifdef __EMSCRIPTEN__
-    return emscripten_get_now(); // high-res ms
-    #else
-    using clock = std::chrono::steady_clock;
-    return std::chrono::duration<double, std::milli>(clock::now().time_since_epoch()).count();
-    #endif
-}
+    inline double now_ms()
+    {
+        #ifdef __EMSCRIPTEN__
+        return emscripten_get_now(); // high-res ms
+        #else
+        using clock = std::chrono::steady_clock;
+        return std::chrono::duration<double, std::milli>(clock::now().time_since_epoch()).count();
+        #endif
+    }
 
-// build/rebuild micro-blocks. Returns true if rebuilt.
-inline bool ensure_blocks_built(TileBlockProgress& P,
-    int bmp_w, int bmp_h,
-    int tile_w, int tile_h,
-    int block_w, int block_h)
-{
-    if (block_w <= 0) block_w = 64;
-    if (block_h <= 0) block_h = 8;
+    // build/rebuild micro-blocks. Returns true if rebuilt.
+    inline bool ensureBlocksBuilt(TileBlockProgress& P,
+        int bmp_w, int bmp_h,
+        int tile_w, int tile_h,
+        int block_w, int block_h)
+    {
+        if (block_w <= 0) block_w = 64;
+        if (block_h <= 0) block_h = 8;
 
-    const bool changed =
-        (P.bmp_w != bmp_w) || (P.bmp_h != bmp_h) ||
-        (P.tile_w != tile_w) || (P.tile_h != tile_h) ||
-        (P.block_w != block_w) || (P.block_h != block_h);
+        const bool changed =
+            (P.bmp_w != bmp_w) || (P.bmp_h != bmp_h) ||
+            (P.tile_w != tile_w) || (P.tile_h != tile_h) ||
+            (P.block_w != block_w) || (P.block_h != block_h);
 
-    if (!changed) return false;
+        if (!changed) return false;
 
-    P.bmp_w = bmp_w;  P.bmp_h = bmp_h;
-    P.tile_w = tile_w; P.tile_h = tile_h;
-    P.block_w = block_w; P.block_h = block_h;
+        P.bmp_w = bmp_w;  P.bmp_h = bmp_h;
+        P.tile_w = tile_w; P.tile_h = tile_h;
+        P.block_w = block_w; P.block_h = block_h;
 
-    P.tiles_x = (bmp_w + tile_w - 1) / tile_w;
-    P.tiles_y = (bmp_h + tile_h - 1) / tile_h;
-    const int tile_count = P.tiles_x * P.tiles_y;
+        P.tiles_x = (bmp_w + tile_w - 1) / tile_w;
+        P.tiles_y = (bmp_h + tile_h - 1) / tile_h;
+        const int tile_count = P.tiles_x * P.tiles_y;
 
-    std::vector<Block> blocks;
-    blocks.reserve((bmp_w / block_w + 1) * (bmp_h / block_h + 1));
+        std::vector<TileBlock> blocks;
+        blocks.reserve((bmp_w / block_w + 1) * (bmp_h / block_h + 1));
 
-    std::vector<uint32_t> total(tile_count, 0), done(tile_count, 0);
+        std::vector<uint32_t> total(tile_count, 0), done(tile_count, 0);
 
-    for (int ty = 0; ty < P.tiles_y; ++ty) {
-        for (int tx = 0; tx < P.tiles_x; ++tx) {
-            const int tile_index = ty * P.tiles_x + tx;
+        for (int ty = 0; ty < P.tiles_y; ++ty) {
+            for (int tx = 0; tx < P.tiles_x; ++tx) {
+                const int tile_index = ty * P.tiles_x + tx;
 
-            const int x0 = tx * tile_w;
-            const int y0 = ty * tile_h;
-            const int x1 = std::min(x0 + tile_w, bmp_w);
-            const int y1 = std::min(y0 + tile_h, bmp_h);
+                const int x0 = tx * tile_w;
+                const int y0 = ty * tile_h;
+                const int x1 = std::min(x0 + tile_w, bmp_w);
+                const int y1 = std::min(y0 + tile_h, bmp_h);
 
-            for (int by = y0; by < y1; by += block_h) {
-                const int yy1 = std::min(by + block_h, y1);
-                for (int bx = x0; bx < x1; bx += block_w) {
-                    const int xx1 = std::min(bx + block_w, x1);
-                    blocks.push_back(Block{ tile_index, bx, by, xx1, yy1 });
-                    ++total[tile_index];
+                for (int by = y0; by < y1; by += block_h) {
+                    const int yy1 = std::min(by + block_h, y1);
+                    for (int bx = x0; bx < x1; bx += block_w) {
+                        const int xx1 = std::min(bx + block_w, x1);
+                        blocks.push_back(TileBlock{ tile_index, bx, by, xx1, yy1 });
+                        ++total[tile_index];
+                    }
                 }
             }
         }
+
+        P.blocks = std::move(blocks);
+        P.blocks_total_per_tile = std::move(total);
+        P.blocks_done_per_tile = std::move(done);
+        P.next_block.store(0, std::memory_order_relaxed);
+        return true;
     }
-
-    P.blocks = std::move(blocks);
-    P.blocks_total_per_tile = std::move(total);
-    P.blocks_done_per_tile = std::move(done);
-    P.next_block.store(0, std::memory_order_relaxed);
-    return true;
 }
-
 
 template<typename T>
 class CanvasImageBase : public Image, public CanvasObjectBase<T>
@@ -952,7 +951,9 @@ public:
         int block_h = 8
     )
     {
-        ensure_blocks_built(P, bmp_width, bmp_height, tile_w, tile_h, block_w, block_h);
+        using namespace detail;
+
+        ensureBlocksBuilt(P, bmp_width, bmp_height, tile_w, tile_h, block_w, block_h);
 
         // initialize cursors if thread_count changed
         P.ensure_owner_slots(thread_count);
@@ -997,7 +998,7 @@ public:
                     if (bi >= N)
                         break; // this owner finished its sequence
 
-                    const Block b = P.blocks[bi];
+                    const TileBlock b = P.blocks[bi];
                     const int x0 = b.x0, x1 = b.x1, y0 = b.y0, y1 = b.y1;
 
                     // render micro-block

@@ -54,8 +54,11 @@ class WorldStageTransform
 
     void updateCache()
     {
-        m64 = static_cast<glm::dmat3>(m128);
+        // invert
         inv_m128 = glm::inverse(m128);
+
+        // downcast
+        m64 = static_cast<glm::dmat3>(m128);
         inv_m64 = static_cast<glm::dmat3>(inv_m128);
     }
 
@@ -365,8 +368,8 @@ public:
 public:
 
     void populateUI(DRect restrict_world_rect = DRect::max_extent());
-    int  getPositionDecimals()  const { return 1 + Math::countWholeDigits(zoom_128 * 5); }
-    f128 getPositionPrecision() const { return Math::precisionFromDecimals<f128>(getPositionDecimals()); }
+    int  getPositionDecimals()  const { return 1 + math::countWholeDigits(zoom_128 * 5); }
+    f128 getPositionPrecision() const { return math::precisionFromDecimals<f128>(getPositionDecimals()); }
 
     void uiSetUsingActualZoom() { ui_using_relative_zoom = false; }
     void uiSetUsingRelativeZoom() { ui_using_relative_zoom = true; }
@@ -381,11 +384,11 @@ public:
     // ────── tween ───────────────────────────────────────────────────────────────────────────────────────────────────────
     static void lerp(CameraInfo& dst, const CameraInfo& a, const CameraInfo& b, f64 lerp_factor)
     {
-        dst.setX(Math::lerp(a.x<f128>(), b.x<f128>(), lerp_factor));
-        dst.setY(Math::lerp(a.y<f128>(), b.y<f128>(), lerp_factor));
-        dst.setRotation(Math::lerpAngle(a.rotation(), b.rotation(), lerp_factor));
-        dst.setZoom(Math::lerp(a.zoom<f128>(), b.zoom<f128>(), lerp_factor));
-        dst.setStretch(Math::lerp(a.stretch(), b.stretch(), lerp_factor));
+        dst.setX(math::lerp(a.x<f128>(), b.x<f128>(), lerp_factor));
+        dst.setY(math::lerp(a.y<f128>(), b.y<f128>(), lerp_factor));
+        dst.setRotation(math::lerpAngle(a.rotation(), b.rotation(), lerp_factor));
+        dst.setZoom(math::lerp(a.zoom<f128>(), b.zoom<f128>(), lerp_factor));
+        dst.setStretch(math::lerp(a.stretch(), b.stretch(), lerp_factor));
     }
 };
 

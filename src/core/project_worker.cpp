@@ -15,6 +15,8 @@ void ProjectWorker::startWorker()
 
 void ProjectWorker::end()
 {
+    BL_TAKE_OWNERSHIP("live");
+
     if (shared_sync.project_thread_started)
     {
         // Kill worker thread
@@ -28,6 +30,8 @@ void ProjectWorker::end()
 
 void ProjectWorker::_destroyActiveProject()
 {
+    BL_TAKE_OWNERSHIP("live");
+
     if (current_project)
     {
         current_project->_projectDestroy();
@@ -39,6 +43,8 @@ void ProjectWorker::_destroyActiveProject()
 
 void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 {
+    BL_TAKE_OWNERSHIP("live");
+
     switch (e.type)
     {
     case ProjectCommandType::PROJECT_SET:
@@ -96,7 +102,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 
 void ProjectWorker::worker_loop()
 {
-    bool shadow_changed = false;
+    //bool shadow_changed = false;
 
     while (!shared_sync.quitting.load())
     {
@@ -167,7 +173,7 @@ void ProjectWorker::worker_loop()
                 /// ────── Update shadow buffer with *changed* live variables ──────
                 {
                     // currently, we push live changes to shadow IF shadow itself wasn't changed by UI
-                    shadow_changed = current_project->changedShadow();
+                    ///shadow_changed = current_project->changedShadow();
                     ///if (!shadow_changed)
                     ///  pushDataToShadow();
                     pushDataToUnchangedShadowVars();
@@ -284,14 +290,24 @@ void ProjectWorker::populateOverlay()
         current_project->_populateOverlay();
 }
 
+void ProjectWorker::onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset)
+{
+    if (current_project)
+        current_project->_onEncodeFrame(data, request_id, preset);
+}
+
 void ProjectWorker::_onEvent(SDL_Event& e)
 {
+    BL_TAKE_OWNERSHIP("live");
+
     if (current_project)
         current_project->_onEvent(e);
 }
 
 void ProjectWorker::draw()
 {
+    BL_TAKE_OWNERSHIP("live");
+
     if (current_project)
         current_project->_projectDraw();
 }

@@ -24,9 +24,9 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
     {}
 
     /// ─────── Thread-safe UI for editing Scene inputs with ImGui ───────
-    struct UI : Interface
+    struct UI : ViewModel
     {
-        using Interface::Interface;
+        using ViewModel::ViewModel;
         void sidebar();
         //void overlay();
 
@@ -63,8 +63,8 @@ struct {SIM_NAME}_Project : public Project<{SIM_NAME}_Project>
         return ProjectInfo({ "New Projects", "{SIM_NAME}" });
     }
 
-    struct UI : Interface {
-        using Interface::Interface;
+    struct UI : ViewModel {
+        using ViewModel::ViewModel;
         void sidebar();
         //void overlay();
     };

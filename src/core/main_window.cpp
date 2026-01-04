@@ -1,15 +1,27 @@
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
+#include <bitloop/util/text_util.h>
 #include <bitloop/imguix/imgui_debug_ui.h>
+
 #include <imgui_stdlib.h>
+
 #include <filesystem>
+#include <regex>
 
 #ifndef __EMSCRIPTEN__
 #include <fstream>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <charconv>
+#include <cctype>
 #endif
 
-#include <regex>
+/// TODO
+/// > Make tab buttons always visible, but the panels hidden on startup (customizable)
+/// > When panels visible, put a "Vertical Collapse" button
+
 
 BL_BEGIN_NS
 
@@ -27,11 +39,415 @@ void ImDebugPrint(const char* fmt, ...)
 }
 
 #ifndef __EMSCRIPTEN__
+
+// returns npos if not found
+static size_t find_insensitive(std::string_view txt, std::string_view substr_txt, size_t from)
+{
+    if (substr_txt.empty()) return from;
+    if (substr_txt.size() > txt.size()) return std::string_view::npos;
+
+    for (size_t i = from; i + substr_txt.size() <= txt.size(); ++i)
+    {
+        bool ok = true;
+        for (size_t j = 0; j < substr_txt.size(); ++j)
+        {
+            if (!text::eqInsensitive(txt[i + j], substr_txt[j])) { ok = false; break; }
+        }
+        if (ok) return i;
+    }
+    return std::string_view::npos;
+}
+
+static std::string normalize_extension(std::string_view ext)
+{
+    if (ext.empty()) return {};
+    if (ext.front() == '.') return std::string(ext);
+    std::string out;
+    out.reserve(ext.size() + 1);
+    out.push_back('.');
+    out.append(ext.begin(), ext.end());
+    return out;
+}
+
+struct Token
+{
+    enum class Kind { Lit, Index, Alias } kind = Kind::Lit;
+    std::string lit;   // Lit
+    int pad_width = 0; // Index (%0Nd)
+};
+
+static void push_lit(std::vector<Token>& toks, std::string&& s)
+{
+    if (s.empty()) return;
+    if (!toks.empty() && toks.back().kind == Token::Kind::Lit)
+        toks.back().lit += s;
+    else
+    {
+        Token t;
+        t.kind = Token::Kind::Lit;
+        t.lit = std::move(s);
+        toks.push_back(std::move(t));
+    }
+}
+
+// tokenizes one path segment:
+// %s => alias wildcard
+// first %d/%0Nd => index (global)
+// %% => '%'
+static std::vector<Token> tokenize_segment(std::string_view fmt, bool& have_index_global)
+{
+    std::vector<Token> toks;
+    std::string cur;
+    cur.reserve(fmt.size());
+
+    for (size_t i = 0; i < fmt.size(); ++i)
+    {
+        char c = fmt[i];
+        if (c != '%' || i + 1 >= fmt.size())
+        {
+            cur.push_back(c);
+            continue;
+        }
+
+        char n = fmt[i + 1];
+
+        if (n == '%') { cur.push_back('%'); ++i; continue; }
+
+        if (n == 's')
+        {
+            push_lit(toks, std::move(cur));
+            cur.clear();
+            Token t; t.kind = Token::Kind::Alias;
+            toks.push_back(std::move(t));
+            ++i;
+            continue;
+        }
+
+        if (!have_index_global)
+        {
+            if (n == 'd')
+            {
+                push_lit(toks, std::move(cur));
+                cur.clear();
+                Token t; t.kind = Token::Kind::Index; t.pad_width = 0;
+                toks.push_back(std::move(t));
+                have_index_global = true;
+                ++i;
+                continue;
+            }
+
+            if (n == '0')
+            {
+                size_t j = i + 2;
+                int width = 0;
+                bool any = false;
+                while (j < fmt.size() && std::isdigit(static_cast<unsigned char>(fmt[j])))
+                {
+                    any = true;
+                    width = width * 10 + (fmt[j] - '0');
+                    ++j;
+                }
+                if (any && j < fmt.size() && fmt[j] == 'd')
+                {
+                    push_lit(toks, std::move(cur));
+                    cur.clear();
+                    Token t; t.kind = Token::Kind::Index; t.pad_width = width;
+                    toks.push_back(std::move(t));
+                    have_index_global = true;
+                    i = j; // consume through 'd'
+                    continue;
+                }
+            }
+        }
+
+        // unknown or extra %d when already used: treat '%' literally
+        cur.push_back('%');
+    }
+
+    push_lit(toks, std::move(cur));
+    return toks;
+}
+
+// backtracking matcher for ONE segment: Alias is wildcard; Index parses digits and outputs idx.
+static bool match_segment_and_extract_index(
+    const std::vector<Token>& toks,
+    std::string_view segment,
+    bool& idx_set_inout,
+    int& idx_inout)
+{
+    struct State { size_t ti, pos; bool idx_set; int idx; };
+    std::vector<State> stack;
+    stack.push_back({ 0, 0, idx_set_inout, idx_inout });
+
+    auto parse_int = [](std::string_view digits, int& val) -> bool {
+        if (digits.empty()) return false;
+        int x = 0;
+        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), x);
+        if (ec != std::errc{} || ptr != digits.data() + digits.size()) return false;
+        val = x;
+        return true;
+
+    };
+    while (!stack.empty())
+    {
+        State st = stack.back();
+        stack.pop_back();
+
+        if (st.ti == toks.size())
+        {
+            if (st.pos == segment.size())
+            {
+                idx_set_inout = st.idx_set;
+                idx_inout = st.idx;
+                return true;
+            }
+            continue;
+        }
+
+        const Token& tk = toks[st.ti];
+
+        if (tk.kind == Token::Kind::Lit)
+        {
+            std::string_view lit = tk.lit;
+            if (st.pos + lit.size() > segment.size()) continue;
+            if (!text::eqInsensitive(segment.substr(st.pos, lit.size()), lit)) continue;
+            stack.push_back({ st.ti + 1, st.pos + lit.size(), st.idx_set, st.idx });
+            continue;
+        }
+
+        if (tk.kind == Token::Kind::Index)
+        {
+            // consume digits (try all splits, longest-first)
+            size_t p = st.pos;
+            size_t max = p;
+            while (max < segment.size() && segment[max] >= '0' && segment[max] <= '9')
+                ++max;
+
+            if (max == p) continue;
+
+            for (size_t end = max; end > p; --end)
+            {
+                int idx = 0;
+                if (!parse_int(segment.substr(p, end - p), idx)) continue;
+                stack.push_back({ st.ti + 1, end, true, idx });
+            }
+            continue;
+        }
+
+        // alias wildcard: consume until next literal (or end)
+        size_t next_lit_i = st.ti + 1;
+        while (next_lit_i < toks.size() && toks[next_lit_i].kind != Token::Kind::Lit)
+            ++next_lit_i;
+
+        if (next_lit_i >= toks.size())
+        {
+            stack.push_back({ st.ti + 1, segment.size(), st.idx_set, st.idx });
+            continue;
+        }
+
+        std::string_view next_lit = toks[next_lit_i].lit;
+        size_t search_from = st.pos;
+
+        while (true)
+        {
+            size_t occ = find_insensitive(segment, next_lit, search_from);
+            if (occ == std::string_view::npos) break;
+            stack.push_back({ st.ti + 1, occ, st.idx_set, st.idx });
+            search_from = occ + 1;
+        }
+    }
+
+    return false;
+}
+
+// returns max index matched by rel_format under base_dir.
+// %s (alias) is treated as wildcard, and extension is ignored (matches by stem).
+int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_format)
+{
+    std::filesystem::path fmt_path{ std::string(rel_format) };
+
+    // build pattern segments (directories + filename STEM) from rel_format
+    std::vector<std::string> pattern_segs;
+    pattern_segs.reserve(8);
+    {
+        std::filesystem::path pdir = fmt_path.parent_path();
+        for (const auto& part : pdir) pattern_segs.push_back(part.string());
+
+        // ignore extension: use stem
+        std::filesystem::path fname = fmt_path.filename();
+        pattern_segs.push_back(fname.stem().string());
+    }
+
+    // find unchanging anchor directory: longest leading directory prefix with no '%' in the segment
+    std::filesystem::path anchor_rel;
+    size_t anchor_count = 0;
+    for (; anchor_count + 1 < pattern_segs.size(); ++anchor_count) // +1 to exclude filename seg
+    {
+        const std::string& seg = pattern_segs[anchor_count];
+        if (seg.find('%') != std::string::npos) break;
+        anchor_rel /= seg;
+    }
+
+    // remaining pattern (relative to scan_root)
+    std::vector<std::string> rem_pattern(pattern_segs.begin() + static_cast<std::ptrdiff_t>(anchor_count),
+        pattern_segs.end());
+
+    // tokenize remaining pattern segments (global: only first %d is Index).
+    bool have_index_global = false;
+    std::vector<std::vector<Token>> rem_tokens;
+    rem_tokens.reserve(rem_pattern.size());
+    for (const auto& seg : rem_pattern)
+        rem_tokens.push_back(tokenize_segment(seg, have_index_global));
+
+    if (!have_index_global)
+        return 0;
+
+    // compute scan root directory
+    const bool fmt_abs = fmt_path.is_absolute();
+    std::filesystem::path scan_root = fmt_abs
+        ? anchor_rel
+        : (std::filesystem::path(std::string(base_dir)) / anchor_rel);
+
+    std::error_code ec;
+    if (!std::filesystem::exists(scan_root, ec) || ec)
+        return 0;
+
+    const bool need_recursive = (rem_tokens.size() > 1); // wildcard directories possible
+    int max_idx = 0;
+
+    auto try_match_rel_path = [&](const std::filesystem::path& full_path) {
+        std::error_code ec_rel;
+        std::filesystem::path rel = full_path.lexically_relative(scan_root);
+        if (rel.empty()) return;
+
+        // build candidate segments: directories + filename STEM
+        std::vector<std::string> cand;
+        cand.reserve(8);
+
+        // count components to quickly reject mismatched depths
+        std::vector<std::filesystem::path> comps;
+        for (const auto& part : rel) comps.push_back(part);
+        if (comps.empty()) return;
+
+        for (size_t i = 0; i + 1 < comps.size(); ++i)
+            cand.push_back(comps[i].string());
+
+        // last component: filename stem (ignore extension)
+        cand.push_back(comps.back().stem().string());
+
+        if (cand.size() != rem_tokens.size())
+            return;
+
+        bool idx_set = false;
+        int idx = 0;
+
+        for (size_t i = 0; i < rem_tokens.size(); ++i)
+        {
+            if (!match_segment_and_extract_index(rem_tokens[i], cand[i], idx_set, idx))
+                return;
+        }
+
+        if (idx_set && idx > max_idx)
+            max_idx = idx;
+    };
+
+    if (!need_recursive)
+    {
+        std::filesystem::directory_iterator it(
+            scan_root, std::filesystem::directory_options::skip_permission_denied, ec);
+
+        if (ec) return 0;
+
+        for (const auto& entry : it)
+        {
+            std::error_code ec2;
+            if (!entry.is_regular_file(ec2) || ec2) continue;
+            try_match_rel_path(entry.path());
+        }
+    }
+    else
+    {
+        std::filesystem::recursive_directory_iterator it(
+            scan_root, std::filesystem::directory_options::skip_permission_denied, ec);
+
+        if (ec) return 0;
+
+        for (const auto& entry : it)
+        {
+            std::error_code ec2;
+            if (!entry.is_regular_file(ec2) || ec2) continue;
+            try_match_rel_path(entry.path());
+        }
+    }
+
+    return max_idx;
+}
+
+// expand rel_format with index + alias, append fallback_extension only if format filename has no extension
+std::string constructCapturePath(
+    std::string_view rel_format,
+    int index,
+    std::string_view alias,
+    std::string_view fallback_extension = ".webp")
+{
+    std::filesystem::path fmt_path{ std::string(rel_format) };
+    const bool fmt_has_ext = fmt_path.filename().has_extension();
+
+    std::string out;
+    out.reserve(rel_format.size() + alias.size() + 32);
+
+    auto append_padded_index = [&](int w) {
+        std::string num = std::to_string(index);
+        if (w > 0 && static_cast<int>(num.size()) < w)
+            num.insert(num.begin(), static_cast<size_t>(w - num.size()), '0');
+        out += num;
+    };
+
+    for (size_t i = 0; i < rel_format.size(); ++i)
+    {
+        char c = rel_format[i];
+        if (c != '%' || i + 1 >= rel_format.size()) { out.push_back(c); continue; }
+
+        char n = rel_format[i + 1];
+
+        if (n == '%') { out.push_back('%'); ++i; continue; }
+        if (n == 's') { out.append(alias.begin(), alias.end()); ++i; continue; }
+        if (n == 'd') { append_padded_index(0); ++i; continue; }
+
+        if (n == '0')
+        {
+            size_t j = i + 2;
+            int width = 0;
+            bool any = false;
+            while (j < rel_format.size() && std::isdigit(static_cast<unsigned char>(rel_format[j])))
+            {
+                any = true;
+                width = width * 10 + (rel_format[j] - '0');
+                ++j;
+            }
+            if (any && j < rel_format.size() && rel_format[j] == 'd')
+            {
+                append_padded_index(width);
+                i = j; // consume through 'd'
+                continue;
+            }
+        }
+
+        // unknown: treat '%' literally
+        out.push_back('%');
+    }
+
+    if (!fmt_has_ext)
+        out += normalize_extension(fallback_extension);
+
+    return std::filesystem::path(out).lexically_normal().string();
+}
+
 static bool path_contains(const std::filesystem::path& root, const std::filesystem::path& p)
 {
     std::error_code ec1, ec2;
-    std::filesystem::path pc    = std::filesystem::weakly_canonical(p, ec1);
-    std::filesystem::path rootc = std::filesystem::weakly_canonical(root,ec2);
+    std::filesystem::path pc = std::filesystem::weakly_canonical(p, ec1);
+    std::filesystem::path rootc = std::filesystem::weakly_canonical(root, ec2);
 
     if (ec1 || ec2)
     {
@@ -53,7 +469,8 @@ std::string getPreferredCapturesDirectory() {
     // If executable dir lives inside the cmake project dir, clamp to root cmake project dir
     if (path_contains(project_root, path)) {
         path = project_root;
-    } else {
+    }
+    else {
         std::filesystem::path trimmed;
         if (!project_worker()->getCurrentProject()) {
             DebugBreak();
@@ -71,156 +488,6 @@ std::string getPreferredCapturesDirectory() {
     return path.lexically_normal().string();
 }
 
-static inline char bl_tolower(char c) {
-    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-}
-
-static bool ends_with_ci(std::string_view s, std::string_view suffix)
-{
-    if (suffix.size() > s.size()) return false;
-    s = s.substr(s.size() - suffix.size());
-    for (size_t i = 0; i < suffix.size(); ++i)
-        if (bl_tolower(s[i]) != bl_tolower(suffix[i])) return false;
-    return true;
-}
-
-static bool starts_with_ci(std::string_view s, std::string_view prefix)
-{
-    if (prefix.size() > s.size()) return false;
-    for (size_t i = 0; i < prefix.size(); ++i)
-        if (bl_tolower(s[i]) != bl_tolower(prefix[i])) return false;
-    return true;
-}
-
-static bool try_parse_indexed_name(
-    std::string_view filename,
-    std::string_view name,
-    std::string_view alias,      // empty = no alias
-    std::string_view extension,  // e.g. ".webp" (case-insensitive)
-    int& out_index)
-{
-    // Must end with extension
-    if (!ends_with_ci(filename, extension)) return false;
-
-    // Strip extension
-    std::string_view core = filename.substr(0, filename.size() - extension.size());
-
-    // If alias is provided, must end with "_" + alias
-    if (!alias.empty())
-    {
-        // Build the suffix "_alias" without allocating: check manually
-        if (core.size() <= alias.size() + 1) return false;
-        if (bl_tolower(core[core.size() - alias.size() - 1]) != '_') return false;
-
-        std::string_view tail = core.substr(core.size() - alias.size(), alias.size());
-        if (!starts_with_ci(tail, alias)) return false;
-
-        core = core.substr(0, core.size() - (alias.size() + 1));
-    }
-
-    // Now core must be: name + digits
-    if (!starts_with_ci(core, name)) return false;
-    if (core.size() <= name.size()) return false;
-
-    std::string_view digits = core.substr(name.size());
-    for (char c : digits) if (c < '0' || c > '9') return false;
-
-    int idx = 0;
-    auto* b = digits.data();
-    auto* e = digits.data() + digits.size();
-    auto [ptr, ec] = std::from_chars(b, e, idx);
-    if (ec != std::errc{} || ptr != e) return false;
-
-    out_index = idx;
-    return true;
-}
-
-static int find_max_clip_index(
-    const std::filesystem::path& directory_path,
-    const char* name,
-    const char* alias,       // may be nullptr
-    const char* extension)
-{
-    int max_clip_index = 0;
-
-    const std::string_view sv_name = name ? std::string_view(name) : std::string_view();
-    const std::string_view sv_alias = alias ? std::string_view(alias) : std::string_view();
-    std::string_view sv_ext = extension ? std::string_view(extension) : std::string_view();
-
-    // Be tolerant if caller passes "webp" instead of ".webp"
-    std::string ext_storage;
-    if (!sv_ext.empty() && sv_ext[0] != '.') {
-        ext_storage.reserve(sv_ext.size() + 1);
-        ext_storage.push_back('.');
-        ext_storage.append(sv_ext);
-        sv_ext = ext_storage;
-    }
-
-    std::error_code ec;
-    std::filesystem::directory_iterator it(
-        directory_path,
-        std::filesystem::directory_options::skip_permission_denied,
-        ec
-    );
-    const std::filesystem::directory_iterator end;
-
-    for (; it != end; it.increment(ec))
-    {
-        if (ec) break; // stop on catastrophic error
-
-        std::error_code ec2;
-        if (!it->is_regular_file(ec2) || ec2) continue;
-
-        const std::string filename = it->path().filename().string();
-
-        int clip_index = 0;
-        if (try_parse_indexed_name(filename, sv_name, sv_alias, sv_ext, clip_index))
-            if (clip_index > max_clip_index) max_clip_index = clip_index;
-    }
-
-    return max_clip_index;
-}
-
-static std::filesystem::path make_next_clip_path(
-    const std::filesystem::path& capture_dir,
-    const char* name,
-    const char* alias,      // may be nullptr
-    const char* extension)
-{
-    std::error_code io_error;
-    std::filesystem::create_directories(capture_dir, io_error); // no-op if exists
-
-    const int next_index = find_max_clip_index(capture_dir, name, alias, extension) + 1;
-
-    std::string filename;
-    filename.reserve(
-        (name ? std::char_traits<char>::length(name) : 0) +
-        16 +
-        (alias ? (1 + std::char_traits<char>::length(alias)) : 0) +
-        (extension ? std::char_traits<char>::length(extension) : 0) + 1
-    );
-
-    if (name) filename += name;
-    filename += std::to_string(next_index);
-    if (alias && *alias) { filename += '_'; filename += alias; }
-
-    if (extension && *extension) {
-        if (extension[0] == '.') filename += extension;
-        else { filename += '.'; filename += extension; }
-    }
-
-    return capture_dir / filename;
-}
-
-// Convenience overload (no alias)
-static std::filesystem::path make_next_clip_path(
-    const std::filesystem::path& capture_dir,
-    const char* name,
-    const char* extension)
-{
-    return make_next_clip_path(capture_dir, name, nullptr, extension);
-}
-
 static bool ensure_parent_directories_exist(const std::filesystem::path& file_path, std::error_code& ec)
 {
     ec.clear();
@@ -229,9 +496,51 @@ static bool ensure_parent_directories_exist(const std::filesystem::path& file_pa
     return std::filesystem::create_directories(parent, ec);
 }
 
-
+std::filesystem::path MainWindow::getProjectSnapshotsDir()
+{
+    namespace fs = std::filesystem;
+    fs::path dir = getPreferredCapturesDirectory();                        // e.g. "C:/dev/bitloop-gallery/captures/"
+    dir /= project_worker()->getCurrentProject()->getProjectInfo()->name;  // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/"
+    dir /= "image";                                                        // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/"
+    return dir;
+}
+std::filesystem::path MainWindow::getProjectVideosDir()
+{
+    namespace fs = std::filesystem;
+    fs::path dir = getPreferredCapturesDirectory();                        // e.g. "C:/dev/bitloop-gallery/captures/"
+    dir /= project_worker()->getCurrentProject()->getProjectInfo()->name;  // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/"
+    dir /= "video";                                                        // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/video/"
+    return dir;
+}
+std::filesystem::path MainWindow::getProjectAnimationsDir()
+{
+    namespace fs = std::filesystem;
+    fs::path dir = getPreferredCapturesDirectory();                        // e.g. "C:/dev/bitloop-gallery/captures/"
+    dir /= project_worker()->getCurrentProject()->getProjectInfo()->name;  // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/"
+    dir /= "animation";                                                    // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/animation/"
+    return dir;
+}
 #endif
 
+static bool _isEditingUI()
+{
+    ImGuiID active_id = ImGui::GetActiveID();
+
+    static ImGuiID old_active_id = 0;
+    ImGuiID lagged_active_id = active_id ? active_id : old_active_id;
+
+    old_active_id = active_id;
+
+    if (lagged_active_id == 0)
+        return false;
+
+    static ImGuiID viewport_id = ImHashStr("Viewport");
+    return (lagged_active_id != ImGui::FindWindowByID(viewport_id)->MoveId);
+}
+bool MainWindow::isEditingUI()
+{
+    return is_editing_ui;
+}
 
 void MainWindow::init()
 {
@@ -369,21 +678,56 @@ void MainWindow::populateProjectUI()
     if (!project_worker()->hasActiveProject())
         return;
 
+    BL_TAKE_OWNERSHIP("ui");
+
     ImGui::BeginPaddedRegion(scale_size(3.0f));
     project_worker()->populateAttributes();
     ImGui::EndPaddedRegion();
 }
 void MainWindow::populateOverlay()
 {
+    BL_TAKE_OWNERSHIP("ui");
+
     project_worker()->populateOverlay();
 }
 
-void MainWindow::queueBeginSnapshot(const SnapshotPresetList& presets, const char* relative_filename)
+std::string MainWindow::prepareFullCapturePath(const SnapshotPreset& preset, std::filesystem::path base_dir, const char* rel_path_fmt, int file_idx, const char* fallback_extension)
 {
-    MainWindowCommand_SnapshotPayload payload;
-    payload.path = relative_filename;
+    namespace fs = std::filesystem;
+
+    fs::path rel_filepath = rel_path_fmt;
+
+    std::string base_filename = rel_filepath.filename().string();     // e.g. "seahorse_valley"
+
+    #ifdef __EMSCRIPTEN__
+    /// todo: Use capture format for name
+    std::string qualified_filename = (base_filename + '_') + preset.alias_cstr(); // e.g. "seahorse_valley_pixel9a"
+
+    if (rel_filepath.has_extension())
+        return qualified_filename;
+    else
+        return qualified_filename + fallback_extension;
+    #else
+    // organize by project name, relative to project capture dir                                                         
+    fs::path relative_dir = base_dir / rel_filepath.parent_path(); // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/backgrounds/"
+    std::string filled_rel_filepath = constructCapturePath(rel_path_fmt, file_idx, preset.getAlias(), fallback_extension);
+    fs::path filled_full_filepath = relative_dir / filled_rel_filepath;
+
+    std::error_code ec;
+    ensure_parent_directories_exist(filled_full_filepath, ec);
+
+    return filled_full_filepath.string();
+    #endif
+}
+
+void MainWindow::queueBeginSnapshot(const SnapshotPresetList& presets, std::string_view rel_path_fmt, int request_id, std::string_view xmp_data)
+{
+    SnapshotPresetsArgs payload;
+    payload.rel_path_fmt = rel_path_fmt;
     payload.presets = presets;
-    queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT, payload });
+    payload.request_id = request_id;
+    payload.xmp_data = xmp_data;
+    queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_PRESET_LIST, payload });
 }
 void MainWindow::queueBeginRecording()
 {
@@ -393,111 +737,83 @@ void MainWindow::queueEndRecording()
 {
     queueMainWindowCommand({ MainWindowCommandType::END_RECORDING });
 }
-
-void MainWindow::beginRecording()
+void MainWindow::beginRecording(const SnapshotPreset& preset, const char* rel_path_fmt)
 {
+    namespace fs = std::filesystem;
+
     assert(!capture_manager.isRecording());
     assert(!capture_manager.isSnapshotting());
 
     snapshot.enabled = false;
-    //record.enabled = true; // keep record button enabled. Clicking again ends recording
     record.toggled = true;
+    //record.enabled = true; // keep record button enabled. Clicking again ends recording
 
-    // Don't capture until next frame starts (and sets this true)
+    // don't capture until next frame starts (and sets this true)
     capture_manager.setCaptureEnabled(false);
 
+    // If not web, decide on save path
     #ifndef __EMSCRIPTEN__
-    std::filesystem::path capture_dir = getPreferredCapturesDirectory();
-
-    std::string active_sim_name = project_worker()->getCurrentProject()->getProjectInfo()->name;
-
-    // Organize by project name
-    capture_dir /= active_sim_name;
+    fs::path capture_dir;
+    fs::path filename;
 
     switch ((CaptureFormat)getSettingsConfig()->getRecordFormat())
     {
         case CaptureFormat::x264:
         case CaptureFormat::x265:
-            capture_dir /= "video";
-            capture_dir /= make_next_clip_path(capture_dir, "clip", ".mp4");
-            break;
+        {
+            capture_dir    = getProjectVideosDir();
+            int file_idx   = getHighestCaptureIndex(capture_dir.string(), rel_path_fmt) + 1;
+            filename       = prepareFullCapturePath(preset, capture_dir, rel_path_fmt, file_idx, ".mp4");
+        }
+        break;
 
         case CaptureFormat::WEBP_VIDEO:
-            capture_dir /= "animation";
-            capture_dir /= make_next_clip_path(capture_dir, "clip", ".webp");
+        {
+            capture_dir    = getProjectAnimationsDir();
+            int file_idx   = getHighestCaptureIndex(capture_dir.string(), rel_path_fmt) + 1;
+            filename       = prepareFullCapturePath(preset, capture_dir, rel_path_fmt, file_idx, ".webp");
+        }
+        break;
     }
 
-    std::error_code ec;
-    ensure_parent_directories_exist(capture_dir, ec);
+    #endif
 
-    int64_t bitrate = 0;
+    int ssaa      = (preset.getSSAA() > 0)       ? preset.getSSAA()       : getSettingsConfig()->default_ssaa;
+    float sharpen = (preset.getSharpening() > 0) ? preset.getSharpening() : getSettingsConfig()->default_sharpen;
+
+    CaptureConfig config;
+    config.format             =       getSettingsConfig()->getRecordFormat();
+    config.resolution         =       preset.getResolution();
+    config.ssaa               =       ssaa;
+    config.sharpen            =       sharpen;
+    config.fps                =       getSettingsConfig()->record_fps;
+    config.record_frame_count =       getSettingsConfig()->record_frame_count;
+    config.quality            = (f32) getSettingsConfig()->record_quality;
+    config.near_lossless      =       getSettingsConfig()->record_lossless;
+
     #if BITLOOP_FFMPEG_ENABLED
-    bitrate = getSettingsConfig()->record_bitrate;
+    config.bitrate = getSettingsConfig()->record_bitrate;
     #endif
 
-    capture_manager.startCapture(
-        getSettingsConfig()->getRecordFormat(),
-        capture_dir.string(),
-        getSettingsConfig()->record_resolution,
-        getSettingsConfig()->default_ssaa,
-        getSettingsConfig()->default_sharpen,
-        getSettingsConfig()->record_fps,
-        getSettingsConfig()->record_frame_count,
-        bitrate,
-        (float)getSettingsConfig()->record_quality,
-        getSettingsConfig()->record_lossless,
-        getSettingsConfig()->record_near_lossless,
-        true);
-    #else
-    capture_manager.startCapture(
-        getSettingsConfig()->getRecordFormat(),
-        getSettingsConfig()->record_resolution,
-        getSettingsConfig()->default_ssaa,
-        getSettingsConfig()->default_sharpen,
-        getSettingsConfig()->record_fps,
-        getSettingsConfig()->record_frame_count,
-        0,
-        getSettingsConfig()->record_quality,
-        getSettingsConfig()->record_lossless,
-        getSettingsConfig()->record_near_lossless,
-        true);
+    #ifndef __EMSCRIPTEN__
+    config.filename = filename.string();
     #endif
+
+    enabled_capture_presets = SnapshotPresetList(preset);
+    active_capture_preset_request_id = 0; // no assigned callback
+
+    /// TODO: check for ffmpeg/webp initialization error
+    capture_manager.startCapture(config);
 }
-std::string MainWindow::prepareFullCapturePath(const SnapshotPreset& preset, const char* relative_filepath_noext)
+
+void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float sharpen, std::string_view xmp_data)
 {
-    namespace fs = std::filesystem;
+    // begin snapshot with provided args (lowest level, no awareness of presets)
 
-    fs::path rel_filepath = relative_filepath_noext;
-
-    std::string base_filename      = rel_filepath.filename().string();     // e.g. "seahorse_valley"
-
-    #ifdef __EMSCRIPTEN__
-    std::string qualified_filename = (base_filename + '_') + preset.alias; // e.g. "seahorse_valley_1920x1080"
-    return qualified_filename + ".webp";
-    #else
-    // Organize by project name
-    fs::path dir = getPreferredCapturesDirectory();                                                            // e.g. "C:/dev/bitloop-gallery/captures/"
-    dir /= project_worker()->getCurrentProject()->getProjectInfo()->name;                                      // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/"
-    dir /= "image";                                                                                            // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/"
-                                                                                               
-    // relative to project capture dir                                                         
-    fs::path relative_dir = dir / rel_filepath.parent_path();                                                  // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/backgrounds/"
-    fs::path filename = relative_dir / make_next_clip_path(relative_dir, base_filename.c_str(), preset.alias, ".webp"); // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/backgrounds/seahorse_valley_1920x1080.webp"
-
-    filename = filename.lexically_normal();
-
-    std::error_code ec;
-    ensure_parent_directories_exist(filename, ec);
-
-    return filename.string();
-    #endif
-}
-void MainWindow::beginSnapshot(const char* full_filepath, IVec2 res, int ssaa, float sharpen)
-{
     assert(!capture_manager.isRecording());
     assert(!capture_manager.isSnapshotting());
 
-    // Disable everything until snapshot complete
+    // disable everything until snapshot complete
     snapshot.enabled = false;
     record.enabled = false;
     pause.enabled = false;
@@ -506,38 +822,64 @@ void MainWindow::beginSnapshot(const char* full_filepath, IVec2 res, int ssaa, f
     snapshot.toggled = true;
     record.toggled = false;
 
-    // Don't capture until *next* frame starts (when capture_enabled turns true)
+    // don't capture until *next* frame starts (when capture_enabled turns true)
     capture_manager.setCaptureEnabled(false);
 
-    #ifndef __EMSCRIPTEN__
-    capture_manager.startCapture(
-        getSettingsConfig()->getSnapshotFormat(),
-        full_filepath,
-        res, ssaa, sharpen,
-        0, 0, 0, 100.0f, true, 100, true);
-    #else
-    capture_manager.startCapture(
-        getSettingsConfig()->getSnapshotFormat(),
-        res, ssaa, sharpen,
-        0, 0, 0, 100.0f, true, 100, true);
-    #endif
-}
-void MainWindow::beginSnapshot(const SnapshotPreset& preset, const char* relative_filepath_noext)
-{
-    std::string full_path = prepareFullCapturePath(preset, relative_filepath_noext);
-    int ssaa      = (preset.ssaa > 0)    ? preset.ssaa :    getSettingsConfig()->default_ssaa;
-    float sharpen = (preset.sharpen > 0) ? preset.sharpen : getSettingsConfig()->default_sharpen;
+    CaptureConfig config;
+    config.format = getSettingsConfig()->getSnapshotFormat();
+    config.resolution = res;
+    config.ssaa = ssaa;
+    config.sharpen = sharpen;
+    config.quality = 100.0f;
+    config.lossless = true;
+    config.save_payload = xmp_data;
 
-    beginSnapshot(full_path.c_str(), preset.size, ssaa, sharpen);
+    #ifndef __EMSCRIPTEN__
+    config.filename = filepath;
+    #endif
+
+    capture_manager.startCapture(config);
 }
-void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_proj_path)
+void MainWindow::beginSnapshot(const SnapshotPreset& preset, const char* rel_path_fmt, int file_idx, std::string_view xmp_data)
+{
+    // begin snapshot using provided preset (ssaa/sharpen falls back to global defaults if "unset")
+
+    /// todo: Check extension is valid image format
+    std::filesystem::path base_dir;
+    #ifdef __EMSCRIPTEN__
+    base_dir = "";
+    #else
+    base_dir = getProjectSnapshotsDir();
+    #endif
+
+    std::string full_path = prepareFullCapturePath(preset, base_dir, rel_path_fmt, file_idx, ".webp");
+    int ssaa      = (preset.getSSAA() > 0)       ? preset.getSSAA()       : getSettingsConfig()->default_ssaa;
+    float sharpen = (preset.getSharpening() > 0) ? preset.getSharpening() : getSettingsConfig()->default_sharpen;
+
+    _beginSnapshot(full_path.c_str(), preset.getResolution(), ssaa, sharpen, xmp_data);
+}
+void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id, std::string_view xmp_data)
 {
     enabled_capture_presets = presets;
     is_snapshotting = true;
     active_capture_preset = 0;
-    active_capture_rel_proj_path = rel_proj_path;
+    active_capture_rel_path_fmt = rel_path_fmt;
+    active_capture_preset_request_id = request_id;
+    active_capture_xmp_data = xmp_data;
 
-    beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_proj_path.c_str());
+    // Determine snapshot group index for this batch (ignored on web)
+    #ifndef __EMSCRIPTEN__
+    namespace fs = std::filesystem;
+    fs::path rel_filepath = rel_path_fmt;
+    fs::path dir = getPreferredCapturesDirectory();                        // e.g. "C:/dev/bitloop-gallery/captures/"
+    dir /= project_worker()->getCurrentProject()->getProjectInfo()->name;  // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/"
+    dir /= "image";                                                        // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/"
+    shared_batch_fileindex = getHighestCaptureIndex(dir.string(), rel_path_fmt) + 1;
+    #else
+    shared_batch_fileindex = 0;
+    #endif
+
+    beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex, xmp_data);
 }
 void MainWindow::endRecording()
 {
@@ -579,13 +921,12 @@ void MainWindow::checkCaptureComplete()
             // todo: When you include other snapshot types (PNG, JPEG, etc) use a more robust "is snapshot" check
             if (capture_manager.format() == CaptureFormat::WEBP_SNAPSHOT)
             {
-                // Do we have another preset to capture?
+                // do we have another preset to capture?
                 active_capture_preset++;
                 if (active_capture_preset < enabled_capture_presets.size())
                 {
                     // todo: maybe queue to begin capture at more suitable time
-                    //beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_proj_path.c_str());
-                    queueMainWindowCommand({ MainWindowCommandType::TAKE_ACTIVE_PRESET_SNAPSHOT });
+                    queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET });
                 }
                 else
                 {
@@ -595,7 +936,7 @@ void MainWindow::checkCaptureComplete()
         }
         else
         {
-            // ffmpeg saving to desk handled automatically by encoder...
+            // ffmpeg saving to disk handled automatically by encoder...
         }
 
         // untoggle
@@ -620,7 +961,7 @@ void MainWindow::checkCaptureComplete()
 
 void MainWindow::handleCommand(MainWindowCommandEvent e)
 {
-    // Handle commands which can be initiated by both GUI thread & project-worker thread
+    // handle commands which can be initiated by both GUI thread & project-worker thread
     switch (e.type)
     {
     case MainWindowCommandType::ON_PLAY_PROJECT:
@@ -661,7 +1002,6 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
 
         // If recording, finalize
         endRecording();
-
         break;
 
     case MainWindowCommandType::ON_PAUSED_PROJECT:
@@ -670,24 +1010,28 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         snapshot.enabled = false; // only allow snapshot while project running
         break;
 
-    case MainWindowCommandType::BEGIN_SNAPSHOT:
+    case MainWindowCommandType::BEGIN_SNAPSHOT_PRESET_LIST:
         if (e.payload.has_value())
         {
-            MainWindowCommand_SnapshotPayload payload = std::any_cast<MainWindowCommand_SnapshotPayload>(e.payload);
-            beginSnapshotList(payload.presets, payload.path.c_str()); // e.g. "backgrounds/seahorse_valley"
+            SnapshotPresetsArgs payload = std::any_cast<SnapshotPresetsArgs>(e.payload);
+            beginSnapshotList(payload.presets, payload.rel_path_fmt.c_str(), payload.request_id, payload.xmp_data); // e.g. "backgrounds/seahorse_valley"
         }
         else
-            beginSnapshotList(getSnapshotPresetManager()->enabledPresets(), "snap");
+            beginSnapshotList(getSettingsConfig()->enabledImagePresets(), "snap%d_%s", 0);
+            //beginSnapshotList(getSnapshotPresetManager()->enabledImagePresets(), "snap%d_%s", 0);
         break;
 
-    case MainWindowCommandType::TAKE_ACTIVE_PRESET_SNAPSHOT:
+    case MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET:
     {
-        beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_proj_path.c_str());
+        // "private" command triggered on completing a snapshot - triggers a snapshot on the next batch preset
+        SnapshotPresetList presets;
+        presets.add(enabled_capture_presets[active_capture_preset]);
+        beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex, active_capture_xmp_data);
     }
     break;
 
     case MainWindowCommandType::BEGIN_RECORDING:
-        beginRecording();
+        beginRecording(getSettingsConfig()->enabledVideoPreset(), "clip%d_%s");
         break;
 
     case MainWindowCommandType::END_RECORDING:
@@ -824,7 +1168,7 @@ void MainWindow::populateToolbar()
         {
             // not paused/resuming - begin recording immediately if record button "on" so we start capturing from the very first frame
             if (record.toggled)
-                beginRecording();
+                beginRecording(getSettingsConfig()->enabledVideoPreset(), "clip%d_%s");
         }
 
         project_worker()->startProject();
@@ -864,7 +1208,7 @@ void MainWindow::populateToolbar()
                 {
                     // Start recording
                     //record.toggled = true;
-                    beginRecording();
+                    beginRecording(getSettingsConfig()->enabledVideoPreset(), "clip%d_%s");
                 }
                 else
                 {
@@ -886,7 +1230,7 @@ void MainWindow::populateToolbar()
     ImGui::SameLine();
     if (toolbarButton("##snapshot", "snapshot", snapshot, ImVec2(size, size)))
     {
-        beginSnapshotList(getSnapshotPresetManager()->enabledPresets(), "snap");
+        beginSnapshotList(getSettingsConfig()->enabledImagePresets(), "snap%d_%s", 0);
     }
 
     ImGui::EndChild();
@@ -1095,13 +1439,13 @@ void MainWindow::populateCollapsedLayout()
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6.0f, 6.0f));
-        ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+        //ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         populateToolbar();
 
         populateProjectTree(true);
         ImGui::SwipeScrollWindow();
 
-        ImGui::EndChild();
+        //ImGui::EndChild();
         ImGui::PopStyleVar();
     }
     ImGui::End();
@@ -1110,14 +1454,14 @@ void MainWindow::populateCollapsedLayout()
     {
         // Only add padding after toolbar to inner-child
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(8.0f, 8.0f));
-        ImGui::BeginChild("AttributesFrameInner", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+        //ImGui::BeginChild("AttributesFrameInner", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         populateToolbar();
         
 
         populateProjectUI();
         ImGui::SwipeScrollWindow();
 
-        ImGui::EndChild();
+        //ImGui::EndChild();
         ImGui::PopStyleVar();
     }
 
@@ -1129,7 +1473,7 @@ void MainWindow::populateExpandedLayout()
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
-        ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+        //ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         populateToolbar();
 
         populateProjectTree(false);
@@ -1137,7 +1481,7 @@ void MainWindow::populateExpandedLayout()
 
         ImGui::SwipeScrollWindow();
 
-        ImGui::EndChild();
+        //ImGui::EndChild();
         ImGui::PopStyleVar();
     }
 
@@ -1145,6 +1489,9 @@ void MainWindow::populateExpandedLayout()
 }
 void MainWindow::populateViewport()
 {
+    /// todo: Make more thread-safe by only handling commands when we draw? (where both GUI and live buffers are unused)
+    ///       As long as you queue commands for project_worker, you're safe here, but if invoke a project callback directly
+    ///       e.g. onBeginSnapshot, there's a chance the project could still be mutating live buffer
     if (!command_queue.empty())
     {
         // We don't call populateAttributes() if holding shadow_buffer_mutex,
@@ -1207,6 +1554,14 @@ void MainWindow::populateViewport()
             {
                 std::unique_lock<std::mutex> lock(shared_sync.state_mutex);
 
+                // ---------------------------------------------------------------------------------------
+                // For the rest of this scope, we can safely mutate both shadow(GUI) data AND live data...
+                // ---------------------------------------------------------------------------------------
+
+                /// todo: Project::_projectProcess() must have just occured
+                /// this would seem like a smarter place to call invokeScheduledCalls()
+                /// to ensure bl_schedule lamdas can safely access both live/shadow data
+
                 canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
                 project_worker()->draw();
                 canvas.end();
@@ -1222,7 +1577,11 @@ void MainWindow::populateViewport()
                         if (encode_next_sim_frame)
                         {
                             canvas.readPixels(frame_data);
-                            capture_manager.encodeFrame(frame_data.data());
+                            capture_manager.encodeFrame(frame_data.data(), [&](bytebuf& data)
+                            {
+                                const SnapshotPreset& preset = enabled_capture_presets[active_capture_preset];
+                                project_worker()->onEncodeFrame(data, active_capture_preset_request_id, preset);
+                            });
                         }
                     }
 
@@ -1263,15 +1622,15 @@ void MainWindow::populateViewport()
                 ox = 0.5f * (client_size.x - sw);                     // Center horizontally
             }
 
-            image_pos = { ox, oy };
+            image_pos += { ox, oy };
             image_size = { sw, sh };
 
-            canvas.setClientRect(IRect((int)ox, (int)oy, (int)(ox + sw), (int)(oy + sh)));
+            canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)(image_pos.x + sw), (int)(image_pos.y + sh)));
         }
         else
         {
             image_size = (ImVec2)canvas_size;
-            canvas.setClientRect(IRect(0, 0, canvas_size.x, canvas_size.y));
+            canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)image_pos.x + canvas_size.x, (int)image_pos.y + canvas_size.y));
         }
 
         // Draw cached (or freshly generated) frame
@@ -1288,12 +1647,21 @@ void MainWindow::populateUI()
     if (!manageDockingLayout())
         return;
 
-
     // Determine if we are ready to draw *before* populating simulation imgui attributes
     {
         std::lock_guard<std::mutex> g(shared_sync.state_mutex);
         need_draw = shared_sync.frame_ready_to_draw;
     }
+
+    // Stall here (GUI-thread) until worker finishes copying data to live thread
+    shared_sync.wait_until_live_buffer_updated();
+
+    // Force stall on live thread while we mutate the (now-synced) UI data
+    std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // For the rest of this scope, it's safe to mutate GUI data buffers in preparation for the next worker frame...
+    // ------------------------------------------------------------------------------------------------------------
 
     bool collapse_layout = vertical_layout || platform()->max_char_rows() < 40.0f;
 
@@ -1301,18 +1669,14 @@ void MainWindow::populateUI()
         collapse_layout = false;
 
 
-    // ==== Allow project to populate UI / draw nanovg overlay ====
+    // ==== populate UI / draw nanovg overlay ====
 
 
     // Shadow buffer is now up-to-date and free to access (while worker does processing)
     {
         // Draw sidebar
         {
-            // Stall until we've finishing copying the shadow buffer to the live buffer (on worker thread)
-            shared_sync.wait_until_live_buffer_updated();
-            std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
             if (sidebar_visible)
             {
@@ -1325,9 +1689,9 @@ void MainWindow::populateUI()
                     done_first_focus = true;
             }
 
-            populateOverlay();
+            //populateOverlay();
 
-            ImGui::PopStyleVar();
+            //ImGui::PopStyleVar();
         }
 
         // Draw viewport
@@ -1338,7 +1702,7 @@ void MainWindow::populateUI()
                 (int)ImGuiWindowFlags_NoDocking;
 
             ImGui::SetNextWindowClass(&wc);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
+            //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
 
             populateViewport();
         }
@@ -1346,13 +1710,14 @@ void MainWindow::populateUI()
 
     if (sidebar_visible)
     {
-        ImGui::Begin("Settings");
+        ImGui::Begin("Settings", nullptr, window_flags);
         {
+            populateToolbar();
             settings_panel.populateSettings();
         }
         ImGui::End();
 
-        #ifdef DEBUG_INCLUDE_LOG_TABS
+        #ifdef BL_DEBUG_INCLUDE_LOG_TABS
         ImGui::Begin("Debug"); // Begin Debug Window
         {
             if (ImGui::BeginTabBar("DebugTabs"))
@@ -1385,10 +1750,12 @@ void MainWindow::populateUI()
         #endif
     }
 
-    ImGui::PopStyleVar();
+    //ImGui::PopStyleVar();
 
     // Always save capture output on main GUI thread (for Emscripten)
     checkCaptureComplete();
+
+    is_editing_ui = _isEditingUI();
 
     //static bool demo_open = true;
     //ImGui::ShowDemoWindow(&demo_open);

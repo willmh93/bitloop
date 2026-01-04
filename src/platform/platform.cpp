@@ -115,9 +115,9 @@ static void ensure_offscreen_fbo(GLuint& fbo, GLuint& color, GLuint& depth, int 
 
 void PlatformManager::gl_begin_frame()
 {
-    #ifdef SIMULATE_DISPLAY
-    offscreen_w = SIMULATE_DISPLAY.w;
-    offscreen_h = SIMULATE_DISPLAY.h;
+    #ifdef BL_SIMULATE_DISPLAY
+    offscreen_w = BL_SIMULATE_DISPLAY.w;
+    offscreen_h = BL_SIMULATE_DISPLAY.h;
 
     // ensure offscreen FBO exists
     if (!offscreen_fbo)
@@ -133,7 +133,7 @@ void PlatformManager::gl_begin_frame()
 
 void PlatformManager::gl_end_frame()
 {
-    #ifdef SIMULATE_DISPLAY
+    #ifdef BL_SIMULATE_DISPLAY
     // downscale into the real window backbuffer
     glBindFramebuffer(GL_READ_FRAMEBUFFER, offscreen_fbo);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -148,7 +148,7 @@ void PlatformManager::gl_end_frame()
 
 void PlatformManager::imgui_fix_offscreen_mouse_position()
 {
-    #ifdef SIMULATE_DISPLAY
+    #ifdef BL_SIMULATE_DISPLAY
     // imgui_impl_sdl3 calls UpdateMouseData() in NewFrame and queries global mouse state,
     // which can overwrite scaled coordinates
     float mx = 0.0f, my = 0.0f;
@@ -228,7 +228,7 @@ bool PlatformManager::device_vertical()
     #endif
 
     // todo: Add do DebugDevicePreset
-    #ifdef SIMULATE_MOBILE
+    #ifdef BL_SIMULATE_MOBILE
     return true;
     #else
     return false;
@@ -273,7 +273,7 @@ bool PlatformManager::device_orientation_changed(std::function<void(int, int)> o
 
 bool PlatformManager::is_mobile() const
 {
-    #ifdef SIMULATE_MOBILE
+    #ifdef BL_SIMULATE_MOBILE
     return true;
     #else
     return is_mobile_device;
@@ -282,7 +282,7 @@ bool PlatformManager::is_mobile() const
 
 bool PlatformManager::is_desktop_native() const
 {
-    #if defined __EMSCRIPTEN__ || defined SIMULATE_BROWSER
+    #if defined __EMSCRIPTEN__ || defined BL_SIMULATE_BROWSER
     return false;
     #else
     return !is_mobile();
@@ -291,9 +291,9 @@ bool PlatformManager::is_desktop_native() const
 
 bool PlatformManager::is_desktop_browser() const
 {
-    #ifdef SIMULATE_BROWSER
+    #ifdef BL_SIMULATE_BROWSER
         // simulating browser
-        #ifdef SIMULATE_MOBILE
+        #ifdef BL_SIMULATE_MOBILE
         return false;
         #else
         return true;

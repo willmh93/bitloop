@@ -26,9 +26,9 @@ struct Test1_Scene : public Scene<Test1_Scene>
         //speed(info.speed)
     {}
 
-    struct UI : Interface
+    struct UI : ViewModel
     {
-        using Interface::Interface;
+        using ViewModel::ViewModel;
         void sidebar();
     };
 
@@ -72,9 +72,9 @@ struct Test1_Project : public Project<Test1_Project>
         return ProjectInfo({ "Framework Tests", "Test A" });
     }
 
-    struct UI : Interface
+    struct UI : ViewModel
     {
-        using Interface::Interface;
+        using ViewModel::ViewModel;
         void sidebar();
     };
 

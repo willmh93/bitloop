@@ -11,22 +11,26 @@
 
 BL_BEGIN_NS
 
-namespace Math
+namespace math
 {
+    // Numbers
+
     template<class T> inline constexpr T pi_v = std::numbers::pi_v<T>;
     template<> inline constexpr f128 pi_v<f128> = f128(3.141592653589793116, 1.2246467991473532072e-16);
 
-    // Numbers
-    constexpr float FPI = (float)std::numbers::pi;
-    constexpr float FTWO_PI = (float)std::numbers::pi * 2.0f;
-    constexpr float FHALF_PI = (float)std::numbers::pi / 2.0f;
-    constexpr float FINV_TWO_PI = 1.0f / FTWO_PI;
+    inline constexpr float  pi_f       = (float)std::numbers::pi;
+    inline constexpr float  tau_f      = (float)std::numbers::pi * 2.0f;
+    inline constexpr float  half_pi_f  = (float)std::numbers::pi / 2.0f;
+    inline constexpr float  inv_pi_f   = (float)std::numbers::inv_pi;
+    inline constexpr float  inv_tau_f  = 1.0f / tau_f;
+                                
+    inline constexpr double pi         = std::numbers::pi;
+    inline constexpr double tau        = std::numbers::pi * 2.0;
+    inline constexpr double half_pi    = std::numbers::pi / 2.0;
+    inline constexpr double inv_pi     = std::numbers::inv_pi;
+    inline constexpr double inv_tau    = 1.0 / tau;
 
-    constexpr double PI = std::numbers::pi;
-    constexpr double TWO_PI = std::numbers::pi * 2.0;
-    constexpr double HALF_PI = std::numbers::pi / 2.0;
-    constexpr double INV_TWO_PI = 1.0 / TWO_PI;
-
+    // Functions
 
     template<typename T> [[nodiscard]] inline T roundDown(T v, T step) { return floor(v / step) * step; }
     template<typename T> [[nodiscard]] inline T roundUp(T v, T step) { return ceil(v / step) * step; }
@@ -105,28 +109,22 @@ namespace Math
         return y == T{0} ? T{0} : y;
     }
 
+    // lerp from input a to log(a)
     template<typename T>
-    [[nodiscard]] constexpr T fast_log1p(T x)
-    {
-        T y = x / (2 + x);
-        T y2 = y * y;
-        return 2 * y * (1 + y2 * (T{ 1.0 } / 3 + y2 * (T{ 1.0 } / 5 + y2 * (T{ 1.0 } / 7))));
-    }
-
-    template<typename T>
-    [[nodiscard]] inline T linear_log_lerp(T a, T lerp_factor)
+    [[nodiscard]] inline T linearLogLerp(T a, T lerp_factor)
     {
         return a + (log(a) - a) * lerp_factor;
     }
 
+    // lerp from input a to log1p(a)
     template<typename T>
-    [[nodiscard]] inline T linear_log1p_lerp(T a, T lerp_factor)
+    [[nodiscard]] inline T linearLog1pLerp(T a, T lerp_factor)
     {
         return a + (log(1 + a) - a) * lerp_factor;
     }
 
     template<typename T>
-    [[nodiscard]] inline T linear_log_range_lerp(T x, T a, T b, T lerp_factor)
+    [[nodiscard]] inline T linearLogRangeLerp(T x, T a, T b, T lerp_factor)
     {
         return x + (log(((x - a) / (b - a))) - x) * lerp_factor;
     }
@@ -238,6 +236,20 @@ namespace Math
     template<typename T> [[nodiscard]] inline T wrapRadians2PI(T a) noexcept { return a - pi_v<T>*2 * floor(a * T{1}/(pi_v<T>*2)); }
     template<typename T, typename S> [[nodiscard]] inline T lerpAngle(T a, T b, S f) { return wrapRadians(a + T{f}*closestAngleDifference(a, b)); }
     template<typename T> [[nodiscard]] inline T avgAngle(T a, T b) { return lerpAngle(a, b, T{ 0.5 }); }
+    template<typename T> constexpr T avgAngle(const std::vector<T>& angles)
+    {
+        T s = 0, c = 0;
+        for (T a : angles) {
+            s += bl::sin(a);
+            c += bl::cos(a);
+        }
+
+        // If angles are very spread out, resultant length can be ~0 and mean is undefined/unstable.
+        const T r2 = s * s + c * c;
+        if (r2 < 1e-24) return 0;
+
+        return bl::atan2(s, c);
+    }
 
     // todo: Add support for "Segment" class, perhaps move to those classes for:
     // >  Ray     --> Ray      intersection
@@ -382,9 +394,9 @@ namespace Math
 
     // Lerp
     template<typename ValueT, typename Scalar>
-    [[nodiscard]] constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar x)
+    [[nodiscard]] constexpr ValueT lerp(const ValueT& a, const ValueT& b, Scalar factor)
     {
-        return (ValueT)(a + (b - a) * x);
+        return (ValueT)(a + (b - a) * factor);
     }
     
     template<typename ValueT, typename Scalar>
@@ -408,6 +420,7 @@ namespace Math
         return ret;
     }
 
+    // inverse lerp: get factor from value and range
     template<typename T>
     [[nodiscard]] inline T lerpFactor(T value, T min, T max) {
         return ((value - min) / (max - min));
@@ -421,12 +434,12 @@ namespace Math
         return f;
     }
 
-    template<class T>
-    inline T len(const Vec2<T>& v) { return sqrt(v.x * v.x + v.y * v.y); }
-
+    // Catmull–Rom spline lerp
     template<class T>
     inline Vec2<T> arcLerp(float t, const Vec2<T>& a, const Vec2<T>& b, const Vec2<T>& c)
     {
+        // todo: use newton steps to improve performance
+
         using Vec2 = Vec2<T>;
         if (t <= 0.0f) { return a; }
         if (t >= 1.0f) { return c; }
@@ -468,7 +481,7 @@ namespace Math
 
         const T target = t * L;
 
-        // Choose segment and invert the sampled cumulative length
+        // choose segment and invert the sampled cumulative length
         int   seg = (target <= L0) ? 0 : 1;
         T want = (seg == 0) ? target : (target - L0);
 
@@ -482,7 +495,7 @@ namespace Math
         const T c0 = cum[i - 1], c1 = cum[i];
         const T w = (c1 > c0) ? ((want - c0) / (c1 - c0)) : 0;
 
-        // Linearly blend between the two sampled points for final position
+        // linearly blend between the two sampled points for final position
         Vec2 d = pts[i - 1] + (pts[i] - pts[i - 1]) * w;
         return d;
     }
@@ -534,45 +547,116 @@ namespace Math
         return ret;
     }
 
-    namespace MovingAverage
+
+    template<typename T>
+    class SMA
     {
-        template<typename T>
-        class MA
+        int ma_length = 0;
+        std::vector<T> samples;   // ring buffer storage
+        std::size_t head = 0;     // index of the oldest sample to overwrite next
+        std::size_t count = 0;    // number of valid samples in buffer (<= ma_length)
+        T sum{};
+
+    public:
+
+        SMA(int length) : ma_length(length)
         {
-            int ma_length = 0;
+            if (ma_length < 1) ma_length = 1;
+            samples.resize(static_cast<std::size_t>(ma_length)); // fixed size
+        }
 
-            std::vector<T> samples;
-            T sum{};
-
-        public:
-            MA(int length) : ma_length(length) {}
-
-            T push(T v)
+        T push(T v)
+        {
+            if (count < static_cast<std::size_t>(ma_length))
             {
+                // warming up: append into the next slot
+                const std::size_t idx = (head + count) % static_cast<std::size_t>(ma_length);
+                samples[idx] = v;
                 sum += v;
-                samples.push_back(v);
-
-                if (samples.size() > ma_length)
-                {
-                    sum -= samples[0];
-                    samples.erase(samples.begin());
-                }
-
-                return average();
+                ++count;
             }
-
-            void clear()
+            else
             {
-                sum = T{};
-                samples.clear();
+                // full: overwrite oldest (head)
+                sum -= samples[head];
+                samples[head] = v;
+                sum += v;
+
+                head = (head + 1) % static_cast<std::size_t>(ma_length);
             }
 
-            [[nodiscard]] T average() const
+            return average();
+        }
+
+        void clear()
+        {
+            sum = T{};
+            head = 0;
+            count = 0;
+        }
+
+        [[nodiscard]] T average() const
+        {
+            if (count == 0) return T{};
+            return sum / (double)(count);
+        }
+    };
+
+    template<typename T>
+    class EMA
+    {
+        int ma_length = 0;   // smoothing length
+        T alpha{};           // smoothing factor
+        T value{};           // current EMA
+        bool has_value = false;
+
+    public:
+        EMA(int length) : ma_length(length)
+        {
+            if (ma_length < 1) ma_length = 1;
+            alpha = T(2) / (T(ma_length) + T(1));
+        }
+
+        T push(T v)
+        {
+            if (!has_value)
             {
-                return (sum / (double)samples.size());
+                value = v; // first sample
+                has_value = true;
+                return value;
             }
-        };
-    }
+
+            value = value + alpha * (v - value);
+            return value;
+        }
+
+        void clear()
+        {
+            value = T{};
+            has_value = false;
+        }
+
+        [[nodiscard]] T average() const
+        {
+            return has_value ? value : T{};
+        }
+
+        [[nodiscard]] bool ready() const
+        {
+            return has_value;
+        }
+
+        [[nodiscard]] int length() const
+        {
+            return ma_length;
+        }
+
+        [[nodiscard]] T smoothing() const
+        {
+            return alpha;
+        }
+    };
+
 }
 
 BL_END_NS

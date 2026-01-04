@@ -231,7 +231,7 @@ void CameraInfo::populateUI(DRect restrict_world_rect)
     f128 relative_zoom = relativeZoom<f128>();
     f128 zoom_speed = relative_zoom / 100.0;
     ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1, 1e32, "%.5f"))
+    if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1, 1e32, "%.2f"))
     {
         zoom_speed = relative_zoom / 100.0;
         zoom_128 = relative_zoom * getReferenceZoom<f128>();
@@ -341,7 +341,7 @@ bool CameraNavigator::panDrag(int _x, int _y, double touch_dist, double touch_an
 
             if (fingers.size() >= 2)
             {
-                double delta_rotation = Math::closestAngleDifference(pan_down_touch_angle, touch_angle);
+                double delta_rotation = math::closestAngleDifference(pan_down_touch_angle, touch_angle);
                 changed |= camera->setRotation(pan_beg_cam_angle + delta_rotation);
                 //blPrint() << "Setting rotation: " << bl::dp(3) << (double)cam_rotation;
 
