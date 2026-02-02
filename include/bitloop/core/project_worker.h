@@ -68,7 +68,7 @@ protected:
     void populateAttributes();
     void populateOverlay();
 
-    void onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset);
+    void onEncodeFrame(EncodeFrame& data, int request_id, const CapturePreset& preset);
 
 public:
 
@@ -84,10 +84,10 @@ public:
     {
         singleton = this;
     }
+    ~ProjectWorker();
 
     // ======== Thread Control ========
     void startWorker();
-    void end();
     void worker_loop();
 
     // ======== Events / Data ========
@@ -102,7 +102,7 @@ public:
 
     // ======== Project Control ========
     [[nodiscard]] ProjectBase* getCurrentProject() { return current_project; }
-    [[nodiscard]] bool hasActiveProject();
+    [[nodiscard]] bool hasCurrentProject();
 
     std::mutex command_mutex;
     void addProjectCommand(ProjectCommandEvent e)
@@ -115,6 +115,16 @@ public:
     void startProject()             { addProjectCommand({ ProjectCommandType::PROJECT_PLAY, ProjectID::CURRENT_PROJECT }); }
     void stopProject()              { addProjectCommand({ ProjectCommandType::PROJECT_STOP,  ProjectID::CURRENT_PROJECT }); }
     void pauseProject()             { addProjectCommand({ ProjectCommandType::PROJECT_PAUSE, ProjectID::CURRENT_PROJECT }); }
+
+    bool isSwitchingProject()
+    {
+        std::lock_guard<std::mutex> lock(command_mutex);
+        for (auto& command : project_command_queue) {
+            if (command.type == ProjectCommandType::PROJECT_SET)
+                return true;
+        }
+        return false;
+    }
 };
 
 [[nodiscard]] constexpr ProjectWorker* project_worker()

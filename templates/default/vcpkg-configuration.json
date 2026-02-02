@@ -6,7 +6,7 @@
   "registries": [
     {
       "kind": "git",
-      "baseline": "f54c8e0f262549356f9a2c21c37f3f6ce77fc4b3",
+      "baseline": "66f27d2b649ade94f56842441a95d5e1c9191757",
       "repository": "https://github.com/willmh93/bitloop-registry.git",
       "packages": [
         "brotli-tool",

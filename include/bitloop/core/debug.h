@@ -11,6 +11,7 @@
 
 #include <mutex>
 #include <unordered_map>
+#include <array>
 
 #include <ostream>
 #include <sstream>
@@ -67,7 +68,6 @@
 // to make them inspectable while debugging
 template<class T>
 __declspec(noinline) void dbg_keep_ref(const T& x) {
-    // Prevents the optimizer from eliding the call entirely
     (void)*reinterpret_cast<volatile const char*>(&x);
 }
 #else
@@ -146,6 +146,7 @@ public:
     // text
     DebugStream& operator<<(const char* s) { if (s) append(std::string_view{ s }); return *this; }
     DebugStream& operator<<(std::string_view sv) { append(sv); return *this; }
+    DebugStream& operator<<(const std::string& s) { return (*this) << std::string_view{ s }; }
     DebugStream& operator<<(char c) { ensure(1); buf[len++] = c; return *this; }
     DebugStream& operator<<(bool b) { return (*this) << (b ? "true" : "false"); }
 
@@ -185,21 +186,22 @@ public:
         DebugStream& operator<<(const T& v)
     {
         std::ostringstream oss;
-        oss << v;                          // uses ADL-found std::ostream<< (e.g., your f128 overload)
-        const std::string s = oss.str();   // materialize once
+        oss << v;
+        const std::string s = oss.str();
         return (*this) << std::string_view{ s };
     }
 
-    // flush now (optional manual call)
     void flush() {
         if (!len) return;
-        ensure(1);
+
         buf[len] = '\0';
+
         #ifdef WIN32
         OutputDebugStringA(buf);
         #endif
         ImDebugPrint(buf);
         std::cout << buf;
+
         len = 0;
     }
 
@@ -209,14 +211,15 @@ private:
     }
 
     void append(std::string_view sv) {
-        if (sv.empty()) return;
         const char* p = sv.data();
         std::size_t n = sv.size();
+
         while (n) {
             if (kBufSize - len == 0) { flush(); }
             std::size_t take = std::min(n, kBufSize - len);
             std::memcpy(buf + len, p, take);
             len += take;
+
             p += take;
             n -= take;
         }
@@ -324,8 +327,8 @@ inline void blPrint(const char* fmt, ...)
 #ifdef TIMERS_ENABLED
 #define timer0(name)      auto _timer_##name = std::chrono::steady_clock::now();
 #define timer1(name, ...) auto waited_##name = std::chrono::steady_clock::now() - _timer_##name;\
-                      double dt_##name = std::chrono::duration<double, std::milli>(waited_##name).count();\
-                      if (dt_##name >= TIMER_ELAPSED_LIMIT) { blPrint("Timer (%s): %.4f", #name, dt_##name); }
+                          double dt_##name = std::chrono::duration<double, std::milli>(waited_##name).count();\
+                          if (dt_##name >= TIMER_ELAPSED_LIMIT) { blPrint("Timer (%s): %.4f\n", #name, dt_##name); }
 #else
 #define timer0(name)     
 #define timer1(name, ...)

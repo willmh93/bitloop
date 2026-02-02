@@ -2,7 +2,7 @@
 
 #include <bitloop/core/capture_manager.h>
 #include <bitloop/core/snapshot_presets.h>
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 
 BL_BEGIN_NS;
 
@@ -15,6 +15,7 @@ struct SettingsConfig
 
     std::string capture_dir;
 
+    bool    preview_mode = false;
     bool    fixed_time_delta = false;
 
     int     default_ssaa = 1;
@@ -30,7 +31,7 @@ struct SettingsConfig
     int     record_near_lossless = 100;
 
     SnapshotPresetHashMap target_image_presets;
-    int                   target_video_preset = 0; // idx
+    int                   target_video_preset = 0; // idx (todo: should probably be preset hash)
 
     #if BITLOOP_FFMPEG_ENABLED
     int64_t        record_bitrate = 128000000ll;
@@ -56,7 +57,7 @@ struct SettingsConfig
         return ret;
     }
 
-    SnapshotPreset enabledVideoPreset() const
+    CapturePreset enabledVideoPreset() const
     {
         const SnapshotPresetList& capture_presets = snapshot_preset_manager.allPresets();
         return capture_presets.at(target_video_preset);
@@ -75,7 +76,7 @@ class SettingsPanel
 
     SettingsConfig config;
 
-    // input buffers (avoids direct access to SnapshotPreset)
+    // input buffers (avoids direct access to CapturePreset)
     char   input_name[64]{};
     char   input_alias[32]{};
     IVec2  input_resolution;
@@ -87,7 +88,7 @@ class SettingsPanel
 
     int selected_capture_preset = 0;
     int selected_image_preset = -1;
-
+    bool selected_preset_is_video = false;
     
 
 public:
@@ -96,7 +97,7 @@ public:
     {}
 
     void init();
-    void setInputPreset(SnapshotPreset* p)
+    void setInputPreset(CapturePreset* p)
     {
         if (!p) return;
         input_resolution = p->getResolution();
@@ -110,7 +111,15 @@ public:
     SettingsConfig& getConfig() { return config; }
     const SettingsConfig& getConfig() const { return config; }
 
-    void populateCapturePresets();
+    // image or video capture preset index, depending on visible tab
+    int getSelectedPresetIndex() const {
+        if (selected_preset_is_video)
+            return config.target_video_preset;
+        else
+            return selected_image_preset;
+    }
+
+    void populateCapturePresetsEditor();
     void populateSettings();
 };
 
@@ -122,7 +131,7 @@ enum struct CapturePresetsSelectMode
 };
 
 // flexible preset picker
-// > getPresetRefFromIdx:   items provided by callback, e.g. [&](int i)->SnapshotPreset& { return presets[i]; }
+// > getPresetRefFromIdx:   items provided by callback, e.g. [&](int i)->CapturePreset& { return presets[i]; }
 // > count:                 number of items provided by callback
 // > enabled_preset:        enabled presets provided by hash lookup
 //   - Useful if a sim saves a list of "valid" render targets but can't guarantee they exist in the provided list
@@ -164,7 +173,7 @@ int populateCapturePresetsList(
             {
                 ImGui::PushID(i);
 
-                SnapshotPreset& preset = getPresetRefFromIdx(i);
+                CapturePreset& preset = getPresetRefFromIdx(i);
                 bool enabled = enabled_presets && enabled_presets->count(preset.hashedAlias()) > 0;
                 bool was_enabled = enabled;
 
@@ -264,7 +273,7 @@ int populateCapturePresetsList(
         auto enable_if = [&](auto&& pred)
         {
             for (int i = 0; i < count; i++) {
-                SnapshotPreset& p = getPresetRefFromIdx(i);
+                CapturePreset& p = getPresetRefFromIdx(i);
                 if (pred(p)) enable_hash(p.hashedAlias());
             }
         };
@@ -272,7 +281,7 @@ int populateCapturePresetsList(
         auto disable_if = [&](auto&& pred)
         {
             for (int i = 0; i < count; i++) {
-                SnapshotPreset& p = getPresetRefFromIdx(i);
+                CapturePreset& p = getPresetRefFromIdx(i);
                 if (pred(p)) disable_hash(p.hashedAlias());
             }
         };
@@ -280,20 +289,20 @@ int populateCapturePresetsList(
         auto set_only = [&](auto&& pred)
         {
             for (int i = 0; i < count; i++) {
-                SnapshotPreset& p = getPresetRefFromIdx(i);
+                CapturePreset& p = getPresetRefFromIdx(i);
                 if (pred(p)) enable_hash(p.hashedAlias());
                 else         disable_hash(p.hashedAlias());
             }
         };
 
-        auto max_dim = [](const SnapshotPreset& p) { return (p.width() > p.height()) ? p.width() : p.height(); };
-        auto min_dim = [](const SnapshotPreset& p) { return (p.width() < p.height()) ? p.width() : p.height(); };
+        auto max_dim = [](const CapturePreset& p) { return (p.width() > p.height()) ? p.width() : p.height(); };
+        auto min_dim = [](const CapturePreset& p) { return (p.width() < p.height()) ? p.width() : p.height(); };
 
-        auto is_square = [&](const SnapshotPreset& p) { return p.width() == p.height(); };
-        auto is_portrait = [&](const SnapshotPreset& p) { return p.height() > p.width(); };
-        auto is_landscape = [&](const SnapshotPreset& p) { return p.width() > p.height(); };
+        auto is_square = [&](const CapturePreset& p) { return p.width() == p.height(); };
+        auto is_portrait = [&](const CapturePreset& p) { return p.height() > p.width(); };
+        auto is_landscape = [&](const CapturePreset& p) { return p.width() > p.height(); };
 
-        auto aspect = [&](const SnapshotPreset& p) -> float
+        auto aspect = [&](const CapturePreset& p) -> float
         {
             const float w = (float)((p.width() > 0) ? p.width() : 1);
             const float h = (float)((p.height() > 0) ? p.height() : 1);
@@ -303,38 +312,38 @@ int populateCapturePresetsList(
         // Heuristics:
         // - 8K: any preset with max dimension >= 7680
         // - 4K: max dimension >= 3840 but < 7680, and min dimension >= ~2000 to avoid 3840x1080 counting as 4K
-        auto is_8k = [&](const SnapshotPreset& p)
+        auto is_8k = [&](const CapturePreset& p)
         {
             return max_dim(p) >= 7680;
         };
 
-        auto is_4k = [&](const SnapshotPreset& p)
+        auto is_4k = [&](const CapturePreset& p)
         {
             const int md = max_dim(p);
             const int nd = min_dim(p);
             return (md >= 3840) && (md < 7680) && (nd >= 2000);
         };
 
-        auto is_1440_class = [&](const SnapshotPreset& p)
+        auto is_1440_class = [&](const CapturePreset& p)
         {
             const int md = max_dim(p);
             const int nd = min_dim(p);
             return (md >= 2560) && (md < 3840) && (nd >= 1440);
         };
 
-        auto is_1080_class = [&](const SnapshotPreset& p)
+        auto is_1080_class = [&](const CapturePreset& p)
         {
             const int md = max_dim(p);
             const int nd = min_dim(p);
             return (md >= 1920) && (md < 2560) && (nd >= 1080);
         };
 
-        auto is_ultrawide = [&](const SnapshotPreset& p)
+        auto is_ultrawide = [&](const CapturePreset& p)
         {
             return is_landscape(p) && aspect(p) >= 2.2f && aspect(p) < 3.0f;
         };
 
-        auto is_super_ultrawide = [&](const SnapshotPreset& p)
+        auto is_super_ultrawide = [&](const CapturePreset& p)
         {
             return is_landscape(p) && aspect(p) >= 3.0f;
         };
@@ -353,7 +362,7 @@ int populateCapturePresetsList(
             if (ImGui::MenuItem("Invert Enabled"))
             {
                 for (int i = 0; i < count; i++) {
-                    SnapshotPreset& p = getPresetRefFromIdx(i);
+                    CapturePreset& p = getPresetRefFromIdx(i);
                     set_enabled(p.hashedAlias(), !is_enabled(p.hashedAlias()));
                 }
             }

@@ -6,8 +6,10 @@
 
 #include <bitloop/util/timer.h>
 #include <bitloop/platform/platform.h>
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/core/interface_model.h>
 #include <bitloop/core/snapshot_presets.h>
+#include <bitloop/core/capture_manager.h>
+#include <bitloop/imguix/imguix.h>
 
 #include "input.h"
 #include "layout.h"
@@ -145,9 +147,8 @@ struct Input
 */
 /// =================
 
-
 class ProjectBase;
-using ProjectCreatorFunc = std::function<ProjectBase* ()>;
+using ProjectCreatorFunc = std::function<ProjectBase*()>;
 
 struct ProjectInfo
 {
@@ -209,8 +210,6 @@ class ProjectBase
     Viewport* ctx_focused = nullptr;
     Viewport* ctx_hovered = nullptr;
 
-    static inline ProjectBase* active_project = nullptr;
-
 protected:
 
     friend class ProjectWorker;
@@ -234,6 +233,9 @@ protected:
     void _populateAllAttributes();
     virtual void _populateOverlay();
     virtual void _projectAttributes() {}
+
+    virtual void _initGUI();
+    virtual void _destroyGUI();
     
     // ----- Project management (internal, invokes public virtual methods) -----
     void _projectPrepare();
@@ -247,7 +249,7 @@ protected:
 
     // ----- capturing -----
 
-    void _onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset);
+    void _onEncodeFrame(EncodeFrame& data, int request_id, const CapturePreset& preset);
 
     // ----- input -----
     std::vector<FingerInfo> pressed_fingers;
@@ -256,8 +258,6 @@ protected:
 
 
     // ----- data buffers -----
-    bool has_var_buffer = false;
-
     virtual void updateProjectLiveBuffer() {}
     virtual void updateProjectShadowBuffer() {}
 
@@ -272,9 +272,14 @@ protected:
 
 public:
 
+    static ProjectBase* activeProject();
+
+    // todo: improve access
     MouseInfo mouse;
 
     virtual ~ProjectBase() = default;
+
+    virtual InterfaceModel* getInterfaceModel() = 0;
     
     /// ----- Project factory -----
 
@@ -373,11 +378,6 @@ public:
         return findProjectInfo(sim_uid);
     }
 
-    static ProjectBase* activeProject()
-    {
-        return active_project;
-    }
-
     /// ----- Scene factory -----
 
     // create Scene with default config
@@ -439,7 +439,7 @@ public:
     /// ----- states -----
 
     [[nodiscard]] bool isPaused() const { return paused; }
-    [[nodiscard]] bool isActive() const { return started; } // true even if paused. Indicates project has been started and has a state
+    [[nodiscard]] bool isActive() const { return started; } // in "started/paused" state (but not stopped)
 
     #ifdef BITLOOP_DEV_MODE
     [[nodiscard]] std::string proj_path(std::string_view virtual_path) const
@@ -494,6 +494,23 @@ public:
     void logClear();
 };
 
+class BasicProject : public ProjectBase, public DirectInterfaceModel
+{
+    void _projectAttributes() override final
+    {
+        sidebar();
+    }
+    void _populateOverlay() override final
+    {
+        overlay();
+    }
+
+    InterfaceModel* getInterfaceModel() override final
+    {
+        return static_cast<InterfaceModel*>(this);
+    }
+};
+
 template<typename ProjectType>
 class Project : public ProjectBase, public VarBuffer<ProjectType>
 {
@@ -501,28 +518,58 @@ class Project : public ProjectBase, public VarBuffer<ProjectType>
 
 public:
 
-    using ViewModel = ViewModel<ProjectType>;
-    ViewModel* ui = nullptr;
+    using BufferedInterfaceModel = DoubleBufferedInterfaceModel<ProjectType>;
+    BufferedInterfaceModel* ui = nullptr;
 
-    Project() : ProjectBase()
-    {
-        has_var_buffer = true;
-
-        // todo: Move virtual populate methods into new class derived from ViewModel
-        ui = new ProjectType::UI(static_cast<const ProjectType*>(this));
-        ui->init();
-    }
+    Project() : ProjectBase() {}
     ~Project()
     {
-        delete ui;
+        // should already be destroyed in _destroyGUI on GUI thread
+        assert(ui == nullptr);
+        if (ui) delete ui;
     }
 
 protected:
+
+    InterfaceModel* getInterfaceModel() override final
+    {
+        return static_cast<InterfaceModel*>(ui);
+    }
+
+    auto getUI() const noexcept
+    {
+        return static_cast<const ProjectType::UI*>(ui);
+    }
+
+    void _initGUI() override final
+    {
+        if (!ui)
+        {
+            // safer to initialize UI on same thread as UI populate
+            ui = new ProjectType::UI(static_cast<const ProjectType*>(this));
+            ui->init();
+        }
+
+        ProjectBase::_initGUI();
+    }
+
+    void _destroyGUI() override final
+    {
+        if (ui)
+        {
+            ui->destroy();
+            delete ui;
+            ui = nullptr;
+        }
+
+        ProjectBase::_destroyGUI();
+    }
 
     void _projectAttributes() override final
     {
         ui->sidebar();
     }
+
     void _populateOverlay() override final
     {
         ui->overlay();
@@ -572,7 +619,6 @@ protected:
     }
 };
 
-typedef ProjectBase BasicProject;
 
 
 BL_END_NS

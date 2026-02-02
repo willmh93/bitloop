@@ -7,8 +7,9 @@
 #include <bitloop/core/capture_manager.h>
 #include <bitloop/core/settings.h>
 
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 #include <bitloop/nanovgx/nano_canvas.h>
+#include <bitloop/util/thread_queue.h>
 
 BL_BEGIN_NS;
 
@@ -30,9 +31,11 @@ struct ToolbarButtonState
 
 enum struct MainWindowCommandType
 {
+    ON_SELECT_PROJECT,
     ON_PLAY_PROJECT,
     ON_STOPPED_PROJECT,
     ON_PAUSED_PROJECT,
+
     BEGIN_SNAPSHOT_PRESET_LIST,
     BEGIN_SNAPSHOT_ACTIVE_PRESET,
     BEGIN_RECORDING,
@@ -44,7 +47,6 @@ struct SnapshotPresetsArgs
     std::string rel_path_fmt; // path format (relative to project capture dir, no extension)
     SnapshotPresetList presets; // which presets to target
     int request_id;
-    std::string xmp_data;
 };
 
 struct MainWindowCommandEvent
@@ -92,12 +94,11 @@ class MainWindow
     SettingsPanel    settings_panel;
     CaptureConfig    config;
 
-    SnapshotPresetList enabled_capture_presets;
+    SnapshotPresetList enabled_snapshot_presets;
     bool               is_snapshotting = false; // remains true for whole batch
     int                active_capture_preset = 0;
-    int                active_capture_preset_request_id = 0;
+    int                active_snapshot_preset_request_id = 0;
     std::string        active_capture_rel_path_fmt;
-    std::string        active_capture_xmp_data;
     int                shared_batch_fileindex = 0; // dir scanned for next highest index, used for batch
     
     ///bool            window_capture = false;
@@ -108,6 +109,7 @@ class MainWindow
     std::vector<uint8_t> frame_data; // intermediate buffer to read canvas pixels before encoding
 
     SharedSync& shared_sync;
+    ThreadQueue thread_queue;
 
     const int window_flags = 0;
         // ImGuiWindowFlags_NoTitleBar |
@@ -126,9 +128,10 @@ public:
     {
         singleton = this;
     }
+    ~MainWindow() { thread_queue.pump(); }
 
     [[nodiscard]] Canvas* getCanvas() { return &canvas; }
-    [[nodiscard]] CaptureManager* getRecordManager() { return &capture_manager; }
+    [[nodiscard]] CaptureManager* getCaptureManager() { return &capture_manager; }
     [[nodiscard]] SettingsConfig* getSettingsConfig() { return &settings_panel.getConfig(); }
     [[nodiscard]] const SettingsConfig* getSettingsConfig() const { return &settings_panel.getConfig(); }
     [[nodiscard]] SnapshotPresetManager* getSnapshotPresetManager() { return &settings_panel.getConfig().snapshot_preset_manager; }
@@ -145,14 +148,13 @@ public:
     void queueBeginSnapshot(
         const SnapshotPresetList& presets,
         std::string_view rel_path_fmt = {},
-        int request_id = 0,
-        std::string_view xmp_data = {}
+        int request_id = 0
     );
 
     void queueBeginRecording();
     void queueEndRecording();
 
-    void beginRecording(const SnapshotPreset& preset, const char* rel_path_fmt);
+    void beginRecording(const CapturePreset& preset, const char* rel_path_fmt);
 
     #ifndef __EMSCRIPTEN__
     std::filesystem::path getProjectSnapshotsDir();
@@ -163,7 +165,7 @@ public:
     // e.g. for a given preset 'backgrounds/seahorse_valley' may create missing dirs and return:
     //     'captures/Mandelbrot/backgrounds/seahorse_valley_1920x1080.webp'
     std::string prepareFullCapturePath(
-        const SnapshotPreset& preset,
+        const CapturePreset& preset,
         std::filesystem::path base_dir,
         const char* rel_path_fmt,
         int file_idx,
@@ -171,13 +173,13 @@ public:
 
 private:
     // uses provided args and exact path (lowest level, no awareness of presets)
-    void _beginSnapshot(const char* filepath, IVec2 res, int ssaa=1, float sharpen=0.0f, std::string_view xmp_data = {});
+    void _beginSnapshot(const char* filepath, IVec2 res, int ssaa=1, float sharpen=0.0f);
 public:
     // begins snapshot using preset (uses default global ssaa/sharpen unless explicitly set in preset)
-    void beginSnapshot(const SnapshotPreset& preset, const char* rel_path_fmt, int file_idx, std::string_view xmp_data = {});
+    void beginSnapshot(const CapturePreset& preset, const char* rel_path_fmt, int file_idx);
 
     // relative to project capture dir - if nullptr, name chosen automatically, e.g. For a given preset:
-    void beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id, std::string_view xmp_data={});
+    void beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id);
 
     void endRecording();
     void checkCaptureComplete();
@@ -240,6 +242,12 @@ public:
     
     void populateExpandedLayout();
     void populateUI();
+
+    ThreadQueue& threadQueue() { return thread_queue; }
+    ///template <typename F> void invokeBlocking(F&& fn) {
+    ///    thread_queue.invokeBlocking(std::forward<F>(fn));
+    ///}
+
 };
 
 [[nodiscard]] constexpr MainWindow* main_window()

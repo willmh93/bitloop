@@ -76,8 +76,8 @@ public:
 
     [[nodiscard]] int gl_width()      const { return gl_w; }
     [[nodiscard]] int gl_height()     const { return gl_h; }
-    [[nodiscard]] int fbo_width()     const { return fb_w; }
-    [[nodiscard]] int fbo_height()    const { return fb_h; }
+    [[nodiscard]] int fbo_width()     const { return fbo_size().x; }
+    [[nodiscard]] int fbo_height()    const { return fbo_size().y; }
     [[nodiscard]] int window_width()  const { return win_w; }
     [[nodiscard]] int window_height() const { return win_h; }
 
@@ -85,12 +85,8 @@ public:
     [[nodiscard]] IVec2 window_size() const { return {win_w, win_h}; }
 
     // Device Info
-    #ifdef BL_SIMULATE_DISPLAY
-    [[nodiscard]] float dpr() const { return BL_SIMULATE_DISPLAY.dpr; }
-    #else
-    //[[nodiscard]] float dpr() const { return win_dpr; }
-    [[nodiscard]] float dpr() { return (float)gl_w / (float)win_w; }
-    #endif
+
+    [[nodiscard]] float dpr() const { return win_dpr; }
 
     [[nodiscard]] bool offscreen_active() const
     {
@@ -104,8 +100,11 @@ public:
     // what the app should render to (offscreen, or direct)
     [[nodiscard]] IVec2 fbo_size() const
     {
-        if (offscreen_active()) return { offscreen_w, offscreen_h };
-        return { gl_w, gl_h };
+        #ifdef BL_SIMULATE_DISPLAY
+        return {offscreen_w, offscreen_h};
+        #else
+        return {fb_w, fb_h};
+        #endif
     }
 
     // input scaling to fbo-space

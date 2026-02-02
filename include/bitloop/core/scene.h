@@ -1,8 +1,10 @@
 #pragma once
 
 #include <random>
+#include <chrono>
 
 #include <bitloop/platform/platform.h>
+#include <bitloop/core/interface_model.h>
 #include <bitloop/core/capture_manager.h>
 #include <bitloop/core/snapshot_presets.h>
 #include <bitloop/util/math_util.h>
@@ -11,23 +13,28 @@
 
 #include "types.h"
 #include "event.h"
-#include "var_buffer.h"
+
 #include "camera.h"
 #include "input.h"
 
 BL_BEGIN_NS
 
+
 class Viewport;
 class ProjectBase;
 class Layout;
 
-
-
 class SceneBase : public ChangeTracker
 {
+    friend class ProjectBase;
+
     mutable std::mt19937 gen;
 
     int dt_sceneProcess = 0;
+
+
+    std::chrono::steady_clock::time_point elapsed_t0
+        = std::chrono::steady_clock::now();
 
     mutable std::vector<math::SMA<double>> dt_scene_ma_list;
     mutable std::vector<math::SMA<double>> dt_project_ma_list;
@@ -40,6 +47,8 @@ class SceneBase : public ChangeTracker
     mutable bool initiating_snapshot = false;
     mutable bool initiating_recording = false;
 
+    virtual void _initGUI() {}
+    virtual void _destroyGUI() {}
 
 protected:
 
@@ -51,14 +60,33 @@ protected:
     int scene_index = -1;
     std::vector<Viewport*> mounted_to_viewports;
 
+    bool started = false;
+    bool destroyed = false;
+
+    void _sceneStart()
+    {
+        started = true;
+        elapsed_t0 = std::chrono::steady_clock::now();
+        sceneStart();
+    }
+
+    void _sceneDestroy()
+    {
+        if (!destroyed && started)
+        {
+            sceneDestroy();
+            destroyed = true;
+        }
+    }
+
     // Mounting to/from viewport
     void registerMount(Viewport* viewport);
     void registerUnmount(Viewport* viewport);
 
     //
-    bool has_var_buffer = false;
     virtual void _sceneAttributes() {}
     virtual void _populateOverlay() {}
+    
 
     // In case Scene uses double buffer
     virtual void updateLiveBuffers() {}
@@ -72,7 +100,7 @@ protected:
 
     //
 
-    void _onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset);
+    void _onEncodeFrame(EncodeFrame& data, int request_id, const CapturePreset& preset);
 
     //
 
@@ -114,6 +142,8 @@ public:
     SceneBase() : gen(std::random_device{}()) {}
     virtual ~SceneBase() = default;
 
+    virtual InterfaceModel* getInterfaceModel() = 0;
+
     void mountTo(Viewport* viewport);
     void mountTo(Layout& viewports);
     void mountToAll(Layout& viewports);
@@ -140,6 +170,12 @@ public:
     virtual std::string name() const { return "Scene"; }
     [[nodiscard]] int sceneIndex() const { return scene_index; }
 
+    [[nodiscard]] double timeElapsed() const
+    {
+        const auto elapsed = std::chrono::steady_clock::now() - elapsed_t0;
+        return std::chrono::duration<double>(elapsed).count(); // seconds, fractional
+    }
+
     [[nodiscard]] double frame_dt(int average_samples = 1) const;
     [[nodiscard]] double scene_dt(int average_samples = 1) const;
     [[nodiscard]] double project_dt(int average_samples = 1) const;
@@ -158,25 +194,22 @@ public:
 
     virtual void onBeginSnapshot() {}
     virtual void onEncodeFrame(
-        bytebuf& data [[maybe_unused]],
-        int request_id [[maybe_unused]],
-        const SnapshotPreset& preset [[maybe_unused]]
+        EncodeFrame& data [[maybe_unused]],
+        const CapturePreset& preset [[maybe_unused]]
     ) {}
 
     void beginSnapshotList(
         const SnapshotPresetList& presets,
         std::string_view relative_filepath = {},
         SnapshotCompleteCallback on_snapshot_complete = nullptr,
-        SnapshotBatchCompleteCallback on_batch_complete = nullptr,
-        std::string_view xmp_data = {});
+        SnapshotBatchCompleteCallback on_batch_complete = nullptr);
 
     void beginSnapshot(
-        const SnapshotPreset& preset,
+        const CapturePreset& preset,
         std::string_view relative_filepath = {},
-        SnapshotCompleteCallback on_snapshot_complete = nullptr,
-        std::string_view xmp_data = {})
+        SnapshotCompleteCallback on_snapshot_complete = nullptr)
     {
-        beginSnapshotList(SnapshotPresetList(preset), relative_filepath, on_snapshot_complete, nullptr, xmp_data);
+        beginSnapshotList(SnapshotPresetList(preset), relative_filepath, on_snapshot_complete, nullptr);
     }
 
     void beginRecording();
@@ -194,6 +227,24 @@ public:
     void logClear();
 };
 
+class BasicScene : public SceneBase, public DirectInterfaceModel
+{
+    void _sceneAttributes() override final
+    {
+        sidebar();
+    }
+    void _populateOverlay() override final
+    {
+        overlay();
+    }
+
+    InterfaceModel* getInterfaceModel() override final
+    {
+        return static_cast<InterfaceModel*>(this);
+    }
+};
+
+
 template<typename SceneType>
 class Scene : public SceneBase, public VarBuffer<SceneType>
 {
@@ -201,44 +252,64 @@ class Scene : public SceneBase, public VarBuffer<SceneType>
 
 public:
 
-    using ViewModel = ViewModel<SceneType>;
-    ViewModel* ui = nullptr;
-
+    using BufferedInterfaceModel = DoubleBufferedInterfaceModel<SceneType>;
+    BufferedInterfaceModel* ui = nullptr;
+    
     Scene() : SceneBase()
     {
-        has_var_buffer = true;
     }
 
     ~Scene()
     {
-        if (ui)
-            delete ui;
+        // should already be destroyed in _destroyGUI on GUI thread
+        assert(ui == nullptr);
+        if (ui) delete ui;
     }
 
 protected:
 
-    void _sceneAttributes() override final
+    InterfaceModel* getInterfaceModel() override final
+    {
+        return static_cast<InterfaceModel*>(ui);
+    }
+
+    auto getUI() const noexcept
+    {
+        return static_cast<const SceneType::UI*>(ui);
+    }
+
+    void _initGUI() override final
     {
         if (!ui) {
             // safer to initialize UI on same thread as UI populate
             ui = new SceneType::UI(static_cast<const SceneType*>(this));
             ui->init();
         }
+    }
 
+    void _destroyGUI() override final
+    {
+        if (ui)
+        {
+            ui->destroy();
+            delete ui;
+            ui = nullptr;
+        }
+    }
+
+    void _sceneAttributes() override final
+    {
         ui->sidebar();
     }
 
     void _populateOverlay() override final
     {
-        if (!ui) {
-            // safer to initialize UI on same thread as UI populate
-            ui = new SceneType::UI(static_cast<const SceneType*>(this));
-            ui->init();
-        }
-
         ui->overlay();
     }
 
+
+
+    
 private:
 
     void updateLiveBuffers() override final          { VarBuffer<SceneType>::updateLive(); }
@@ -251,8 +322,5 @@ private:
     void invokeScheduledCalls() override final       { VarBuffer<SceneType>::invokeScheduledCalls(); }
 };
 
-// todo: Make dedicated "SingleThreadedScene" class which uses a single thread for both UI/process
-//       BasicScene currently doesn't support any UI
-typedef SceneBase BasicScene;
 
 BL_END_NS

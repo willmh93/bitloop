@@ -13,7 +13,7 @@ void ProjectWorker::startWorker()
     shared_sync.project_thread_started = true;
 }
 
-void ProjectWorker::end()
+ProjectWorker::~ProjectWorker()
 {
     BL_TAKE_OWNERSHIP("live");
 
@@ -22,7 +22,7 @@ void ProjectWorker::end()
         // Kill worker thread
         worker_thread.join();
 
-        // Clean up
+        // Clean up (TODO: ensure destruction happens on worker thread?)
         _destroyActiveProject();
     }
 }
@@ -35,7 +35,10 @@ void ProjectWorker::_destroyActiveProject()
     if (current_project)
     {
         current_project->_projectDestroy();
+
+        // destroys layout, which destroys viewports which calls sceneDestroy on unmount
         delete current_project;
+
         current_project = nullptr;
     }
 }
@@ -55,7 +58,8 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
 
         current_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
         current_project->configure(e.project_uid, main_window()->getCanvas(), &project_log);
-        current_project->_projectPrepare();
+
+        main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_SELECT_PROJECT });
     }
     break;
 
@@ -128,8 +132,8 @@ void ProjectWorker::worker_loop()
 
         capture_manager->setCaptureEnabled(true);
 
-        // Start draw timer
-        auto draw_t0 = std::chrono::steady_clock::now();
+        // Start frame timer
+        auto frame_t0 = std::chrono::steady_clock::now();
 
         /// ────── Do heavy work (while GUI thread redraws cached frame) ──────
         if (current_project && current_project->started) 
@@ -172,10 +176,7 @@ void ProjectWorker::worker_loop()
                 
                 /// ────── Update shadow buffer with *changed* live variables ──────
                 {
-                    // currently, we push live changes to shadow IF shadow itself wasn't changed by UI
-                    ///shadow_changed = current_project->changedShadow();
-                    ///if (!shadow_changed)
-                    ///  pushDataToShadow();
+                    // we push live changes to shadow IF shadow itself wasn't changed by UI
                     pushDataToUnchangedShadowVars();
                 }
 
@@ -206,10 +207,10 @@ void ProjectWorker::worker_loop()
 
         // Wait 16ms (minus time taken to draw the frame)
         using namespace std::chrono;
-        auto draw_duration = steady_clock::now() - draw_t0;
-        Uint64 draw_ns = static_cast<Uint64>(duration_cast<nanoseconds>(draw_duration).count());
+        auto frame_dt = steady_clock::now() - frame_t0;
+        Uint64 frame_ns = static_cast<Uint64>(duration_cast<nanoseconds>(frame_dt).count());
         Uint64 target_ns = 1000000000llu / main_window()->getFPS();
-        Uint64 delay_ns = std::max(0llu, target_ns - draw_ns);
+        Uint64 delay_ns = std::max(0llu, target_ns - frame_ns);
         if (delay_ns > 0)
             SDL_DelayPrecise(delay_ns);
     }
@@ -273,9 +274,9 @@ void ProjectWorker::pollEvents()
         _onEvent(e);
 }
 
-bool bl::ProjectWorker::hasActiveProject()
+bool bl::ProjectWorker::hasCurrentProject()
 {
-    return (current_project && current_project->isActive());
+    return (current_project != nullptr);
 }
 
 void ProjectWorker::populateAttributes()
@@ -290,7 +291,7 @@ void ProjectWorker::populateOverlay()
         current_project->_populateOverlay();
 }
 
-void ProjectWorker::onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset)
+void ProjectWorker::onEncodeFrame(EncodeFrame& data, int request_id, const CapturePreset& preset)
 {
     if (current_project)
         current_project->_onEncodeFrame(data, request_id, preset);

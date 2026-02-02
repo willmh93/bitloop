@@ -79,7 +79,7 @@ namespace math
     {
         static_assert(bl::is_floating_point_v<Float>, "Float must be a floating-point type");
         if (!isfinite(x)) return 0;
-        x = fabs(x);
+        x = abs(x);
         if (x < Float{ 1 }) return 1;
         return static_cast<int>(floor(log10(x))) + 1;
     }

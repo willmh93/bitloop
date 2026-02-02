@@ -6,215 +6,6 @@
 
 BL_BEGIN_NS;
 
-static inline float srgb_to_linear_u8(uint8_t u) {
-    // sRGB <-> linear (per channel, 0..255 <-> 0..1)
-    float e = u / 255.0f;
-    if (e <= 0.04045f) return e / 12.92f;
-    return powf((e + 0.055f) / 1.055f, 2.4f);
-}
-static inline uint8_t linear_to_srgb_u8(float l) {
-    l = std::clamp(l, 0.0f, 1.0f);
-    double ld = static_cast<double>(l);
-    double e  = (ld <= 0.0031308)
-              ? (ld * 12.92)
-              : (1.055 * std::pow(ld, 1.0 / 2.4) - 0.055);
-    int v = static_cast<int>(e * 255.0 + 0.5);
-    return static_cast<uint8_t>(std::clamp(v, 0, 255));
-}
-static void downscale_box_integer_rgba8_linear(const uint8_t* src, uint8_t* dst, int dst_w, int dst_h, int N)
-{
-    /// TODO: Make multi-threaded or use shader render pass
-
-    // Integer-factor box downscale in linear light (N×N average)
-    int src_w = dst_w * N;
-    //int src_h = dst_h * N;
-    const int src_stride = src_w * 4;
-
-    for (int dst_y = 0; dst_y < dst_h; ++dst_y)
-    {
-        const int src_y0 = dst_y * N;
-        for (int dst_x = 0; dst_x < dst_w; ++dst_x)
-        {
-            const int src_x0 = dst_x * N;
-
-            //const uint8_t* a = src + (src_y0 * src_w + src_x0) * 4;
-            //uint8_t* b = dst + (dst_y * dst_w + dst_x) * 4;
-            //b[0] = 255;//a[0];
-            //b[1] = 255;// a[1];
-            //b[2] = 255;// a[2];
-            //b[3] = 255;//a[3];
-
-            double accR = 0.0, accG = 0.0, accB = 0.0, accA = 0.0;
-            for (int j = 0; j < N; ++j) {
-                const uint8_t* row = src + (src_y0 + j) * src_stride + src_x0 * 4;
-                for (int i = 0; i < N; ++i) {
-                    const uint8_t* p = row + i * 4;
-                    accR += srgb_to_linear_u8(p[0]);
-                    accG += srgb_to_linear_u8(p[1]);
-                    accB += srgb_to_linear_u8(p[2]);
-                    accA += p[3] / 255.0;
-                }
-            }
-            
-            const double inv = 1.0 / double(N * N);
-            const float r = float(accR * inv);
-            const float g = float(accG * inv);
-            const float b = float(accB * inv);
-            const float a = float(accA * inv);
-            
-            uint8_t* q = dst + (dst_y * dst_w + dst_x) * 4;
-            q[0] = linear_to_srgb_u8(r);
-            q[1] = linear_to_srgb_u8(g);
-            q[2] = linear_to_srgb_u8(b);
-            q[3] = (uint8_t)std::lround(std::clamp(a, 0.0f, 1.0f) * 255.0f);
-        }
-    }
-}
-static inline float mitchell_kernel(float x) {
-    // Mitchell–Netravali kernel (B=1/3, C=1/3), base radius=2
-    const float B = 1.0f / 3.0f;
-    const float C = 1.0f / 3.0f;
-    x = fabsf(x);
-    const float x2 = x * x;
-    const float x3 = x2 * x;
-    if (x < 1.0f) {
-        return ((12 - 9 * B - 6 * C) * x3 + (-18 + 12 * B + 6 * C) * x2 + (6 - 2 * B)) / 6.0f;
-    }
-    else if (x < 2.0f) {
-        return ((-B - 6 * C) * x3 + (6 * B + 30 * C) * x2 + (-12 * B - 48 * C) * x + (8 * B + 24 * C)) / 6.0f;
-    }
-    return 0.0f;
-}
-static void downscale_mitchell_rgba8_linear(const uint8_t* src, int sw, int sh, uint8_t* dst, int dw, int dh)
-{
-    // Separable resample (downscale) with Mitchell in linear light, supports fractional scale.
-    // Note: for downscaling by S (>1), we widen the kernel by S (prefilter) to properly low-pass.
-    const float scaleX = float(dw) / float(sw); // < 1 when downscaling
-    const float scaleY = float(dh) / float(sh);
-    const float sx = (scaleX < 1.0f) ? scaleX : 1.0f;
-    const float sy = (scaleY < 1.0f) ? scaleY : 1.0f;
-
-    // Horizontal pass to temp (linear floats)
-    std::vector<float> tmp(dw * sh * 4, 0.0f);
-
-    // Prepare horizontal
-    const int radiusBase = 2; // Mitchell base radius
-    for (int y = 0; y < sh; ++y) {
-        for (int x = 0; x < dw; ++x) {
-            // Map destination x to source space
-            float srcX = (x + 0.5f) / scaleX - 0.5f;
-            // Kernel width scales by 1/scale when downscaling
-            float radius = radiusBase / sx;
-            int x0 = int(floorf(srcX - radius));
-            int x1 = int(ceilf(srcX + radius));
-
-            double wsum = 0.0;
-            double accR = 0.0, accG = 0.0, accB = 0.0, accA = 0.0;
-
-            for (int ix = x0; ix <= x1; ++ix) {
-                int sxclamp = std::min(std::max(ix, 0), sw - 1);
-                float dx = (srcX - ix);
-                // Scale distance by sx so kernel widens when downscaling
-                float w = mitchell_kernel(dx * sx);
-                if (w == 0.0f) continue;
-
-                const uint8_t* p = src + (y * sw + sxclamp) * 4;
-                // convert to linear
-                float lr = srgb_to_linear_u8(p[0]);
-                float lg = srgb_to_linear_u8(p[1]);
-                float lb = srgb_to_linear_u8(p[2]);
-                float la = p[3] / 255.0f;
-
-                wsum += w;
-                accR += w * lr;
-                accG += w * lg;
-                accB += w * lb;
-                accA += w * la;
-            }
-            float r = (wsum > 0.0) ? float(accR / wsum) : 0.0f;
-            float g = (wsum > 0.0) ? float(accG / wsum) : 0.0f;
-            float b = (wsum > 0.0) ? float(accB / wsum) : 0.0f;
-            float a = (wsum > 0.0) ? float(accA / wsum) : 0.0f;
-
-            float* q = &tmp[(y * dw + x) * 4];
-            q[0] = r; q[1] = g; q[2] = b; q[3] = a;
-        }
-    }
-
-    // Vertical pass to dst (convert back to sRGB)
-    for (int y = 0; y < dh; ++y) {
-        float srcY = (y + 0.5f) / scaleY - 0.5f;
-        float radius = radiusBase / sy;
-        int y0 = int(floorf(srcY - radius));
-        int y1 = int(ceilf(srcY + radius));
-
-        for (int x = 0; x < dw; ++x) {
-            double wsum = 0.0;
-            double accR = 0.0, accG = 0.0, accB = 0.0, accA = 0.0;
-
-            for (int iy = y0; iy <= y1; ++iy) {
-                int syclamp = std::min(std::max(iy, 0), sh - 1);
-                float dy = (srcY - iy);
-                float w = mitchell_kernel(dy * sy);
-                if (w == 0.0f) continue;
-
-                const float* p = &tmp[(syclamp * dw + x) * 4];
-                wsum += w;
-                accR += w * p[0];
-                accG += w * p[1];
-                accB += w * p[2];
-                accA += w * p[3];
-            }
-            float r = (wsum > 0.0) ? float(accR / wsum) : 0.0f;
-            float g = (wsum > 0.0) ? float(accG / wsum) : 0.0f;
-            float b = (wsum > 0.0) ? float(accB / wsum) : 0.0f;
-            float a = (wsum > 0.0) ? float(accA / wsum) : 0.0f;
-
-            uint8_t* q = dst + (y * dw + x) * 4;
-            q[0] = linear_to_srgb_u8(r);
-            q[1] = linear_to_srgb_u8(g);
-            q[2] = linear_to_srgb_u8(b);
-            q[3] = (uint8_t)std::round(fmaxf(0.0f, fminf(1.0f, a)) * 255.0f);
-        }
-    }
-}
-static void unsharp_linear_rgba8_inplace(uint8_t* img, int w, int h, float amount) {
-    if (amount <= 0.0f) return;
-
-    std::vector<float> lin(w * h * 3);
-    // to linear
-    for (int i = 0; i < w * h; ++i) {
-        uint8_t* p = &img[i * 4];
-        lin[i * 3 + 0] = srgb_to_linear_u8(p[0]);
-        lin[i * 3 + 1] = srgb_to_linear_u8(p[1]);
-        lin[i * 3 + 2] = srgb_to_linear_u8(p[2]);
-    }
-    // simple 3x3 box blur
-    auto at = [&](int x, int y) { x = std::clamp(x, 0, w - 1); y = std::clamp(y, 0, h - 1); return (y * w + x) * 3; };
-    std::vector<float> blur = lin;
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            double r = 0, g = 0, b = 0;
-            for (int j = -1; j <= 1; ++j)
-                for (int i = -1; i <= 1; ++i) {
-                    int idx = at(x + i, y + j);
-                    r += lin[idx + 0]; g += lin[idx + 1]; b += lin[idx + 2];
-                }
-            int o = (y * w + x) * 3;
-            blur[o + 0] = float(r / 9.0); blur[o + 1] = float(g / 9.0); blur[o + 2] = float(b / 9.0);
-        }
-    }
-    // sharpen and back to sRGB
-    for (int i = 0; i < w * h; ++i) {
-        float r = std::clamp(lin[i * 3 + 0] + amount * (lin[i * 3 + 0] - blur[i * 3 + 0]), 0.0f, 1.0f);
-        float g = std::clamp(lin[i * 3 + 1] + amount * (lin[i * 3 + 1] - blur[i * 3 + 1]), 0.0f, 1.0f);
-        float b = std::clamp(lin[i * 3 + 2] + amount * (lin[i * 3 + 2] - blur[i * 3 + 2]), 0.0f, 1.0f);
-        uint8_t* p = &img[i * 4];
-        p[0] = linear_to_srgb_u8(r);
-        p[1] = linear_to_srgb_u8(g);
-        p[2] = linear_to_srgb_u8(b);
-    }
-}
 
 bool webp_snapshot_encode_rgba(
     const uint8_t* rgba,
@@ -411,7 +202,7 @@ std::string make_xmp_packet_with_save(std::string_view save_text)
     return xmp;
 }
 
-bool webp_set_chunk_inplace(std::vector<uint8_t>& io_webp,
+bool webp_set_chunk_inplace(bytebuf& io_webp,
    const char fourcc[4],
    const uint8_t* payload,
    size_t payload_size)
@@ -440,8 +231,7 @@ bool webp_set_chunk_inplace(std::vector<uint8_t>& io_webp,
     return true;
 }
 
-bool webp_set_save_string_as_xmp_inplace(std::vector<uint8_t>& io_webp,
-    std::string_view save_text)
+bool webp_set_save_string_as_xmp_inplace(bytebuf& io_webp, std::string_view save_text)
 {
     const std::string xmp = make_xmp_packet_with_save(save_text);
     static constexpr char kXMP[4] = { 'X','M','P',' ' };
@@ -450,7 +240,7 @@ bool webp_set_save_string_as_xmp_inplace(std::vector<uint8_t>& io_webp,
         xmp.size());
 }
 
-bool webp_extract_save_from_xmp(const std::vector<uint8_t>& webp, std::string& out_save)
+bool webp_extract_save_from_xmp(const bytebuf& webp, std::string& out_save)
 {
     if (webp.empty()) return false;
 
@@ -487,17 +277,6 @@ bool webp_extract_save_from_xmp(const std::vector<uint8_t>& webp, std::string& o
 // ────── FFmpegWorker ──────
 
 #if BITLOOP_FFMPEG_ENABLED
-constexpr const char* codecs[] = { "x264", "x265" };
-const char* VideoCodecFromCaptureFormat(CaptureFormat format)
-{
-    switch (format)
-    {
-    case CaptureFormat::x264: return codecs[0];
-    case CaptureFormat::x265: return codecs[1];
-    }
-    return nullptr;
-}
-
 static bool is_h264(const AVCodec* c) { return c && c->id == AV_CODEC_ID_H264; }
 static bool is_h265(const AVCodec* c) { return c && c->id == AV_CODEC_ID_HEVC; }
 static bool h264_frame_size_supported(int w, int h)
@@ -546,7 +325,7 @@ void FFmpegWorker::process(CaptureManager* capture_manager, CaptureConfig video_
         else
         {
             // Grab the pending frame
-            bytebuf frame = capture_manager->takePendingFrame();
+            EncodeFrame frame = capture_manager->takePendingFrame();
 
             if (frame.empty())
             {
@@ -589,9 +368,11 @@ bool FFmpegWorker::startCapture()
     //const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     const AVCodec* codec = nullptr;
 
+    #if BITLOOP_FFMPEG_X265_ENABLED
     if (config.format == CaptureFormat::x265)
         codec = avcodec_find_encoder(AV_CODEC_ID_HEVC);
     else
+    #endif
         codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 
     // Avoid H.264 at 8K
@@ -719,14 +500,14 @@ bool FFmpegWorker::startCapture()
     return true;
 }
 
-bool FFmpegWorker::encodeFrame(bytebuf& frame)
+bool FFmpegWorker::encodeFrame(EncodeFrame& frame)
 {
     av_frame_make_writable(rgb_frame);
 
     int src_line_size = config.resolution.x * 4;
     int targ_line_size = rgb_frame->linesize[0];
 
-    uint8_t* data = frame.data();
+    uint8_t* data = frame.frameData();
     const uint8_t* src_row = nullptr;
     uint8_t* targ_row = nullptr;
 
@@ -818,9 +599,9 @@ bool FFmpegWorker::finalize(CaptureManager* capture_manager)
 
 // ────── WebPWorker ──────
 
-void WebPWorker::process(CaptureManager* capture_manager, CaptureConfig video_config)
+void WebPWorker::process(CaptureManager* capture_manager, CaptureConfig capture_config)
 {
-    config = video_config;
+    config = capture_config;
 
     if (!startCapture())
         return;
@@ -848,7 +629,7 @@ void WebPWorker::process(CaptureManager* capture_manager, CaptureConfig video_co
             blPrint() << "Grabbing pending frame...";
 
             // Grab the pending frame
-            bytebuf frame = capture_manager->takePendingFrame();
+            EncodeFrame frame = capture_manager->takePendingFrame();
 
             if (frame.empty())
             {
@@ -889,23 +670,78 @@ void WebPWorker::process(CaptureManager* capture_manager, CaptureConfig video_co
 bool WebPWorker::startCapture()
 {
     frame_index = 0;
-    rgba_frames.clear();
+    //rgba_frames.clear();
+    encoded_data.clear();
+
+    if (config.format == CaptureFormat::WEBP_VIDEO)
+    {
+        frame_delay_ms = (config.fps > 0) ? (1000 / config.fps) : 100;
+        timestamp_ms = 0;
+
+        WebPAnimEncoderOptions opts;
+        if (!WebPAnimEncoderOptionsInit(&opts))
+            return false;
+
+        opts.anim_params.bgcolor = 0x00000000;
+        opts.anim_params.loop_count = 0;
+
+        // speed > size
+        opts.minimize_size = 0;
+        opts.allow_mixed = 0;
+
+        enc = WebPAnimEncoderNew(config.resolution.x, config.resolution.y, &opts);
+        if (!enc)
+            return false;
+    }
 
     return true;
 }
 
-bool WebPWorker::encodeFrame(bytebuf& frame)
+bool WebPWorker::encodeFrame(EncodeFrame& frame)
 {
     blPrint() << "Encoding frame...";
 
+    // Grab metadata from this frame, save on finalize
+    config.save_payload.swap(frame.payload);
+
     if (config.format == CaptureFormat::WEBP_SNAPSHOT)
     {
-        webp_snapshot_encode_rgba(frame.data(), config.resolution.x, config.resolution.y, 100, 6, config.lossless, config.near_lossless, 100, encoded_data);
+        const bool ok = webp_snapshot_encode_rgba(
+            frame.frameData(),
+            config.resolution.x,
+            config.resolution.y,
+            100,
+            6,
+            config.lossless,
+            config.near_lossless,
+            100,
+            encoded_data);
+
+        if (!ok)
+            return false;
     }
     else if (config.format == CaptureFormat::WEBP_VIDEO)
     {
-        rgba_frames.emplace_back();
-        rgba_frames.back().swap(frame);
+        if (!enc)
+            return false;
+
+        const bool ok = webp_anim_add_rgba(
+            enc,
+            frame.frameData(),
+            config.resolution.x,
+            config.resolution.y,
+            config.resolution.x * 4,
+            timestamp_ms,
+            config.lossless,
+            config.near_lossless,
+            config.quality,
+            6
+        );
+
+        if (!ok)
+            return false;
+
+        timestamp_ms += frame_delay_ms;
         frame_index++;
     }
 
@@ -929,17 +765,30 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
     }
     else if (config.format == CaptureFormat::WEBP_VIDEO)
     {
-        webp_anim_encode_simple(
-            rgba_frames,
-            config.resolution.x, config.resolution.y,
-            config.resolution.x * 4,
-            (1000 / config.fps),
-            config.lossless,
-            config.near_lossless,
-            config.quality,
-            6, 0,
-            encoded_data
-        );
+        if (!enc)
+            return false;
+
+        // flush: last frame duration is set by the final timestamp
+        if (!WebPAnimEncoderAdd(enc, nullptr, timestamp_ms, nullptr))
+        {
+            WebPAnimEncoderDelete(enc);
+            enc = nullptr;
+            return false;
+        }
+
+        WebPData webp = { 0 };
+        if (!WebPAnimEncoderAssemble(enc, &webp))
+        {
+            WebPAnimEncoderDelete(enc);
+            enc = nullptr;
+            return false;
+        }
+
+        WebPAnimEncoderDelete(enc);
+        enc = nullptr;
+
+        encoded_data.assign(webp.bytes, webp.bytes + webp.size);
+        WebPDataClear(&webp);
 
         if (!config.save_payload.empty())
             webp_set_save_string_as_xmp_inplace(encoded_data, config.save_payload);
@@ -957,32 +806,8 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
 // ────── CaptureManager ──────
 
 bool CaptureManager::startCapture(CaptureConfig _config)
-    //CaptureFormat format,
-    //std::string filename,
-    //IVec2 resolution,
-    //int supersample_factor,
-    //float sharpen,
-    //int fps,
-    //int record_frame_count,
-    //int64_t bitrate,
-    //float quality,
-    //bool lossless,
-    //int near_lossless,
-    //bool flip)
 {
     config = _config;
-    ///config.format = format;
-    ///config.filename = filename;
-    ///config.resolution = resolution;
-    ///config.sharpen = sharpen;
-    ///config.ssaa = supersample_factor;
-    ///config.flip = flip;
-    ///config.record_frame_count = record_frame_count;
-    ///config.fps = fps;
-    ///config.bitrate = bitrate;
-    ///config.quality = quality;
-    ///config.lossless = lossless;
-    ///config.near_lossless = near_lossless;
 
     capture_to_memory_complete.store(false, std::memory_order_release);
 
@@ -1051,61 +876,32 @@ void CaptureManager::onFinalized()
 
 void CaptureManager::preProcessFrameForEncoding(const uint8_t* src_data, bytebuf& out)
 {
-    int src_w = config.resolution.x * config.ssaa;
-    int src_h = config.resolution.y * config.ssaa;
-    int dest_w = config.resolution.x;
-    int dest_h = config.resolution.y;
+    CapturePreprocessParams params;
+    params.src_resolution = srcResolution();
+    params.dst_resolution = dstResolution();
+    params.ssaa = std::max(1, config.ssaa);
+    params.sharpen = std::clamp(config.sharpen, 0.0f, 1.0f);
+    params.flip_y = config.flip;
 
-    // flip src_data => oriented_src_data
-    if (config.flip)
+    if (!preprocessor.preprocessRGBA8(src_data, params, out))
     {
-        oriented_src_data.resize(config.srcBytes());
-
-        const uint8_t* src_row = nullptr;
-
-        uint8_t* dst_data = oriented_src_data.data();
-        uint8_t* dst_row = nullptr;
-
-        int line_size = src_w * 4;
-        for (int src_y = src_h - 1, dst_y = 0; src_y >= 0; src_y--, dst_y++)
-        {
-            src_row = src_data + (src_y * line_size);
-            dst_row = dst_data + (dst_y * line_size);
-            memcpy(dst_row, src_row, line_size);
-        }
-    }
-    else
-    {
-        oriented_src_data = bytebuf(src_data, src_data + config.srcBytes());
-    }
-
-    // Downscale "oriented_src_data" to "out"
-    {
+        // fail-safe so the encoder thread can continue even if GL preprocessing fails
         out.resize(config.dstBytes());
-
-        const uint8_t* src_ptr = oriented_src_data.data();
-        uint8_t* dst_ptr = out.data();
-
-        const float ssaa_f = (float)config.ssaa;
-        const int   ssaa_i = (int)std::round(ssaa_f);
-        const bool  is_integer = (fabsf(ssaa_f - (float)ssaa_i) < 1e-6f);
-
-        if (is_integer && ssaa_i > 1)
-            // integer scaling
-            downscale_box_integer_rgba8_linear(src_ptr, dst_ptr, dest_w, dest_h, ssaa_i);
-        else if (ssaa_f > 1.0f)
-            // Fractional scaling
-            downscale_mitchell_rgba8_linear(src_ptr, src_w, src_h, dst_ptr, dest_w, dest_h);
-        else
-            // No scaling: just copy
-            std::memcpy(dst_ptr, src_ptr, out.size());
-
-        // apply sharpening
-        unsharp_linear_rgba8_inplace(dst_ptr, dest_w, dest_h, config.sharpen);
+        for (size_t i = 0; i + 3 < out.size(); i += 4)
+        {
+            out[i + 0] = 0;
+            out[i + 1] = 0;
+            out[i + 2] = 0;
+            out[i + 3] = 255;
+        }
     }
 }
 
-bool CaptureManager::encodeFrame(const uint8_t* data, std::function<void(bytebuf&)> onPreprocessed)
+bool CaptureManager::encodeFrame(
+    const uint8_t* data,
+    //std::function<void(bytebuf&)> preProcessedFrame,
+    std::function<void(EncodeFrame&)> postProcessedFrame
+)
 {
     if (!isCaptureEnabled())
         return false;
@@ -1113,9 +909,16 @@ bool CaptureManager::encodeFrame(const uint8_t* data, std::function<void(bytebuf
     // Preprocess frame (supersampling, sharpening, flipping, etc...)
     /// todo: Move to worker?
     blPrint() << "preProcessFrameForEncoding()...";
-    bytebuf preprocessed_frame;
+    EncodeFrame preprocessed_frame;
+
+    timer0(PREPROCESS);
+
+    // todo: Apply flipping before preprocessing (more intuitive for user)
+    //preProcessedFrame(preprocessed_frame);
     preProcessFrameForEncoding(data, preprocessed_frame);
-    onPreprocessed(preprocessed_frame);
+    postProcessedFrame(preprocessed_frame);
+
+    timer1(PREPROCESS);
 
     // If encoder still busy with previous frame, do not block here
     if (encoder_busy.load(std::memory_order_acquire))
@@ -1127,7 +930,12 @@ bool CaptureManager::encodeFrame(const uint8_t* data, std::function<void(bytebuf
 
         std::lock_guard<std::mutex> lock(pending_mutex);
         pending_frame.resize(config.srcBytes());
-        std::memcpy(pending_frame.data(), preprocessed_frame.data(), config.dstBytes());
+
+        // copy all data to pending_frame (pixels, frame metadata, etc)
+        pending_frame.loadFrom(preprocessed_frame);
+
+        //std::memcpy(pending_frame.frameData(), preprocessed_frame.frameData(), config.dstBytes());
+
 
         // Mark busy only after the buffer is fully populated
         blPrint() << "encoder_busy.store(true)";
@@ -1165,6 +973,61 @@ bool CaptureManager::encodeFrame(const uint8_t* data, std::function<void(bytebuf
     return false;*/
 }
 
+bool CaptureManager::encodeFrameTexture(
+    uint32_t src_texture,
+    //std::function<void(EncodeFrame&)> preprocessedFrame,
+    std::function<void(EncodeFrame&)> postProcessedFrame
+)
+{
+    if (!isCaptureEnabled())
+        return false;
+
+    CapturePreprocessParams params;
+    params.src_resolution = srcResolution();
+    params.dst_resolution = dstResolution();
+    params.ssaa = std::max(1, config.ssaa);
+    params.sharpen = std::clamp(config.sharpen, 0.0f, 1.0f);
+    params.flip_y = config.flip;
+
+    blPrint() << "preprocessTexture()...";
+    EncodeFrame preprocessed_frame;
+
+    timer0(PREPROCESS);
+
+    //preProcessedFrame(preprocessed_frame);
+    if (!preprocessor.preprocessTexture(src_texture, params, preprocessed_frame))
+    {
+        // fail-safe so the encoder thread can continue even if GL preprocessing fails.
+        preprocessed_frame.resize(config.dstBytes());
+        for (size_t i = 0; i + 3 < preprocessed_frame.size(); i += 4)
+        {
+            preprocessed_frame[i + 0] = 0;
+            preprocessed_frame[i + 1] = 0;
+            preprocessed_frame[i + 2] = 0;
+            preprocessed_frame[i + 3] = 255;
+        }
+    }
+
+    timer1(PREPROCESS);
+
+    if (postProcessedFrame)
+        postProcessedFrame(preprocessed_frame);
+
+    if (encoder_busy.load(std::memory_order_acquire))
+        return false;
+
+    {
+        std::lock_guard<std::mutex> lock(pending_mutex);
+        pending_frame.loadFrom(preprocessed_frame);
+        //pending_frame.resize(config.dstBytes());
+        //std::memcpy(pending_frame.data(), preprocessed_frame.frameData(), config.dstBytes());
+        encoder_busy.store(true, std::memory_order_release);
+    }
+
+    work_available_cond.notify_one();
+    return true;
+}
+
 void CaptureManager::waitUntilReadyForNewFrame()
 {
     blPrint() << "waitUntilReadyForNewFrame()...";
@@ -1197,11 +1060,11 @@ bool CaptureManager::waitForWorkAvailable()
     return true;
 }
 
-bytebuf CaptureManager::takePendingFrame()
+EncodeFrame CaptureManager::takePendingFrame()
 {
     blPrint() << "takePendingFrame()...";
     std::lock_guard<std::mutex> lock(pending_mutex);
-    bytebuf out;
+    EncodeFrame out;
     out.swap(pending_frame);
     return out;
 }

@@ -10,8 +10,12 @@
 
 #include <bitloop/core/physics2d.h>
 
+#include <bitloop/nanovgx/nano_canvas.h>
+#include <bitloop/nanovgx/nano_bitmap.h>
+#include <bitloop/nanovgx/nano_shader_surface.h>
+
 // imgui
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 
 // util
 #include <bitloop/util/compression.h>

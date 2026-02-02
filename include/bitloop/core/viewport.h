@@ -53,7 +53,7 @@ public:
     //[[nodiscard]] double posX() const { return x; }
     //[[nodiscard]] double posY() const { return y; }
 
-    
+    [[nodiscard]] IVec2 outputSize() const;
 
     template<typename T=double> [[nodiscard]] Vec2<T> worldSize() const { return m.toWorldOffset<T>(width(), height()); }
     template<typename T=double> [[nodiscard]] Quad<T> worldQuad() const {
@@ -61,6 +61,7 @@ public:
         return m.toWorldQuad(r);
     }
     //[[nodiscard]] DAngledRect worldRect() { return camera.toWorldRect(DAngledRect(width/2, height/2, width, height, 0.0)); }
+
 
 
     template<typename T>

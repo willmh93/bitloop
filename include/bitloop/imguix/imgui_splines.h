@@ -1907,8 +1907,8 @@ namespace ImSpline
 			//float py = bb.Min.y + ((grid_y - view_rect->Min.y) / (view_rect->Max.y - view_rect->Min.y) * bb.GetHeight());
 			//py = floorf(py);
 
-			float t = (grid_y - view_rect->Min.y) / y_denom; // _ChatGPT_ 0..1 in normal mode
-			if (invert_y) t = 1.0f - t;                      // _ChatGPT_ flip for Y-up
+			float t = (grid_y - view_rect->Min.y) / y_denom;
+			if (invert_y) t = 1.0f - t;
 
 			float py = bb.Min.y + t * bb.GetHeight();
 			py = floorf(py);

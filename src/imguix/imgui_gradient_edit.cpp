@@ -8,6 +8,7 @@
 
 #include <bitloop/imguix/imgui_gradient_edit.h>
 #include <cstdint>
+#include <optional>
 
 static const float GRADIENT_BAR_WIDGET_HEIGHT = 25;
 static const float GRADIENT_BAR_EDITOR_HEIGHT = 40;
@@ -560,15 +561,18 @@ namespace ImGui
     bool GradientEditor(
         ImGradient* gradient,
         float bar_scale,
-        float mark_scale)
+        float mark_scale,
+        float color_picker_size)
     {
         if (!gradient) return false;
 
         bool modified = false;
 
         ImVec2 bar_pos = ImGui::GetCursorScreenPos();
-        bar_pos.x += 10 * bar_scale;
-        float maxWidth = ImGui::GetContentRegionAvail().x - 20 * bar_scale;
+        float margin = 10 * bar_scale;
+        bar_pos.x += margin;
+        float availWidth = ImGui::GetContentRegionAvail().x;
+        float maxWidth = availWidth - 20 * bar_scale;
         float barBottom = bar_pos.y + GRADIENT_BAR_EDITOR_HEIGHT * bar_scale;
 
         if (maxWidth < 100)
@@ -633,6 +637,8 @@ namespace ImGui
         if (gradient->hasSelectedMark())
         {
             ImGradientMark* selectedMark = gradient->getSelectedMark();
+            if (color_picker_size > 0.0f)
+                ImGui::SetNextItemWidth(std::min(availWidth - margin - ImGui::GetStyle().FramePadding.x, color_picker_size));
             bool colorModified = ImGui::ColorPicker3("Color", selectedMark->color, 
                 ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoSidePreview);
             //bool colorModified = ImGui::ColorPicker3(selectedMark-color);

@@ -1,5 +1,6 @@
 #include <bitloop/core/viewport.h>
 #include <bitloop/core/scene.h>
+#include <bitloop/core/main_window.h>
 
 BL_BEGIN_NS
 
@@ -22,7 +23,7 @@ Viewport::~Viewport()
         // If sim is no longer mounted to any viewports, it's safe to destroy
         if (scene->mounted_to_viewports.size() == 0)
         {
-            scene->sceneDestroy();
+            scene->_sceneDestroy();
             delete scene;
         }
     }
@@ -60,6 +61,15 @@ void Viewport::draw()
 
     restoreCameraTransform();
     restore();
+}
+
+[[nodiscard]] IVec2 bl::Viewport::outputSize() const {
+    IVec2 ret = size();
+    const CaptureManager* capture_manager = main_window()->getCaptureManager();
+    if (capture_manager->isRecording() || capture_manager->isSnapshotting())
+        ret = capture_manager->dstResolution();
+
+    return ret;
 }
 
 BL_END_NS

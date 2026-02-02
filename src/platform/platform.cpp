@@ -1,6 +1,6 @@
 #include <bitloop/core/config.h>
 #include <bitloop/core/project.h>
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -61,7 +61,12 @@ void PlatformManager::update()
 {
     SDL_GetWindowSizeInPixels(window, &gl_w, &gl_h);
     SDL_GetWindowSize(window, &win_w, &win_h);
+
+    #ifdef BL_SIMULATE_DISPLAY
+    win_dpr = BL_SIMULATE_DISPLAY.dpr;
+    #else
     win_dpr = SDL_GetWindowDisplayScale(window);
+    #endif
 }
 
 void PlatformManager::resized()

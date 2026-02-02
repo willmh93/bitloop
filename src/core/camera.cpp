@@ -2,7 +2,7 @@
 #include <bitloop/core/camera.h>
 #include <bitloop/core/scene.h>
 #include <bitloop/core/viewport.h>
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 #include <bitloop/platform/platform.h>
 
 BL_BEGIN_NS
@@ -415,6 +415,8 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
                 return false;
             }
 
+            blPrint() << "SDL_EVENT_FINGER_DOWN";
+
             // Add pressed finger
             FingerInfo info;
             info.fingerId = e.fingerID();
@@ -504,10 +506,12 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
         break;
         }
 
-        switch (e.type())
-        {
+    switch (e.type())
+    {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         {
+            blPrint() << "SDL_EVENT_MOUSE_BUTTON_DOWN";
+
             if (fingers.size() == 0)
             {
                 FingerInfo info;

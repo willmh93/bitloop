@@ -58,6 +58,7 @@ function(_apply_common_settings _TARGET)
 			$<$<CONFIG:RelWithDebInfo>:-Wl>
 			$<$<CONFIG:RelWithDebInfo>:--gc-sections>
 			$<$<CONFIG:RelWithDebInfo>:-flto>
+			$<$<CONFIG:RelWithDebInfo>:-sASSERTIONS>
 		)
 	endif()
 endfunction()
@@ -81,9 +82,6 @@ function(_apply_main_settings _TARGET)
 endfunction()
 
 function(bitloop_enable_wasm_brotli  _TARGET)
-	#if (NOT PROJECT_IS_TOP_LEVEL)
-	#	return() # skip in vcpkg/consumer builds
-	#endif()
 	if(NOT EMSCRIPTEN)
 		message(STATUS "[bitloop] Skipping Brotli: not an Emscripten build.")
 		return()
@@ -131,7 +129,13 @@ function(bitloop_enable_wasm_brotli  _TARGET)
 
 	# Precompress with brotli
 	message(STATUS "BROTLI_EXECUTABLE: ${BROTLI_EXECUTABLE}")
-	add_custom_command(TARGET ${_TARGET} POST_BUILD COMMAND "${BROTLI_EXECUTABLE}" -f -q 11 "${_WASM}" VERBATIM)
+	message(STATUS "_WASM: ${_WASM}")
+
+	add_custom_command(TARGET ${_TARGET} POST_BUILD
+		COMMAND ${BROTLI_EXECUTABLE} -f -q 11 "$<SHELL_PATH:$<TARGET_FILE_DIR:${_TARGET}>/$<TARGET_FILE_BASE_NAME:${_TARGET}>.wasm>"
+		VERBATIM
+	)
+	#add_custom_command(TARGET ${_TARGET} POST_BUILD COMMAND ${BROTLI_EXECUTABLE} -f -q 11 ${_WASM} VERBATIM)
 endfunction()
 
 function(_optimize_wasm target)
@@ -139,7 +143,7 @@ function(_optimize_wasm target)
   if(NOT PROJECT_IS_TOP_LEVEL)
     return()
   endif()
-  # If you still build demo executables in the framework repo itself, you can call:
+  
   bitloop_enable_wasm_brotli(${target})
 endfunction()
 
@@ -303,6 +307,9 @@ function(bitloop_new_project sim_name)
 		add_executable(${_TARGET} ${SIM_SOURCES})
 		target_include_directories(${_TARGET} PRIVATE "$<BUILD_INTERFACE:${BL_AUTOGEN_DIR}>")
 
+		#target_include_directories(${_TARGET} PUBLIC "$<BUILD_INTERFACE:${BL_AUTOGEN_DIR}>")
+		#message(STATUS "${_TARGET} including autogen dir")
+		
 		_apply_root_exe_name(${_TARGET})
 
 	else()
@@ -321,7 +328,10 @@ function(bitloop_new_project sim_name)
 			add_library(${_TARGET} ${_type} ${SIM_SOURCES})
 		endif()
 
+		#message(STATUS "${sim_name} not including autogen dir")
+		target_include_directories(${sim_name} INTERFACE "$<BUILD_INTERFACE:${BL_AUTOGEN_DIR}>")
 		add_library(${sim_name}::${sim_name} ALIAS ${sim_name}) # Export an alias so consumers can link as sim::sim
+
 	endif()
 
 	set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY _TYPE ${_type})

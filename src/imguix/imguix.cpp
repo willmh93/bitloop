@@ -1,4 +1,4 @@
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 #include <bitloop/util/math_util.h>
 
 
@@ -832,6 +832,114 @@ static bool DragBehaviorFloat128(ImGuiID id, f128* v, f128 v_speed, f128 v_min, 
 
 namespace ImGui
 {
+    bool collapsing_head_box_contents_disabled = false;
+
+    void BeginCollapsingHeaderContentsDisabled()
+    {
+        collapsing_head_box_contents_disabled = true;
+    }
+
+    void EndCollapsingHeaderContentsDisabled()
+    {
+        collapsing_head_box_contents_disabled = false;
+    }
+
+    bool CollapsingHeaderBox(const char* id, bool open_by_default, float pad, float extra)
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        DlCtx& c = box_dlctx(dl);
+        box_ensure_split(dl, c);
+
+        const int my_depth = c.depth;
+        c.depth++;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+        const bool open = ImGui::CollapsingHeader(id, open_by_default ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+        ImGui::PopStyleVar();
+
+        if (open && collapsing_head_box_contents_disabled)
+            ImGui::BeginDisabled();
+
+        const ImVec2 hmin = ImGui::GetItemRectMin();
+        const ImVec2 hmax = ImGui::GetItemRectMax();
+
+        float spacing = 0.5f;//  ImGui::GetStyle().ItemSpacing.y;
+        ImGui::Dummy(ImVec2(0, spacing));
+
+        if (!open)
+        {
+            c.depth--;
+            box_maybe_merge(dl, c);
+            return false;
+        }
+
+        CurrentBoxState st{};
+        st.kind = BoxKind::Header;
+        st.dl = dl;
+        st.pad = pad;
+        st.extra = extra;
+        st.depth = my_depth;
+        st.content_ch = c.content_ch;
+        st.header_min = hmin;
+        st.header_max = hmax;
+
+        st.start_cursor = ImGui::GetCursorScreenPos();
+        st.span_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x + st.extra * 2);
+
+        box_stack().push_back(st);
+
+        ImGui::PushID(id);
+        box_begin_contents(box_stack().back());
+        return true;
+    }
+
+    void EndCollapsingHeaderBox(float end_spacing)
+    {
+        auto& s = box_stack();
+        IM_ASSERT(!s.empty() && s.back().kind == BoxKind::Header);
+
+        ImGui::Dummy(ImVec2(0, 1.0f));
+
+        CurrentBoxState st = s.back();
+        s.pop_back();
+
+        ImGui::EndGroup();
+
+        // tight content bounds (group)
+        const ImVec2 content_max = ImGui::GetItemRectMax();
+
+        // RESTORE window rects so subsequent items use full width again
+        {
+            ImGuiWindow* window = ImGui::GetCurrentWindow();
+            window->WorkRect.Max.x = st.old_work_rect_max_x;
+            window->ContentRegionRect.Max.x = st.old_content_rect_max_x;
+        }
+
+        // outer frame (your old "midline of header" start)
+        const float y0 = (st.header_min.y + st.header_max.y) * 0.5f;
+        const float x0 = st.start_cursor.x - st.extra;
+        const float x1 = x0 + st.span_w;
+
+        ImVec2 outer_min(x0, y0);
+        ImVec2 outer_max(x1, content_max.y + st.pad);
+
+        // draw behind content
+        box_draw_bg_border(st, outer_min, outer_max);
+
+        // advance cursor below the box and restore X to normal content start
+        ImGui::SetCursorScreenPos(ImVec2(st.start_cursor.x, outer_max.y));
+        ImGui::Dummy(ImVec2(st.span_w, bl::scale_size(end_spacing)));
+
+        ImGui::PopID();
+
+        DlCtx& c = box_dlctx(st.dl);
+        c.depth--;
+        box_maybe_merge(st.dl, c);
+
+        if (collapsing_head_box_contents_disabled)
+            ImGui::EndDisabled();
+    }
+
     bool Section(const char* name, bool open_by_default, float header_spacing, float body_margin_top)
     {
         ImGui::Dummy(bl::scale_size(0.0f, header_spacing));
@@ -842,8 +950,9 @@ namespace ImGui
 
     bool ResetBtn(const char* id)
     {
+        // todo: automatic GL destruction on exit
         static int size = (int)bl::platform()->line_height();
-        static int reset_icon = bl::loadGLTextureRGBA8("/data/icon/reset.svg", nullptr, nullptr, size, size);
+        static GLuint reset_icon = bl::loadGLTextureRGBA8("/data/icon/reset.svg", nullptr, nullptr, size, size);
         return ImGui::ImageButton(id, reset_icon, ImVec2((float)size, (float)size));
     }
 

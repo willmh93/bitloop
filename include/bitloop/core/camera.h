@@ -336,8 +336,8 @@ public:
     /// Once focusWorldRect called, use it as a "reference" for future scaling relative to that reference zoom
     /// e.g. setRelativeZoom(2)  will zoom 2x relative to focused rect
     template<typename T> void setReferenceZoom(T _ref_zoom) { ref_zoom = _ref_zoom; }
-    template<typename T> [[nodiscard]] T getReferenceZoom() const { return T{ref_zoom}; }
-    template<typename T> [[nodiscard]] T relativeZoom() const noexcept { return T{zoom_128 / ref_zoom}; }
+    template<typename T = f64> [[nodiscard]] T getReferenceZoom() const { return T{ref_zoom}; }
+    template<typename T = f64> [[nodiscard]] T relativeZoom() const noexcept { return T{zoom<T>() / ref_zoom}; }
 
     DVec2 viewportStageSize() const;
     template<typename T = f64> Vec2<T> viewportWorldSize() const { return Vec2<T>(viewportStageSize()) / getReferenceZoom<T>(); }

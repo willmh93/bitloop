@@ -3,10 +3,10 @@
 /// ======== Debug Features ========
 //#define BL_DEBUG_FINITE_DOUBLE_CHECKS
 //#define BL_FORCE_RELEASE_FINITE_DOUBLE_CHECKS
-#define BL_DEBUG_INCLUDE_LOG_TABS
+//#define BL_DEBUG_INCLUDE_LOG_TABS
 
 //#define BL_FORCE_DEBUG
-#define BL_DEBUG_OWNERSHIP 0
+#define BL_DEBUG_OWNERSHIP 0 // assert on cross-thread data ownership violations
 
 
 /// ======== Platform Simulation ========
@@ -33,5 +33,5 @@
 #define TIMERS_ENABLED
 
 // -- global timer0/timer1 elapse threshold -- 
-constexpr double TIMER_ELAPSED_LIMIT = 1.0; // ms (outputs warning if duration exceeds this limit)
+constexpr double TIMER_ELAPSED_LIMIT = 0.0; // ms (outputs warning if duration exceeds this limit)
 

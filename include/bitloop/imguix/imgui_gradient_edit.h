@@ -199,6 +199,16 @@ public:
         return _hash;
     }
 
+    const uint32_t* data() const
+    {
+        return m_cachedColors;
+    }
+
+    constexpr int cacheSize() const
+    {
+        return CACHE_SIZE;
+    }
+
 private:
     static constexpr float kEps = 1e-6f;
     static constexpr int CACHE_SIZE = 3072;
@@ -248,7 +258,7 @@ private:
 namespace ImGui
 {
     bool GradientButton(ImGradient* gradient, float dpr);
-    bool GradientEditor(ImGradient* gradient, float bar_scale, float mark_scale);
+    bool GradientEditor(ImGradient* gradient, float bar_scale, float mark_scale, float color_picker_size = 0.0f);
 }
 
 /*#include <list>

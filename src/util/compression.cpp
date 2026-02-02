@@ -1,7 +1,7 @@
 #include <bitloop/util/compression.h>
 
-#include <brotli/encode.h>
-#include <brotli/decode.h>
+
+
 #include <stdexcept>
 #include <vector>
 
@@ -38,7 +38,6 @@ namespace compression {
     // ========== Base62/Base64 encode ==========
     std::string b64_encode(std::string_view bytes)
     {
-        
         const unsigned char* src = reinterpret_cast<const unsigned char*>(bytes.data());
         size_t len = bytes.size();
         if (len == 0) return {};
@@ -392,5 +391,175 @@ namespace compression {
         BrotliDecoderDestroyInstance(st);
         return out;
     }
+
+    void BrotliDict::build(std::span<const std::string_view> parts)
+    {
+        size_t total = 0;
+        for (auto s : parts) total += s.size() + 1;
+
+        bytes.clear();
+        bytes.reserve(total);
+
+        for (auto s : parts)
+        {
+            bytes.insert(bytes.end(),
+                reinterpret_cast<const uint8_t*>(s.data()),
+                reinterpret_cast<const uint8_t*>(s.data()) + s.size());
+            bytes.push_back('\n');
+        }
+
+        if (!bytes.empty())
+        {
+            prepared = BrotliEncoderPrepareDictionary(
+                BROTLI_SHARED_DICTIONARY_RAW,
+                bytes.size(),
+                bytes.data(),
+                BROTLI_MAX_QUALITY,
+                nullptr, nullptr, nullptr
+            );
+            if (!prepared) throw std::runtime_error("brotli prepare dictionary failed");
+        }
+    }
+
+    BrotliDict& BrotliDict::operator=(BrotliDict&& other) noexcept
+    {
+        if (this == &other) return *this;
+        if (prepared) BrotliEncoderDestroyPreparedDictionary(prepared);
+        bytes = std::move(other.bytes);
+        prepared = other.prepared;
+        other.prepared = nullptr;
+        return *this;
+    }
+
+    BrotliDict::~BrotliDict()
+    {
+        if (prepared) BrotliEncoderDestroyPreparedDictionary(prepared);
+    }
+
+    std::string brotli_ascii_compress_with_dict(const std::string& input, int quality, int window, const BrotliDict* dict)
+    {
+        if (dict && !dict->empty()) quality = std::max(quality, 5);
+
+        BrotliEncoderState* st = BrotliEncoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!st) throw std::runtime_error("brotli encoder state alloc failed");
+
+        BrotliEncoderSetParameter(st, BROTLI_PARAM_MODE, BROTLI_MODE_TEXT);
+        BrotliEncoderSetParameter(st, BROTLI_PARAM_QUALITY, static_cast<uint32_t>(quality));
+        BrotliEncoderSetParameter(st, BROTLI_PARAM_LGWIN, static_cast<uint32_t>(window));
+
+        if (dict && !dict->empty())
+        {
+            if (!BrotliEncoderAttachPreparedDictionary(st, dict->prepared))
+            {
+                BrotliEncoderDestroyInstance(st);
+                throw std::runtime_error("brotli attach dictionary failed");
+            }
+        }
+
+        size_t cap = BrotliEncoderMaxCompressedSize(input.size());
+        if (cap < 1024) cap = 1024;
+
+        std::string comp(cap, '\0');
+
+        const uint8_t* next_in = reinterpret_cast<const uint8_t*>(input.data());
+        size_t avail_in = input.size();
+
+        uint8_t* next_out = reinterpret_cast<uint8_t*>(&comp[0]);
+        size_t avail_out = comp.size();
+
+        size_t total_out = 0;
+
+        while (true)
+        {
+            BROTLI_BOOL ok = BrotliEncoderCompressStream(
+                st,
+                BROTLI_OPERATION_FINISH,
+                &avail_in, &next_in,
+                &avail_out, &next_out,
+                &total_out
+            );
+
+            if (!ok)
+            {
+                BrotliEncoderDestroyInstance(st);
+                throw std::runtime_error("brotli compress failed");
+            }
+
+            if (BrotliEncoderIsFinished(st)) break;
+
+            if (avail_out == 0)
+            {
+                const size_t used = static_cast<size_t>(next_out - reinterpret_cast<uint8_t*>(&comp[0]));
+                comp.resize(comp.size() * 2);
+                next_out = reinterpret_cast<uint8_t*>(&comp[0]) + used;
+                avail_out = comp.size() - used;
+            }
+        }
+
+        const size_t produced = static_cast<size_t>(next_out - reinterpret_cast<uint8_t*>(&comp[0]));
+        comp.resize(produced);
+
+        BrotliEncoderDestroyInstance(st);
+        return b62_encode(comp);
+    }
+
+    std::string brotli_ascii_decompress_with_dict(const std::string& ascii, const BrotliDict* dict)
+    {
+        std::string comp = b62_decode(ascii);
+
+        std::string out(std::max<size_t>(comp.size() * 3 + 1024, 1024), '\0');
+
+        BrotliDecoderState* st = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!st) throw std::runtime_error("brotli decoder state alloc failed");
+
+        if (dict && !dict->empty())
+        {
+            BROTLI_BOOL ok = BrotliDecoderAttachDictionary(
+                st,
+                BROTLI_SHARED_DICTIONARY_RAW,
+                dict->bytes.size(),
+                dict->bytes.data()
+            );
+            if (!ok)
+            {
+                BrotliDecoderDestroyInstance(st);
+                throw std::runtime_error("brotli attach dictionary failed");
+            }
+        }
+
+        const uint8_t* next_in = reinterpret_cast<const uint8_t*>(comp.data());
+        size_t avail_in = comp.size();
+
+        uint8_t* next_out = reinterpret_cast<uint8_t*>(&out[0]);
+        size_t avail_out = out.size();
+
+        while (true)
+        {
+            BrotliDecoderResult r = BrotliDecoderDecompressStream(
+                st, &avail_in, &next_in, &avail_out, &next_out, nullptr);
+
+            if (r == BROTLI_DECODER_RESULT_SUCCESS) break;
+
+            if (r == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
+            {
+                const size_t used = static_cast<size_t>(next_out - reinterpret_cast<uint8_t*>(&out[0]));
+                out.resize(out.size() * 2);
+                next_out = reinterpret_cast<uint8_t*>(&out[0]) + used;
+                avail_out = out.size() - used;
+                continue;
+            }
+
+            BrotliDecoderDestroyInstance(st);
+            throw std::runtime_error("brotli decompress failed");
+        }
+
+        const size_t produced = static_cast<size_t>(next_out - reinterpret_cast<uint8_t*>(&out[0]));
+        out.resize(produced);
+
+        BrotliDecoderDestroyInstance(st);
+        return out;
+    }
+
+
 
 } // namespace compression

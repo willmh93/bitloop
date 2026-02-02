@@ -1,9 +1,3 @@
-#ifdef __EMSCRIPTEN__
-#define NANOVG_GLES3_IMPLEMENTATION
-#else
-#define NANOVG_GL3_IMPLEMENTATION
-#endif
-
 #include <bitloop/nanovgx/nano_canvas.h>
 #include <bitloop/core/project.h>
 
@@ -12,7 +6,8 @@ BL_BEGIN_NS
 constexpr double nice_steps[] = { 1.0, 2.0, 5.0, 10.0 };
 constexpr int    nice_steps_count = 4;
 
-inline f128 niceStepDivisible(f128 ideal, f128& coarse, f128& fade)
+template<typename flt>
+inline flt niceStepDivisible(flt ideal, flt& coarse, flt& fade)
 {
     if (ideal <= 0.0)
     {
@@ -24,19 +19,19 @@ inline f128 niceStepDivisible(f128 ideal, f128& coarse, f128& fade)
 
     // Collect nice numbers for current decade and one above
     constexpr int span_count = 2; // exp10 and exp10+1 are enough to contain ideal
-    std::array<f128, nice_steps_count * span_count> candidates{};
+    std::array<flt, nice_steps_count * span_count> candidates{};
     int n = 0;
     for (int d = 0; d <= 1; ++d) 
     {
         //const f128 v = pow(10, exp10 + f128(d));
-        const f128 v = pow10_128(exp10 + d);
+        const flt v = (flt)pow10_128(exp10 + d); // todo: optimize for f64 (don't use f128 pow10)
         for (int i = 0; i < nice_steps_count; ++i)
             candidates[n++] = nice_steps[i] * v;
     }
     std::sort(candidates.begin(), candidates.begin() + n);
 
     // Fine step: largest candidate <= ideal
-    f128 step = candidates[0];
+    flt step = candidates[0];
     for (int i = 0; i < n && candidates[i] <= ideal; ++i) 
         step = candidates[i];
 
@@ -52,7 +47,7 @@ inline f128 niceStepDivisible(f128 ideal, f128& coarse, f128& fade)
     }
 
     // Calculate fade (how far ideal lies between step and coarse)
-    fade = clamp((ideal - step) / (coarse - step), 0, 1);
+    fade = bl::clamp((ideal - step) / (coarse - step), 0.0, 1.0);
     return step;
 }
 
@@ -64,28 +59,31 @@ void Painter::drawWorldAxis(
     save();
     saveCameraTransform();
 
+    typedef f64 flt;
+    typedef Vec2<flt> vec2 ;
+
     //Viewport* ctx = camera.viewport;
     const double angle = m._angle();
     //const DDVec2 zoom(camera.zoom<f128>(), camera.zoom<f128>());
-    const DDVec2 zoom(m._zoom<f128>());
+    const vec2 zoom(m._zoom<flt>());
 
     // ======== viewport world bounds ========
-    const DDVec2 TL = m.toWorld<f128>(0, 0);
-    const DDVec2 TR = m.toWorld<f128>(surface->width(), 0);
-    const DDVec2 BR = m.toWorld<f128>(surface->width(), surface->height());
-    const DDVec2 BL = m.toWorld<f128>(0, surface->height());
+    const vec2 TL = m.toWorld<flt>(0, 0);
+    const vec2 TR = m.toWorld<flt>(surface->width(), 0);
+    const vec2 BR = m.toWorld<flt>(surface->width(), surface->height());
+    const vec2 BL = m.toWorld<flt>(0, surface->height());
 
     // ======== min/max of world bounds ========
-    const f128 wMinX = std::min({ TL.x, TR.x, BR.x, BL.x });
-    const f128 wMaxX = std::max({ TL.x, TR.x, BR.x, BL.x });
-    const f128 wMinY = std::min({ TL.y, TR.y, BR.y, BL.y });
-    const f128 wMaxY = std::max({ TL.y, TR.y, BR.y, BL.y });
+    const flt wMinX = std::min({ TL.x, TR.x, BR.x, BL.x });
+    const flt wMaxX = std::max({ TL.x, TR.x, BR.x, BL.x });
+    const flt wMinY = std::min({ TL.y, TR.y, BR.y, BL.y });
+    const flt wMaxY = std::max({ TL.y, TR.y, BR.y, BL.y });
 
     // ======== Step calculation ========
-    const f128 targetPx = f128{ scale_size(140.0) };
-    f128 coarseX, coarseY, fadeX, fadeY;
-    const f128 stepX = niceStepDivisible(targetPx / zoom.x, coarseX, fadeX);
-    const f128 stepY = niceStepDivisible(targetPx / zoom.y, coarseY, fadeY);
+    const flt targetPx = flt{ scale_size(140.0) };
+    flt coarseX, coarseY, fadeX, fadeY;
+    const flt stepX = niceStepDivisible<flt>(targetPx / zoom.x, coarseX, fadeX);
+    const flt stepY = niceStepDivisible<flt>(targetPx / zoom.y, coarseY, fadeY);
 
     worldHudMode();
 
@@ -93,24 +91,25 @@ void Painter::drawWorldAxis(
     if (grid_opacity > 0.0) 
     {
         setLineWidth(1);
-        constexpr f128 kMinorFactor = f128{ 0.25 }; // opacity for fine lines
+        constexpr flt kMinorFactor = flt{ 0.25 }; // opacity for fine lines
 
         auto gridPass = [&](bool isX)
         {
-            const f128 step   = isX ? stepX : stepY;
-            const f128 coarse = isX ? coarseX : coarseY;
-            const f128 a0     = isX ? wMinX : wMinY;
-            const f128 a1     = isX ? wMaxX : wMaxY;
+            const flt step   = isX ? stepX : stepY;
+            const flt coarse = isX ? coarseX : coarseY;
+            const flt a0     = isX ? wMinX : wMinY;
+            const flt a1     = isX ? wMaxX : wMaxY;
+            const flt eps = std::numeric_limits<flt>::epsilon();
 
             // Loop over each gridline
-            for (f128 w = math::roundUp(a0, step); w < a1; w += step)
+            for (flt w = math::roundUp(a0, step); w < a1; w += step)
             {
-                const bool major = abs((w / coarse) - round(w / coarse)) < f128::eps();
-                const f128 alpha = major ? 1 : kMinorFactor;
+                const bool major = abs((w / coarse) - bl::round(w / coarse)) < eps;
+                const flt alpha = major ? 1 : kMinorFactor;
 
                 setStrokeStyle(255, 255, 255, static_cast<int>(grid_opacity * alpha * 255));
-                if (isX) strokeLineSharp<f128>({w, wMinY}, {w, wMaxY});
-                else     strokeLineSharp<f128>({wMinX, w}, {wMaxX, w});
+                if (isX) strokeLineSharp<flt>({w, wMinY}, {w, wMaxY});
+                else     strokeLineSharp<flt>({wMinX, w}, {wMaxX, w});
             }
         };
 
@@ -123,8 +122,8 @@ void Painter::drawWorldAxis(
     {
         setStrokeStyle(255, 255, 255, static_cast<int>(axis_opacity * 255.0));
         setLineWidth(1);
-        strokeLineSharp<f128>({wMinX, 0}, {wMaxX, 0});
-        strokeLineSharp<f128>({0, wMinY}, {0, wMaxY});
+        strokeLineSharp<flt>({wMinX, 0}, {wMaxX, 0});
+        strokeLineSharp<flt>({0, wMinY}, {0, wMaxY});
     }
 
     // ======== Tick marks and labels ========
@@ -142,12 +141,12 @@ void Painter::drawWorldAxis(
         DVec2 standard_txt_size = boundingBox("W").size() / 2.0;
         auto tickPass = [&](bool isX) 
         {
-            const f128 step = isX ? stepX : stepY;
-            const f128 coarse = isX ? coarseX : coarseY;
-            const f128 fade = isX ? fadeX : fadeY;
+            const flt step = isX ? stepX : stepY;
+            const flt coarse = isX ? coarseX : coarseY;
+            const flt fade = isX ? fadeX : fadeY;
             DVec2 perpDir = m.axisStagePerpDirection(isX);
-            const f128 wStart = isX ? wMinX : wMinY;
-            const f128 wEnd = isX ? wMaxX : wMaxY;
+            const flt wStart = isX ? wMinX : wMinY;
+            const flt wEnd = isX ? wMaxX : wMaxY;
             double txt_sample_angle = isX ? angle : (angle + math::half_pi);
             double txt_size_weight_x = std::abs(std::cos(txt_sample_angle));
             double txt_size_weight_y = std::abs(std::sin(txt_sample_angle));
@@ -164,26 +163,30 @@ void Painter::drawWorldAxis(
                     decimals = (1 + math::countWholeDigits(zoom.y * 0.0125));
             }
 
-            for (f128 w = math::roundUp(wStart, step); w < wEnd; w += step)
+            // multiply epsilon by large number of potential steps to avoid rounding error
+            const flt eps = 100.0 * std::numeric_limits<flt>::epsilon();
+
+            for (flt w = math::roundUp(wStart, step); w < wEnd; w += step)
             {
-                //if (abs(w) < f128::eps()) continue;
-                if (abs(w) < 1e-31) continue;
-                const bool major = abs((w / coarse) - round(w / coarse)) < f128::eps();
-                const f128 alphaL = major ? 1 : (1 - fade);
+                if (abs(w) < eps) continue;
+                const bool major = abs((w / coarse) - round(w / coarse)) < eps;
+                const flt alphaL = major ? 1 : (1 - fade);
                 const int aTick = static_cast<int>(axis_opacity * alphaL * 255.0);
                 const int txt_alpha = static_cast<int>(text_opacity * alphaL * 255.0);
 
-                const DVec2 stage_pos = isX ? m.toStage<f128>(w, 0) : m.toStage<f128>(0, w);
+                const DVec2 stage_pos = isX ? m.toStage<flt>(w, 0) : m.toStage<flt>(0, w);
                 setStrokeStyle(255, 255, 255, aTick);
                 strokeLineSharp(DVec2{stage_pos - perpDir * tick_length}, DVec2{stage_pos + perpDir * tick_length});
 
+                std::string txt = format_number(w, decimals);
+
                 constexpr double spacing = 3;
-                DVec2 txt_size = DVec2{ boundingBoxScientific(w, decimals).size().x * 0.75, standard_txt_size.y };
+                DVec2 txt_size = DVec2{ boundingBoxScientific<f64, flt>(txt).size().x * 0.75, standard_txt_size.y };
                 double txt_dist = (txt_size_weight_x * txt_size.y) + (txt_size_weight_y * txt_size.x) * 0.5 + spacing;
 
                 DVec2 txt_anchor = stage_pos + (perpDir * (tick_length + txt_dist));
                 setFillStyle(255, 255, 255, txt_alpha);
-                fillNumberScientific(w, txt_anchor, decimals);
+                fillNumberScientific<f64, flt>(txt, txt_anchor);
             }
         };
 
@@ -197,19 +200,25 @@ void Painter::drawWorldAxis(
 
 void Canvas::create(double _global_scale)
 {
-    #ifdef __EMSCRIPTEN__
-    context.vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
-    #else
-    context.vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
-    #endif
+    context.vg = nvgCreate(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     usePainter(&context);
     
     setGlobalScale(_global_scale);
 
-
-    //SimplePainter::default_font = NanoFont::create("/data/fonts/Roboto-Regular.ttf");
     context.default_font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
     context.default_font->setSize(16.0f);
+}
+
+Canvas::~Canvas()
+{
+    if (fbo) glDeleteFramebuffers(1, &fbo);
+    if (tex) glDeleteTextures(1, &tex);
+    if (rbo) glDeleteRenderbuffers(1, &rbo);
+    if (context.vg)
+    {
+        nvgDelete(context.vg);
+        context.vg = nullptr;
+    }
 }
 
 bool Canvas::resize(int w, int h)

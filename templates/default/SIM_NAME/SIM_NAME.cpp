@@ -22,7 +22,7 @@ void {SIM_NAME}_Project::projectPrepare(Layout& layout)
 {
     /// create multiple instance of a single Scene, mount to separate viewports
     for (int i = 0; i < viewport_count; i++)
-        layout << create<{SIM_NAME}_Scene>(viewport_count);
+        layout << create<{SIM_NAME}_Scene>();
 
     /// or create a single Scene instance and view on multiple Viewports
     //auto* scene = create<{SIM_NAME}_Scene>();

@@ -53,6 +53,16 @@ namespace bl
     template<class T> constexpr T log10(T x) { if consteval { return gcem::log10(x); } else { return std::log10(x); } }
     template<class T> constexpr T trunc(T x) { if consteval { return gcem::trunc(x); } else { return std::trunc(x); } }
 
+    template<class T> T clamp(T x, T a, T b) {
+        if (x < a)
+            return a;
+        else if (x > b)
+            return b;
+        else
+            return x;
+    }
+
+
     template<class T, class U> constexpr T atan2(T y, U x) { if consteval { return gcem::atan2(y, x); } else { return std::atan2(y, x); } }
     template<class T, class U> constexpr T pow(T x, U y)   { if consteval { return gcem::pow(x, y);   } else { return std::pow(x, y);   } }
     template<class T, class U> constexpr T fmod(T x, U y)  { if consteval { return gcem::fmod(x, y);  } else { return std::fmod(x, y);  } }

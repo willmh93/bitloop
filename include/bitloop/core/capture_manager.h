@@ -1,6 +1,7 @@
 #pragma once
 #include <bitloop/core/debug.h>
 #include <bitloop/core/types.h>
+#include <bitloop/core/capture_preprocessor.h>
 #include <bitloop/util/hashable.h>
 
 #include <string>
@@ -34,18 +35,38 @@ extern "C" {
 *    instead of the WEBP/FFmpeg multi-frame encoder.
 */
 
+class WebPAnimEncoder;
+
 BL_BEGIN_NS;
 
 enum struct CaptureFormat
 {
     // Video
-    x264,
-    x265,
-    WEBP_VIDEO,
+    #if BITLOOP_FFMPEG_ENABLED
+        x264,
+        #if BITLOOP_FFMPEG_X265_ENABLED
+            x265,
+        #endif
+    #endif
 
-    // Snapshot
+    WEBP_VIDEO,
     WEBP_SNAPSHOT
 };
+
+inline const char* CaptureFormatComboString()
+{
+    static const char* ret =
+        #if BITLOOP_FFMPEG_ENABLED
+            "H.264 (x264)\0"
+            #if BITLOOP_FFMPEG_X265_ENABLED
+                "H.265 / HEVC (x265)\0"
+            #endif
+        #endif
+        "WebP Animation\0"
+        "WebP Snapshot\0";
+
+    return ret;
+}
 
 struct BitrateRange
 {
@@ -84,11 +105,42 @@ struct CaptureConfig
     size_t dstBytes() const { return (size_t)resolution.x * (size_t)resolution.y * 4; }
 };
 
+struct EncodeFrame
+{
+    bytebuf data;
+    std::string payload; // XMP data (or other metadata)
+
+    EncodeFrame() = default;
+    EncodeFrame(const bytebuf& d) : data(d) {}
+    EncodeFrame(const bytebuf& d, std::string_view p) : data(d), payload(p) {}
+
+    size_t size() const { return data.size(); }
+    void resize(size_t size) { data.resize(size); }
+
+    operator bytebuf& () { return data; }
+    uint8_t* frameData() { return data.data(); }
+    const uint8_t* frameData() const { return data.data(); }
+    bool empty() const { return data.empty(); }
+
+    void loadFrom(const EncodeFrame& src)
+    {
+        resize(src.size());
+        std::memcpy(frameData(), src.frameData(), src.size());
+        payload = src.payload;
+    }
+
+    void swap(EncodeFrame& other)
+    {
+        data.swap(other.data);
+        payload.swap(other.payload);
+    }
+
+    uint8_t& operator[](size_t i) { return data[i]; }
+};
+
 class CaptureManager;
 
 #if BITLOOP_FFMPEG_ENABLED
-const char* VideoCodecFromCaptureFormat(CaptureFormat format);
-
 class FFmpegWorker
 {
     friend class CaptureManager;
@@ -108,15 +160,16 @@ class FFmpegWorker
     bool             finalizing = false;
 
     // main thread worker
-    void process(CaptureManager* capture_manager, CaptureConfig config);
+    void process(CaptureManager* capture_manager, CaptureConfig capture_config);
 
     bool startCapture();
-    bool encodeFrame(bytebuf& frame);
+    bool encodeFrame(EncodeFrame& frame);
     bool finalize(CaptureManager* capture_manager);
 };
 #endif
 
-bool webp_extract_save_from_xmp(const std::vector<uint8_t>& webp, std::string& out_save);
+bool webp_set_save_string_as_xmp_inplace(bytebuf& io_webp, std::string_view save_text);
+bool webp_extract_save_from_xmp(const bytebuf& webp, std::string& out_save);
 
 class WebPWorker
 {
@@ -124,16 +177,18 @@ class WebPWorker
 
     CaptureConfig   config;
 
-    std::vector<bytebuf> rgba_frames;
+    WebPAnimEncoder* enc = nullptr;
     bytebuf encoded_data;
 
     int frame_index = 0;
+    int timestamp_ms = 0;
+    int frame_delay_ms = 0;
 
     // main thread worker
     void process(CaptureManager* capture_manager, CaptureConfig config);
 
     bool startCapture();
-    bool encodeFrame(bytebuf& frame);
+    bool encodeFrame(EncodeFrame& frame);
     bool finalize(CaptureManager* capture_manager);
 };
 
@@ -141,6 +196,8 @@ class WebPWorker
 class CaptureManager
 {
     CaptureConfig config;
+
+    CapturePreprocessor preprocessor;
 
     // Can be assigned to WebPWorker or FFmpegWorker
     std::jthread   encoder_thread;
@@ -166,15 +223,12 @@ class CaptureManager
 
     // single pending frame
     std::mutex pending_mutex;
-    bytebuf    pending_frame; // grabbed by encoder thread with std::move
+    EncodeFrame pending_frame; // grabbed by encoder thread with std::move
 
     std::atomic<bool> capture_enabled{ true };
 
     std::atomic<bool> recording{ false };
     std::atomic<bool> snapshotting{ false };
-
-    // intermediate buffer, flipped if (config.flipped == true), otherwise unchanged
-    bytebuf  oriented_src_data;
 
     // WebPWorker stores final encoded data in encoded_data and sets capture_to_memory_complete=true
     std::atomic<bool> capture_to_memory_complete{ false };
@@ -184,9 +238,9 @@ class CaptureManager
 
     // ────── methods used by the worker thread ──────
 
-    bool     waitForWorkAvailable(); // waits until a frame is pending (or returns false if not recording / no work)
-    bytebuf  takePendingFrame();     // then swaps out the pending frame (takes ownership)
-    void     markEncoderIdle();      // then marks as idle when finished encoding
+    bool         waitForWorkAvailable(); // waits until a frame is pending (or returns false if not recording / no work)
+    EncodeFrame  takePendingFrame();     // then swaps out the pending frame (takes ownership)
+    void         markEncoderIdle();      // then marks as idle when finished encoding
 
     bool     shouldFinalize() const  { return finalize_requested.load(std::memory_order_acquire); }
     void     clearFinalizeRequest()  { finalize_requested.store(false, std::memory_order_release); }
@@ -207,6 +261,7 @@ public:
                                      
     bool  isRecording() const           { return recording.load(std::memory_order_acquire);        }
     bool  isSnapshotting() const        { return snapshotting.load(std::memory_order_acquire);     }
+    bool  isCapturing() const           { return isRecording() || isSnapshotting();                }
     bool  isCaptureEnabled() const      { return capture_enabled.load(std::memory_order_acquire);  }
     void  setCaptureEnabled(bool b)     { capture_enabled.store(b, std::memory_order_release);     }
                                         
@@ -239,7 +294,14 @@ public:
     // ────── [start capture] => [encode frames] => [finalize capture] ──────
 
     bool startCapture(CaptureConfig _config);
-    bool encodeFrame(const uint8_t* data, std::function<void(bytebuf&)> onPreprocessed=nullptr);
+    bool encodeFrame(const uint8_t* data,
+        //std::function<void(EncodeFrame&)> preProcessedFrame = nullptr,
+        std::function<void(EncodeFrame&)> postProcessedFrame = nullptr);
+
+    bool encodeFrameTexture(uint32_t src_texture,
+        //std::function<void(EncodeFrame&)> preProcessedFrame = nullptr,
+        std::function<void(EncodeFrame&)> postProcessedFrame = nullptr);
+
     void finalizeCapture();
 
 };

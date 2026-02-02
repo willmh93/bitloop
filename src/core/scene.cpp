@@ -114,7 +114,7 @@ bool SceneBase::isSnapshotting() const
 
 bool SceneBase::isRecording() const
 {
-    bool ret = main_window()->getRecordManager()->isRecording();
+    bool ret = main_window()->getCaptureManager()->isRecording();
     if (ret) initiating_recording = false;
     return ret || initiating_recording;
 }
@@ -124,9 +124,9 @@ bool SceneBase::isCapturing() const
     return isSnapshotting() || isRecording();
 }
 
-void SceneBase::_onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset)
+void SceneBase::_onEncodeFrame(EncodeFrame& data, int request_id, const CapturePreset& preset)
 {
-    onEncodeFrame(data, request_id, preset);
+    onEncodeFrame(data, preset);
 
     for (size_t i = 0; i < snapshot_callbacks.size(); i++)
     {
@@ -135,7 +135,8 @@ void SceneBase::_onEncodeFrame(bytebuf& data, int request_id, const SnapshotPres
 
         if (callback_id == request_id)
         {
-            on_snapshot_complete(data, preset);
+            if (on_snapshot_complete)
+                on_snapshot_complete(data, preset);
 
             if (on_batch_complete && i == snapshot_callbacks.size() - 1)
                 on_batch_complete();
@@ -150,12 +151,11 @@ void SceneBase::beginSnapshotList(
     const SnapshotPresetList& presets,
     std::string_view rel_path_fmt,
     SnapshotCompleteCallback on_snapshot_complete,
-    SnapshotBatchCompleteCallback on_batch_complete,
-    std::string_view xmp_data)
+    SnapshotBatchCompleteCallback on_batch_complete)
 {
     snapshot_callbacks.push_back(std::make_pair(capture_request_id, SnapshotBatchCallbacks{ on_snapshot_complete, on_batch_complete }));
 
-    main_window()->queueBeginSnapshot(presets, rel_path_fmt, capture_request_id, xmp_data);
+    main_window()->queueBeginSnapshot(presets, rel_path_fmt, capture_request_id);
 
     capture_request_id++;
     initiating_snapshot = true;

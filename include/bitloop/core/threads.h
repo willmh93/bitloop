@@ -321,6 +321,7 @@ namespace Thread
     }
 }
 
+// todo: Move to new thread_sync.h
 struct SharedSync
 {
     std::atomic<bool> quitting{ false };

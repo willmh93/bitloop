@@ -11,8 +11,8 @@ struct ExampleText_Scene : public Scene<ExampleText_Scene>
     struct Config {};
     ExampleText_Scene(Config& info [[maybe_unused]]) {}
 
-    struct UI : ViewModel {
-        using ViewModel::ViewModel;
+    struct UI : BufferedInterfaceModel {
+        using BufferedInterfaceModel::BufferedInterfaceModel;
         void sidebar();
     };
 
@@ -59,8 +59,8 @@ struct ExampleText_Project : public Project<ExampleText_Project>
         return ProjectInfo({ "Tests", "Draw Text" });
     }
 
-    struct UI : ViewModel {
-        using ViewModel::ViewModel;
+    struct UI : BufferedInterfaceModel {
+        using BufferedInterfaceModel::BufferedInterfaceModel;
         void sidebar();
     };
 

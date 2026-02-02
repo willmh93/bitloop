@@ -2,6 +2,7 @@
 
 #include <bitloop/core/types.h>
 #include <bitloop/util/hashable.h>
+#include <bitloop/core/capture_manager.h>
 
 BL_BEGIN_NS;
 
@@ -18,7 +19,7 @@ inline void assign_fixed_string(char(&dest)[N], std::string_view src)
 }
 
 // Snapshot presets (reusable display description / render opts)
-class SnapshotPreset : public Hashable
+class CapturePreset : public Hashable
 {
     char  alias[32]{}; // must be unique
     char  name[64]{};
@@ -29,19 +30,22 @@ class SnapshotPreset : public Hashable
     std::string list_name;
     bl::hash_t  hashed_alias = 0;
 
+    bool video = false;
+
 public:
 
-    SnapshotPreset() {}
-    SnapshotPreset(const SnapshotPreset& rhs)
+    CapturePreset() {}
+    CapturePreset(const CapturePreset& rhs)
     {
         strcpy(alias, rhs.alias);
         strcpy(name, rhs.name);
         size = rhs.size;
         ssaa = rhs.ssaa;
         sharpen = rhs.sharpen;
+        video = rhs.video;
         updateCache();
     }
-    SnapshotPreset(std::string_view _name, std::string_view _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f)
+    CapturePreset(std::string_view _name, std::string_view _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f)
     {
         strcpy(alias, _alias.data());
         strcpy(name, _name.data());
@@ -77,6 +81,11 @@ public:
     void setSSAA(int _ssaa)               { ssaa = _ssaa;                      updateCache(); }
     void setSharpening(float _sharpen)    { sharpen = _sharpen;                updateCache(); }
 
+    // dynamic (set last minute on CapturePreset copy, convenient for user)
+    void setVideo(bool v)                       { video = v; }
+    [[nodiscard]] bool isImage() const noexcept { return !video; }
+    [[nodiscard]] bool isVideo() const noexcept { return video; }
+
     // compute hash for entire preset info
     hash_t compute_hash() const noexcept override
     {
@@ -111,7 +120,7 @@ public:
 
 typedef std::unordered_map<bl::hash_t, bool> SnapshotPresetHashMap;
 
-using SnapshotCompleteCallback       = std::function<void(bytebuf&, const SnapshotPreset& preset)>;
+using SnapshotCompleteCallback       = std::function<void(EncodeFrame&, const CapturePreset& preset)>;
 using SnapshotBatchCompleteCallback  = std::function<void()>;
 
 struct SnapshotBatchCallbacks
@@ -124,16 +133,16 @@ class SnapshotPresetList
 {
     bool lookup_dirty = false;
 
-    std::vector<SnapshotPreset> items;
-    std::unordered_map<bl::hash_t, SnapshotPreset*> lookup;
+    std::vector<CapturePreset> items;
+    std::unordered_map<bl::hash_t, CapturePreset*> lookup;
 
 public:
 
     SnapshotPresetList() = default;
-    SnapshotPresetList(const SnapshotPreset& item) { add(item); }
-    SnapshotPresetList(const std::vector<SnapshotPreset>& _items)
+    SnapshotPresetList(const CapturePreset& item) { add(item); }
+    SnapshotPresetList(const std::vector<CapturePreset>& _items)
     {
-        for (const SnapshotPreset& item : _items)
+        for (const CapturePreset& item : _items)
             add(item);
     }
 
@@ -146,7 +155,7 @@ public:
         lookup_dirty = false;
     }
 
-    void add(const SnapshotPreset& preset) {
+    void add(const CapturePreset& preset) {
         items.push_back(preset);
         lookup_dirty = true;
     }
@@ -157,23 +166,23 @@ public:
     }
 
     // find by: hash
-    SnapshotPreset* find(bl::hash_t hash) {
+    CapturePreset* find(bl::hash_t hash) {
         if (lookup_dirty) updateLookup();
         if (lookup.count(hash) == 0) return nullptr;
         return lookup[hash];
     }
 
     // find by: index
-    SnapshotPreset& operator[](int i)                   { return items[i]; }
-    const SnapshotPreset& operator[](int i) const       { return items[i]; }
-    SnapshotPreset& at(int i)                           { return items[i]; }
-    const SnapshotPreset& at(int i) const               { return items[i]; }
-    SnapshotPreset* at_safe(int i)                      { return (i < 0 || i >= (int)items.size()) ? nullptr : &items[i]; }
+    CapturePreset& operator[](int i)                   { return items[i]; }
+    const CapturePreset& operator[](int i) const       { return items[i]; }
+    CapturePreset& at(int i)                           { return items[i]; }
+    const CapturePreset& at(int i) const               { return items[i]; }
+    CapturePreset* at_safe(int i)                      { return (i < 0 || i >= (int)items.size()) ? nullptr : &items[i]; }
 
     // find by: alias
-    SnapshotPreset* operator[](std::string_view alias)             { return findByAlias(alias); }
-    const SnapshotPreset* operator[](std::string_view alias) const { return findByAlias(alias); }
-    SnapshotPreset* findByAlias(std::string_view alias) {
+    CapturePreset* operator[](std::string_view alias)             { return findByAlias(alias); }
+    const CapturePreset* operator[](std::string_view alias) const { return findByAlias(alias); }
+    CapturePreset* findByAlias(std::string_view alias) {
         // hash alias, find(hash)?
         for (int i = 0; i < size(); i++) {
             if (items[i].getAlias() == alias)
@@ -181,7 +190,7 @@ public:
         }
         return nullptr;
     }
-    const SnapshotPreset* findByAlias(std::string_view alias) const {
+    const CapturePreset* findByAlias(std::string_view alias) const {
         // hash alias, find(hash)?
         for (int i = 0; i < size(); i++) {
             if (items[i].getAlias() == alias)
@@ -235,73 +244,73 @@ public:
         // ------------------------------
         // Generic / common render targets
         // ------------------------------
-        capture_presets.add(SnapshotPreset("Square 512", "square512", { 512,  512 }));
-        capture_presets.add(SnapshotPreset("Square 1024", "square1024", { 1024, 1024 }));
+        capture_presets.add(CapturePreset("Square 512", "square512", { 512,  512 }));
+        capture_presets.add(CapturePreset("Square 1024", "square1024", { 1024, 1024 }));
 
-        capture_presets.add(SnapshotPreset("FHD 1080p (16:9)", "fhd", { 1920, 1080 }));
-        capture_presets.add(SnapshotPreset("QHD 1440p (16:9)", "qhd", { 2560, 1440 }));
-        capture_presets.add(SnapshotPreset("UHD 4K (16:9)", "uhd4k", { 3840, 2160 }));
+        capture_presets.add(CapturePreset("FHD 1080p (16:9)", "fhd", { 1920, 1080 }));
+        capture_presets.add(CapturePreset("QHD 1440p (16:9)", "qhd", { 2560, 1440 }));
+        capture_presets.add(CapturePreset("UHD 4K (16:9)", "uhd4k", { 3840, 2160 }));
 
-        capture_presets.add(SnapshotPreset("WUXGA (16:10)", "wuxga", { 1920, 1200 }));
-        capture_presets.add(SnapshotPreset("WQXGA (16:10)", "wqxga", { 2560, 1600 }));
+        capture_presets.add(CapturePreset("WUXGA (16:10)", "wuxga", { 1920, 1200 }));
+        capture_presets.add(CapturePreset("WQXGA (16:10)", "wqxga", { 2560, 1600 }));
 
-        capture_presets.add(SnapshotPreset("UltraWide FHD (21:9)", "uwfhd", { 2560, 1080 }));
-        capture_presets.add(SnapshotPreset("UltraWide QHD (21:9)", "uwqhd", { 3440, 1440 }));
+        capture_presets.add(CapturePreset("UltraWide FHD (21:9)", "uwfhd", { 2560, 1080 }));
+        capture_presets.add(CapturePreset("UltraWide QHD (21:9)", "uwqhd", { 3440, 1440 }));
 
-        capture_presets.add(SnapshotPreset("Dual FHD (32:9)", "dfhd", { 3840, 1080 }));
-        capture_presets.add(SnapshotPreset("Dual QHD (32:9)", "dqhd", { 5120, 1440 }));
-        capture_presets.add(SnapshotPreset("UltraWide 5K2K (21:9)", "uw5k2k", { 5120, 2160 }));
+        capture_presets.add(CapturePreset("Dual FHD (32:9)", "dfhd", { 3840, 1080 }));
+        capture_presets.add(CapturePreset("Dual QHD (32:9)", "dqhd", { 5120, 1440 }));
+        capture_presets.add(CapturePreset("UltraWide 5K2K (21:9)", "uw5k2k", { 5120, 2160 }));
 
         // ------------------------------
         // 8K targets
         // ------------------------------
-        capture_presets.add(SnapshotPreset("UHD 8K (16:9)", "uhd8k", { 7680, 4320 })); // “8K UHD”
-        capture_presets.add(SnapshotPreset("DCI 8K (17:9)", "dci8k", { 8192, 4320 })); // cinema 8K
-        capture_presets.add(SnapshotPreset("8K (16:10)", "8k16x10", { 7680, 4800 })); // very high-res desktop target
-        capture_presets.add(SnapshotPreset("Dual UHD 8K-wide (32:9)", "duhd", { 7680, 2160 })); // effectively “dual 4K”
+        capture_presets.add(CapturePreset("UHD 8K (16:9)", "uhd8k", { 7680, 4320 })); // “8K UHD”
+        capture_presets.add(CapturePreset("DCI 8K (17:9)", "dci8k", { 8192, 4320 })); // cinema 8K
+        capture_presets.add(CapturePreset("8K (16:10)", "8k16x10", { 7680, 4800 })); // very high-res desktop target
+        capture_presets.add(CapturePreset("Dual UHD 8K-wide (32:9)", "duhd", { 7680, 2160 })); // effectively “dual 4K”
 
         // ------------------------------
         // Phones (portrait)
         // ------------------------------
-        capture_presets.add(SnapshotPreset("Apple iPhone 16", "iphone16", { 1179, 2556 }));
-        capture_presets.add(SnapshotPreset("Apple iPhone 16 Plus", "iphone16plus", { 1290, 2796 }));
-        capture_presets.add(SnapshotPreset("Apple iPhone 16 Pro", "iphone16pro", { 1206, 2622 }));
-        capture_presets.add(SnapshotPreset("Apple iPhone 16 Pro Max", "iphone16promax", { 1320, 2868 }));
+        capture_presets.add(CapturePreset("Apple iPhone 16", "iphone16", { 1179, 2556 }));
+        capture_presets.add(CapturePreset("Apple iPhone 16 Plus", "iphone16plus", { 1290, 2796 }));
+        capture_presets.add(CapturePreset("Apple iPhone 16 Pro", "iphone16pro", { 1206, 2622 }));
+        capture_presets.add(CapturePreset("Apple iPhone 16 Pro Max", "iphone16promax", { 1320, 2868 }));
 
         // Common Android portrait targets (used to replace duplicate device-specific sizes)
-        capture_presets.add(SnapshotPreset("Android FHD+ (20:9)", "androidfhdplus", { 1080, 2400 })); // replaces Pixel 8a
-        capture_presets.add(SnapshotPreset("Android FHD+ 1080x2340", "android1080x2340", { 1080, 2340 })); // replaces Galaxy S24 / S25
-        capture_presets.add(SnapshotPreset("Android FHD+ 1080x2424", "android1080x2424", { 1080, 2424 })); // replaces Pixel 9 / 9a
-        capture_presets.add(SnapshotPreset("Android QHD+ 1440x3120", "android1440x3120", { 1440, 3120 })); // replaces S24+ / S24 Ultra / S25+
+        capture_presets.add(CapturePreset("Android FHD+ (20:9)", "androidfhdplus", { 1080, 2400 })); // replaces Pixel 8a
+        capture_presets.add(CapturePreset("Android FHD+ 1080x2340", "android1080x2340", { 1080, 2340 })); // replaces Galaxy S24 / S25
+        capture_presets.add(CapturePreset("Android FHD+ 1080x2424", "android1080x2424", { 1080, 2424 })); // replaces Pixel 9 / 9a
+        capture_presets.add(CapturePreset("Android QHD+ 1440x3120", "android1440x3120", { 1440, 3120 })); // replaces S24+ / S24 Ultra / S25+
 
         // Keep higher-res / less common phone targets
-        capture_presets.add(SnapshotPreset("Google Pixel 9 Pro", "pixel9pro", { 1280, 2856 }));
-        capture_presets.add(SnapshotPreset("Google Pixel 9 Pro XL", "pixel9proxl", { 1344, 2992 }));
-        capture_presets.add(SnapshotPreset("OnePlus 12", "oneplus12", { 1440, 3168 }));
+        capture_presets.add(CapturePreset("Google Pixel 9 Pro", "pixel9pro", { 1280, 2856 }));
+        capture_presets.add(CapturePreset("Google Pixel 9 Pro XL", "pixel9proxl", { 1344, 2992 }));
+        capture_presets.add(CapturePreset("OnePlus 12", "oneplus12", { 1440, 3168 }));
 
         // ------------------------------
         // Tablets / laptops (landscape)
         // ------------------------------
-        capture_presets.add(SnapshotPreset("Apple iPad mini", "ipadmini", { 2266, 1488 }));
-        capture_presets.add(SnapshotPreset("Apple iPad Air 11", "ipadair11", { 2360, 1640 }));
-        capture_presets.add(SnapshotPreset("Apple iPad Air 13", "ipadair13", { 2732, 2048 }));
-        capture_presets.add(SnapshotPreset("Apple iPad Pro 11", "ipadpro11", { 2420, 1668 }));
-        capture_presets.add(SnapshotPreset("Apple iPad Pro 13", "ipadpro13", { 2752, 2064 }));
+        capture_presets.add(CapturePreset("Apple iPad mini", "ipadmini", { 2266, 1488 }));
+        capture_presets.add(CapturePreset("Apple iPad Air 11", "ipadair11", { 2360, 1640 }));
+        capture_presets.add(CapturePreset("Apple iPad Air 13", "ipadair13", { 2732, 2048 }));
+        capture_presets.add(CapturePreset("Apple iPad Pro 11", "ipadpro11", { 2420, 1668 }));
+        capture_presets.add(CapturePreset("Apple iPad Pro 13", "ipadpro13", { 2752, 2064 }));
 
-        capture_presets.add(SnapshotPreset("Apple MacBook Air 13", "macbookair13", { 2560, 1664 }));
-        capture_presets.add(SnapshotPreset("Apple MacBook Pro 14", "macbookpro14", { 3024, 1964 }));
+        capture_presets.add(CapturePreset("Apple MacBook Air 13", "macbookair13", { 2560, 1664 }));
+        capture_presets.add(CapturePreset("Apple MacBook Pro 14", "macbookpro14", { 3024, 1964 }));
 
         // ------------------------------
         // Handhelds / gaming / other
         // ------------------------------
-        capture_presets.add(SnapshotPreset("Valve Steam Deck OLED", "steamdeckoled", { 1280,  800 }));
-        capture_presets.add(SnapshotPreset("Nintendo Switch OLED", "switcholed", { 1280,  720 }));
+        capture_presets.add(CapturePreset("Valve Steam Deck OLED", "steamdeckoled", { 1280,  800 }));
+        capture_presets.add(CapturePreset("Nintendo Switch OLED", "switcholed", { 1280,  720 }));
 
         // ------------------------------
         // Thumbnails / Icons
         // ------------------------------
-        capture_presets.add(SnapshotPreset("Thumbnail", "thumb128x72", { 128, 72 }));
-        capture_presets.add(SnapshotPreset("Thumbnail (HD)", "thumb128x72_hd", { 128, 72 }, 9));
+        capture_presets.add(CapturePreset("Thumbnail", "thumb128x72", { 128, 72 }));
+        capture_presets.add(CapturePreset("Thumbnail (HD)", "thumb128x72_hd", { 128, 72 }, 9));
 
         capture_presets.updateLookup();
     }

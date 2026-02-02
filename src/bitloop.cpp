@@ -75,7 +75,7 @@
 #include "stb_image.h"
 
 /// ImGui
-#include <bitloop/imguix/imgui_custom.h>
+#include <bitloop/imguix/imguix.h>
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 
@@ -103,6 +103,9 @@ void gui_loop()
         #ifdef BL_SIMULATE_DISPLAY
         platform()->upscale_mouse_event_to_offscreen(es);
         #endif
+
+        // this gets called more when active
+        main_window()->threadQueue().pump();
 
         ImGui_ImplSDL3_ProcessEvent(&es);
 
@@ -153,6 +156,7 @@ void gui_loop()
 
     // ======== Prepare frame ========
     ImGui_ImplOpenGL3_NewFrame();
+
     ImGui_ImplSDL3_NewFrame();
 
     ImGui::GetIO().DisplaySize = (ImVec2)platform()->fbo_size();
@@ -160,23 +164,26 @@ void gui_loop()
 
     platform()->imgui_fix_offscreen_mouse_position();
 
+    /// this gets called most while idling
+    main_window()->threadQueue().pump();
+
     ImGui::NewFrame();
 
     // ======== Draw window ========
     main_window()->populateUI();
 
-
     platform()->gl_begin_frame();
 
     // ======== Render ========
     ImGui::Render();
+
     glClearColor(0.160784f, 0.160784f, 0.180392f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
+
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
     platform()->gl_end_frame();
-
     SDL_GL_SwapWindow(window);
+
 
     #ifdef __EMSCRIPTEN__
     // Release simulated paste keys
@@ -289,59 +296,55 @@ int bitloop_main(int, char* [])
 
     }
 
-    auto _platform_manager = std::make_unique<PlatformManager>(window);
-    auto _main_window      = std::make_unique<MainWindow>(shared_sync);
-    auto _project_worker   = std::make_unique<ProjectWorker>(shared_sync, _main_window->getRecordManager());
-
-    // ======== ImGui setup ========
     {
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImPlot::CreateContext();
-        ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
-        ImGui_ImplOpenGL3_Init();
+        auto _platform_manager = std::make_unique<PlatformManager>(window);
+        auto _main_window      = std::make_unique<MainWindow>(shared_sync);
+        auto _project_worker   = std::make_unique<ProjectWorker>(shared_sync, _main_window->getCaptureManager());
 
-        #ifdef __EMSCRIPTEN__
-        emscripten_browser_clipboard::paste(clipboard_paste_callback);
+        // ======== ImGui setup ========
+        {
+            IMGUI_CHECKVERSION();
+            ImGui::CreateContext();
+            ImPlot::CreateContext();
+            ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
+            ImGui_ImplOpenGL3_Init();
 
-        ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
-        platform_io.Platform_GetClipboardTextFn = get_content_for_imgui;
-        platform_io.Platform_SetClipboardTextFn = set_content_from_imgui;
-        #endif
-    }
+            #ifdef __EMSCRIPTEN__
+            emscripten_browser_clipboard::paste(clipboard_paste_callback);
 
-    // ======== Init window & start worker thread ========
-    {
-        platform()->init();
-        main_window()->init();
-        project_worker()->startWorker();
-    }
+            ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+            platform_io.Platform_GetClipboardTextFn = get_content_for_imgui;
+            platform_io.Platform_SetClipboardTextFn = set_content_from_imgui;
+            #endif
+        }
 
-    timer_calibrate_overhead();
+        // ======== Init window & start worker thread ========
+        {
+            platform()->init();
+            main_window()->init();
+            project_worker()->startWorker();
+        }
 
-    // ======== Start main gui loop ========
-    {
+        timer_calibrate_overhead();
+
+        // ======== Start main gui loop ========
         #ifdef __EMSCRIPTEN__
         emscripten_set_main_loop(gui_loop, 0, true);
         #else
+        while (!shared_sync.quitting.load())
         {
-            while (!shared_sync.quitting.load())
-            {
-                gui_loop();
-                SDL_Delay(0);
-            }
-
-            // Gracefully exit
-            project_worker()->end();
-
-            ImGui_ImplOpenGL3_Shutdown();
-            ImGui_ImplSDL3_Shutdown();
-            ImGui::DestroyContext();
-            SDL_GL_DestroyContext(gl_context);
-            SDL_DestroyWindow(window);
-            SDL_Quit();
+            gui_loop();
+            std::this_thread::yield();
         }
         #endif
     }
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+    SDL_GL_DestroyContext(gl_context);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
     return 0;
 }

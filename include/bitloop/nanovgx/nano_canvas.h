@@ -4,12 +4,11 @@
 
 #include <bitloop/platform/platform.h>
 
-#include "nanovg.h"
-#include "nanovg_gl.h"
-
 #include <bitloop/core/debug.h>
 #include <bitloop/core/camera.h>
+
 #include <bitloop/nanovgx/nano_bitmap.h>
+#include <bitloop/nanovgx/nano_shader_surface.h>
 
 BL_BEGIN_NS
 
@@ -471,6 +470,8 @@ public:
     {
         if (!paint_ctx->active_font) setFont(paint_ctx->default_font);
         nvgText(vg, (float)(x), (float)(y), txt.data(), txt.data() + txt.size());
+
+        
     }
 };
 
@@ -1020,11 +1021,24 @@ public:
 
         nvgRestore(vg);
     }
-    template<typename T> void drawImage(const CanvasImageBase<T>& bmp)
+    template<typename T> void drawImage(const WorldImageT<T>& bmp)
     {
         drawImage(bmp, bmp.worldQuad());
     }
 
+    void drawShaderSurface(const ShaderSurface& surf, float x, float y, float w, float h, float alpha = 1.0f) const
+    {
+        int img = surf.nvgImageId(vg);
+        if (!img)
+            return;
+
+        NVGpaint paint = nvgImagePattern(vg, x, y, w, h, 0.0f, img, alpha);
+
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillPaint(vg, paint);
+        nvgFill(vg);
+    }
 
     // ======== Text ========
 
@@ -1117,8 +1131,10 @@ private:
             // Use fixed-point (keep trailing zeros for consistency)
             s = to_string(abs_v, decimals, true, false, false);
         }
-
-        return s;
+        if (v >= 0)
+            return s;
+        else
+            return '-' + s;
     }
 
     const double exponent_font_scale = 0.85;
@@ -1126,10 +1142,8 @@ private:
     const double exponent_spacing_y = -0.3;
 
 public:
-    template<typename PosT=double, typename ValT> void fillNumberScientific(ValT v, Vec2<PosT> pos, int decimals, double fontSize = 12)
+    template<typename PosT=double, typename ValT> void fillNumberScientific(std::string& txt, Vec2<PosT> pos, /*int decimals,*/ double fontSize = 12.0)
     {
-        std::string txt = format_number(v, decimals);
-
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
         {
@@ -1163,10 +1177,9 @@ public:
             fillTextSharp(txt.c_str(), pos);
         }
     }
-    template<typename PosT=double, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(ValT v, int decimals, double fontSize = 12)
+    
+	template<typename PosT=double, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(std::string& txt, /*int decimals,*/ double fontSize = 12.0)
     {
-        std::string txt = format_number(v, decimals);
-
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
         {
@@ -1341,6 +1354,8 @@ public:
     void create(double global_scale);
     bool resize(int w, int h);
 
+    ~Canvas();
+
     IRect clientRect() const { return client_rect; }
     void setClientRect(IRect r) { client_rect = r; }
 
@@ -1356,7 +1371,5 @@ public:
 
     bool readPixels(std::vector<uint8_t>& out_rgba);
 };
-
-GLuint loadSVG(const char* path, int outputWidth, int outputHeight);
 
 BL_END_NS

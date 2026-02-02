@@ -2,6 +2,8 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <cstring>
+#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <type_traits>
@@ -959,14 +961,33 @@ FORCE_INLINE f128 round_to_decimals(f128 v, int prec)
 
 FORCE_INLINE f128 pow10_128(int k)
 {
-    f128 r = 1, ten = 10;
+    if (k == 0) return f128(1.0);
+
     int n = (k >= 0) ? k : -k;
-    for (int i = 0; i < n; ++i) r = r * ten;
-    return (k >= 0) ? r : (1 / r);
+
+    // fast small-exponent path
+    if (n <= 16) {
+        f128 r = f128(1.0);
+        const f128 ten = f128(10.0);
+        for (int i = 0; i < n; ++i) r = r * ten;
+        return (k >= 0) ? r : (f128(1.0) / r);
+    }
+
+    f128 r = f128(1.0);
+    f128 base = f128(10.0);
+
+    while (n) {
+        if (n & 1) r = r * base;
+        n >>= 1;
+        if (n) base = base * base;
+    }
+
+    return (k >= 0) ? r : (f128(1.0) / r);
 }
+
 FORCE_INLINE void normalize10(const f128& x, f128& m, int& exp10)
 {
-    if (x.hi == 0.0) { m = 0; exp10 = 0; return; }
+    if (x.hi == 0.0) { m = f128(0.0); exp10 = 0; return; }
 
     f128 ax = abs(x);
 
@@ -975,12 +996,13 @@ FORCE_INLINE void normalize10(const f128& x, f128& m, int& exp10)
     int e10 = (int)std::floor((e2 - 1) * 0.30102999566398114); // ≈ log10(2)
 
     m = ax * pow10_128(-e10);
-    while (m >= 10) { m = m / 10; ++e10; }
-    while (m < 1) { m = m * 10; --e10; }
+    while (m >= f128(10.0)) { m = m / f128(10.0); ++e10; }
+    while (m <  f128(1.0))  { m = m * f128(10.0); --e10; }
     exp10 = e10;
 }
 
-FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept {
+FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept
+{
     /// round x to an integer at scale = 10^prec (ties-to-even)
     if (prec <= 0) return x;
     const f128 scale = pow10_128(prec);
@@ -996,277 +1018,389 @@ FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept {
 
     return n;
 }
-FORCE_INLINE void emit_uint_rev(std::string& out, f128 n) {
+
+BL_PUSH_PRECISE
+FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexcept
+{
+    double p, err;
+#ifdef FMA_AVAILABLE
+    two_prod_precise_fma(a.hi, b, p, err);
+#else
+    two_prod_precise_dekker(a.hi, b, p, err);
+#endif
+    err += a.lo * b;
+
+    double s, e;
+    two_sum_precise(p, err, s, e);
+    return f128{s, e};
+}
+
+FORCE_INLINE f128 sub_by_double_print(f128 a, double b) noexcept
+{
+    double s, e;
+    two_sum_precise(a.hi, -b, s, e);
+    e += a.lo;
+
+    double ss, ee;
+    two_sum_precise(s, e, ss, ee);
+    return f128{ss, ee};
+}
+BL_POP_PRECISE
+
+struct f128_chars_result
+{
+    char* ptr = nullptr;
+    bool ok = false;
+};
+
+FORCE_INLINE int emit_uint_rev_buf(char* dst, f128 n)
+{
     // n is a non-negative integer in f128
     const f128 base = f128(1000000000.0); // 1e9
 
-    // Fast path for small values
-    if (n < 10) {
-        int d = (int)floor(n).hi;
-        if (d < 0) d = 0; if (d > 9) d = 9;  // safety clamp
-        out.push_back(char('0' + d));
-        return;
+    int len = 0;
+
+    if (n < f128(10.0)) {
+        int d = (int)n.hi;
+        if (d < 0) d = 0; else if (d > 9) d = 9;
+        dst[len++] = char('0' + d);
+        return len;
     }
 
-    // Extract 9-digit chunks in base 1e9
     while (n >= base) {
         f128 q = floor(n / base);
-        f128 r = n - q * base; // should be in [0, 1e9]
+        f128 r = n - q * base;
 
-        // Convert r to an integer chunk
-        long long chunk = (long long)floor(r).hi;
+        long long chunk = (long long)std::floor(r.hi);
+        if (chunk >= 1000000000LL) { chunk -= 1000000000LL; q = q + f128(1.0); }
+        if (chunk < 0) chunk = 0;
 
-        // Correct occasional rounding to 1e9
-        if (chunk >= 1000000000LL) {
-            chunk -= 1000000000LL;
-            q = q + 1;
-        }
-        if (chunk < 0) chunk = 0; // guard against tiny negative drift
-
-        // Emit this chunk as exactly 9 digits, reversed
         for (int i = 0; i < 9; ++i) {
             int d = int(chunk % 10);
-            out.push_back(char('0' + d));
+            dst[len++] = char('0' + d);
             chunk /= 10;
         }
 
         n = q;
     }
 
-    // Final (most significant) chunk — no zero padding
-    long long last = (long long)floor(n).hi;
+    long long last = (long long)std::floor(n.hi);
     if (last == 0) {
-        out.push_back('0');
-    }
-    else {
+        dst[len++] = '0';
+    } else {
         while (last > 0) {
             int d = int(last % 10);
-            out.push_back(char('0' + d));
+            dst[len++] = char('0' + d);
             last /= 10;
         }
     }
+
+    return len;
 }
 
-FORCE_INLINE void emit_scientific(std::ostream& os, const f128& x, std::streamsize prec, bool strip_trailing_zeros)
+FORCE_INLINE void emit_uint_rev(std::string& out, f128 n)
 {
-    if (x.hi == 0.0) { os << "0"; return; }
+    char tmp[320];
+    int len = emit_uint_rev_buf(tmp, n);
+    out.assign(tmp, tmp + len);
+}
+
+FORCE_INLINE f128_chars_result append_exp10_to_chars(char* p, char* end, int e10) noexcept
+{
+    if (p >= end) return {p, false};
+    *p++ = 'e';
+
+    if (p >= end) return {p, false};
+    if (e10 < 0) { *p++ = '-'; e10 = -e10; }
+    else         { *p++ = '+'; }
+
+    char buf[8];
+    int n = 0;
+    do {
+        buf[n++] = char('0' + (e10 % 10));
+        e10 /= 10;
+    } while (e10);
+
+    if (n < 2) buf[n++] = '0';
+
+    if (p + n > end) return {p, false};
+    for (int i = n - 1; i >= 0; --i) *p++ = buf[i];
+
+    return {p, true};
+}
+
+FORCE_INLINE f128_chars_result emit_fixed_dec_to_chars(char* first, char* last, f128 x, int prec, bool strip_trailing_zeros) noexcept
+{
+    if (x.hi == 0.0) {
+        if (first >= last) return {first, false};
+        *first = '0';
+        return {first + 1, true};
+    }
+
+    if (prec < 0) prec = 0;
+
+    const bool neg = (x.hi < 0.0);
+    if (neg) x = f128{-x.hi, -x.lo};
+
+    f128 ip = floor(x);
+    f128 fp = x - ip;
+
+    // fractional digits scratch (rounded in-place)
+    constexpr int kFracStack = 2048;
+    char frac_stack[kFracStack];
+    char* frac = frac_stack;
+
+    std::string frac_dyn;
+    if (prec > kFracStack) {
+        frac_dyn.resize((size_t)prec);
+        frac = frac_dyn.data();
+    }
+
+    int frac_len = (prec > 0) ? prec : 0;
+
+    if (prec > 0) {
+        static constexpr double kPow10[10] = {
+            1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0,
+            1000000.0, 10000000.0, 100000000.0, 1000000000.0
+        };
+
+        int written = 0;
+        const int full = prec / 9;
+        const int rem  = prec - full * 9;
+
+        for (int c = 0; c < full; ++c) {
+            fp = mul_by_double_print(fp, kPow10[9]);
+            uint32_t chunk = (uint32_t)fp.hi;
+            fp = sub_by_double_print(fp, (double)chunk);
+
+            for (int i = 8; i >= 0; --i) {
+                frac[written + i] = char('0' + (chunk % 10u));
+                chunk /= 10u;
+            }
+            written += 9;
+        }
+
+        if (rem > 0) {
+            fp = mul_by_double_print(fp, kPow10[rem]);
+            uint32_t chunk = (uint32_t)fp.hi;
+            fp = sub_by_double_print(fp, (double)chunk);
+
+            for (int i = rem - 1; i >= 0; --i) {
+                frac[written + i] = char('0' + (chunk % 10u));
+                chunk /= 10u;
+            }
+            written += rem;
+        }
+
+        // look-ahead digit for ties-to-even
+        f128 la = mul_by_double_print(fp, 10.0);
+        int next = (int)la.hi;
+        if (next < 0) next = 0; else if (next > 9) next = 9;
+        f128 remv = sub_by_double_print(la, (double)next);
+
+        const int last_digit = frac[prec - 1] - '0';
+        bool round_up = false;
+        if (next > 5) round_up = true;
+        else if (next < 5) round_up = false;
+        else {
+            const bool gt_half = (remv.hi > 0.0) || (remv.lo > 0.0);
+            round_up = gt_half || ((last_digit & 1) != 0);
+        }
+
+        if (round_up) {
+            int i = prec - 1;
+            for (; i >= 0; --i) {
+                char& c = frac[i];
+                if (c == '9') c = '0';
+                else { c = char(c + 1); break; }
+            }
+            if (i < 0) {
+                ip = ip + f128(1.0);
+                for (int j = 0; j < prec; ++j) frac[j] = '0';
+            }
+        }
+
+        if (strip_trailing_zeros) {
+            while (frac_len > 0 && frac[frac_len - 1] == '0') --frac_len;
+        }
+    }
+
+    char int_rev[320];
+    int int_len = emit_uint_rev_buf(int_rev, ip);
+
+    if (neg && int_len == 1 && int_rev[0] == '0' && frac_len == 0) {
+        if (first >= last) return {first, false};
+        *first = '0';
+        return {first + 1, true};
+    }
+
+    const size_t needed = (size_t)(neg ? 1 : 0) + (size_t)int_len + (frac_len ? (size_t)(1 + frac_len) : 0u);
+    if ((size_t)(last - first) < needed) return {first, false};
+
+    char* p = first;
+    if (neg) *p++ = '-';
+
+    for (int i = int_len - 1; i >= 0; --i) *p++ = int_rev[i];
+
+    if (frac_len > 0) {
+        *p++ = '.';
+        std::memcpy(p, frac, (size_t)frac_len);
+        p += frac_len;
+    }
+
+    return {p, true};
+}
+
+FORCE_INLINE f128_chars_result emit_scientific_to_chars(char* first, char* last, const f128& x, std::streamsize prec, bool strip_trailing_zeros) noexcept
+{
+    if (x.hi == 0.0) {
+        if (first >= last) return {first, false};
+        *first = '0';
+        return {first + 1, true};
+    }
+
     if (prec < 1) prec = 1; // total significant digits
 
-    bool neg = x.hi < 0.0;
+    const bool neg = (x.hi < 0.0);
     f128 v = neg ? f128(-x.hi, -x.lo) : x;
+
     f128 m; int e = 0;
     normalize10(v, m, e);
 
-    const f128 ten = 10;
-
-    // Collect digits: d[0] is the first significant digit, then fractional digits.
-    // compute prec digits + 1 lookahead digit for rounding.
     const int sig = (int)prec;
-    unsigned char dbuf[128]; // supports large 'prec'
-    const int max_sig = (int)std::min<int>(sig + 1, (int)(sizeof(dbuf)));
+    unsigned char dbuf[128];
+    const int max_sig = (int)std::min<int>(sig + 1, (int)sizeof(dbuf));
 
     f128 t = m;
     for (int i = 0; i < max_sig; ++i) {
-        int di = (int)floor(t).hi;
+        int di = (int)t.hi;
         if (di < 0) di = 0; else if (di > 9) di = 9;
         dbuf[i] = (unsigned char)di;
-        t = (t - f128(di)) * ten;
+        t = mul_by_double_print(sub_by_double_print(t, (double)di), 10.0);
     }
 
-    // Round using the lookahead digit if we have it
     bool carry = (max_sig >= sig + 1) && (dbuf[sig] >= 5);
 
-    // Propagate carry across the first 'sig' digits (right to left)
     for (int i = sig - 1; i >= 0 && carry; --i) {
         int vdig = (int)dbuf[i] + 1;
-        if (vdig == 10) {
-            dbuf[i] = 0;
-            carry = true;
-        }
-        else {
-            dbuf[i] = (unsigned char)vdig;
-            carry = false;
-        }
+        if (vdig == 10) { dbuf[i] = 0; carry = true; }
+        else            { dbuf[i] = (unsigned char)vdig; carry = false; }
     }
 
-    // 9.999… → 10.000…
     if (carry) {
         for (int i = sig - 1; i >= 1; --i) dbuf[i] = 0;
         dbuf[0] = 1;
         ++e;
     }
 
-    if (neg) os.put('-');
-
-    // First digit
-    os.put(char('0' + dbuf[0]));
-
-    // Fractional digits (with optional stripping)
-    if (sig > 1) {
-        int last = sig - 1;
-        if (strip_trailing_zeros) {
-            while (last >= 1 && dbuf[last] == 0) --last; // find last non-zero fractional digit
-        }
-        if (last >= 1) {
-            os.put('.');
-            for (int i = 1; i <= last; ++i)
-                os.put(char('0' + dbuf[i]));
-        }
-        // else: all fractional digits were zero → omit decimal point entirely
+    int last_frac = sig - 1;
+    if (sig > 1 && strip_trailing_zeros) {
+        while (last_frac >= 1 && dbuf[last_frac] == 0) --last_frac;
     }
 
-    os.put('e');
-    os << e;
-}
-FORCE_INLINE void emit_fixed_dec(std::ostream& os, f128 x, int prec, bool strip_trailing_zeros)
-{
-    bool neg = (x.hi < 0.0);
-    if (neg) x = f128{ -x.hi, -x.lo };
-
-    // split into integer and fractional parts
-    f128 ip = floor(x);
-    f128 fp = x - ip;
-
-    // emit integer part
-    std::string rev; rev.reserve(64);
-    emit_uint_rev(rev, ip);
-    std::string out; out.reserve(rev.size() + 2 + (prec > 0 ? prec : 0));
-    if (neg) out.push_back('-');
-    for (int i = int(rev.size()) - 1; i >= 0; --i) out.push_back(rev[i]);
-
-    if (prec > 0)
+    // compute exponent part first (for bounds)
+    char exp_buf[16];
     {
-        out.push_back('.');
+        char* ep = exp_buf;
+        char* eend = exp_buf + sizeof(exp_buf);
+        auto er = append_exp10_to_chars(ep, eend, e);
+        if (!er.ok) return {first, false};
+        int exp_len = (int)(er.ptr - ep);
 
-        // generate 'prec' digits with one extra look-ahead for rounding
-        const f128 ten{ 10.0 };
-        const f128 half{ 0.5 };
+        const bool has_frac = (sig > 1) && (last_frac >= 1);
+        const size_t needed = (size_t)(neg ? 1 : 0) + 1u + (has_frac ? (size_t)(1 + last_frac) : 0u) + (size_t)exp_len;
+        if ((size_t)(last - first) < needed) return {first, false};
 
-        // collect digits into a small buffer
-        std::string digits; digits.resize(size_t(prec), '0');
+        char* p = first;
+        if (neg) *p++ = '-';
+        *p++ = char('0' + dbuf[0]);
 
-        f128 frac = fp;
-        for (int i = 0; i < prec; ++i) {
-            frac = frac * ten;                // stays in [0,10]
-            int di = (int)floor(frac).hi;     // 0..9
-            if (di < 0) di = 0; if (di > 9) di = 9;
-            digits[size_t(i)] = char('0' + di);
-            frac = frac - f128(di);
+        if (has_frac) {
+            *p++ = '.';
+            for (int i = 1; i <= last_frac; ++i) *p++ = char('0' + dbuf[i]);
         }
 
-        // Look-ahead digit to decide rounding
-        f128 nextv = frac * ten;        // in [0,10]
-        int next = (int)floor(nextv).hi;      // 0..9
-        if (next < 0) next = 0; if (next > 9) next = 9;
-        f128 rem = nextv - f128(next); // remainder after next digit
+        std::memcpy(p, exp_buf, (size_t)exp_len);
+        p += exp_len;
 
-        // Round-half-even on the last printed digit
-        bool round_up = false;
-        if (next > 5) round_up = true;
-        else if (next < 5) round_up = false;
-        else { // next == 5
-            if (rem.hi > 0.0 || rem.lo > 0.0) {
-                round_up = true; // strictly greater than half
-            }
-            else {
-                // exact tie: round to even (last printed digit even stays)
-                int last_digit = digits.empty() ? 0 : (digits.back() - '0');
-                round_up = (last_digit % 2 != 0);
-            }
-        }
-
-        if (round_up) {
-            // propagate carry across fractional digits, then into integer if needed
-            int i = prec - 1;
-            for (; i >= 0; --i) {
-                if (digits[size_t(i)] == '9') {
-                    digits[size_t(i)] = '0';
-                }
-                else {
-                    digits[size_t(i)]++;
-                    break;
-                }
-            }
-            if (i < 0) {
-                // carry into integer part, increment integer part 'out' (string) from the right, skipping sign
-                int j = int(out.size()) - 1; // currently points at '.'
-                // move to last integer digit
-                while (j >= 0 && out[size_t(j)] != '.') --j;
-                int k = j - 1; // index of last integer digit
-                for (; k >= (neg ? 1 : 0); --k) {
-                    char c = out[size_t(k)];
-                    if (c == '-') break;
-                    if (c == '9') out[size_t(k)] = '0';
-                    else { out[size_t(k)] = char(c + 1); break; }
-                }
-                if (k < (neg ? 1 : 0)) {
-                    // need to insert '1' at the beginning (after '-')
-                    if (neg) out.insert(out.begin() + 1, '1');
-                    else     out.insert(out.begin(), '1');
-                    ++j; // decimal point index shifted right by one
-                }
-            }
-        }
-
-        // Append (and optionally strip) fractional digits
-        if (strip_trailing_zeros) {
-            int end = prec - 1;
-            while (end >= 0 && digits[size_t(end)] == '0') --end;
-            if (end >= 0) {
-                out.append(digits.data(), size_t(end + 1));
-            }
-            else {
-                // all zeros: drop the dot
-                out.pop_back();
-            }
-        }
-        else {
-            out.append(digits);
-        }
+        return {p, true};
     }
-
-    if (out == "-0") out = "0";
-    os << out;
 }
 
-FORCE_INLINE std::string to_string(const f128& x, int precision,
+FORCE_INLINE f128_chars_result to_chars(char* first, char* last, const f128& x, int precision,
     bool fixed = false, bool scientific = false,
-    bool strip_trailing_zeros = false)
+    bool strip_trailing_zeros = false) noexcept
 {
     if (precision < 0) precision = 0;
 
-    std::stringstream ss;
-
     if (fixed && !scientific) {
-        emit_fixed_dec(ss, x, precision, strip_trailing_zeros);
-        return ss.str();
+        return emit_fixed_dec_to_chars(first, last, x, precision, strip_trailing_zeros);
     }
 
     if (scientific && !fixed) {
-        emit_scientific(ss, x, precision, strip_trailing_zeros);
-        return ss.str();
+        return emit_scientific_to_chars(first, last, x, precision, strip_trailing_zeros);
     }
 
-    // default: choose fixed vs scientific by exponent
-    if (x.hi == 0.0) { ss << "0"; return ss.str(); }
+    if (x.hi == 0.0) {
+        if (first >= last) return {first, false};
+        *first = '0';
+        return {first + 1, true};
+    }
 
     f128 ax = (x.hi < 0.0) ? f128(-x.hi, -x.lo) : x;
     f128 m; int e10 = 0;
     normalize10(ax, m, e10);
 
     if (e10 >= -4 && e10 < precision) {
-        int frac = (e10 >= 0)
+        const int frac = (e10 >= 0)
             ? precision
             : std::max(0, precision - 1 - e10);
-        emit_fixed_dec(ss, x, frac, strip_trailing_zeros);
-    }
-    else {
-        emit_scientific(ss, x, precision, strip_trailing_zeros);
+        return emit_fixed_dec_to_chars(first, last, x, frac, strip_trailing_zeros);
     }
 
-    return ss.str();
+    return emit_scientific_to_chars(first, last, x, precision, strip_trailing_zeros);
 }
 
+FORCE_INLINE void to_string_into(std::string& out, const f128& x, int precision,
+    bool fixed = false, bool scientific = false,
+    bool strip_trailing_zeros = false)
+{
+    if (precision < 0) precision = 0;
+
+    // avoid reallocation in hot loop
+    const size_t cap_fixed = 1u + 309u + 1u + ((size_t)precision + 16u) + 32u;
+    const size_t cap_sci   = 1u + 1u + 1u + ((size_t)precision + 2u) + 32u;
+    const size_t cap = (cap_fixed > cap_sci) ? cap_fixed : cap_sci;
+
+    out.resize(cap);
+
+    char* first = out.data();
+    char* last  = out.data() + out.size();
+
+    auto r = to_chars(first, last, x, precision, fixed, scientific, strip_trailing_zeros);
+    if (!r.ok) { out.clear(); return; }
+
+    out.resize((size_t)(r.ptr - first));
+}
+
+FORCE_INLINE void emit_scientific(std::string& os, const f128& x, std::streamsize prec, bool strip_trailing_zeros)
+{
+    to_string_into(os, x, (int)prec, false, true, strip_trailing_zeros);
+}
+
+FORCE_INLINE void emit_fixed_dec(std::string& os, f128 x, int prec, bool strip_trailing_zeros)
+{
+    to_string_into(os, x, prec, true, false, strip_trailing_zeros);
+}
+
+FORCE_INLINE std::string to_string(const f128& x, int precision,
+    bool fixed = false, bool scientific = false,
+    bool strip_trailing_zeros = false)
+{
+    std::string out;
+    to_string_into(out, x, precision, fixed, scientific, strip_trailing_zeros);
+    return out;
+}
 FORCE_INLINE bool   valid_flt128_string(const char* s)
 {
     for (char* p = (char*)s; *p; ++p) {
@@ -1424,13 +1558,17 @@ FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
     const bool scientific = (f & std::ios_base::scientific) != 0;
     const bool showpoint = (f & std::ios_base::showpoint) != 0;
 
+    std::string s;
+
     if (fixed && !scientific) {
-        emit_fixed_dec(os, x, prec, !showpoint);
+        emit_fixed_dec(s, x, prec, !showpoint);
+        os << s;
         return os;
     }
 
     if (scientific && !fixed) {
-        emit_scientific(os, x, prec + 1, !showpoint);
+        emit_scientific(s, x, prec + 1, !showpoint);
+        os << s;
         return os;
     }
 
@@ -1442,11 +1580,13 @@ FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
 
     if (e10 >= -4 && e10 < prec) {
         const int frac = std::max(0, prec - 1 - e10);
-        emit_fixed_dec(os, x, frac, !showpoint);
+        emit_fixed_dec(s, x, frac, !showpoint);
     }
     else {
-        emit_scientific(os, x, prec, !showpoint);
+        emit_scientific(s, x, prec, !showpoint);
     }
+    os << s;
+
     return os;
 }
 

@@ -37,6 +37,11 @@ BL_BEGIN_NS
     }
 }*/
 
+ProjectBase* ProjectBase::activeProject()
+{
+    return project_worker()->current_project;
+}
+
 
 void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
 {
@@ -54,7 +59,8 @@ void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_lo
 
 void ProjectBase::_populateAllAttributes()
 {
-    if (has_var_buffer)
+    if (getInterfaceModel() &&
+        getInterfaceModel()->sidebarVisible())
     {
         bool showUI = ImGui::CollapsingHeader("Project", ImGuiTreeNodeFlags_DefaultOpen);
 
@@ -73,29 +79,37 @@ void ProjectBase::_populateAllAttributes()
     {
         SceneBase* scene = ctx_focused->scene;
 
-        std::string sceneName = scene->name() + " " + std::to_string(scene->sceneIndex());
-        std::string section_id = sceneName + "_section";
-
-        bool showSceneUI = (viewports.count() == 1) || ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
-        if (showSceneUI)
+        if (scene->getInterfaceModel() &&
+            scene->getInterfaceModel()->sidebarVisible())
         {
-            // Allow Scene to populate inputs for section
-            ImGui::PushID(section_id.c_str());
+            std::string sceneName = scene->name() + " " + std::to_string(scene->sceneIndex());
+            std::string section_id = sceneName + "_section";
 
-            // blue
-            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.35f, 0.60f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.35f, 0.42f, 0.7f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+            // If we have only one viewport, always show its UI (and don't show collapsing header)
+            bool showSceneUI =
+                (viewports.count() == 1) ||
+                ImGui::CollapsingHeader(sceneName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 
-            // red
-            //ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
-            //ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.6f, 0.3f, 0.3f, 1.0f));
-            //ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+            if (showSceneUI)
+            {
+                // Allow Scene to populate inputs for section
+                ImGui::PushID(section_id.c_str());
 
-            scene->_sceneAttributes();
+                // blue
+                ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.35f, 0.60f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.35f, 0.42f, 0.7f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
 
-            ImGui::PopStyleColor(3);
-            ImGui::PopID();
+                // red
+                //ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
+                //ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.6f, 0.3f, 0.3f, 1.0f));
+                //ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+
+                scene->_sceneAttributes();
+
+                ImGui::PopStyleColor(3);
+                ImGui::PopID();
+            }
         }
     }
 }
@@ -103,6 +117,17 @@ void ProjectBase::_populateOverlay()
 {
     for (SceneBase* scene : viewports.all_scenes)
         scene->_populateOverlay();
+}
+
+void ProjectBase::_initGUI()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->_initGUI();
+}
+void ProjectBase::_destroyGUI()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->_destroyGUI();
 }
 
 void ProjectBase::updateLiveBuffers()
@@ -154,9 +179,10 @@ void ProjectBase::invokeScheduledCalls()
 
 void ProjectBase::_projectPrepare()
 {
-    viewports.clear();
-
-    active_project = this;
+    if (started)
+        viewports.clear();
+    else
+        assert(viewports.count() == 0);
 
     // Prepare project and create layout
     // Note: This is where old viewports get replaced
@@ -172,6 +198,7 @@ void ProjectBase::_projectStart()
     done_single_process = false;
 
     // Prepare layout
+    // TODO: prepare if not yet prepared?
     _projectPrepare();
 
     /// Determine real viewport size, and cache starting size
@@ -195,8 +222,14 @@ void ProjectBase::_projectStart()
         ///scene->dt_project_draw_ma_list.clear();
         scene->clearCurrent();
 
-        scene->sceneStart();
+        scene->_sceneStart();
     }
+
+    main_window()->threadQueue().invokeBlocking([&]()
+    {
+        _initGUI();
+        main_window()->threadQueue().drain();
+    });
 
     // Mount to viewports
     for (Viewport* viewport : viewports)
@@ -230,9 +263,23 @@ void ProjectBase::_projectPause()
 }
 void ProjectBase::_projectDestroy()
 {
+    if (!started)
+        return; // nothing to destroy
+
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->_sceneDestroy();
+
     projectDestroy();
 
-    active_project = nullptr;
+    // force any UI / deferred destructions to happen on the main GUI thread *before* deleting the project/scenes
+    main_window()->threadQueue().invokeBlocking([&]()
+    {
+        _destroyGUI();
+        main_window()->threadQueue().drain();
+    });
+
+    // deletes Scene's *after* Scene::_destroyGUI 
+    viewports.clear();
 }
 
 void ProjectBase::updateViewportRects()
@@ -345,8 +392,8 @@ void ProjectBase::_projectProcess()
             //    (viewport->h != viewport->old_h);
 
             double dt;
-            if (main_window()->getRecordManager()->isRecording() )
-                dt = 1.0 / main_window()->getRecordManager()->fps();
+            if (main_window()->getCaptureManager()->isRecording() )
+                dt = 1.0 / main_window()->getCaptureManager()->fps();
             else
                 dt = dt_frameProcess / 1000.0;
 
@@ -515,19 +562,21 @@ void ProjectBase::_onEvent(SDL_Event& e)
         // Mouse
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         {
+            if (platform()->is_mobile()) return;
             mouse.pressed = true;
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
-
         } break;
         case SDL_EVENT_MOUSE_BUTTON_UP:
         {
+            if (platform()->is_mobile()) return;
             mouse.pressed = false;
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
         } break;
         case SDL_EVENT_MOUSE_MOTION:
         {
+            if (platform()->is_mobile()) return;
             mouse.client_x = e.motion.x;
             mouse.client_y = e.motion.y;
         } break;
@@ -537,8 +586,8 @@ void ProjectBase::_onEvent(SDL_Event& e)
         case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_MOTION:
         {
-            mouse.client_x = (double)(e.tfinger.x * (float)canvas->fboWidth());
-            mouse.client_y = (double)(e.tfinger.y * (float)canvas->fboHeight());
+            mouse.client_x = (double)(e.tfinger.x * platform()->fbo_width());
+            mouse.client_y = (double)(e.tfinger.y * platform()->fbo_height());
         } break;
     }
 
@@ -755,7 +804,7 @@ Layout& ProjectBase::newLayout(int targ_viewports_x, int targ_viewports_y)
     return viewports;
 }
 
-void ProjectBase::_onEncodeFrame(bytebuf& data, int request_id, const SnapshotPreset& preset)
+void ProjectBase::_onEncodeFrame(EncodeFrame& data, int request_id, const CapturePreset& preset)
 {
     for (SceneBase* scene : viewports.all_scenes)
         scene->_onEncodeFrame(data, request_id, preset);

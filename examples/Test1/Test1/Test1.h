@@ -26,9 +26,9 @@ struct Test1_Scene : public Scene<Test1_Scene>
         //speed(info.speed)
     {}
 
-    struct UI : ViewModel
+    struct UI : DoubleBufferedAccessor
     {
-        using ViewModel::ViewModel;
+        using DoubleBufferedAccessor::DoubleBufferedAccessor;
         void sidebar();
     };
 
@@ -72,9 +72,9 @@ struct Test1_Project : public Project<Test1_Project>
         return ProjectInfo({ "Framework Tests", "Test A" });
     }
 
-    struct UI : ViewModel
+    struct UI : DoubleBufferedAccessor
     {
-        using ViewModel::ViewModel;
+        using DoubleBufferedAccessor::DoubleBufferedAccessor;
         void sidebar();
     };
 

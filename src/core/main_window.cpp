@@ -280,7 +280,7 @@ int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_forma
 
     // find unchanging anchor directory: longest leading directory prefix with no '%' in the segment
     std::filesystem::path anchor_rel;
-    size_t anchor_count = 0;
+    size_t anchor_count = 0; // number of segments in anchor
     for (; anchor_count + 1 < pattern_segs.size(); ++anchor_count) // +1 to exclude filename seg
     {
         const std::string& seg = pattern_segs[anchor_count];
@@ -289,18 +289,30 @@ int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_forma
     }
 
     // remaining pattern (relative to scan_root)
-    std::vector<std::string> rem_pattern(pattern_segs.begin() + static_cast<std::ptrdiff_t>(anchor_count),
+    std::vector<std::string> rem_pattern(
+        pattern_segs.begin() + static_cast<std::ptrdiff_t>(anchor_count),
         pattern_segs.end());
 
     // tokenize remaining pattern segments (global: only first %d is Index).
     bool have_index_global = false;
+    size_t index_seg = static_cast<size_t>(-1); // segment index (within rem_pattern) that introduced %d
     std::vector<std::vector<Token>> rem_tokens;
     rem_tokens.reserve(rem_pattern.size());
-    for (const auto& seg : rem_pattern)
-        rem_tokens.push_back(tokenize_segment(seg, have_index_global));
 
+    for (size_t i = 0; i < rem_pattern.size(); ++i)
+    {
+        const bool before = have_index_global;
+        rem_tokens.push_back(tokenize_segment(rem_pattern[i], have_index_global));
+        if (!before && have_index_global)
+            index_seg = i;
+    }
+
+    // no %d means caller intends overwrite semantics.
     if (!have_index_global)
-        return 0;
+        return -1;
+
+    // only require matching up to (and including) the segment containing the first %d.
+    const size_t match_depth = (index_seg == static_cast<size_t>(-1)) ? rem_tokens.size() : (index_seg + 1);
 
     // compute scan root directory
     const bool fmt_abs = fmt_path.is_absolute();
@@ -316,7 +328,6 @@ int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_forma
     int max_idx = 0;
 
     auto try_match_rel_path = [&](const std::filesystem::path& full_path) {
-        std::error_code ec_rel;
         std::filesystem::path rel = full_path.lexically_relative(scan_root);
         if (rel.empty()) return;
 
@@ -335,13 +346,13 @@ int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_forma
         // last component: filename stem (ignore extension)
         cand.push_back(comps.back().stem().string());
 
-        if (cand.size() != rem_tokens.size())
+        if (cand.size() < match_depth)
             return;
 
         bool idx_set = false;
         int idx = 0;
 
-        for (size_t i = 0; i < rem_tokens.size(); ++i)
+        for (size_t i = 0; i < match_depth; ++i)
         {
             if (!match_segment_and_extract_index(rem_tokens[i], cand[i], idx_set, idx))
                 return;
@@ -675,7 +686,7 @@ void MainWindow::initFonts()
 
 void MainWindow::populateProjectUI()
 {
-    if (!project_worker()->hasActiveProject())
+    if (!project_worker()->hasCurrentProject())
         return;
 
     BL_TAKE_OWNERSHIP("ui");
@@ -691,7 +702,7 @@ void MainWindow::populateOverlay()
     project_worker()->populateOverlay();
 }
 
-std::string MainWindow::prepareFullCapturePath(const SnapshotPreset& preset, std::filesystem::path base_dir, const char* rel_path_fmt, int file_idx, const char* fallback_extension)
+std::string MainWindow::prepareFullCapturePath(const CapturePreset& preset, std::filesystem::path base_dir, const char* rel_path_fmt, int file_idx, const char* fallback_extension)
 {
     namespace fs = std::filesystem;
 
@@ -709,9 +720,8 @@ std::string MainWindow::prepareFullCapturePath(const SnapshotPreset& preset, std
         return qualified_filename + fallback_extension;
     #else
     // organize by project name, relative to project capture dir                                                         
-    fs::path relative_dir = base_dir / rel_filepath.parent_path(); // e.g. "C:/dev/bitloop-gallery/captures/Mandelbrot/image/backgrounds/"
     std::string filled_rel_filepath = constructCapturePath(rel_path_fmt, file_idx, preset.getAlias(), fallback_extension);
-    fs::path filled_full_filepath = relative_dir / filled_rel_filepath;
+    fs::path filled_full_filepath = base_dir / filled_rel_filepath;
 
     std::error_code ec;
     ensure_parent_directories_exist(filled_full_filepath, ec);
@@ -720,13 +730,12 @@ std::string MainWindow::prepareFullCapturePath(const SnapshotPreset& preset, std
     #endif
 }
 
-void MainWindow::queueBeginSnapshot(const SnapshotPresetList& presets, std::string_view rel_path_fmt, int request_id, std::string_view xmp_data)
+void MainWindow::queueBeginSnapshot(const SnapshotPresetList& presets, std::string_view rel_path_fmt, int request_id)
 {
     SnapshotPresetsArgs payload;
     payload.rel_path_fmt = rel_path_fmt;
     payload.presets = presets;
     payload.request_id = request_id;
-    payload.xmp_data = xmp_data;
     queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_PRESET_LIST, payload });
 }
 void MainWindow::queueBeginRecording()
@@ -737,7 +746,7 @@ void MainWindow::queueEndRecording()
 {
     queueMainWindowCommand({ MainWindowCommandType::END_RECORDING });
 }
-void MainWindow::beginRecording(const SnapshotPreset& preset, const char* rel_path_fmt)
+void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_path_fmt)
 {
     namespace fs = std::filesystem;
 
@@ -747,6 +756,9 @@ void MainWindow::beginRecording(const SnapshotPreset& preset, const char* rel_pa
     snapshot.enabled = false;
     record.toggled = true;
     //record.enabled = true; // keep record button enabled. Clicking again ends recording
+
+    // Mainly used for snapshot lists, but set anyway for consistency
+    active_capture_rel_path_fmt = rel_path_fmt;
 
     // don't capture until next frame starts (and sets this true)
     capture_manager.setCaptureEnabled(false);
@@ -758,14 +770,19 @@ void MainWindow::beginRecording(const SnapshotPreset& preset, const char* rel_pa
 
     switch ((CaptureFormat)getSettingsConfig()->getRecordFormat())
     {
-        case CaptureFormat::x264:
+        #if BITLOOP_FFMPEG_ENABLED
+        #if BITLOOP_FFMPEG_X265_ENABLED
         case CaptureFormat::x265:
+        #endif
+        case CaptureFormat::x264:
         {
+
             capture_dir    = getProjectVideosDir();
             int file_idx   = getHighestCaptureIndex(capture_dir.string(), rel_path_fmt) + 1;
             filename       = prepareFullCapturePath(preset, capture_dir, rel_path_fmt, file_idx, ".mp4");
         }
         break;
+        #endif
 
         case CaptureFormat::WEBP_VIDEO:
         {
@@ -789,7 +806,7 @@ void MainWindow::beginRecording(const SnapshotPreset& preset, const char* rel_pa
     config.fps                =       getSettingsConfig()->record_fps;
     config.record_frame_count =       getSettingsConfig()->record_frame_count;
     config.quality            = (f32) getSettingsConfig()->record_quality;
-    config.near_lossless      =       getSettingsConfig()->record_lossless;
+    config.near_lossless      =       getSettingsConfig()->record_near_lossless;
 
     #if BITLOOP_FFMPEG_ENABLED
     config.bitrate = getSettingsConfig()->record_bitrate;
@@ -799,14 +816,14 @@ void MainWindow::beginRecording(const SnapshotPreset& preset, const char* rel_pa
     config.filename = filename.string();
     #endif
 
-    enabled_capture_presets = SnapshotPresetList(preset);
-    active_capture_preset_request_id = 0; // no assigned callback
+    enabled_snapshot_presets = SnapshotPresetList(preset);
+    active_snapshot_preset_request_id = 0; // no assigned callback for recording
 
     /// TODO: check for ffmpeg/webp initialization error
     capture_manager.startCapture(config);
 }
 
-void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float sharpen, std::string_view xmp_data)
+void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float sharpen)
 {
     // begin snapshot with provided args (lowest level, no awareness of presets)
 
@@ -832,7 +849,6 @@ void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float
     config.sharpen = sharpen;
     config.quality = 100.0f;
     config.lossless = true;
-    config.save_payload = xmp_data;
 
     #ifndef __EMSCRIPTEN__
     config.filename = filepath;
@@ -840,7 +856,7 @@ void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float
 
     capture_manager.startCapture(config);
 }
-void MainWindow::beginSnapshot(const SnapshotPreset& preset, const char* rel_path_fmt, int file_idx, std::string_view xmp_data)
+void MainWindow::beginSnapshot(const CapturePreset& preset, const char* rel_path_fmt, int file_idx)
 {
     // begin snapshot using provided preset (ssaa/sharpen falls back to global defaults if "unset")
 
@@ -856,18 +872,19 @@ void MainWindow::beginSnapshot(const SnapshotPreset& preset, const char* rel_pat
     int ssaa      = (preset.getSSAA() > 0)       ? preset.getSSAA()       : getSettingsConfig()->default_ssaa;
     float sharpen = (preset.getSharpening() > 0) ? preset.getSharpening() : getSettingsConfig()->default_sharpen;
 
-    _beginSnapshot(full_path.c_str(), preset.getResolution(), ssaa, sharpen, xmp_data);
+    _beginSnapshot(full_path.c_str(), preset.getResolution(), ssaa, sharpen);
 }
-void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id, std::string_view xmp_data)
+void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id)
 {
-    enabled_capture_presets = presets;
+    assert(presets.size() > 0);
+
+    enabled_snapshot_presets = presets;
     is_snapshotting = true;
     active_capture_preset = 0;
     active_capture_rel_path_fmt = rel_path_fmt;
-    active_capture_preset_request_id = request_id;
-    active_capture_xmp_data = xmp_data;
+    active_snapshot_preset_request_id = request_id;
 
-    // Determine snapshot group index for this batch (ignored on web)
+    // Determine snapshot group index for this batch for the target directory (ignored on web)
     #ifndef __EMSCRIPTEN__
     namespace fs = std::filesystem;
     fs::path rel_filepath = rel_path_fmt;
@@ -879,7 +896,7 @@ void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char
     shared_batch_fileindex = 0;
     #endif
 
-    beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex, xmp_data);
+    beginSnapshot(enabled_snapshot_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex);
 }
 void MainWindow::endRecording()
 {
@@ -923,7 +940,7 @@ void MainWindow::checkCaptureComplete()
             {
                 // do we have another preset to capture?
                 active_capture_preset++;
-                if (active_capture_preset < enabled_capture_presets.size())
+                if (active_capture_preset < enabled_snapshot_presets.size())
                 {
                     // todo: maybe queue to begin capture at more suitable time
                     queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET });
@@ -943,7 +960,11 @@ void MainWindow::checkCaptureComplete()
         record.toggled = false;
         snapshot.toggled = false;
 
-        bool project_active = project_worker()->hasActiveProject();
+        // have we ended recording while the project is still "started/paused" state?
+        // or have we ended recording with a hard "stop"?
+        bool project_active =
+            project_worker()->hasCurrentProject() &&
+            project_worker()->getCurrentProject()->isActive();
 
         if (project_active)
         {
@@ -956,6 +977,14 @@ void MainWindow::checkCaptureComplete()
             record.enabled = true;
             snapshot.enabled = true;
         }
+        else
+        {
+            play.enabled = true;
+            pause.enabled = false;
+            stop.enabled = false;
+            record.enabled = true;
+            snapshot.enabled = false;
+        }
     }
 }
 
@@ -964,6 +993,18 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
     // handle commands which can be initiated by both GUI thread & project-worker thread
     switch (e.type)
     {
+    case MainWindowCommandType::ON_SELECT_PROJECT:
+    {
+        // in a "stopped" state to begin with
+        play.enabled = true;
+        stop.enabled = false;
+        pause.enabled = false;
+
+        record.enabled = true;
+        snapshot.enabled = false;
+    }
+    break;
+
     case MainWindowCommandType::ON_PLAY_PROJECT:
     {
         /// note: could be starting OR resuming project
@@ -1014,19 +1055,18 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         if (e.payload.has_value())
         {
             SnapshotPresetsArgs payload = std::any_cast<SnapshotPresetsArgs>(e.payload);
-            beginSnapshotList(payload.presets, payload.rel_path_fmt.c_str(), payload.request_id, payload.xmp_data); // e.g. "backgrounds/seahorse_valley"
+            beginSnapshotList(payload.presets, payload.rel_path_fmt.c_str(), payload.request_id); // e.g. "backgrounds/seahorse_valley"
         }
         else
             beginSnapshotList(getSettingsConfig()->enabledImagePresets(), "snap%d_%s", 0);
-            //beginSnapshotList(getSnapshotPresetManager()->enabledImagePresets(), "snap%d_%s", 0);
         break;
 
     case MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET:
     {
         // "private" command triggered on completing a snapshot - triggers a snapshot on the next batch preset
         SnapshotPresetList presets;
-        presets.add(enabled_capture_presets[active_capture_preset]);
-        beginSnapshot(enabled_capture_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex, active_capture_xmp_data);
+        presets.add(enabled_snapshot_presets[active_capture_preset]);
+        beginSnapshot(enabled_snapshot_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex);
     }
     break;
 
@@ -1200,22 +1240,19 @@ void MainWindow::populateToolbar()
         ImGui::SameLine();
         if (toolbarButton("##record", "record", record, ImVec2(size, size)))
         {
-            //if (!play.enabled)
-            if (project_worker()->hasActiveProject())
+            if (project_worker()->hasCurrentProject() &&
+                project_worker()->getCurrentProject()->isActive())
             {
                 // sim already 'active' (and possibly in 'paused' state)
                 if (!record.toggled)
                 {
                     // Start recording
-                    //record.toggled = true;
                     beginRecording(getSettingsConfig()->enabledVideoPreset(), "clip%d_%s");
                 }
                 else
                 {
                     /// endRecording() signals finalize_requested=true, so recording finalizes in MainWindow::checkCaptureComplete()
                     endRecording();
-                    //record.toggled = false;
-                    //capture_manager.finalizeCapture();
                 }
             }
             else
@@ -1245,8 +1282,6 @@ void MainWindow::populateToolbar()
 
 void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i, int depth)
 {
-    //if (!node.visible)
-    //    return;
     ImGui::PushID(node.uid);
     if (node.project_info)
     {
@@ -1255,6 +1290,11 @@ void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i,
         {
             project_worker()->setActiveProject(node.project_info->sim_uid);
             project_worker()->startProject();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("[...]"))
+        {
+            project_worker()->setActiveProject(node.project_info->sim_uid);
         }
     }
     else
@@ -1397,9 +1437,8 @@ bool MainWindow::manageDockingLayout()
         ImGuiID dock_main_id = dockspace_id;
         ImGuiID dock_sidebar = ImGui::DockBuilderSplitNode(
             dock_main_id,
-            //vertical_layout ? ImGuiDir_Down : ImGuiDir_Right,
-            vertical_layout ? ImGuiDir_Down : ImGuiDir_Left,
-            vertical_layout ? 0.4f : 0.25f,
+            vertical_layout ? ImGuiDir_Down : ImGuiDir_Right,
+            vertical_layout ? 0.4f : 0.3f,
             nullptr,
             &dock_main_id
         );
@@ -1440,29 +1479,23 @@ void MainWindow::populateCollapsedLayout()
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6.0f, 6.0f));
-        //ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
         populateToolbar();
 
         populateProjectTree(true);
         ImGui::SwipeScrollWindow();
 
-        //ImGui::EndChild();
         ImGui::PopStyleVar();
     }
     ImGui::End();
     
     if (ImGui::Begin("Active", nullptr, window_flags))
     {
-        // Only add padding after toolbar to inner-child
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(8.0f, 8.0f));
-        //ImGui::BeginChild("AttributesFrameInner", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+
         populateToolbar();
-        
-
         populateProjectUI();
-        ImGui::SwipeScrollWindow();
 
-        //ImGui::EndChild();
+        ImGui::SwipeScrollWindow();
         ImGui::PopStyleVar();
     }
 
@@ -1474,15 +1507,12 @@ void MainWindow::populateExpandedLayout()
     if (ImGui::Begin("Projects", nullptr, window_flags))
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
-        //ImGui::BeginChild("AttributesFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
-        populateToolbar();
 
+        populateToolbar();
         populateProjectTree(false);
         populateProjectUI();
 
         ImGui::SwipeScrollWindow();
-
-        //ImGui::EndChild();
         ImGui::PopStyleVar();
     }
 
@@ -1518,9 +1548,35 @@ void MainWindow::populateViewport()
         // set canvas size to viewport size by default
         IVec2 canvas_size(client_size);
 
+        bool capture_preview_mode = main_window()->getSettingsConfig()->preview_mode;
+        bool is_capturing = capture_manager.isCapturing();
+        bool use_capture_resolution =
+            capture_manager.isRecording() ||
+            capture_manager.isSnapshotting() ||
+            capture_preview_mode;
+
         // switch to record resolution if recording
-        if (capture_manager.isRecording() || capture_manager.isSnapshotting())
-            canvas_size = capture_manager.srcResolution();
+        if (use_capture_resolution)
+        {
+            // only preview when not recording
+            if (capture_preview_mode && !is_capturing)
+            {
+                SnapshotPresetList& presets = getSnapshotPresetManager()->allPresets();
+
+                // get selected "allPresets" index
+                int selected_preset_idx = settings_panel.getSelectedPresetIndex();
+
+                if (selected_preset_idx >= 0)
+                {
+                    CapturePreset& preset = presets[selected_preset_idx];
+                    canvas_size = preset.getResolution();
+                }
+            }
+            else
+            {
+                canvas_size = capture_manager.srcResolution();
+            }
+        }
 
         bool resized = canvas.resize(canvas_size.x, canvas_size.y);
         if (resized)
@@ -1538,7 +1594,7 @@ void MainWindow::populateViewport()
         else if (shared_sync.project_thread_started)
         {
             // Launch startup simulation 1 frame late once we have a valid canvas size
-            if (!project_worker()->getCurrentProject())
+            if (!project_worker()->getCurrentProject() && !project_worker()->isSwitchingProject())
             {
                 auto first_project = ProjectBase::projectInfoList().front();
                 project_worker()->setActiveProject(first_project->sim_uid);
@@ -1578,10 +1634,16 @@ void MainWindow::populateViewport()
                         if (encode_next_sim_frame)
                         {
                             canvas.readPixels(frame_data);
-                            capture_manager.encodeFrame(frame_data.data(), [&](bytebuf& data)
+                            capture_manager.encodeFrame(frame_data.data(), [&](EncodeFrame& data)
                             {
-                                const SnapshotPreset& preset = enabled_capture_presets[active_capture_preset];
-                                project_worker()->onEncodeFrame(data, active_capture_preset_request_id, preset);
+                                CapturePreset preset = capture_manager.isSnapshotting() ?
+                                    enabled_snapshot_presets[active_capture_preset] :
+                                    enabled_snapshot_presets[0]; // recording preset (multi-preset recording not supported)
+
+                                // convenience: Tell user whether preset is being used a video or snapshot
+                                preset.setVideo(capture_manager.isRecording());
+
+                                project_worker()->onEncodeFrame(data, active_snapshot_preset_request_id, preset);
                             });
                         }
                     }
@@ -1604,7 +1666,7 @@ void MainWindow::populateViewport()
         ImVec2 image_pos = ImGui::GetCursorScreenPos();
         ImVec2 image_size;
 
-        if (capture_manager.isRecording() || capture_manager.isSnapshotting())
+        if (use_capture_resolution)
         {
             float sw = client_size.x, sh = client_size.y; // calculates to image size (after scaling)
             float ox = 0, oy = 0;
@@ -1648,81 +1710,96 @@ void MainWindow::populateUI()
     if (!manageDockingLayout())
         return;
 
-    // Determine if we are ready to draw *before* populating simulation imgui attributes
+    //thread_queue.pump();
+
+    // determine if we are ready to draw *before* populating simulation imgui attributes
     {
         std::lock_guard<std::mutex> g(shared_sync.state_mutex);
         need_draw = shared_sync.frame_ready_to_draw;
     }
 
-    // Stall here (GUI-thread) until worker finishes copying data to live thread
+    // stall here (GUI-thread) until worker finishes copying data to live thread
     shared_sync.wait_until_live_buffer_updated();
 
-    // Force stall on live thread while we mutate the (now-synced) UI data
-    std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex);
-
-    // ------------------------------------------------------------------------------------------------------------
-    // For the rest of this scope, it's safe to mutate GUI data buffers in preparation for the next worker frame...
-    // ------------------------------------------------------------------------------------------------------------
-
-    bool collapse_layout = vertical_layout || platform()->max_char_rows() < 40.0f;
-
-    if (ProjectBase::projectInfoList().size() <= 1)
-        collapse_layout = false;
-
-
-    // ==== populate UI / draw nanovg overlay ====
-
-
-    // Shadow buffer is now up-to-date and free to access (while worker does processing)
     {
-        // Draw sidebar
+        // force stall on live thread while we mutate the (now-synced) UI data
+        ///std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex); // was this
+
+        // prevent deadlock if worker thread is waiting
+        std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex, std::defer_lock);
+        while (!shadow_lock.try_lock())
         {
-            //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            thread_queue.pump();
+            std::this_thread::yield();
+        }
 
-            if (sidebar_visible)
+        // ------------------------------------------------------------------------------------------------------------
+        // For the rest of this scope, it's safe to mutate GUI data buffers in preparation for the next worker frame...
+        // ------------------------------------------------------------------------------------------------------------
+
+        bool collapse_layout = vertical_layout || platform()->max_char_rows() < 40.0f;
+
+        if (ProjectBase::projectInfoList().size() <= 1)
+            collapse_layout = false;
+
+
+        // ==== populate UI / draw nanovg overlay ====
+
+
+        // shadow buffer is now up-to-date and free to access (while worker does processing)
+        {
+            // Draw sidebar
             {
-                if (collapse_layout)
-                    populateCollapsedLayout();
-                else
-                    populateExpandedLayout();
+                if (sidebar_visible)
+                {
+                    if (collapse_layout)
+                        populateCollapsedLayout();
+                    else
+                        populateExpandedLayout();
 
-                #ifdef BL_DEBUG_INCLUDE_LOG_TABS
-                if (!done_first_focus && focusWindow("Debug"))
-                    done_first_focus = true;
-                #else
-                if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
-                    done_first_focus = true;
-                #endif
+                    ///#ifdef BL_DEBUG_INCLUDE_LOG_TABS
+                    ///if (!done_first_focus && focusWindow("Debug"))
+                    ///    done_first_focus = true;
+                    ///#else
+                    if (!done_first_focus && focusWindow(collapse_layout ? "Active" : "Projects"))
+                        done_first_focus = true;
+                    ///#endif
+                }
+
+                populateOverlay();
+
+                //thread_queue.pump();
             }
 
-            //populateOverlay();
+            // Draw viewport
+            {
+                ImGuiWindowClass wc{};
+                wc.DockNodeFlagsOverrideSet = (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiWindowFlags_NoDocking;
+                ImGui::SetNextWindowClass(&wc);
 
-            //ImGui::PopStyleVar();
+                populateViewport();
+
+                //thread_queue.pump();
+            }
         }
 
-        // Draw viewport
+        if (sidebar_visible)
         {
-            ImGuiWindowClass wc{};
-            wc.DockNodeFlagsOverrideSet =
-                (int)ImGuiDockNodeFlags_NoTabBar |
-                (int)ImGuiWindowFlags_NoDocking;
+            ImGui::Begin("Settings", nullptr, window_flags);
+            {
+                populateToolbar();
+                settings_panel.populateSettings();
+            }
+            ImGui::End();
 
-            ImGui::SetNextWindowClass(&wc);
-            //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 3));
-
-            populateViewport();
+            //thread_queue.pump();
         }
+
+        // end mutex lock
     }
 
     if (sidebar_visible)
     {
-        ImGui::Begin("Settings", nullptr, window_flags);
-        {
-            populateToolbar();
-            settings_panel.populateSettings();
-        }
-        ImGui::End();
-
         #ifdef BL_DEBUG_INCLUDE_LOG_TABS
         ImGui::Begin("Debug"); // Begin Debug Window
         {
@@ -1730,9 +1807,7 @@ void MainWindow::populateUI()
             {
                 if (ImGui::BeginTabItem("Display"))
                 {
-                    // Debug DPI
                     dpiDebugInfo();
-
                     ImGui::EndTabItem();
                 }
 
@@ -1755,9 +1830,7 @@ void MainWindow::populateUI()
         #endif
     }
 
-    //ImGui::PopStyleVar();
-
-    // Always save capture output on main GUI thread (for Emscripten)
+    // always save capture output on main GUI thread (for Emscripten)
     checkCaptureComplete();
 
     is_editing_ui = _isEditingUI();
@@ -1765,7 +1838,7 @@ void MainWindow::populateUI()
     //static bool demo_open = true;
     //ImGui::ShowDemoWindow(&demo_open);
 
-    /// Debugging
+    /// debugging
     {
         // Debug Log
         //project_log.draw();
@@ -1788,6 +1861,8 @@ void MainWindow::populateUI()
         //);
         ImGui::End();*/
     }
+
+    ///gui_destruction_queue.flush();
 }
 
 BL_END_NS

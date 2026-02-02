@@ -253,7 +253,7 @@ namespace ImGui
         const float rounding = style.FrameRounding;
         const float t = (style.FrameBorderSize > 0.0f) ? style.FrameBorderSize : 1.0f;
 
-        const ImU32 col_bg = ImGui::GetColorU32(ImGuiCol_TitleBg);
+        const ImU32 col_bg = ImColor(0.0f, 0.0f, 0.0f, 0.1f);// ImGui::GetColorU32(ImGuiCol_TitleBg);
         const ImU32 col_border = ImGui::GetColorU32(ImGuiCol_Border);
         const ImDrawFlags rf = ImDrawFlags_RoundCornersBottomLeft | ImDrawFlags_RoundCornersBottomRight;
 
@@ -276,99 +276,11 @@ namespace ImGui
     // CollapsingHeaderBox / EndCollapsingHeaderBox
     // -------------------------
 
-    inline bool CollapsingHeaderBox(const char* id, bool open_by_default=false, float pad = bl::scale_size(10.0f), float extra = 3.0f)
-    {
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        DlCtx& c = box_dlctx(dl);
-        box_ensure_split(dl, c);
+    void BeginCollapsingHeaderContentsDisabled();
+    void EndCollapsingHeaderContentsDisabled();
 
-        const int my_depth = c.depth;
-        c.depth++;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-        const bool open = ImGui::CollapsingHeader(id, open_by_default ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-        ImGui::PopStyleVar();
-
-        const ImVec2 hmin = ImGui::GetItemRectMin();
-        const ImVec2 hmax = ImGui::GetItemRectMax();
-
-        float spacing = 0.5f;//  ImGui::GetStyle().ItemSpacing.y;
-        ImGui::Dummy(ImVec2(0, spacing));
-
-        if (!open)
-        {
-            c.depth--;
-            box_maybe_merge(dl, c);
-            return false;
-        }
-
-        CurrentBoxState st{};
-        st.kind = BoxKind::Header;
-        st.dl = dl;
-        st.pad = pad;
-        st.extra = extra;
-        st.depth = my_depth;
-        st.content_ch = c.content_ch;
-        st.header_min = hmin;
-        st.header_max = hmax;
-
-        st.start_cursor = ImGui::GetCursorScreenPos();
-        st.span_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x + st.extra*2);
-
-        box_stack().push_back(st);
-
-        ImGui::PushID(id);
-        box_begin_contents(box_stack().back());
-        return true;
-    }
-
-    inline void EndCollapsingHeaderBox(float end_spacing=4.0f)
-    {
-        auto& s = box_stack();
-        IM_ASSERT(!s.empty() && s.back().kind == BoxKind::Header);
-
-        //ImGui::Dummy(ImVec2(0, bl::scale_size(1.0f)));
-        ImGui::Dummy(ImVec2(0, 1.0f));
-
-        CurrentBoxState st = s.back();
-        s.pop_back();
-
-        ImGui::EndGroup();
-
-        // tight content bounds (group)
-        const ImVec2 content_max = ImGui::GetItemRectMax();
-
-        // RESTORE window rects so subsequent items use full width again
-        {
-            ImGuiWindow* window = ImGui::GetCurrentWindow();
-            window->WorkRect.Max.x = st.old_work_rect_max_x;
-            window->ContentRegionRect.Max.x = st.old_content_rect_max_x;
-        }
-
-
-        // outer frame (your old "midline of header" start)
-        const float y0 = (st.header_min.y + st.header_max.y) * 0.5f;
-        const float x0 = st.start_cursor.x - st.extra;
-        const float x1 = x0 + st.span_w;
-
-        ImVec2 outer_min(x0, y0);
-        ImVec2 outer_max(x1, content_max.y + st.pad);
-
-        // draw behind content
-        box_draw_bg_border(st, outer_min, outer_max);
-
-        // advance cursor below the box and restore X to normal content start
-        ImGui::SetCursorScreenPos(ImVec2(st.start_cursor.x, outer_max.y));
-        ImGui::Dummy(ImVec2(st.span_w, bl::scale_size(end_spacing)));
-
-        ImGui::PopID();
-
-        DlCtx& c = box_dlctx(st.dl);
-        c.depth--;
-        box_maybe_merge(st.dl, c);
-
-        
-    }
+    bool CollapsingHeaderBox(const char* id, bool open_by_default = false, float pad = bl::scale_size(10.0f), float extra = 3.0f);
+    void EndCollapsingHeaderBox(float end_spacing = 4.0f);
 
     // ---------------------
     // TabBox / EndTabBox
@@ -626,6 +538,8 @@ namespace ImGui
 
     inline void SwipeScrollWindow(float decay = 0.93f, float drag_threshold = bl::scale_size(20.0f))
     {
+        return;
+
         if (!bl::platform()->is_mobile())
             return;
 
