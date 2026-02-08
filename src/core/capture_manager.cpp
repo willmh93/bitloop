@@ -591,7 +591,7 @@ bool FFmpegWorker::finalize(CaptureManager* capture_manager)
     avio_close(format_context->pb);
     avformat_free_context(format_context);
 
-    capture_manager->onFinalized();
+    capture_manager->onFinalized(false);
 
     return true;
 }
@@ -634,10 +634,12 @@ void WebPWorker::process(CaptureManager* capture_manager, CaptureConfig capture_
             if (frame.empty())
             {
                 blPrint() << "frame is empty";
+                capture_manager->onFinalized(true);
+                break;
 
                 // Shouldn't occur, but if it does, check we're still recording and skip frame
                 if (!capture_manager->isRecording() && !capture_manager->isSnapshotting()) break;
-                continue;
+                    continue;
             }
 
             encodeFrame(frame);
@@ -798,7 +800,7 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
         capture_manager->capture_to_memory_complete.store(true, std::memory_order_release);
     }
 
-    capture_manager->onFinalized();
+    capture_manager->onFinalized(false);
 
     return true;
 }
@@ -808,7 +810,7 @@ bool WebPWorker::finalize(CaptureManager* capture_manager)
 bool CaptureManager::startCapture(CaptureConfig _config)
 {
     config = _config;
-
+    frame_count = 0;
     capture_to_memory_complete.store(false, std::memory_order_release);
 
     if (config.format == CaptureFormat::x264 || config.format == CaptureFormat::x265)
@@ -848,7 +850,7 @@ void CaptureManager::finalizeCapture()
     work_available_cond.notify_one();
 }
 
-void CaptureManager::onFinalized()
+void CaptureManager::onFinalized(bool error)
 {
     // called by encoder thread upon finalized...
 
@@ -862,7 +864,10 @@ void CaptureManager::onFinalized()
     encoder_busy.store(false, std::memory_order_release);
 
     any_capture_complete.store(true, std::memory_order_release);
+    capture_error.store(error, std::memory_order_release);
     clearFinalizeRequest();
+
+    frame_count = 0;
 
     // No more work to do - notify waiters.
     /// todo: Still needed if we only ever call from encoder thread?
@@ -899,12 +904,13 @@ void CaptureManager::preProcessFrameForEncoding(const uint8_t* src_data, bytebuf
 
 bool CaptureManager::encodeFrame(
     const uint8_t* data,
-    //std::function<void(bytebuf&)> preProcessedFrame,
     std::function<void(EncodeFrame&)> postProcessedFrame
 )
 {
     if (!isCaptureEnabled())
+    {
         return false;
+    }
 
     // Preprocess frame (supersampling, sharpening, flipping, etc...)
     /// todo: Move to worker?
@@ -913,29 +919,31 @@ bool CaptureManager::encodeFrame(
 
     timer0(PREPROCESS);
 
-    // todo: Apply flipping before preprocessing (more intuitive for user)
-    //preProcessedFrame(preprocessed_frame);
     preProcessFrameForEncoding(data, preprocessed_frame);
+
+    // debug test (no preprocessing)
+    //preprocessed_frame.resize(config.dstBytes());
+    //memcpy(preprocessed_frame.frameData(), data, config.dstBytes());
+
     postProcessedFrame(preprocessed_frame);
 
     timer1(PREPROCESS);
 
     // If encoder still busy with previous frame, do not block here
     if (encoder_busy.load(std::memory_order_acquire))
+    {
         return false;
+    }
 
     // Move the frame into 'pending_frame' for the encoder thread to grab
     {
         blPrint() << "Set pending_frame...";
 
         std::lock_guard<std::mutex> lock(pending_mutex);
-        pending_frame.resize(config.srcBytes());
 
         // copy all data to pending_frame (pixels, frame metadata, etc)
         pending_frame.loadFrom(preprocessed_frame);
-
-        //std::memcpy(pending_frame.frameData(), preprocessed_frame.frameData(), config.dstBytes());
-
+        frame_count++;
 
         // Mark busy only after the buffer is fully populated
         blPrint() << "encoder_busy.store(true)";
@@ -1018,9 +1026,10 @@ bool CaptureManager::encodeFrameTexture(
 
     {
         std::lock_guard<std::mutex> lock(pending_mutex);
+
         pending_frame.loadFrom(preprocessed_frame);
-        //pending_frame.resize(config.dstBytes());
-        //std::memcpy(pending_frame.data(), preprocessed_frame.frameData(), config.dstBytes());
+        frame_count++;
+
         encoder_busy.store(true, std::memory_order_release);
     }
 

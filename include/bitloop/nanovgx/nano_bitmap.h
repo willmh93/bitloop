@@ -31,7 +31,7 @@ protected:
 
 public:
 
-    Image() : RasterGridDimensions(0, 0), colors(nullptr) {}
+    Image() : RasterGrid(0, 0), colors(nullptr) {}
 
     [[nodiscard]] int imageId() const { return nano_img; }
     [[nodiscard]] const uint8_t* data() const { return pixels.data(); }
@@ -39,7 +39,7 @@ public:
     void create(int w, int h) 
     {
         //raster_w = w; raster_h = h;
-        setRasterSize(w, h);
+        RasterGrid::setRasterSize(w, h);
         pixels.assign(size_t(w) * h * 4, 0);
         colors = reinterpret_cast<uint32_t*>(&pixels.front());
         pending_resize = true;

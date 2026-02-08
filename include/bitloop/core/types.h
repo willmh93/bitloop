@@ -1608,3 +1608,19 @@ constexpr I operator^(I a, E b) noexcept {
     using U = enum_underlying_t<E>;
     return static_cast<I>(static_cast<I> (a) ^ static_cast<I>(static_cast<U>(b)));
 }
+
+
+// handy fixed-bit enums for constexpr dispatch tables
+enum struct Enum_0_2 : uint8_t { _0, _1, _2, COUNT };
+enum struct Enum_0_3 : uint8_t { _0, _1, _2, _3, COUNT };
+enum struct Enum_0_4 : uint8_t { _0, _1, _2, _3, _4, COUNT };
+enum struct Enum_0_5 : uint8_t { _0, _1, _2, _3, _4, _5, COUNT };
+enum struct Enum_0_6 : uint8_t { _0, _1, _2, _3, _4, _5, _6, COUNT };
+enum struct Enum_0_7 : uint8_t { _0, _1, _2, _3, _4, _5, _6, _7, COUNT };
+
+bl_enable_enum_bitops(Enum_0_2);
+bl_enable_enum_bitops(Enum_0_3);
+bl_enable_enum_bitops(Enum_0_4);
+bl_enable_enum_bitops(Enum_0_5);
+bl_enable_enum_bitops(Enum_0_6);
+bl_enable_enum_bitops(Enum_0_7);

@@ -48,8 +48,11 @@ struct ScopedGLState
     GLint prev_fbo = 0;
     GLint prev_program = 0;
     GLint prev_vao = 0;
+
     GLint prev_active_tex = 0;
-    GLint prev_tex2d = 0;
+    GLint prev_tex2d_active = 0;
+    GLint prev_tex2d0 = 0;
+
     GLint prev_viewport[4] = { 0, 0, 0, 0 };
     GLint prev_pack = 0;
     GLint prev_unpack = 0;
@@ -59,37 +62,42 @@ struct ScopedGLState
     GLboolean scissor = GL_FALSE;
     GLboolean cull = GL_FALSE;
 
-#if defined(GL_FRAMEBUFFER_SRGB)
+    #if defined(GL_FRAMEBUFFER_SRGB)
     GLboolean framebuffer_srgb = GL_FALSE;
-#endif
+    #endif
 
     ScopedGLState()
     {
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
         glGetIntegerv(GL_CURRENT_PROGRAM, &prev_program);
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vao);
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex2d);
         glGetIntegerv(GL_VIEWPORT, prev_viewport);
         glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack);
         glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_unpack);
+
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex2d_active);
+
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex2d0);
+        glActiveTexture((GLenum)prev_active_tex);
 
         depth_test = glIsEnabled(GL_DEPTH_TEST);
         blend = glIsEnabled(GL_BLEND);
         scissor = glIsEnabled(GL_SCISSOR_TEST);
         cull = glIsEnabled(GL_CULL_FACE);
 
-#if defined(GL_FRAMEBUFFER_SRGB)
+        #if defined(GL_FRAMEBUFFER_SRGB)
         framebuffer_srgb = glIsEnabled(GL_FRAMEBUFFER_SRGB);
-#endif
+        #endif
     }
 
     ~ScopedGLState()
     {
-#if defined(GL_FRAMEBUFFER_SRGB)
+        #if defined(GL_FRAMEBUFFER_SRGB)
         if (framebuffer_srgb) glEnable(GL_FRAMEBUFFER_SRGB);
         else glDisable(GL_FRAMEBUFFER_SRGB);
-#endif
+        #endif
 
         if (depth_test) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
         if (blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
@@ -103,11 +111,17 @@ struct ScopedGLState
 
         glUseProgram(prev_program);
         glBindVertexArray(prev_vao);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)prev_tex2d0);
+
         glActiveTexture((GLenum)prev_active_tex);
-        glBindTexture(GL_TEXTURE_2D, (GLuint)prev_tex2d);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)prev_tex2d_active);
+
         glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prev_fbo);
     }
 };
+
 
 static bool compile_shader(GLuint& out_shader, GLenum stage, const char* src)
 {
@@ -453,6 +467,8 @@ bool CapturePreprocessor::ensureTargets(const IVec2& dst_resolution)
 
 bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf* out_rgba)
 {
+    ScopedGLState _gl;
+
     if (!ensureInitialized())
         return false;
 
@@ -463,7 +479,6 @@ bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreproc
     if (!ensureTargets(params.dst_resolution))
         return false;
 
-    ScopedGLState _gl;
 
 #if defined(GL_FRAMEBUFFER_SRGB)
     glDisable(GL_FRAMEBUFFER_SRGB);
@@ -526,10 +541,13 @@ bool CapturePreprocessor::preprocessRGBA8(const uint8_t* src_rgba, const Capture
         return false;
 
     glBindTexture(GL_TEXTURE_2D, (GLuint)upload_tex);
+    GLint prev_unpack = 4;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_unpack);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
         params.src_resolution.x, params.src_resolution.y,
         GL_RGBA, GL_UNSIGNED_BYTE, src_rgba);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_unpack);
 
     return runPipeline(upload_tex, params, &out_rgba);
 }

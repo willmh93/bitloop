@@ -2,12 +2,9 @@
 #include <bitloop/core/main_window.h>
 #include <bitloop/core/project_worker.h>
 #include <bitloop/util/text_util.h>
-#include <bitloop/imguix/imgui_debug_ui.h>
-
-#include <imgui_stdlib.h>
+//#include <bitloop/imguix/imgui_debug_ui.h>
 
 #include <filesystem>
-#include <regex>
 
 #ifndef __EMSCRIPTEN__
 #include <fstream>
@@ -40,6 +37,13 @@ void ImDebugPrint(const char* fmt, ...)
 
 #ifndef __EMSCRIPTEN__
 
+struct Token
+{
+    enum class Kind { Lit, Index, Alias } kind = Kind::Lit;
+    std::string lit; 
+    int pad_width = 0;
+};
+
 // returns npos if not found
 static size_t find_insensitive(std::string_view txt, std::string_view substr_txt, size_t from)
 {
@@ -57,7 +61,6 @@ static size_t find_insensitive(std::string_view txt, std::string_view substr_txt
     }
     return std::string_view::npos;
 }
-
 static std::string normalize_extension(std::string_view ext)
 {
     if (ext.empty()) return {};
@@ -68,14 +71,6 @@ static std::string normalize_extension(std::string_view ext)
     out.append(ext.begin(), ext.end());
     return out;
 }
-
-struct Token
-{
-    enum class Kind { Lit, Index, Alias } kind = Kind::Lit;
-    std::string lit;   // Lit
-    int pad_width = 0; // Index (%0Nd)
-};
-
 static void push_lit(std::vector<Token>& toks, std::string&& s)
 {
     if (s.empty()) return;
@@ -89,13 +84,9 @@ static void push_lit(std::vector<Token>& toks, std::string&& s)
         toks.push_back(std::move(t));
     }
 }
-
-// tokenizes one path segment:
-// %s => alias wildcard
-// first %d/%0Nd => index (global)
-// %% => '%'
 static std::vector<Token> tokenize_segment(std::string_view fmt, bool& have_index_global)
 {
+    // tokenizes one path segment: %s => alias wildcard; first %d/%0Nd => index (global); %% => '%'
     std::vector<Token> toks;
     std::string cur;
     cur.reserve(fmt.size());
@@ -167,14 +158,9 @@ static std::vector<Token> tokenize_segment(std::string_view fmt, bool& have_inde
     push_lit(toks, std::move(cur));
     return toks;
 }
-
-// backtracking matcher for ONE segment: Alias is wildcard; Index parses digits and outputs idx.
-static bool match_segment_and_extract_index(
-    const std::vector<Token>& toks,
-    std::string_view segment,
-    bool& idx_set_inout,
-    int& idx_inout)
+static bool match_segment_and_extract_index(const std::vector<Token>& toks, std::string_view segment, bool& idx_set_inout, int& idx_inout)
 {
+    // backtracking matcher for ONE segment. Alias is wildcard; Index parses digits and outputs idx
     struct State { size_t ti, pos; bool idx_set; int idx; };
     std::vector<State> stack;
     stack.push_back({ 0, 0, idx_set_inout, idx_inout });
@@ -259,10 +245,35 @@ static bool match_segment_and_extract_index(
 
     return false;
 }
+static bool path_contains(const std::filesystem::path& root, const std::filesystem::path& p)
+{
+    std::error_code ec1, ec2;
+    std::filesystem::path pc = std::filesystem::weakly_canonical(p, ec1);
+    std::filesystem::path rootc = std::filesystem::weakly_canonical(root, ec2);
 
-// returns max index matched by rel_format under base_dir.
-// %s (alias) is treated as wildcard, and extension is ignored (matches by stem).
-int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_format)
+    if (ec1 || ec2)
+    {
+        pc = p.lexically_normal();
+        rootc = root.lexically_normal();
+    }
+
+    if (pc == rootc) return true;
+    std::filesystem::path rel = pc.lexically_relative(rootc);
+
+    auto s = rel.native();
+    return !s.empty() && !(s.size() >= 2 && s[0] == '.' && s[1] == '.');
+}
+static bool ensure_parent_directories_exist(const std::filesystem::path& file_path, std::error_code& ec)
+{
+    ec.clear();
+    const std::filesystem::path parent = file_path.parent_path();
+    if (parent.empty()) return true; // nothing to create
+    return std::filesystem::create_directories(parent, ec);
+}
+
+// returns max index matched by rel_format under base_dir
+// %s (alias) is treated as wildcard, and extension is ignored (matches by stem)
+static int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_format)
 {
     std::filesystem::path fmt_path{ std::string(rel_format) };
 
@@ -395,11 +406,7 @@ int getHighestCaptureIndex(std::string_view base_dir, std::string_view rel_forma
 }
 
 // expand rel_format with index + alias, append fallback_extension only if format filename has no extension
-std::string constructCapturePath(
-    std::string_view rel_format,
-    int index,
-    std::string_view alias,
-    std::string_view fallback_extension = ".webp")
+std::string constructCapturePath(std::string_view rel_format, int index, std::string_view alias, std::string_view fallback_extension = ".webp")
 {
     std::filesystem::path fmt_path{ std::string(rel_format) };
     const bool fmt_has_ext = fmt_path.filename().has_extension();
@@ -453,26 +460,6 @@ std::string constructCapturePath(
 
     return std::filesystem::path(out).lexically_normal().string();
 }
-
-static bool path_contains(const std::filesystem::path& root, const std::filesystem::path& p)
-{
-    std::error_code ec1, ec2;
-    std::filesystem::path pc = std::filesystem::weakly_canonical(p, ec1);
-    std::filesystem::path rootc = std::filesystem::weakly_canonical(root, ec2);
-
-    if (ec1 || ec2)
-    {
-        pc = p.lexically_normal();
-        rootc = root.lexically_normal();
-    }
-
-    if (pc == rootc) return true;
-    std::filesystem::path rel = pc.lexically_relative(rootc);
-
-    auto s = rel.native();
-    return !s.empty() && !(s.size() >= 2 && s[0] == '.' && s[1] == '.');
-}
-
 std::string getPreferredCapturesDirectory() {
     std::filesystem::path path = platform()->executable_dir();
     std::filesystem::path project_root = std::filesystem::path(CMAKE_SOURCE_DIR).lexically_normal();
@@ -497,14 +484,6 @@ std::string getPreferredCapturesDirectory() {
 
     path /= "captures";
     return path.lexically_normal().string();
-}
-
-static bool ensure_parent_directories_exist(const std::filesystem::path& file_path, std::error_code& ec)
-{
-    ec.clear();
-    const std::filesystem::path parent = file_path.parent_path();
-    if (parent.empty()) return true; // nothing to create
-    return std::filesystem::create_directories(parent, ec);
 }
 
 std::filesystem::path MainWindow::getProjectSnapshotsDir()
@@ -916,44 +895,58 @@ void MainWindow::endRecording()
         capture_manager.finalizeCapture();
     }
 }
+
+
+
 void MainWindow::checkCaptureComplete()
 {
+    static bool show_error_box = false;
+    ImGui::DrawMessageBox("Capture Error", &show_error_box, "Reason: Undetermined", scale_size(350, 170));
+
     bool captured_to_memory = false;
-    if (capture_manager.handleCaptureComplete(captured_to_memory))
+    bool error = false;
+    if (capture_manager.handleCaptureComplete(&captured_to_memory, &error))
     {
-        if (captured_to_memory)
+        if (error)
         {
-            // capture to memory is currently always webp... (still OR webp animation)
-            bytebuf data;
-            capture_manager.takeCompletedCaptureFromMemory(data);
-
-            #ifdef __EMSCRIPTEN__
-            platform()->download_snapshot_webp(data, "snapshot.webp");
-            #else
-            std::ofstream out(capture_manager.filename(), std::ios::out | std::ios::binary);
-            out.write((const char*)data.data(), data.size());
-            out.close();
-            #endif
-
-            // todo: When you include other snapshot types (PNG, JPEG, etc) use a more robust "is snapshot" check
-            if (capture_manager.format() == CaptureFormat::WEBP_SNAPSHOT)
-            {
-                // do we have another preset to capture?
-                active_capture_preset++;
-                if (active_capture_preset < enabled_snapshot_presets.size())
-                {
-                    // todo: maybe queue to begin capture at more suitable time
-                    queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET });
-                }
-                else
-                {
-                    is_snapshotting = false;
-                }
-            }
+            show_error_box = true;
         }
         else
         {
-            // ffmpeg saving to disk handled automatically by encoder...
+            if (captured_to_memory)
+            {
+                // capture to memory is currently always webp... (still OR webp animation)
+                bytebuf data;
+                capture_manager.takeCompletedCaptureFromMemory(data);
+
+                #ifdef __EMSCRIPTEN__
+                platform()->download_snapshot_webp(data, "snapshot.webp");
+                #else
+                std::ofstream out(capture_manager.filename(), std::ios::out | std::ios::binary);
+                out.write((const char*)data.data(), data.size());
+                out.close();
+                #endif
+
+                // todo: When you include other snapshot types (PNG, JPEG, etc) use a more robust "is snapshot" check
+                if (capture_manager.format() == CaptureFormat::WEBP_SNAPSHOT)
+                {
+                    // do we have another preset to capture?
+                    active_capture_preset++;
+                    if (active_capture_preset < enabled_snapshot_presets.size())
+                    {
+                        // todo: maybe queue to begin capture at more suitable time
+                        queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET });
+                    }
+                    else
+                    {
+                        is_snapshotting = false;
+                    }
+                }
+            }
+            else
+            {
+                // ffmpeg saving to disk handled automatically by encoder...
+            }
         }
 
         // untoggle
@@ -1268,6 +1261,21 @@ void MainWindow::populateToolbar()
     if (toolbarButton("##snapshot", "snapshot", snapshot, ImVec2(size, size)))
     {
         beginSnapshotList(getSettingsConfig()->enabledImagePresets(), "snap%d_%s", 0);
+    }
+
+    if (getSettingsConfig()->show_fps)
+    {
+        ImGui::SameLine();
+
+        const float pad_y = ImGui::GetStyle().FramePadding.y;
+        float text_h = ImGui::GetTextLineHeight();
+        float y_off = (size - text_h) * 0.5f;
+
+        // move cursor down within the current line before rendering text
+        ImVec2 p = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(ImVec2(p.x, p.y + y_off - pad_y));
+
+        ImGui::Text("FPS: %.1f", fps_timer.getFPS());
     }
 
     ImGui::EndChild();
@@ -1616,14 +1624,27 @@ void MainWindow::populateViewport()
                 // ---------------------------------------------------------------------------------------
 
                 /// todo: Project::_projectProcess() must have just occured
-                /// this would seem like a smarter place to call invokeScheduledCalls()
-                /// to ensure bl_schedule lamdas can safely access both live/shadow data
+                /// this would seem like a smarter place to block and call invokeScheduledCalls() (on worker thread)
+                /// to ensure bl_schedule lamdas can safely access both live/shadow data. The difficulty is not breaking
+                /// variable syncing as it needs to be called before pushDataToUnchangedShadowVars(). It's best thought of
+                /// as part of _projectProcess.
+                ///
+                /// Rather than an aggressive block/wait, *if* there are any scheduled calls, lock shadow_lock, remark live/shadow
+                /// vars, invoke scheduled calls and then repush with pushDataToUnchangedShadowVars? (just like you currently do
+                /// for _projectProcess)
 
-                canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
-                project_worker()->draw();
-                canvas.end();
+                if (canvas.isDirty())
+                {
+                    canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
+                    project_worker()->draw();
+                    canvas.end();
 
-                // Even if not recording, behave as though we are for testing purposes
+                    canvas.setDirty(false);
+                }
+
+                fps_timer.tick();
+
+                // Even if not recording, behave as though we are for consistency
                 if (project_worker()->getCurrentProject() &&
                     !project_worker()->getCurrentProject()->isPaused())
                 {
@@ -1634,6 +1655,9 @@ void MainWindow::populateViewport()
                         if (encode_next_sim_frame)
                         {
                             canvas.readPixels(frame_data);
+
+                            // capture_manager might ignore frame if setCaptureEnabled(true) hasn't been called yet,
+                            // which only happens at the start of the *next* worker frame (to avoid capturing an old invalid frame)
                             capture_manager.encodeFrame(frame_data.data(), [&](EncodeFrame& data)
                             {
                                 CapturePreset preset = capture_manager.isSnapshotting() ?

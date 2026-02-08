@@ -26,6 +26,9 @@ concept HasEq = requires(const T & x, const T & y) {
 };
 
 template<class T>
+concept TriviallyComparable = std::is_trivially_copyable_v<T>;
+
+template<class T>
 concept Ostreamable = requires(std::ostream & os, const T & t) {
     { os << t } -> std::same_as<std::ostream&>;
 };
@@ -51,10 +54,10 @@ struct TypeOps
             return A.hash() == B.hash();
         else if constexpr (HasEq<Store>)
             return A == B;
-        else if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
+        else if constexpr (TriviallyComparable<Store>)
             return std::memcmp(&A, &B, sizeof(Store)) == 0;
         else
-            static_assert(HasEq<Store>, "Store must be equality comparable or trivially copyable");
+            return false;
     }
 
     static void store(std::any& dst, const void* src)
@@ -86,10 +89,10 @@ struct TypeOps
             return A.hash() == B.hash();
         else if constexpr (HasEq<Store>)
             return A == B;
-        else if constexpr (std::is_standard_layout_v<Store> && std::is_trivially_copyable_v<Store>)
+        else if constexpr (TriviallyComparable<Store>)
             return std::memcmp(&A, &B, sizeof(Store)) == 0;
         else
-            static_assert(HasEq<Store>, "Store must be equality comparable or trivially copyable");
+            return false;
     }
 
     static void print(std::ostream& os, const std::any& a)
@@ -135,19 +138,23 @@ struct TypeOps<T[N], void>
                 std::copy(static_cast<const Elem*>(a), static_cast<const Elem*>(a) + N, A.begin());
             return A.hash() == B.hash();
         }
+        else if constexpr (TriviallyComparable<Elem>)
+        {
+            return std::memcmp(a, B.data(), sizeof(Elem) * N) == 0;
+        }
+        else if constexpr (HasEq<Elem>)
+        {
+            const Elem* p = static_cast<const Elem*>(a);
+            for (std::size_t i = 0; i < N; ++i)
+            {
+                if (!(p[i] == B[i]))
+                    return false;
+            }
+            return true;
+        }
         else
         {
-            if constexpr (std::is_trivially_copyable_v<Elem>)
-            {
-                Store A{};
-                std::memcpy(A.data(), a, sizeof(Elem) * N);
-                return std::equal(A.begin(), A.end(), B.begin());
-            }
-            else
-            {
-                const Elem* p = static_cast<const Elem*>(a);
-                return std::equal(p, p + N, B.begin());
-            }
+            return false;
         }
     }
 
@@ -190,8 +197,19 @@ struct TypeOps<T[N], void>
 
         if constexpr (VarHasHashMethod<Store>)
             return A.hash() == B.hash();
+        else if constexpr (TriviallyComparable<Store>)
+            return std::memcmp(&A, &B, sizeof(Store)) == 0;
+        else if constexpr (HasEq<Elem>)
+        {
+            for (std::size_t i = 0; i < N; ++i)
+            {
+                if (!(A[i] == B[i]))
+                    return false;
+            }
+            return true;
+        }
         else
-            return std::equal(A.begin(), A.end(), B.begin());
+            return false;
     }
 
     static void print(std::ostream& os, const std::any& a)
@@ -200,7 +218,10 @@ struct TypeOps<T[N], void>
         os << "[";
         for (std::size_t i = 0; i < N; ++i) {
             if (i) os << ", ";
-            os << s[i];
+            if constexpr (Ostreamable<Elem>)
+                os << s[i];
+            else
+                os << "<unprintable>";
         }
         os << "]";
     }

@@ -278,6 +278,7 @@ namespace ImGui
 
     void BeginCollapsingHeaderContentsDisabled();
     void EndCollapsingHeaderContentsDisabled();
+    bool CollapsingHeaderContentsDisabled();
 
     bool CollapsingHeaderBox(const char* id, bool open_by_default = false, float pad = bl::scale_size(10.0f), float extra = 3.0f);
     void EndCollapsingHeaderBox(float end_spacing = 4.0f);
@@ -613,6 +614,102 @@ namespace ImGui
             if (fabsf(vy) < 0.01f)
                 vy = 0.0f;
         }
+    }
+
+    inline bool DrawMessageBox(
+        const char* title,
+        bool* show,
+        std::string_view reason,
+        ImVec2 size = ImVec2(350.0f, 170.0f),
+        const char* ok_label = "Close")
+    {
+        if (!show || !*show)
+            return false;
+
+        if (reason.empty())
+            reason = "Undetermined";
+
+        if (!ImGui::IsPopupOpen(title))
+            ImGui::OpenPopup(title);
+
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        const ImGuiStyle& style = ImGui::GetStyle();
+
+        const float width = (size.x > 0.0f) ? size.x : 420.0f;
+        const float wrap_width = std::max(1.0f, width - style.WindowPadding.x * 2.0f);
+
+        const ImVec2 text_size = ImGui::CalcTextSize(
+            reason.data(), reason.data() + reason.size(),
+            false, wrap_width);
+
+        const float button_h = ImGui::GetFrameHeight();
+        const float needed_h =
+            style.WindowPadding.y * 2.0f +
+            text_size.y +
+            style.ItemSpacing.y +
+            button_h + 50;
+
+        const float max_h =
+            (size.y > 0.0f) ? size.y : (vp->WorkSize.y * 0.9f);
+
+        const float window_h = std::min(needed_h, max_h);
+        const bool needs_scroll = (needed_h > window_h + 0.5f);
+
+        ImGui::SetNextWindowSize(ImVec2(width, window_h), ImGuiCond_Always);
+
+        const ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoSavedSettings;
+
+        if (!ImGui::BeginPopupModal(title, show, flags))
+            return false;
+
+        if (needs_scroll)
+        {
+            const float child_h = std::max(
+                0.0f,
+                ImGui::GetContentRegionAvail().y - (style.ItemSpacing.y + button_h + 20));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::BeginChild("##error_msg", ImVec2(0.0f, child_h), false);
+
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
+            ImGui::TextUnformatted(reason.data(), reason.data() + reason.size());
+            ImGui::PopTextWrapPos();
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+        }
+        else
+        {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
+            ImGui::TextUnformatted(reason.data(), reason.data() + reason.size());
+            ImGui::PopTextWrapPos();
+        }
+
+        ImGui::Dummy(ImVec2(0, 10));
+
+        const float button_w = 110.0f;
+        const float avail_x = ImGui::GetContentRegionAvail().x;
+        const float button_x = (avail_x - button_w) * 0.5f;
+        if (button_x > 0.0f)
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + button_x);
+
+        bool accepted = ImGui::Button(ok_label, ImVec2(button_w, 0.0f));
+        accepted = accepted || ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
+        const bool cancelled = ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+        if (accepted || cancelled)
+        {
+            *show = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+        return true;
     }
 }
 

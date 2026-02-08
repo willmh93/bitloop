@@ -36,9 +36,16 @@ void ProjectWorker::_destroyActiveProject()
     {
         current_project->_projectDestroy();
 
-        // destroys layout, which destroys viewports which calls sceneDestroy on unmount
-        delete current_project;
+        // force any UI / deferred destructions to happen on the main GUI thread *before* deleting the project/scenes
+        // current_project->ui==nullptr after this
+        main_window()->threadQueue().invokeBlocking([&]()
+        {
+            current_project->_destroyGUI();
+            main_window()->threadQueue().drain();
+        });
 
+        // destroys layout, which destroys viewports, which calls sceneDestroy on unmount
+        delete current_project;
         current_project = nullptr;
     }
 }
@@ -54,6 +61,7 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
     {
         project_log.clear();
 
+        // delete the actual project, then create new
         _destroyActiveProject();
 
         current_project = ProjectBase::findProjectInfo(e.project_uid)->creator();
@@ -108,6 +116,8 @@ void ProjectWorker::worker_loop()
 {
     //bool shadow_changed = false;
 
+    bool immediate_update_requested = false;
+
     while (!shared_sync.quitting.load())
     {
         /// ────── Safe place to control project changes ──────
@@ -133,6 +143,8 @@ void ProjectWorker::worker_loop()
         capture_manager->setCaptureEnabled(true);
 
         // Start frame timer
+        SimpleTimer frame_timer;
+
         auto frame_t0 = std::chrono::steady_clock::now();
 
         /// ────── Do heavy work (while GUI thread redraws cached frame) ──────
@@ -173,6 +185,11 @@ void ProjectWorker::worker_loop()
                 /// ────── Process simulation (potentially heavy work) ──────
                 current_project->_projectProcess();
 
+                if (current_project->immediate_update_requested)
+                {
+                    immediate_update_requested = true;
+                    current_project->immediate_update_requested = false;
+                }
                 
                 /// ────── Update shadow buffer with *changed* live variables ──────
                 {
@@ -205,14 +222,21 @@ void ProjectWorker::worker_loop()
         /// ────── Wait for GUI to draw the freshly prepared data ──────
         shared_sync.wait_until_gui_consumes_frame();
 
-        // Wait 16ms (minus time taken to draw the frame)
-        using namespace std::chrono;
-        auto frame_dt = steady_clock::now() - frame_t0;
-        Uint64 frame_ns = static_cast<Uint64>(duration_cast<nanoseconds>(frame_dt).count());
-        Uint64 target_ns = 1000000000llu / main_window()->getFPS();
-        Uint64 delay_ns = std::max(0llu, target_ns - frame_ns);
-        if (delay_ns > 0)
-            SDL_DelayPrecise(delay_ns);
+        // delay to achieve target fps (minus time taken to draw the frame)
+        if (!immediate_update_requested)
+        {
+            using namespace std::chrono;
+            auto frame_dt = steady_clock::now() - frame_t0;
+            Uint64 frame_ns = static_cast<Uint64>(duration_cast<nanoseconds>(frame_dt).count());
+            Uint64 target_ns = 1000000000llu / main_window()->getFPS();
+            Uint64 delay_ns = std::max(0llu, target_ns - frame_ns);
+            if (delay_ns > 0)
+                SDL_DelayPrecise(delay_ns);
+        }
+        else
+        {
+            immediate_update_requested = false;
+        }
     }
 }
 

@@ -206,7 +206,6 @@ void Canvas::create(double _global_scale)
     setGlobalScale(_global_scale);
 
     context.default_font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
-    context.default_font->setSize(16.0f);
 }
 
 Canvas::~Canvas()
@@ -285,9 +284,12 @@ bool Canvas::readPixels(std::vector<uint8_t>& out_rgba)
     out_rgba.resize(bytes);
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    GLint prev_pack = 4;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
 
     glReadPixels(0, 0, fbo_width, fbo_height, GL_RGBA, GL_UNSIGNED_BYTE, out_rgba.data());
+    glPixelStorei(GL_PACK_ALIGNMENT, prev_pack);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     return true;

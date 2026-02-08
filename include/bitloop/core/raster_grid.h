@@ -44,6 +44,17 @@ struct TileBlockProgress
     void reset_progress_only() {
         std::fill(owner_cursor.begin(), owner_cursor.end(), 0);
     }
+
+    bool finished()
+    {
+        const int N = static_cast<int>(blocks.size());
+        bool ret = true;
+        for (int k = 0; k < owner_count; ++k) {
+            const int bi = k + owner_cursor[k] * owner_count;
+            if (bi < N) { ret = false; break; }
+        }
+        return ret;
+    }
 };
 
 namespace detail
@@ -116,7 +127,7 @@ namespace detail
 }
 
 // w/h info for both 'Image' and 'RasterGrid' (diamond inheritance)
-struct RasterGridDimensions
+struct RasterGrid
 {
     union
     {
@@ -124,7 +135,7 @@ struct RasterGridDimensions
         IVec2 raster_size;
     };
 
-    RasterGridDimensions(int w = 0, int h = 0)
+    RasterGrid(int w = 0, int h = 0)
         : raster_w(w), raster_h(h) {}
 
     int rasterWidth() const { return raster_w; }
@@ -137,11 +148,6 @@ struct RasterGridDimensions
         raster_w = w;
         raster_h = h;
     }
-};
-
-class RasterGrid : public virtual RasterGridDimensions
-{
-public:
 
     template<typename Callback>
     bool forEachPixel(
@@ -150,94 +156,196 @@ public:
         int thread_count = Thread::threadCount(),
         int timeout_ms = 0)
     {
-        static_assert(std::is_invocable_r_v<void, Callback, int, int>,
-            "Callback must be: void(int x, int y)");
+        using CallbackT = std::decay_t<Callback>;
+        using Ret = std::invoke_result_t<CallbackT&, int, int>;
+
+        static_assert(std::is_void_v<Ret> || std::is_same_v<std::remove_cvref_t<Ret>, bool>,
+            "Callback must be: void(int x, int y) or bool(int x, int y)");
+
+        CallbackT cb = std::forward<Callback>(callback);
 
         auto timeout = timeout_ms ?
             std::chrono::milliseconds{ timeout_ms } :
             std::chrono::steady_clock::duration::max();
 
-        if (thread_count > 0)
+        if constexpr (std::is_void_v<Ret>)
         {
-            auto start_time = std::chrono::steady_clock::now();
-
-            std::vector<std::future<void>> futures(thread_count);
-            std::vector<std::atomic<bool>> active_threads(thread_count);
-
-            for (int ti = 0; ti < thread_count; ti++)
-                active_threads[ti].store(false);
-
-            std::atomic<bool> timed_out{ false };
-
-            // Continuously spin checking for idle threads and scheduling new rows...
-            while (!timed_out.load(std::memory_order_relaxed))
+            if (thread_count > 0)
             {
+                auto start_time = std::chrono::steady_clock::now();
+
+                std::vector<std::future<void>> futures(thread_count);
+                std::vector<std::atomic<bool>> active_threads(thread_count);
+
                 for (int ti = 0; ti < thread_count; ti++)
+                    active_threads[ti].store(false, std::memory_order_relaxed);
+
+                std::atomic<bool> timed_out{ false };
+
+                while (!timed_out.load(std::memory_order_relaxed))
                 {
-                    if (timed_out.load(std::memory_order_relaxed))
-                        break;
-
-                    if (active_threads[ti].load(std::memory_order_relaxed))
-                        continue;
-
-                    // Found an idle thread...
-
-                    const int thread_index = ti;
-                    const int row = current_row++;
-
-                    if (row >= raster_h)
+                    for (int ti = 0; ti < thread_count; ti++)
                     {
-                        timed_out.store(true);
-                        break;
+                        if (timed_out.load(std::memory_order_relaxed))
+                            break;
+
+                        if (active_threads[ti].load(std::memory_order_relaxed))
+                            continue;
+
+                        const int thread_index = ti;
+                        const int row = current_row++;
+
+                        if (row >= raster_h)
+                        {
+                            timed_out.store(true, std::memory_order_relaxed);
+                            break;
+                        }
+
+                        active_threads[ti].store(true, std::memory_order_relaxed);
+
+                        futures[ti] = Thread::pool().submit_task([&, row, thread_index]()
+                        {
+                            for (int bmp_x = 0; bmp_x < raster_w; ++bmp_x)
+                                std::invoke(cb, bmp_x, row);
+
+                            if (std::chrono::steady_clock::now() - start_time >= timeout)
+                            {
+                                timed_out.store(true, std::memory_order_relaxed);
+                            }
+                            else
+                            {
+                                active_threads[thread_index].store(false, std::memory_order_relaxed);
+                            }
+                        });
                     }
 
-                    active_threads[ti].store(true);
-
-                    futures[ti] = Thread::pool().submit_task([&, row, thread_index]()
-                    {
-                        for (int bmp_x = 0; bmp_x < raster_w; ++bmp_x)
-                            std::forward<Callback>(callback)(bmp_x, row);
-
-                        // After each row solved, check if timeout exceeded
-                        if (std::chrono::steady_clock::now() - start_time >= timeout)
-                        {
-                            // If so, signal that we shouldn't pick up any new tasks - break out the loop
-                            timed_out.store(true);
-                        }
-                        else
-                        {
-                            // Otherwise, schedule the next available row
-                            active_threads[thread_index].store(false);
-                        }
-                    });
+                    std::this_thread::yield();
                 }
 
-                std::this_thread::yield();
+                for (int ti = 0; ti < thread_count; ti++)
+                {
+                    if (futures[ti].valid())
+                        futures[ti].get();
+                }
+            }
+            else
+            {
+                for (int bmp_y = 0; bmp_y < raster_h; ++bmp_y)
+                {
+                    for (int bmp_x = 0; bmp_x < raster_w; ++bmp_x)
+                        std::invoke(cb, bmp_x, bmp_y);
+                }
             }
 
-            // After timing out, wait for remaining threads to finalize
-            for (int ti = 0; ti < thread_count; ti++)
+            if (current_row >= raster_h)
             {
-                if (futures[ti].valid())
-                    futures[ti].get();
+                current_row = 0;
+                return true;
             }
+            return false;
         }
         else
         {
-            for (int bmp_y = 0; bmp_y < raster_h; ++bmp_y)
-            {
-                for (int bmp_x = 0; bmp_x < raster_w; ++bmp_x)
-                    std::forward<Callback>(callback)(bmp_x, bmp_y);
-            }
-        }
+            std::atomic<bool> stop_requested{ false };
 
-        if (current_row >= raster_h)
-        {
-            current_row = 0;
-            return true;
+            if (thread_count > 0)
+            {
+                auto start_time = std::chrono::steady_clock::now();
+
+                std::vector<std::future<void>> futures(thread_count);
+                std::vector<std::atomic<bool>> active_threads(thread_count);
+
+                for (int ti = 0; ti < thread_count; ti++)
+                    active_threads[ti].store(false, std::memory_order_relaxed);
+
+                std::atomic<bool> timed_out{ false };
+
+                while (!timed_out.load(std::memory_order_relaxed) &&
+                    !stop_requested.load(std::memory_order_relaxed))
+                {
+                    for (int ti = 0; ti < thread_count; ti++)
+                    {
+                        if (timed_out.load(std::memory_order_relaxed) ||
+                            stop_requested.load(std::memory_order_relaxed))
+                            break;
+
+                        if (active_threads[ti].load(std::memory_order_relaxed))
+                            continue;
+
+                        const int thread_index = ti;
+                        const int row = current_row++;
+
+                        if (row >= raster_h)
+                        {
+                            timed_out.store(true, std::memory_order_relaxed);
+                            break;
+                        }
+
+                        active_threads[ti].store(true, std::memory_order_relaxed);
+
+                        futures[ti] = Thread::pool().submit_task([&, row, thread_index]()
+                        {
+                            for (int bmp_x = 0; bmp_x < raster_w; ++bmp_x)
+                            {
+                                if (stop_requested.load(std::memory_order_relaxed))
+                                    break;
+
+                                if (std::invoke(cb, bmp_x, row))
+                                {
+                                    stop_requested.store(true, std::memory_order_relaxed);
+                                    break;
+                                }
+                            }
+
+                            active_threads[thread_index].store(false, std::memory_order_relaxed);
+
+                            if (!stop_requested.load(std::memory_order_relaxed) &&
+                                std::chrono::steady_clock::now() - start_time >= timeout)
+                            {
+                                timed_out.store(true, std::memory_order_relaxed);
+                            }
+                        });
+                    }
+
+                    std::this_thread::yield();
+                }
+
+                for (int ti = 0; ti < thread_count; ti++)
+                {
+                    if (futures[ti].valid())
+                        futures[ti].get();
+                }
+            }
+            else
+            {
+                for (int bmp_y = 0; bmp_y < raster_h; ++bmp_y)
+                {
+                    for (int bmp_x = 0; bmp_x < raster_w; ++bmp_x)
+                    {
+                        if (std::invoke(cb, bmp_x, bmp_y))
+                        {
+                            stop_requested.store(true, std::memory_order_relaxed);
+                            break;
+                        }
+                    }
+
+                    if (stop_requested.load(std::memory_order_relaxed))
+                        break;
+                }
+            }
+
+            if (stop_requested.load(std::memory_order_relaxed))
+                return false;
+
+            if (current_row >= raster_h)
+            {
+                current_row = 0;
+                return true;
+            }
+            return false;
         }
-        return false;
     }
+
 
     template<typename Callback>
     void forEachPixel(
@@ -255,7 +363,7 @@ public:
 };
 
 template<typename T=f64>
-class WorldRasterGridT : public WorldObjectT<T>, public RasterGrid
+class WorldRasterGridT : public WorldObjectT<T>, public virtual RasterGrid
 {
 public:
 
@@ -659,7 +767,8 @@ public:
             }));
         }
 
-        for (auto& f : futs) f.get();
+        for (auto& f : futs)
+            f.get();
 
         bool finished = true;
         for (int k = 0; k < P.owner_count; ++k) {

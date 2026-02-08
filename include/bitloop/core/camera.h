@@ -457,7 +457,11 @@ struct CameraNavigator
     [[nodiscard]] constexpr f128 panBegCamZoom()     const { return pan_beg_cam_zoom; }
     [[nodiscard]] constexpr f64  panBegCamAngle()    const { return pan_beg_cam_angle; }
 
-    bool handleWorldNavigation(Event e, bool single_touch_pan, bool zoom_anchor_mouse = false);
+    bool handleWorldNavigation(
+        Event e,
+        bool single_touch_pan,
+        bool zoom_anchor_mouse = false,
+        double wheel_zoom_rate = 1.0);
 
     void debugPrint(Viewport* ctx) const;
 };

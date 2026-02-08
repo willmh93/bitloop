@@ -1,4 +1,3 @@
-#include <cmath>
 #include <bitloop/core/camera.h>
 #include <bitloop/core/scene.h>
 #include <bitloop/core/viewport.h>
@@ -52,7 +51,7 @@ CameraInfo& CameraInfo::operator =(const CameraInfo& rhs)
 
 const WorldStageTransform& CameraInfo::getTransform() const
 {
-    // todo: Make thread safe? If called from multiple threads, is it safe?
+    // todo: Make thread safe? (If called from multiple threads)
     assert(surface != nullptr);
 
     if (surface->resized())
@@ -394,12 +393,12 @@ void CameraNavigator::panEnd()
     panning = false;
 }
 
-bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, bool zoom_anchor_mouse)
+bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, bool zoom_anchor_mouse, double wheel_zoom_rate)
 {
     Viewport* viewport = event.ctx_focused();
     if (!viewport) return false;
 
-    if (!viewport->mountedScene()->ownsEvent(event) || !event.isPointerEvent())
+    if (!event.ownedBy(viewport->mountedScene()) || !event.isPointerEvent())
         return false;
 
     PointerEvent e(event);
@@ -568,7 +567,7 @@ bool CameraNavigator::handleWorldNavigation(Event event, bool single_touch_pan, 
             //}
             //else
             {
-                camera->setZoom(camera->zoom() + (e.wheelY()/10.0) * camera->zoom());
+                camera->setZoom(camera->zoom() + ((e.wheelY()/10.0) * wheel_zoom_rate) * camera->zoom());
                 panZoomProcess();
                 return true;
             }

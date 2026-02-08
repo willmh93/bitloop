@@ -1,15 +1,27 @@
-#include <functional>
-#include <unordered_map>
-#include <typeindex>
-#include <type_traits>
+#pragma once
+
 #include <any>
-#include <memory>
 #include <concepts>
+#include <cstring>
+#include <functional>
+#include <memory>
+#include <type_traits>
+#include <typeindex>
+#include <unordered_map>
+#include <utility>
 
 template<class U>
-concept HasHashMethod = requires(const U & u) {
+concept HasHashMethod = requires(const U& u) {
     { u.hash() } -> std::convertible_to<std::size_t>;
 };
+
+template<class U>
+concept HasEqualityOperator = requires(const U& a, const U& b) {
+    { a == b } -> std::convertible_to<bool>;
+};
+
+template<class>
+inline constexpr bool dependent_false_v = false;
 
 ///--------------------------///
 /// Variable Changed Tracker ///
@@ -29,68 +41,99 @@ class ChangeTracker
         std::function<void()> commit;
     };
 
-    // one entry per type *in this tracker object*
-    mutable std::unordered_map<std::type_index, std::any>    store_;
-    mutable std::unordered_map<std::type_index, ClearCommit> registry_;
+    // one entry per type in this tracker object
+    mutable std::unordered_map<std::type_index, std::any> store;
+    mutable std::unordered_map<std::type_index, ClearCommit> registry;
 
     template <typename T>
     StateMapPair<T>& getStateMap() const
     {
         const auto idx = std::type_index(typeid(T));
 
-        auto it = store_.find(idx);
-        if (it == store_.end()) {
-            auto& holder = store_[idx];
+        auto it = store.find(idx);
+        if (it == store.end()) {
+            auto& holder = store[idx];
             holder.emplace<StateMapPair<T>>();
 
-            registry_[idx] = {
+            registry[idx] = {
                 // clear: wipe both sets
                 [this, idx]() {
-                    auto it2 = store_.find(idx);
-                    if (it2 == store_.end()) return;
+                    auto it2 = store.find(idx);
+                    if (it2 == store.end())
+                        return;
+
                     auto& maps = std::any_cast<StateMapPair<T>&>(it2->second);
                     maps.current.clear();
                     maps.previous.clear();
                 },
                 // commit: update baseline only when changed; add first-time snapshots
                 [this, idx]() {
-                    auto it2 = store_.find(idx);
-                    if (it2 == store_.end()) return;
+                    auto it2 = store.find(idx);
+                    if (it2 == store.end())
+                        return;
+
                     auto& maps = std::any_cast<StateMapPair<T>&>(it2->second);
 
-                    // 1) Existing tracked vars => write only if changed
+                    // 1) existing tracked vars => write only if changed
                     for (auto& kv : maps.previous) {
                         T* p = kv.first;
-                        if (!p) continue;
+                        if (!p)
+                            continue;
 
                         if constexpr (HasHashMethod<T>) {
                             const std::size_t h = p->hash();
-                            if (kv.second != h) kv.second = h;
-                        } else {
+                            if (kv.second != h)
+                                kv.second = h;
+                        }
+                        else if constexpr (HasEqualityOperator<T>) {
                             const T& live = *p;
-                            if (!(kv.second == live)) kv.second = live; // LHS non-const map value
+                            if (!(kv.second == live))
+                                kv.second = live; // LHS non-const map value
+                        }
+                        else if constexpr (std::is_trivially_copyable_v<T>) {
+                            const T& live = *p;
+                            if (std::memcmp(std::addressof(kv.second), std::addressof(live), sizeof(T)) != 0)
+                                std::memcpy(std::addressof(kv.second), std::addressof(live), sizeof(T));
+                        }
+                        else {
+                            static_assert(dependent_false_v<T>,
+                                "ChangeTracker: T must be trivially copyable, provide operator==, or provide hash()");
                         }
                     }
 
-                    // 2) Newly staged vars => add snapshot if not present
+                    // 2) newly staged vars => add snapshot if not present
                     for (auto& kv : maps.current) {
                         T* p = kv.first;
-                        if (!p) continue;
-                        if (maps.previous.find(p) == maps.previous.end()) {
-                            if constexpr (HasHashMethod<T>) {
-                                maps.previous.emplace(p, p->hash());
-                            } else {
-                                maps.previous.emplace(p, *p);
-                            }
+                        if (!p)
+                            continue;
+
+                        if (maps.previous.find(p) != maps.previous.end())
+                            continue;
+
+                        if constexpr (HasHashMethod<T>) {
+                            maps.previous.emplace(p, p->hash());
+                        }
+                        else if constexpr (HasEqualityOperator<T>) {
+                            maps.previous.emplace(p, *p);
+                        }
+                        else if constexpr (std::is_trivially_copyable_v<T>) {
+                            typename StateMapPair<T>::Baseline base{};
+                            std::memcpy(std::addressof(base), p, sizeof(T));
+                            maps.previous.emplace(p, base);
+                        }
+                        else {
+                            static_assert(dependent_false_v<T>,
+                                "ChangeTracker: T must be trivially copyable, provide operator==, or provide hash()");
                         }
                     }
                 }
             };
+
             return std::any_cast<StateMapPair<T>&>(holder);
         }
+
         return std::any_cast<StateMapPair<T>&>(it->second);
     }
-
 
     template <typename T>
     [[nodiscard]] bool variableChanged(T& var) const
@@ -99,25 +142,29 @@ class ChangeTracker
         auto& maps = getStateMap<NonConstT>();
 
         auto* key = const_cast<NonConstT*>(std::addressof(var));
-        auto  it = maps.previous.find(key);
+        auto it = maps.previous.find(key);
 
         if (it == maps.previous.end()) {
-            // not in baseline yet => start tracking.
-            // report "no change" until first snapshot
+            // not in baseline yet => stage and report "no change" until snapshot
             maps.current[key] = 0;
             return false;
         }
 
         if constexpr (HasHashMethod<NonConstT>) {
-            // compare hashes
             return it->second != var.hash();
         }
-        else {
+        else if constexpr (HasEqualityOperator<NonConstT>) {
             // keep non-const object on LHS to allow non-const member operator==
             return !(it->second == var);
         }
+        else if constexpr (std::is_trivially_copyable_v<NonConstT>) {
+            return std::memcmp(std::addressof(it->second), std::addressof(var), sizeof(NonConstT)) != 0;
+        }
+        else {
+            static_assert(dependent_false_v<NonConstT>,
+                "ChangeTracker: T must be trivially copyable, provide operator==, or provide hash()");
+        }
     }
-
 
 public:
     ChangeTracker() = default;
@@ -125,7 +172,6 @@ public:
     template <typename... Args>
     [[nodiscard]] bool Changed(Args&&... args) const
     {
-        // Pure check: no "current" writes here
         return (variableChanged(std::forward<Args>(args)) || ...);
     }
 
@@ -135,22 +181,21 @@ public:
         getStateMap<std::remove_const_t<T>>().current[std::addressof(var)] = 0;
     }
 
-    // Convenience: register many at once
     template <typename... Args>
     void commitCurrentMany(Args&... args) const
     {
         (commitCurrent(args), ...);
     }
 
-    // Clear both tracked set and baseline for all types
     void clearCurrent()
     {
-        for (auto& [_, cc] : registry_) cc.clear();
+        for (auto& [_, cc] : registry)
+            cc.clear();
     }
 
-    // Snapshot live values of all tracked variables *now* into the baseline.
     void updateCurrent()
     {
-        for (auto& [_, cc] : registry_) cc.commit();
+        for (auto& [_, cc] : registry)
+            cc.commit();
     }
 };

@@ -35,17 +35,14 @@ void ExampleText_Scene::UI::sidebar()
     
     if (ImGui::Section("Options", true))
     {
-        bl_scoped(transform_coordinates);
-        bl_scoped(scale_lines);
-        bl_scoped(scale_sizes);
-        bl_scoped(scale_text);
-        bl_scoped(rotate_text);
+        bl_scoped(opts);
 
-        ImGui::Checkbox("Transform coordinates", &transform_coordinates);
-        ImGui::Checkbox("Scale Lines", &scale_lines);
-        ImGui::Checkbox("Scale Sizes", &scale_sizes);
-        ImGui::Checkbox("Scale Text",  &scale_text);
-        ImGui::Checkbox("Rotate Text", &rotate_text);
+        ImGui::Checkbox("Transform coordinates", &opts.transform_coordinates);
+        ImGui::Checkbox("Scale Lines", &opts.scale_lines);
+        ImGui::Checkbox("Scale Sizes", &opts.scale_sizes);
+        ImGui::Checkbox("Scale Text",  &opts.scale_text);
+        ImGui::Checkbox("Rotate Text", &opts.rotate_text);
+        ImGui::SliderDouble("Font Size", &opts.font_size, 1.0, 100.0);
     }
 }
 
@@ -100,6 +97,8 @@ void ExampleText_Scene::viewportProcess(
     [[maybe_unused]] double dt)
 {
     // Process viewport update
+    if (Changed(camera, opts))
+        requestRedraw(true);
 }
 
 void ExampleText_Scene::viewportDraw(Viewport* ctx) const
@@ -108,24 +107,19 @@ void ExampleText_Scene::viewportDraw(Viewport* ctx) const
     ctx->setTransform(camera.getTransform());
     ctx->drawWorldAxis();
 
-    //ctx->scale(10);
+    ctx->worldCoordinates(opts.transform_coordinates);
+    ctx->scalingLines(opts.scale_lines);
+    ctx->scalingSizes(opts.scale_sizes);
+    ctx->scalingText(opts.scale_text);
+    ctx->rotatingText(opts.rotate_text);
+    ctx->setFontSize(opts.font_size);
 
-    ctx->worldCoordinates(transform_coordinates);
-    ctx->scalingLines(scale_lines);
-    ctx->scalingSizes(scale_sizes);
-    ctx->scalingText(scale_text);
-    ctx->rotatingText(rotate_text);
-
-    double font_size = 32;
-
-    ctx->setFontSize(font_size);
     ctx->setFillStyle(255, 255, 255);
     ctx->setTextAlign(TextAlign::ALIGN_LEFT);
     for (size_t i = 0; i < fonts.size(); i++)
     {
-        double y = (double)i * font_size + 50.0;
+        double y = (double)i * opts.font_size + 50.0;
         ctx->setFont(fonts[i]);
-        //ctx->fillText("The quick brown fox jumps over the lazy dog", 20, y);
         ctx->fillText("The quick brown fox jumps over the lazy dog", 50.0, y);
 
     }
@@ -133,8 +127,10 @@ void ExampleText_Scene::viewportDraw(Viewport* ctx) const
 
 void ExampleText_Scene::onEvent(Event e)
 {
-    if (this->ownsEvent(e))
-        navigator.handleWorldNavigation(e, true);
+    if (!e.ownedBy(this))
+        return;
+
+    navigator.handleWorldNavigation(e, true);
 }
 
 //void ExampleText_Scene::onPointerDown(PointerEvent e) {{}}

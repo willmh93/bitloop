@@ -9,6 +9,7 @@
 #include <bitloop/core/snapshot_presets.h>
 #include <bitloop/util/math_util.h>
 #include <bitloop/util/change_tracker.h>
+#include <bitloop/util/timer.h>
 #include <bitloop/nanovgx/nano_canvas.h>
 
 #include "types.h"
@@ -30,27 +31,23 @@ class SceneBase : public ChangeTracker
 
     mutable std::mt19937 gen;
 
-    int dt_sceneProcess = 0;
-
-
-    std::chrono::steady_clock::time_point elapsed_t0
-        = std::chrono::steady_clock::now();
-
-    mutable std::vector<math::SMA<double>> dt_scene_ma_list;
-    mutable std::vector<math::SMA<double>> dt_project_ma_list;
-    //mutable std::vector<math::SMA> dt_project_draw_ma_list;
-
-    mutable size_t dt_call_index = 0;
-    mutable size_t dt_process_call_index = 0;
-    //size_t dt_draw_call_index = 0;
-
+    double dt_sceneProcess = 0;
+    SimpleTimer running_time;
+    
+    // mutable so we return true the moment we begin capturing,
+    // even if CaptureManager hasn't registered it yet.
     mutable bool initiating_snapshot = false;
     mutable bool initiating_recording = false;
+
+    int capture_request_id = 1; // 0 reserved for "no callback"
+    std::vector<std::pair<int, SnapshotBatchCallbacks>> snapshot_callbacks;
+
+    bool needs_redraw = false;
 
     virtual void _initGUI() {}
     virtual void _destroyGUI() {}
 
-protected:
+//protected:
 
     friend class Viewport;
     friend class ProjectBase;
@@ -66,7 +63,7 @@ protected:
     void _sceneStart()
     {
         started = true;
-        elapsed_t0 = std::chrono::steady_clock::now();
+        running_time.begin();
         sceneStart();
     }
 
@@ -108,7 +105,7 @@ protected:
     {
         onEvent(e);
 
-        if (ownsEvent(e))
+        if (e.ownedBy(this))
         {
             switch (e.type())
             {
@@ -132,6 +129,7 @@ public:
     // see:  ProjectBase::create(typename SceneType::Config config)
     std::shared_ptr<void> active_config;
 
+    // todo: Give each viewport it's own mouse, don't spill position between viewports
     MouseInfo* mouse = nullptr;
 
     //Input input;
@@ -148,6 +146,9 @@ public:
     void mountTo(Layout& viewports);
     void mountToAll(Layout& viewports);
 
+    void requestRedraw(bool b) { needs_redraw = b; }
+    void requestImmediateUpdate();
+
     virtual void sceneStart() {}
     virtual void sceneMounted(Viewport*) {}
     virtual void sceneStop() {}
@@ -156,7 +157,6 @@ public:
     virtual void viewportProcess(Viewport*, double) {}
     virtual void viewportDraw(Viewport*) const = 0;
 
-    bool ownsEvent(const Event& e);
     virtual void onEvent(Event) {}
 
     virtual void onPointerEvent(PointerEvent) {}
@@ -169,34 +169,28 @@ public:
 
     virtual std::string name() const { return "Scene"; }
     [[nodiscard]] int sceneIndex() const { return scene_index; }
-
-    [[nodiscard]] double timeElapsed() const
-    {
-        const auto elapsed = std::chrono::steady_clock::now() - elapsed_t0;
-        return std::chrono::duration<double>(elapsed).count(); // seconds, fractional
+    [[nodiscard]] const std::vector<Viewport*>& mountedToViewports() const {
+        return mounted_to_viewports;
     }
 
-    [[nodiscard]] double frame_dt(int average_samples = 1) const;
-    [[nodiscard]] double scene_dt(int average_samples = 1) const;
-    [[nodiscard]] double project_dt(int average_samples = 1) const;
+    [[nodiscard]] double running_dt() const { return running_time.elapsed(); }
+    [[nodiscard]] double scene_dt() const { return dt_sceneProcess; } // scene only (not including frame delay)
+    [[nodiscard]] double project_dt() const; // project + all scenes (not including frame delay)
+    [[nodiscard]] double frame_dt() const; // whole frame time elapsed (including sleep)
 
-    [[nodiscard]] double fps(int average_samples = 1) const { return 1000.0 / frame_dt(average_samples); }
-    [[nodiscard]] double fpsFactor() const;
+    [[nodiscard]] double fps() const { return 1000.0 / frame_dt(); }
+    [[nodiscard]] double fpsFactor() const; // rate multier:  1x is real FPS = target FPS
 
     [[nodiscard]] bool isSnapshotting() const;
     [[nodiscard]] bool isRecording() const;
     [[nodiscard]] bool isCapturing() const;
-    [[nodiscard]] bool capturedLastFrame();
+    [[nodiscard]] bool capturedLastFrame() const;
+    [[nodiscard]] int  capturedFrameCount() const;
 
-
-    int capture_request_id = 1; // 0 reserved for "no callback"
-    std::vector<std::pair<int, SnapshotBatchCallbacks>> snapshot_callbacks;
+    void permitCaptureFrame(bool b);
 
     virtual void onBeginSnapshot() {}
-    virtual void onEncodeFrame(
-        EncodeFrame& data [[maybe_unused]],
-        const CapturePreset& preset [[maybe_unused]]
-    ) {}
+    virtual void onEncodeFrame(EncodeFrame& data [[maybe_unused]], const CapturePreset& preset [[maybe_unused]]) {}
 
     void beginSnapshotList(
         const SnapshotPresetList& presets,
@@ -215,8 +209,6 @@ public:
     void beginRecording();
     void endRecording();
 
-    void permitCaptureFrame(bool b);
-   
     [[nodiscard]] double random(double min = 0, double max = 1) const
     {
         std::uniform_real_distribution<> dist(min, max);
@@ -307,9 +299,6 @@ protected:
         ui->overlay();
     }
 
-
-
-    
 private:
 
     void updateLiveBuffers() override final          { VarBuffer<SceneType>::updateLive(); }

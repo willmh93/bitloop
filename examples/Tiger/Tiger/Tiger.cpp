@@ -67,37 +67,25 @@ void Tiger_Scene::viewportProcess(Viewport*, double)
 {
     // Process your scene...
     ///camera.setRotation(camera.rotation() + 0.01);
+    if (Changed(camera, transform_coordinates, scale_lines, scale_sizes))
+        requestRedraw(true);
 }
 
 void Tiger_Scene::viewportDraw(Viewport* ctx) const
 {
-    //ctx->rotate(math::toRadians(30.0));
-	
-    /*ctx->transform(camera.getTransform());
+    ctx->transform(camera.getTransform());
     ctx->drawWorldAxis();
-    
-	//ctx->translate(700.0, 100.0);
-    //ctx->scale(2);
-
-    ctx->setFillStyle(Color::white);
-    ctx->fillEllipse((f64)mouse->world_x, (f64)mouse->world_y, 5.0);
 
     ctx->worldCoordinates(transform_coordinates);
     ctx->scalingLines(scale_lines);
-    ctx->scalingSizes(scale_sizes);*/
+    ctx->scalingSizes(scale_sizes);
 
-    //ctx->SimplePainter::translate(500.0, 100.0);
-    //ctx->translate(200.0, 200.0);
-
-    ctx->stageMode();
-    ctx->rotate(math::toRadians(10.0));
-    ctx->translate(100.0, 100.0);
     draw_tiger(ctx);
 }
 
 void Tiger_Scene::onEvent(Event e)
 {
-    if (this->ownsEvent(e))
+    if (e.ownedBy(this))
         navigator.handleWorldNavigation(e, true);
 }
 

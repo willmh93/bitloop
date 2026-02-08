@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <algorithm>
 
+// todo: Make types a util, or only import f128.h (and f64, etc)
 #include <bitloop/core/types.h>
 
 //#define SIMD_FORCE_SCALER
@@ -559,8 +560,15 @@ namespace math
 
     public:
 
-        SMA(int length) : ma_length(length)
+        SMA(int length=1) : ma_length(length)
         {
+            setLength(length);
+        }
+
+        void setLength(int length)
+        {
+            ma_length = length;
+
             if (ma_length < 1) ma_length = 1;
             samples.resize(static_cast<std::size_t>(ma_length)); // fixed size
         }

@@ -30,6 +30,8 @@ struct SettingsConfig
     bool    record_lossless = true;
     int     record_near_lossless = 100;
 
+    bool    show_fps = false;
+
     SnapshotPresetHashMap target_image_presets;
     int                   target_video_preset = 0; // idx (todo: should probably be preset hash)
 

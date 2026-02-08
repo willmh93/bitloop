@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 
+#include <bitloop/util/debug_timer.h>
 #include <bitloop/util/timer.h>
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/interface_model.h>
@@ -198,13 +199,18 @@ class ProjectBase
     int scene_counter = 0;
     int sim_uid = -1;
 
-    double dt_projectProcess = 0;
-    double dt_frameProcess = 0;
+    SimpleTimer project_timer;
+    SimpleTimer scene_timer;
+    SimpleTimer frame_timer;
+
+    double      project_dt = 0;
+    double      frame_dt = 0;
 
     const int splitter_thickness = 6;
 
-    std::chrono::steady_clock::time_point last_frame_time 
-        = std::chrono::steady_clock::now();
+    //std::chrono::steady_clock::time_point last_frame_time 
+    //    = std::chrono::steady_clock::now();
+
 
     // Keep track of focused/hovered project viewports
     Viewport* ctx_focused = nullptr;
@@ -224,10 +230,17 @@ protected:
     bool started = false;
     bool paused = false;
     bool done_single_process = false;
+    DVec2 old_surface_size{};
+
+    bool immediate_update_requested = false;
+    void requestImmediateUpdate()
+    {
+        immediate_update_requested = true;
+    }
 
     void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
 
-    void updateViewportRects();
+    bool updateViewportRects();
 
     // ----- populating Project/Scene ImGui attributes -----
     void _populateAllAttributes();
@@ -496,12 +509,15 @@ public:
 
 class BasicProject : public ProjectBase, public DirectInterfaceModel
 {
+    // todo: Not thread-safe, only for simple projects without buffered variables
     void _projectAttributes() override final
     {
+        ProjectBase::_projectAttributes();
         sidebar();
     }
     void _populateOverlay() override final
     {
+        ProjectBase::_populateOverlay();
         overlay();
     }
 
@@ -567,11 +583,13 @@ protected:
 
     void _projectAttributes() override final
     {
+        ProjectBase::_projectAttributes();
         ui->sidebar();
     }
 
     void _populateOverlay() override final
     {
+        ProjectBase::_populateOverlay();
         ui->overlay();
     }
 

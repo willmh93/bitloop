@@ -19,10 +19,7 @@ static inline double lerp_log(double a, double b, double t) {
 
 static inline bool is_x265(CaptureFormat format)
 {
-    return format == CaptureFormat::x265;
-    //if (!s) return false;
-    //std::string t(s); for (auto& c : t) c = (char)tolower(c);
-    //return (t == "x265" || t == "hevc" || t == "h265");
+    return (format == CaptureFormat::x265);
 }
 
 // Range depends ONLY on resolution, fps, codec
@@ -53,7 +50,7 @@ static inline BitrateRange recommended_bitrate_range_mbps(IVec2 res, int fps, Ca
 static inline double choose_bitrate_mbps_from_range(const BitrateRange& r, int quality_0_to_100)
 {
     int q = std::clamp(quality_0_to_100, 0, 100);
-    double t = q / 100.0;                  // 0..1
+    double t = q / 100.0; // 0..1
     return lerp_log(r.min_mbps, r.max_mbps, t); // same curve/endpoints as before
 }
 #endif
@@ -61,11 +58,7 @@ static inline double choose_bitrate_mbps_from_range(const BitrateRange& r, int q
 void SettingsPanel::init()
 {
     #if BITLOOP_FFMPEG_ENABLED
-    config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(
-        config.getRecordResolution(),
-        config.record_fps,
-        config.getRecordFormat());
-
+    config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
     config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
     #endif
 
@@ -303,11 +296,9 @@ void SettingsPanel::populateSettings()
     {
         ImGui::BeginLabelledBox("Global Capture Options");
 
-        ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
-
         if (!platform()->is_mobile())
         {
-            ImGui::Checkbox("Fixed time-delta", &config.fixed_time_delta);
+            ImGui::Checkbox("Fixed frame time-delta", &config.fixed_time_delta);
         }
 
         ImGui::Spacing();
@@ -316,7 +307,13 @@ void SettingsPanel::populateSettings()
         if (ImGui::InputInt("##fps", &config.record_fps, 1))
         {
             config.record_fps = std::clamp(config.record_fps, 1, 100);
+
+            #if BITLOOP_FFMPEG_ENABLED
+            config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
+            config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
+            #endif
         }
+        ImGui::Checkbox("Show FPS in toolbar", &config.show_fps);
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -348,10 +345,13 @@ void SettingsPanel::populateSettings()
     ///    ImGui::EndLabelledBox();
     ///}
 
+
     if (ImGui::BeginTabBar("capture_tabs"))
     {
         if (ImGui::TabBox("Image"))
         {
+            ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
+
             selected_preset_is_video = false;
 
             SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
@@ -367,27 +367,35 @@ void SettingsPanel::populateSettings()
 
         if (ImGui::TabBox("Video"))
         {
+            ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
+
             selected_preset_is_video = true;
 
             SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
             SnapshotPresetList& presets = manager->allPresets();
 
             // Use target_video_preset as both selected item index and chosen radio button index
-            populateCapturePresetsList<CapturePresetsSelectMode::SINGLE>(
+            int new_index = populateCapturePresetsList<CapturePresetsSelectMode::SINGLE>(
                 [&](int i) -> CapturePreset& {
                 return presets[i];
             }, (int)presets.size(), nullptr, config.target_video_preset);
+
+            if (new_index >= 0)
+            {
+                #if BITLOOP_FFMPEG_ENABLED
+                config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
+                config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
+                #endif
+            }
 
             ImGui::Spacing(); 
 
             ImGui::Text("Codec:");
             if (ImGui::Combo("##codec", &config.record_format, CaptureFormatComboString()))
             {
-                #if BITLOOP_FFMPEG_X265_ENABLED
-                config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(
-                    config.getRecordResolution(),
-                    config.record_fps,
-                    config.getRecordFormat());
+                #if BITLOOP_FFMPEG_ENABLED
+                config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
+                config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
                 #endif
             }
 
@@ -437,6 +445,8 @@ void SettingsPanel::populateSettings()
 
             ImGui::EndTabBox();
         }
+
+        
 
         ImGui::EndTabBar();
     }

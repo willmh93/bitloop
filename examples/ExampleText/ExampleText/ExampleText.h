@@ -19,14 +19,18 @@ struct ExampleText_Scene : public Scene<ExampleText_Scene>
     /// ─────── Scene variables ───────
     std::vector<NanoFont> fonts;
 
-    CameraInfo          camera;
+    CameraInfo      camera;
     CameraNavigator navigator;
 
-    bool transform_coordinates = true;
-    bool scale_lines = true;
-    bool scale_sizes = true;
-    bool scale_text = true;
-    bool rotate_text = true;
+    struct Opts
+    {
+        bool transform_coordinates = true;
+        bool scale_lines = true;
+        bool scale_sizes = true;
+        bool scale_text = true;
+        bool rotate_text = true;
+        double font_size = 32;
+    } opts;
 
     /// ─────── Scene methods ───────
     void sceneStart() override;

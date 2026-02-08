@@ -8,6 +8,7 @@ endif()
 # Add examples target executable
 bitloop_new_project(examples)
 
+bitloop_add_dependency(examples "./Examples")
 bitloop_add_dependency(examples "./Tiger")
 bitloop_add_dependency(examples "./ExampleText")
 #bitloop_add_dependency(examples "./Test1")

@@ -10,8 +10,11 @@ struct GLStateGuard
     GLint prevViewport[4] = { 0,0,0,0 };
     GLint prevProg = 0;
     GLint prevVAO = 0;
+
     GLint prevActiveTex = 0;
-    GLint prevTex2D = 0;
+    GLint prevTex2DActive = 0;
+    GLint prevTex2D0 = 0;
+
     GLint prevPackAlign = 4;
     GLint prevUnpackAlign = 4;
 
@@ -21,13 +24,17 @@ struct GLStateGuard
         glGetIntegerv(GL_VIEWPORT, prevViewport);
         glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVAO);
+
         glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2DActive);
 
         glActiveTexture(GL_TEXTURE0);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D0);
 
         glGetIntegerv(GL_PACK_ALIGNMENT, &prevPackAlign);
         glGetIntegerv(GL_UNPACK_ALIGNMENT, &prevUnpackAlign);
+
+        glActiveTexture((GLenum)prevActiveTex);
     }
 
     ~GLStateGuard()
@@ -35,8 +42,11 @@ struct GLStateGuard
         glPixelStorei(GL_PACK_ALIGNMENT, prevPackAlign);
         glPixelStorei(GL_UNPACK_ALIGNMENT, prevUnpackAlign);
 
-        glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex2D);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex2D0);
+
         glActiveTexture((GLenum)prevActiveTex);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex2DActive);
 
         glBindVertexArray((GLuint)prevVAO);
         glUseProgram((GLuint)prevProg);
@@ -45,6 +55,7 @@ struct GLStateGuard
         glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
     }
 };
+
 
 class ShaderSurface
 {
@@ -294,7 +305,6 @@ public:
         return true;
     }
 
-
     void ensureOutput(int w, int h) const
     {
         if (w <= 0 || h <= 0)
@@ -317,8 +327,13 @@ public:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+        // Preserve global pixel-store state (GL_UNPACK_ALIGNMENT is global, not per-texture)
+        GLint prevUnpackAlignment = 4;
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &prevUnpackAlignment);
+
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, prevUnpackAlignment);
 
         glBindTexture(GL_TEXTURE_2D, 0);
 

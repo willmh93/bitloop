@@ -10,6 +10,7 @@
 #include <bitloop/imguix/imguix.h>
 #include <bitloop/nanovgx/nano_canvas.h>
 #include <bitloop/util/thread_queue.h>
+#include <bitloop/util/timer.h>
 
 BL_BEGIN_NS;
 
@@ -77,6 +78,8 @@ class MainWindow
     bool sidebar_visible = true;
 
     bool need_draw = false;
+
+    FPSTimer fps_timer;
 
     //ImRect viewport_rect;
     ImVec2 client_size{};
@@ -187,6 +190,7 @@ public:
     void captureFrame(bool b) { encode_next_sim_frame = b; }
     bool capturingNextFrame() const { return encode_next_sim_frame; }
     bool capturedLastFrame() const { return captured_last_frame; }
+    int  capturedFrameCount() const { return capture_manager.frameCount(); }
 
     bool isEditingUI();
 

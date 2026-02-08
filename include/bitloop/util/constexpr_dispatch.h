@@ -15,6 +15,7 @@
 #endif
 #endif
 
+
 // ──────────────────────────────────────────────────────────────────────────────
 //    DispatchArg concept/trait + domain size utilities
 // ─────────────────────────────────────────────────────────────────────────────-
@@ -276,6 +277,15 @@ decltype(auto) table_invoke(F&& f,
         }((std::tuple<decltype(Cs)...>*)nullptr);                               \
     }
 
+#define lambda_table(func, ...)                                  \
+    [&] <typename... Ts>(auto... Cs) -> decltype(auto) {        \
+        return [&]<typename... Us>(std::tuple<Us...>*) {        \
+            if constexpr (sizeof...(Ts) == 0)                   \
+                return func.template operator()<Us::value...>(__VA_ARGS__);         \
+            else                                                \
+                return func.template operator()<Ts..., Us::value...>(__VA_ARGS__);  \
+        }((std::tuple<decltype(Cs)...>*)nullptr);               \
+    }
 
 
 /// ────────── usage: free function / local method ──────────

@@ -10,6 +10,8 @@
 #include <bitloop/nanovgx/nano_bitmap.h>
 #include <bitloop/nanovgx/nano_shader_surface.h>
 
+#include <atomic>
+
 BL_BEGIN_NS
 
 class Viewport;
@@ -89,23 +91,12 @@ protected:
     std::string path;
     int id = 0;
     bool created = false;
-    float size = 16.0f;
 
 public:
-
-    //static std::shared_ptr<NanoFont> create(const char* virtual_path)
-    //{
-    //    return std::make_shared<NanoFont>(virtual_path);
-    //}
 
     NanoFontInternal(const char* virtual_path)
     {
         path = platform()->path(virtual_path);
-    }
-
-    void setSize(double size_pts)
-    {
-        size = (float)size_pts;
     }
 };
 
@@ -126,7 +117,7 @@ struct NanoFont : std::shared_ptr<NanoFontInternal>
 struct PainterContext
 {
     NVGcontext* vg = nullptr;
-    double global_scale = 1.0;
+    f64 global_scale = 1.0;
 
     // Text
     NanoFont default_font;
@@ -135,10 +126,10 @@ struct PainterContext
     TextAlign text_align = TextAlign::ALIGN_LEFT;
     TextBaseline text_baseline = TextBaseline::BASELINE_TOP;
 
-    double font_size = 16.0;
+    f32 font_size_px = 16.0f;
 
-    double adjust_scale_x = 1.0;
-    double adjust_scale_y = 1.0;
+    f64 adjust_scale_x = 1.0;
+    f64 adjust_scale_y = 1.0;
 };
 
 class Painter;
@@ -148,8 +139,8 @@ class Painter;
 // ===========================================
 
 static inline NVGcolor toNVG(const Color& c) { return nvgRGBA(c.r, c.g, c.b, c.a); }
-static inline NVGcolor toNVG(const float(&rgb)[3], float a) { return NVGcolor{ rgb[0], rgb[1], rgb[2], a }; }
-static inline NVGcolor toNVG(const float(&rgba)[4]) { return NVGcolor{ rgba[0], rgba[1], rgba[2], rgba[3] }; }
+static inline NVGcolor toNVG(const f32(&rgb)[3], f32 a) { return NVGcolor{ rgb[0], rgb[1], rgb[2], a }; }
+static inline NVGcolor toNVG(const f32(&rgba)[4]) { return NVGcolor{ rgba[0], rgba[1], rgba[2], rgba[3] }; }
 
 class SimplePainter
 {
@@ -177,46 +168,46 @@ public:
     // ======== Context getter/setters ========
 
     [[nodiscard]] NanoFont getDefaultFont() { return paint_ctx->default_font; }
-    [[nodiscard]] double getGlobalScale() { return paint_ctx->global_scale; }
-    void setGlobalScale(double scale) { paint_ctx->global_scale = scale; }
-    void setGlobalAlpha(double alpha) { nvgGlobalAlpha(vg, (float)alpha); }
+    [[nodiscard]] f64 getGlobalScale() { return paint_ctx->global_scale; }
+    void setGlobalScale(f64 scale) { paint_ctx->global_scale = scale; }
+    void setGlobalAlpha(f64 alpha) { nvgGlobalAlpha(vg, (f32)alpha); }
 
     // ======== Transforms ========
 
     void save() const { nvgSave(vg); }
     void restore() { nvgRestore(vg); }
     
-    void resetTransform()                                    { nvgResetTransform(vg); }
-    void transform(const glm::mat3& m)                       { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
-    glm::mat3 currentTransform() const                       { float x[6]; nvgCurrentTransform(vg, x); return glm::mat3(x[0], x[1], 0, x[2], x[3], 0, x[4], x[5], 1); }
+    void resetTransform()                         { nvgResetTransform(vg); }
+    void transform(const glm::mat3& m)            { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
+    glm::mat3 currentTransform() const            { f32 x[6]; nvgCurrentTransform(vg, x); return glm::mat3(x[0], x[1], 0, x[2], x[3], 0, x[4], x[5], 1); }
 
-    void translate(double x, double y)                       { nvgTranslate(vg, (float)(x), (float)(y)); }
-    void translate(DVec2 p)                                  { nvgTranslate(vg, (float)(p.x), (float)(p.y)); }
-    void rotate(double angle)                                { nvgRotate(vg, (float)(angle)); }
-    void scale(double scale)                                 { nvgScale(vg, (float)(scale), (float)(scale)); }
-    void scale(double scale_x, double scale_y)               { nvgScale(vg, (float)(scale_x), (float)(scale_y)); }
-    void skewX(double angle)                                 { nvgSkewX(vg, (float)(angle)); }
-    void skewY(double angle)                                 { nvgSkewY(vg, (float)(angle)); }
-    void setClipRect(double x, double y, double w, double h) { nvgScissor(vg, (float)(x), (float)(y), (float)(w), (float)(h)); }
-    void resetClipping()                                     { nvgResetScissor(vg); }
+    void translate(f64 x, f64 y)                  { nvgTranslate(vg, (f32)(x), (f32)(y)); }
+    void translate(DVec2 p)                       { nvgTranslate(vg, (f32)(p.x), (f32)(p.y)); }
+    void rotate(f64 angle)                        { nvgRotate(vg, (f32)(angle)); }
+    void scale(f64 scale)                         { nvgScale(vg, (f32)(scale), (f32)(scale)); }
+    void scale(f64 scale_x, f64 scale_y)          { nvgScale(vg, (f32)(scale_x), (f32)(scale_y)); }
+    void skewX(f64 angle)                         { nvgSkewX(vg, (f32)(angle)); }
+    void skewY(f64 angle)                         { nvgSkewY(vg, (f32)(angle)); }
+    void setClipRect(f64 x, f64 y, f64 w, f64 h)  { nvgScissor(vg, (f32)(x), (f32)(y), (f32)(w), (f32)(h)); }
+    void resetClipping()                          { nvgResetScissor(vg); }
 
     // ======== Styles ========
 
-    void setFillStyle(const Color& color)                    { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
-    void setFillStyle(const Color& color, int a)             { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, a)); }
-    void setFillStyle(const float(&color)[3])                { nvgFillColor(vg, {color[0], color[1], color[2], 1.0f}); }
-    void setFillStyle(const float(&color)[4])                { nvgFillColor(vg, {color[0], color[1], color[2], color[3]}); }
-    void setFillStyle(int r, int g, int b, int a = 255)      { nvgFillColor(vg, nvgRGBA(r, g, b, a)); }
-    
-    void setStrokeStyle(const Color& color)                  { nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
-    void setStrokeStyle(const float(&color)[3])              { nvgStrokeColor(vg, {color[0], color[1], color[2], 1.0f}); }
-    void setStrokeStyle(const float(&color)[4])              { nvgStrokeColor(vg, {color[0], color[1], color[2], color[3]}); }
-    void setStrokeStyle(int r, int g, int b, int a = 255)    { nvgStrokeColor(vg, nvgRGBA(r, g, b, a)); }
-    
-    void setLineWidth(double w)                              { nvgStrokeWidth(vg, (float)w); }
-    void setLineCap(LineCap cap)                             { nvgLineCap(vg, (int)cap); }
-    void setLineJoin(LineJoin join)                          { nvgLineJoin(vg, (int)join); }
-    void setMiterLimit(double limit)                         { nvgMiterLimit(vg, (float)limit); }
+    void setFillStyle(const Color& color)                  { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
+    void setFillStyle(const Color& color, int a)           { nvgFillColor(vg, nvgRGBA(color.r, color.g, color.b, a)); }
+    void setFillStyle(const f32(&color)[3])                { nvgFillColor(vg, {color[0], color[1], color[2], 1.0f}); }
+    void setFillStyle(const f32(&color)[4])                { nvgFillColor(vg, {color[0], color[1], color[2], color[3]}); }
+    void setFillStyle(int r, int g, int b, int a = 255)    { nvgFillColor(vg, nvgRGBA(r, g, b, a)); }
+                                                           
+    void setStrokeStyle(const Color& color)                { nvgStrokeColor(vg, nvgRGBA(color.r, color.g, color.b, color.a)); }
+    void setStrokeStyle(const f32(&color)[3])              { nvgStrokeColor(vg, {color[0], color[1], color[2], 1.0f}); }
+    void setStrokeStyle(const f32(&color)[4])              { nvgStrokeColor(vg, {color[0], color[1], color[2], color[3]}); }
+    void setStrokeStyle(int r, int g, int b, int a = 255)  { nvgStrokeColor(vg, nvgRGBA(r, g, b, a)); }
+                                                           
+    void setLineWidth(f64 w)                               { nvgStrokeWidth(vg, (f32)w); }
+    void setLineCap(LineCap cap)                           { nvgLineCap(vg, (int)cap); }
+    void setLineJoin(LineJoin join)                        { nvgLineJoin(vg, (int)join); }
+    void setMiterLimit(f64 limit)                          { nvgMiterLimit(vg, (f32)limit); }
 
     // ======== composite ========
 
@@ -255,141 +246,141 @@ public:
 
     // ======== Linear Gradient ========
 
-    void setFillLinearGradient(double x0, double y0, double x1, double y1, const Color& inner, const Color& outer) {
-        nvgFillPaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const Color& inner, const Color& outer) {
+        nvgFillPaint(vg, nvgLinearGradient(vg, f32(x0), f32(y0), f32(x1), f32(y1), toNVG(inner), toNVG(outer)));
     }
-    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
-        nvgFillPaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner, a), toNVG(outer, a)));
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) {
+        nvgFillPaint(vg, nvgLinearGradient(vg, f32(x0), f32(y0), f32(x1), f32(y1), toNVG(inner, a), toNVG(outer, a)));
     }
-    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4]) {
-        nvgFillPaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4]) {
+        nvgFillPaint(vg, nvgLinearGradient(vg, f32(x0), f32(y0), f32(x1), f32(y1), toNVG(inner), toNVG(outer)));
     }
 
     // ======== Radial Gradient ========
 
-    void setFillRadialGradient(double cx, double cy, double r0, double r1, const Color& inner, const Color& outer) {
-        nvgFillPaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const Color& inner, const Color& outer) {
+        nvgFillPaint(vg, nvgRadialGradient(vg, f32(cx), f32(cy), f32(r0), f32(r1), toNVG(inner), toNVG(outer)));
     }
-    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
-        nvgFillPaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner, a), toNVG(outer, a)));
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) {
+        nvgFillPaint(vg, nvgRadialGradient(vg, f32(cx), f32(cy), f32(r0), f32(r1), toNVG(inner, a), toNVG(outer, a)));
     }
-    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) {
-        nvgFillPaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4]) {
+        nvgFillPaint(vg, nvgRadialGradient(vg, f32(cx), f32(cy), f32(r0), f32(r1), toNVG(inner), toNVG(outer)));
     }
 
     // ======== Box Gradient ========
 
-    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer) {
-        nvgFillPaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer) {
+        nvgFillPaint(vg, nvgBoxGradient(vg, f32(x), f32(y), f32(w), f32(h), f32(r), f32(f), toNVG(inner), toNVG(outer)));
     }
-    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
-        nvgFillPaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner, a), toNVG(outer, a)));
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) {
+        nvgFillPaint(vg, nvgBoxGradient(vg, f32(x), f32(y), f32(w), f32(h), f32(r), f32(f), toNVG(inner, a), toNVG(outer, a)));
     }
-    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4]) {
-        nvgFillPaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4]) {
+        nvgFillPaint(vg, nvgBoxGradient(vg, f32(x), f32(y), f32(w), f32(h), f32(r), f32(f), toNVG(inner), toNVG(outer)));
     }
 
     // ======== Linear Gradient (Stroke) ========
 
-    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const Color& inner, const Color& outer) {
-        nvgStrokePaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const Color& inner, const Color& outer) {
+        nvgStrokePaint(vg, nvgLinearGradient(vg, f32(x0), f32(y0), f32(x1), f32(y1), toNVG(inner), toNVG(outer)));
     }
-    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
-        nvgStrokePaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner, a), toNVG(outer, a)));
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) {
+        nvgStrokePaint(vg, nvgLinearGradient(vg, f32(x0), f32(y0), f32(x1), f32(y1), toNVG(inner, a), toNVG(outer, a)));
     }
-    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4]) {
-        nvgStrokePaint(vg, nvgLinearGradient(vg, float(x0), float(y0), float(x1), float(y1), toNVG(inner), toNVG(outer)));
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4]) {
+        nvgStrokePaint(vg, nvgLinearGradient(vg, f32(x0), f32(y0), f32(x1), f32(y1), toNVG(inner), toNVG(outer)));
     }
 
     // ======== Radial Gradient (Stroke) ========
 
-    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const Color& inner, const Color& outer) {
-        nvgStrokePaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const Color& inner, const Color& outer) {
+        nvgStrokePaint(vg, nvgRadialGradient(vg, f32(cx), f32(cy), f32(r0), f32(r1), toNVG(inner), toNVG(outer)));
     }
-    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
-        nvgStrokePaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner, a), toNVG(outer, a)));
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) {
+        nvgStrokePaint(vg, nvgRadialGradient(vg, f32(cx), f32(cy), f32(r0), f32(r1), toNVG(inner, a), toNVG(outer, a)));
     }
-    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) {
-        nvgStrokePaint(vg, nvgRadialGradient(vg, float(cx), float(cy), float(r0), float(r1), toNVG(inner), toNVG(outer)));
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4]) {
+        nvgStrokePaint(vg, nvgRadialGradient(vg, f32(cx), f32(cy), f32(r0), f32(r1), toNVG(inner), toNVG(outer)));
     }
 
     // ======== Box Gradient (Stroke) ========
 
-    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer) {
-        nvgStrokePaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer) {
+        nvgStrokePaint(vg, nvgBoxGradient(vg, f32(x), f32(y), f32(w), f32(h), f32(r), f32(f), toNVG(inner), toNVG(outer)));
     }
-    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) {
-        nvgStrokePaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner, a), toNVG(outer, a)));
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) {
+        nvgStrokePaint(vg, nvgBoxGradient(vg, f32(x), f32(y), f32(w), f32(h), f32(r), f32(f), toNVG(inner, a), toNVG(outer, a)));
     }
-    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4]) {
-        nvgStrokePaint(vg, nvgBoxGradient(vg, float(x), float(y), float(w), float(h), float(r), float(f), toNVG(inner), toNVG(outer)));
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4]) {
+        nvgStrokePaint(vg, nvgBoxGradient(vg, f32(x), f32(y), f32(w), f32(h), f32(r), f32(f), toNVG(inner), toNVG(outer)));
     }
 
     // Linear (Fill)
     void setFillLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer, a); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4]) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer, a); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4]) { setFillLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
 
     // Linear (Stroke)
     void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer, a); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4]) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer, a); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4]) { setStrokeLinearGradient(p0.x, p0.y, p1.x, p1.y, inner, outer); }
 
     // Radial (Fill)
-    void setFillRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer); }
-    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer, a); }
-    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer, a); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4]) { setFillRadialGradient(c.x, c.y, r0, r1, inner, outer); }
 
     // Radial (Stroke)
-    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer); }
-    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer, a); }
-    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4]) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer, a); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4]) { setStrokeRadialGradient(c.x, c.y, r0, r1, inner, outer); }
 
     // Box (Fill)
-    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer, a); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4]) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer, a); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4]) { setFillBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
 
     // Box (Stroke)
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer, a); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4]) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer, a); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4]) { setStrokeBoxGradient(pos.x, pos.y, size.x, size.y, r, f, inner, outer); }
 
     // ======== Paths ========                               
                                                              
-    void beginPath()                                         { nvgBeginPath(vg); }
-    void moveTo(double x, double y)                          { nvgMoveTo(vg, (float)(x), (float)(y)); }
-    void lineTo(double x, double y)                          { nvgLineTo(vg, (float)(x), (float)(y)); }
-    void moveTo(DVec2 p)                                     { nvgMoveTo(vg, (float)(p.x), (float)(p.y)); }
-    void lineTo(DVec2 p)                                     { nvgLineTo(vg, (float)(p.x), (float)(p.y)); }
-    void stroke()                                            { nvgStroke(vg); }
-    void fill()                                              { nvgFill(vg); }
-    void closePath()                                         { nvgClosePath(vg); }
+    void beginPath()           { nvgBeginPath(vg); }
+    void moveTo(f64 x, f64 y)  { nvgMoveTo(vg, (f32)(x), (f32)(y)); }
+    void lineTo(f64 x, f64 y)  { nvgLineTo(vg, (f32)(x), (f32)(y)); }
+    void moveTo(DVec2 p)       { nvgMoveTo(vg, (f32)(p.x), (f32)(p.y)); }
+    void lineTo(DVec2 p)       { nvgLineTo(vg, (f32)(p.x), (f32)(p.y)); }
+    void stroke()              { nvgStroke(vg); }
+    void fill()                { nvgFill(vg); }
+    void closePath()           { nvgClosePath(vg); }
 
-    void bezierTo(double x1, double y1, double x2, double y2, double x, double y) {
-        nvgBezierTo(vg, (float)(x1), (float)(y1), (float)(x2), (float)(y2), (float)(x), (float)(y));
+    void bezierTo(f64 x1, f64 y1, f64 x2, f64 y2, f64 x, f64 y) {
+        nvgBezierTo(vg, (f32)(x1), (f32)(y1), (f32)(x2), (f32)(y2), (f32)(x), (f32)(y));
     }
     void bezierTo(DVec2 p1, DVec2 p2, DVec2 p) {
-        nvgBezierTo(vg, (float)p1.x, (float)p1.y, (float)p2.x, (float)p2.y, (float)p.x, (float)p.y);
+        nvgBezierTo(vg, (f32)p1.x, (f32)p1.y, (f32)p2.x, (f32)p2.y, (f32)p.x, (f32)p.y);
     }
-    void quadraticTo(double cx, double cy, double x, double y) {
-        nvgQuadTo(vg, (float)(cx), (float)(cy), (float)(x), (float)(y));
+    void quadraticTo(f64 cx, f64 cy, f64 x, f64 y) {
+        nvgQuadTo(vg, (f32)(cx), (f32)(cy), (f32)(x), (f32)(y));
     }
     void quadraticTo(DVec2 c, DVec2 p) {
-        nvgQuadTo(vg, (float)c.x, (float)c.y, (float)p.x, (float)p.y);
+        nvgQuadTo(vg, (f32)c.x, (f32)c.y, (f32)p.x, (f32)p.y);
     }
 
-    void arc(double cx, double cy, double r, double a0, double a1, PathWinding winding = PathWinding::WINDING_CCW) {
-        nvgArc(vg, (float)(cx), (float)(cy), (float)(r), (float)(a0), (float)(a1), (int)winding);
+    void arc(f64 cx, f64 cy, f64 r, f64 a0, f64 a1, PathWinding winding = PathWinding::WINDING_CCW) {
+        nvgArc(vg, (f32)(cx), (f32)(cy), (f32)(r), (f32)(a0), (f32)(a1), (int)winding);
     }
-    void arc(DVec2 cen, double r, double a0, double a1, PathWinding winding = PathWinding::WINDING_CCW) {
-        nvgArc(vg, (float)(cen.x), (float)(cen.y), (float)(r), (float)(a0), (float)(a1), (int)winding);
+    void arc(DVec2 cen, f64 r, f64 a0, f64 a1, PathWinding winding = PathWinding::WINDING_CCW) {
+        nvgArc(vg, (f32)(cen.x), (f32)(cen.y), (f32)(r), (f32)(a0), (f32)(a1), (int)winding);
     }
-    void arcTo(double x0, double y0, double x1, double y1, double r) {
-        nvgArcTo(vg, (float)(x0), (float)(y0), (float)(x1), (float)(y1), (float)(r));
+    void arcTo(f64 x0, f64 y0, f64 x1, f64 y1, f64 r) {
+        nvgArcTo(vg, (f32)(x0), (f32)(y0), (f32)(x1), (f32)(y1), (f32)(r));
     }
-    void arcTo(DVec2 p0, DVec2 p1, double r) {
-        nvgArcTo(vg, (float)(p0.x), (float)(p0.y), (float)(p1.x), (float)(p1.y), (float)(r));
+    void arcTo(DVec2 p0, DVec2 p1, f64 r) {
+        nvgArcTo(vg, (f32)(p0.x), (f32)(p0.y), (f32)(p1.x), (f32)(p1.y), (f32)(r));
     }
 
     template<typename PointT> void drawPath(const std::vector<PointT>& path) {
@@ -402,29 +393,29 @@ public:
 
     // ======== Shapes ========
 
-    void circle(double cx, double cy, double r) { nvgCircle(vg, (float)(cx), (float)(cy), (float)(r)); }
-    void circle(DVec2 p, double r) { nvgCircle(vg, (float)(p.x), (float)(p.y), (float)(r)); }
-    void ellipse(double cx, double cy, double rx, double ry) { nvgEllipse(vg, (float)(cx), (float)(cy), (float)(rx), (float)(ry)); }
-    void ellipse(DVec2 cen, DVec2 size) { nvgEllipse(vg, (float)(cen.x), (float)(cen.y), (float)(size.x), (float)(size.y)); }
-    void fillRect(double x, double y, double w, double h) { nvgBeginPath(vg); nvgRect(vg, (float)(x), (float)(y), (float)(w), (float)(h)); nvgFill(vg); }
-    void strokeRect(double x, double y, double w, double h) { nvgBeginPath(vg); nvgRect(vg, (float)(x), (float)(y), (float)(w), (float)(h)); nvgStroke(vg); }
+    void circle(f64 cx, f64 cy, f64 r) { nvgCircle(vg, (f32)(cx), (f32)(cy), (f32)(r)); }
+    void circle(DVec2 p, f64 r) { nvgCircle(vg, (f32)(p.x), (f32)(p.y), (f32)(r)); }
+    void ellipse(f64 cx, f64 cy, f64 rx, f64 ry) { nvgEllipse(vg, (f32)(cx), (f32)(cy), (f32)(rx), (f32)(ry)); }
+    void ellipse(DVec2 cen, DVec2 size) { nvgEllipse(vg, (f32)(cen.x), (f32)(cen.y), (f32)(size.x), (f32)(size.y)); }
+    void fillRect(f64 x, f64 y, f64 w, f64 h) { nvgBeginPath(vg); nvgRect(vg, (f32)(x), (f32)(y), (f32)(w), (f32)(h)); nvgFill(vg); }
+    void strokeRect(f64 x, f64 y, f64 w, f64 h) { nvgBeginPath(vg); nvgRect(vg, (f32)(x), (f32)(y), (f32)(w), (f32)(h)); nvgStroke(vg); }
 
-    void strokeRoundedRect(double x, double y, double w, double h, double r)
+    void strokeRoundedRect(f64 x, f64 y, f64 w, f64 h, f64 r)
     {
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, (float)(x), (float)(y), (float)(w), (float)(h), (float)(r));
+        nvgRoundedRect(vg, (f32)(x), (f32)(y), (f32)(w), (f32)(h), (f32)(r));
         nvgStroke(vg);
     }
-    void fillRoundedRect(double x, double y, double w, double h, double r)
+    void fillRoundedRect(f64 x, f64 y, f64 w, f64 h, f64 r)
     {
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, (float)(x), (float)(y), (float)(w), (float)(h), (float)(r));
+        nvgRoundedRect(vg, (f32)(x), (f32)(y), (f32)(w), (f32)(h), (f32)(r));
         nvgFill(vg);
     }
 
     // ======== Image ========
 
-    //void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) { 
+    //void drawImage(Image& bmp, f64 x, f64 y, f64 w = 0, f64 h = 0) { 
     //    bmp.draw(vg, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h); 
     //}
 
@@ -433,11 +424,10 @@ public:
     //}
 
     // ======== Text ========
-
     void setTextAlign(TextAlign align)          { paint_ctx->text_align = align;       nvgTextAlign(vg, (int)(paint_ctx->text_align) | (int)(paint_ctx->text_baseline)); }
     void setTextBaseline(TextBaseline baseline) { paint_ctx->text_baseline = baseline; nvgTextAlign(vg, (int)(paint_ctx->text_align) | (int)(paint_ctx->text_baseline)); }
-    virtual void setFontSize(double size_pts)   { nvgFontSize(vg, (float)(paint_ctx->global_scale * size_pts)); }
-    void setFontSizePx(double size_px)          { nvgFontSize(vg, (float)size_px); }
+    virtual void setFontSize(f64 size_pts)      { paint_ctx->font_size_px = (f32)(paint_ctx->global_scale * size_pts); nvgFontSize(vg, paint_ctx->font_size_px); }
+    void setFontSizePx(f64 size_px)             { paint_ctx->font_size_px = (f32)size_px; nvgFontSize(vg, (f32)size_px); }
     void setFont(NanoFont font)
     {
         if (font == paint_ctx->active_font)
@@ -448,9 +438,7 @@ public:
             font->id = nvgCreateFont(vg, font->path.c_str(), font->path.c_str());
             font->created = true;
 
-            // Todo: Check if font changed and update even if already created
-            nvgFontSize(vg, (float)paint_ctx->global_scale * font->size);
-
+            nvgFontSize(vg, (f32)paint_ctx->global_scale * paint_ctx->font_size_px);
         }
 
         nvgFontFaceId(vg, font->id);
@@ -460,38 +448,36 @@ public:
 
     [[nodiscard]] DRect boundingBox(std::string_view txt) const
     {
-        float bounds[4];
+        f32 bounds[4];
         nvgTextBounds(vg, 0, 0, txt.data(), txt.data()+txt.size(), bounds);
-        return DRect((double)(bounds[0]), (double)(bounds[1]), (double)(bounds[2] - bounds[0]), (double)(bounds[3] - bounds[1]));
+        return DRect((f64)(bounds[0]), (f64)(bounds[1]), (f64)(bounds[2] - bounds[0]), (f64)(bounds[3] - bounds[1]));
     }
 
     void fillText(std::string_view txt, DVec2 pos) { fillText(txt, pos.x, pos.y); }
-    void fillText(std::string_view txt, double x, double y)
+    void fillText(std::string_view txt, f64 x, f64 y)
     {
         if (!paint_ctx->active_font) setFont(paint_ctx->default_font);
-        nvgText(vg, (float)(x), (float)(y), txt.data(), txt.data() + txt.size());
-
-        
+        nvgText(vg, (f32)(x), (f32)(y), txt.data(), txt.data() + txt.size());
     }
 };
 
 class SurfaceInfo
 {
     // ----- "local" rect info (not necessarily client-space) -----
-    double x = 0, y = 0;
-    double w = 0, h = 0;
+    f64 x = 0, y = 0;
+    f64 w = 0, h = 0;
 
-    double start_w = 0;
-    double start_h = 0;
-    double old_w = 0;
-    double old_h = 0;
+    f64 start_w = 0;
+    f64 start_h = 0;
+    f64 old_w = 0;
+    f64 old_h = 0;
 
     // If surface resized, keep track of the scale factor from the "start" size
-    double scale_adjust = 1;
+    f64 scale_adjust = 1;
 
     // ----- "client" rect info (for SDL event coordinate conversions) -----
-    double client_x = 0, client_y = 0;
-    double client_w = 0, client_h = 0;
+    f64 client_x = 0, client_y = 0;
+    f64 client_w = 0, client_h = 0;
 
 public:
 
@@ -508,13 +494,13 @@ public:
         old_h = h;
     }
 
-    void setSurfacePos(double _x, double _y)
+    void setSurfacePos(f64 _x, f64 _y)
     {
         x = _x;
         y = _y;
     }
 
-    void setSurfaceSize(double _w, double _h)
+    void setSurfaceSize(f64 _w, f64 _h)
     {
         w = _w;
         h = _h;
@@ -525,7 +511,7 @@ public:
         scale_adjust = std::min(new_size.x / start_size.x, new_size.y / start_size.y);
     }
 
-    void setClientRect(double _x, double _y, double _w, double _h)
+    void setClientRect(f64 _x, f64 _y, f64 _w, f64 _h)
     {
         client_x = _x;
         client_y = _y;
@@ -533,29 +519,29 @@ public:
         client_h = _h;
     }
 
-    [[nodiscard]] constexpr double left() const { return x; }
-    [[nodiscard]] constexpr double top() const { return y; }
-    [[nodiscard]] constexpr double right() const { return x + w; }
-    [[nodiscard]] constexpr double bottom() const { return y + h; }
+    [[nodiscard]] constexpr f64   left()             const { return x; }
+    [[nodiscard]] constexpr f64   top()              const { return y; }
+    [[nodiscard]] constexpr f64   right()            const { return x + w; }
+    [[nodiscard]] constexpr f64   bottom()           const { return y + h; }
+                                                     
+    [[nodiscard]] constexpr f64   width()            const { return w; }
+    [[nodiscard]] constexpr f64   height()           const { return h; }
+    [[nodiscard]] constexpr DVec2 size()             const { return DVec2(w, h); }
+    [[nodiscard]] constexpr DRect surfaceRect()      const { return DRect(x, y, x + w, y + h); }
+    [[nodiscard]] constexpr DRect clientRect()       const { return DRect(client_x, client_y, client_x + client_w, client_y + client_h); }
 
-    [[nodiscard]] constexpr double width() const { return w; }
-    [[nodiscard]] constexpr double height() const { return h; }
-    [[nodiscard]] constexpr DVec2  size() const { return DVec2(w, h); }
-    [[nodiscard]] constexpr DRect  surfaceRect() const { return DRect(x, y, x + w, y + h); }
-    [[nodiscard]] constexpr DRect  clientRect() const { return DRect(client_x, client_y, client_x + client_w, client_y + client_h); }
+    [[nodiscard]] constexpr f64   initialSizeScale() const { return scale_adjust; }
+    [[nodiscard]] constexpr bool  resized()          const { return (w != old_w) || (h != old_h); }
 
-    [[nodiscard]] constexpr double initialSizeScale() { return scale_adjust; }
-    [[nodiscard]] constexpr bool   resized() { return (w != old_w) || (h != old_h); }
-
-    [[nodiscard]] double toSurfaceX(double client_posX) { return ((client_posX - client_x) / client_w) * w; }
-    [[nodiscard]] double toSurfaceY(double client_posY) { return ((client_posY - client_y) / client_h) * h; }
+    [[nodiscard]] f64 toSurfaceX(f64 client_posX)    const { return ((client_posX - client_x) / client_w) * w; }
+    [[nodiscard]] f64 toSurfaceY(f64 client_posY)    const { return ((client_posY - client_y) / client_h) * h; }
 };
 
 // ==================================
 // ======== Advanced Painter ========
 // ==================================
 //
-// > Pretransforms world coordinates (double precision) before rendering in screen-space with nanovg 
+// > Pretransforms world coordinates (f64 precision) before rendering in screen-space with nanovg 
 // > Supports toggling between screen-space / world-space
 //
 
@@ -564,13 +550,13 @@ class Painter : private SimplePainter
     friend class CameraInfo;
     friend class Viewport;
 
-    DVec2 align_full(DVec2 p)              { return DVec2{ std::floor(p.x), std::floor(p.y) }; }
-    DVec2 align_full(double px, double py) { return DVec2{ std::floor(px),  std::floor(py) }; }
-    DVec2 align_half(DVec2 p)              { return DVec2{ std::floor(p.x) + 0.5, std::floor(p.y) + 0.5 }; }
-    DVec2 align_half(double px, double py) { return DVec2{ std::floor(px)  + 0.5, std::floor(py)  + 0.5 }; }
+    DVec2 align_full(DVec2 p)         { return DVec2{ std::floor(p.x),       std::floor(p.y) };       }
+    DVec2 align_full(f64 px, f64 py)  { return DVec2{ std::floor(px),        std::floor(py) };        }
+    DVec2 align_half(DVec2 p)         { return DVec2{ std::floor(p.x) + 0.5, std::floor(p.y) + 0.5 }; }
+    DVec2 align_half(f64 px, f64 py)  { return DVec2{ std::floor(px)  + 0.5, std::floor(py)  + 0.5 }; }
 
     glm::mat3 default_viewport_transform;
-    double line_width = 1;
+    f64 line_width = 1;
 
     bool transform_coordinates = true;
     bool scale_lines = true;
@@ -592,7 +578,7 @@ public:
     Painter(SurfaceInfo* s) : surface(s)
     {}
 
-    double _avgAdjustedZoom() const {
+    f64 _avgAdjustedZoom() const {
         return m.avgZoomScaleFactor();
     }
 
@@ -685,19 +671,19 @@ public:
 
     template<typename T> void translate(T x, T y) { if (transform_coordinates) m.translate(x, y); else SimplePainter::translate(x, y); }
     template<typename T> void scale(T s)          { if (transform_coordinates) m.scale(s);        else SimplePainter::scale(s); }
-    void rotate(double r)                         { if (transform_coordinates) m.rotate(r);       else SimplePainter::rotate(r); }
+    void rotate(f64 r)                         { if (transform_coordinates) m.rotate(r);       else SimplePainter::rotate(r); }
 
-    [[nodiscard]] DVec2 Offset(double stage_offX, double stage_offY) const
+    [[nodiscard]] DVec2 Offset(f64 stage_offX, f64 stage_offY) const
     {
-        return m.toWorldOffset<double>(stage_offX, stage_offY);
+        return m.toWorldOffset<f64>(stage_offX, stage_offY);
     }
 
-    double lineScale() {
+    f64 lineScale() {
         return scale_lines ?
             1.0                         // Scaling already handled by world projection matrix
             : paint_ctx->global_scale;  // Stage-transform, fall back to DPR scaling
     }
-    double sizeScale() {
+    f64 sizeScale() {
         return scale_sizes ?
             1.0                         // Scaling already handled by world projection matrix
             : paint_ctx->global_scale;  // Stage-transform, fall back to DPR scaling
@@ -717,23 +703,23 @@ public:
 
     // ======== Position/Size wrappers (applies only enabled camera transforms) ========
 
-    // IF (transform_coordinates)    Input = World (double/f128),   Output = Stage (double)
-    // IF (!transform_coordinates)   Input = Stage (double/f128),   Output = Stage (double)
+    // IF (transform_coordinates)    Input = World (f64/f128),   Output = Stage (f64)
+    // IF (!transform_coordinates)   Input = Stage (f64/f128),   Output = Stage (f64)
 
-    template<typename T> DVec2  PT(T x, T y)    const { return transform_coordinates ? m.toStage<T>(x, y) : Vec2{ (double)x, (double)y }; }
-    template<typename T> DVec2  PT(Vec2<T> p)   const { return transform_coordinates ? m.toStage<T>(p) : static_cast<DVec2>(p); }
+    template<typename T> DVec2    PT(T x, T y)    const { return transform_coordinates ? m.toStage<T>(x, y) : Vec2{ (f64)x, (f64)y }; }
+    template<typename T> DVec2    PT(Vec2<T> p)   const { return transform_coordinates ? m.toStage<T>(p) : static_cast<DVec2>(p); }
     //template<typename T> DVec2  PT(T x, T y)    const { return m.toStage<T>(x, y); }
     //template<typename T> DVec2  PT(Vec2<T> p)   const { return m.toStage<T>(p); }
+                                  
+    template<typename T> DVec2    SIZE(T w, T h)  const { return scale_sizes ? m.toStageSideLengths<T>({w, h}) : DVec2{(f64)w, (f64)h}; }
+    template<typename T> DVec2    SIZE(Vec2<T> s) const { return scale_sizes ? m.toStageSideLengths<T>(s) : s; }
+    template<typename T> f64      SIZE(T radius)  const { return scale_sizes ? (_avgAdjustedZoom() * radius) : radius; }
 
-    template<typename T> DVec2  SIZE(T w, T h)  const { return scale_sizes ? m.toStageSideLengths<T>({w, h}) : DVec2{(double)w, (double)h}; }
-    template<typename T> DVec2  SIZE(Vec2<T> s) const { return scale_sizes ? m.toStageSideLengths<T>(s) : s; }
-    template<typename T> double SIZE(T radius)  const { return scale_sizes ? (_avgAdjustedZoom() * radius) : radius; }
+    template<typename T> DQuad    QUAD(const Quad<T>& q) const { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
 
-    template<typename T> DQuad  QUAD(const Quad<T>& q) const { return { PT(q.a), PT(q.b), PT(q.c), PT(q.d) }; }
-
-    template<typename T> void ROTATE(T r)           { if (r != 0.0) SimplePainter::rotate(r); }
-    template<typename T> void TRANSLATE(T x, T y)   { SimplePainter::translate(PT(x, y)); }
-    template<typename T> DVec2 TRANSFORMED(T x, T y, T w, T h, double rotation) {
+    template<typename T> void     ROTATE(T r)           { if (r != 0.0) SimplePainter::rotate(r); }
+    template<typename T> void     TRANSLATE(T x, T y)   { SimplePainter::translate(PT(x, y)); }
+    template<typename T> DVec2    TRANSFORMED(T x, T y, T w, T h, f64 rotation) {
         SimplePainter::translate(PT(x, y));
         if (rotation != 0.0)
             SimplePainter::rotate(rotation);
@@ -743,7 +729,7 @@ public:
 
     // ======== Styles ========
 
-    void setLineWidth(double w)
+    void setLineWidth(f64 w)
     {
         this->line_width = w;
         if (scale_lines)
@@ -754,10 +740,10 @@ public:
 
     // ======== Paths (overrides) ========
 
-    template<typename T> void moveTo(T px, T py)    { SimplePainter::moveTo(PT(px, py)); }
-    template<typename T> void lineTo(T px, T py)    { SimplePainter::lineTo(PT(px, py)); }
-    template<typename T> void moveTo(Vec2<T> p)     { SimplePainter::moveTo(PT(p)); }
-    template<typename T> void lineTo(Vec2<T> p)     { SimplePainter::lineTo(PT(p)); }
+    template<typename T> void moveTo(T px, T py)                 { SimplePainter::moveTo(PT(px, py)); }
+    template<typename T> void lineTo(T px, T py)                 { SimplePainter::lineTo(PT(px, py)); }
+    template<typename T> void moveTo(Vec2<T> p)                  { SimplePainter::moveTo(PT(p)); }
+    template<typename T> void lineTo(Vec2<T> p)                  { SimplePainter::lineTo(PT(p)); }
 
     template<typename T> void circle(T cx, T cy, T r)            { SimplePainter::circle(PT(cx, cy), SIZE(r)); }
     template<typename T> void circle(Vec2<T> cen, T r)           { SimplePainter::circle(PT(cen),    SIZE(r)); }
@@ -830,50 +816,50 @@ public:
     }
 
     // Linear (Fill)
-    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f) { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
-    void setFillLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4])                 { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4])                 { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
     void setFillLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                                 { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer, a); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4])                                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer, a); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4])                                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
 
     // Linear (Stroke)
-    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
-    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
-    void setStrokeLinearGradient(double x0, double y0, double x1, double y1, const float(&inner)[4], const float(&outer)[4])               { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4])               { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
     void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                               { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer, a); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const float(&inner)[4], const float(&outer)[4])                                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer, a); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4])                                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
 
     // Radial (Fill)
-    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a=1.0f)   { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setFillRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4])                 { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
-    void setFillRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer)                                      { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
-    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setFillRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4])                              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)   { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                 { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer)                                      { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
 
     // Radial (Stroke)
-    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
-    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setStrokeRadialGradient(double cx, double cy, double r0, double r1, const float(&inner)[4], const float(&outer)[4])               { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
-    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const Color& inner, const Color& outer)                                    { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
-    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[3], const float(&outer)[3], float a = 1.0f)            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setStrokeRadialGradient(DVec2 c, double r0, double r1, const float(&inner)[4], const float(&outer)[4])                            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])               { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer)                                    { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
 
     // Box (Fill)
-    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer)            { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
-    void setFillBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4])    { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer)                             { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f)       { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4])                     { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer)            { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])    { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer)                             { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)       { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])                     { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
 
     // Box (Stroke)
-    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const Color& inner, const Color& outer)          { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f) { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
-    void setStrokeBoxGradient(double x, double y, double w, double h, double r, double f, const float(&inner)[4], const float(&outer)[4])  { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const Color& inner, const Color& outer)                           { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[3], const float(&outer)[3], float a=1.0f)     { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, double r, double f, const float(&inner)[4], const float(&outer)[4])                   { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer)          { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])  { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer)                           { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)     { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])                   { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
 
 
     // ======== Shapes ========
@@ -940,13 +926,13 @@ public:
     template<typename T> void fillEllipse(Vec2<T> cen, T r)                            { fillEllipse<T>(cen.x, cen.y, r, r); }
     template<typename T> void fillEllipse(Vec2<T> cen, T r, Color col)                 { setFillStyle(col); fillEllipse<T>(cen.x, cen.y, r, r); }
 
-    template<typename T> void drawArrow(Vec2<T> a, Vec2<T> b, Color color=Color(255,255,255), double tip_angle=35, double tip_scale=1.0, bool fill_tip=true)
+    template<typename T> void drawArrow(Vec2<T> a, Vec2<T> b, Color color=Color(255,255,255), f64 tip_angle=35, f64 tip_scale=1.0, bool fill_tip=true)
     {
-        double dx = b.x - a.x;
-        double dy = b.y - a.y;
-        double angle = std::atan2(dy, dx);
-        const double tip_sharp_angle = math::toRadians(180.0 - tip_angle);
-        double arrow_size;
+        f64 dx = b.x - a.x;
+        f64 dy = b.y - a.y;
+        f64 angle = std::atan2(dy, dx);
+        const f64 tip_sharp_angle = math::toRadians(180.0 - tip_angle);
+        f64 arrow_size;
 
         if (transform_coordinates)
         {
@@ -959,10 +945,10 @@ public:
 
         DVec2 c = b - (b - a).normalized() * arrow_size * 0.7;
 
-        double rx1 = b.x + std::cos(angle + tip_sharp_angle) * arrow_size;
-        double ry1 = b.y + std::sin(angle + tip_sharp_angle) * arrow_size;
-        double rx2 = b.x + std::cos(angle - tip_sharp_angle) * arrow_size;
-        double ry2 = b.y + std::sin(angle - tip_sharp_angle) * arrow_size;
+        f64 rx1 = b.x + std::cos(angle + tip_sharp_angle) * arrow_size;
+        f64 ry1 = b.y + std::sin(angle + tip_sharp_angle) * arrow_size;
+        f64 rx2 = b.x + std::cos(angle - tip_sharp_angle) * arrow_size;
+        f64 ry2 = b.y + std::sin(angle - tip_sharp_angle) * arrow_size;
 
         if (fill_tip)
         {
@@ -997,7 +983,7 @@ public:
 
     // ======== Image ========
 
-    //void drawImage(Image& bmp, double x, double y, double w = 0, double h = 0) {
+    //void drawImage(Image& bmp, f64 x, f64 y, f64 w = 0, f64 h = 0) {
     //    SimplePainter::drawImage(bmp, x, y, w <= 0 ? bmp.bmp_width : w, h <= 0 ? bmp.bmp_height : h);
     //}
 
@@ -1012,7 +998,7 @@ public:
         bmp.refreshData(vg);
 
         nvgSave(vg);
-        nvgTransform(vg, (float)u.x, (float)u.y, (float)v.x, (float)v.y, (float)a.x, (float)a.y);
+        nvgTransform(vg, (f32)u.x, (f32)u.y, (f32)v.x, (f32)v.y, (f32)a.x, (f32)a.y);
         NVGpaint paint = nvgImagePattern(vg, 0, 0, 1, 1, 0.0f, bmp.imageId(), 1.0f);
         nvgBeginPath(vg);
         nvgRect(vg, 0, 0, 1, 1);
@@ -1026,7 +1012,7 @@ public:
         drawImage(bmp, bmp.worldQuad());
     }
 
-    void drawShaderSurface(const ShaderSurface& surf, float x, float y, float w, float h, float alpha = 1.0f) const
+    void drawShaderSurface(const ShaderSurface& surf, f32 x, f32 y, f32 w, f32 h, f32 alpha = 1.0f) const
     {
         int img = surf.nvgImageId(vg);
         if (!img)
@@ -1042,7 +1028,11 @@ public:
 
     // ======== Text ========
 
-    void setFontSize(double size_pts) { nvgFontSize(vg, (float)(sizeScale() * size_pts)); }
+    void setFontSize(f64 size_pts) {
+        SimplePainter::setFontSizePx((f32)(sizeScale() * size_pts));
+        //nvgFontSize(vg, (f32)(sizeScale() * size_pts));
+
+    }
 
     template<typename T> void fillText(std::string_view txt, T px, T py)
     {
@@ -1071,7 +1061,7 @@ public:
         fillText(txt, p.x, p.y);
     }
 
-    template<typename T=double> [[nodiscard]] Rect<T> boundingBox(std::string_view txt)
+    template<typename T=f64> [[nodiscard]] Rect<T> boundingBox(std::string_view txt)
     {
         SimplePainter::save();
         SimplePainter::resetTransform();
@@ -1082,9 +1072,9 @@ public:
     }
 
 private:
-    [[nodiscard]] std::string format_number(double v, int decimals, double fixed_min = 0.001, double fixed_max = 100000) {
+    [[nodiscard]] std::string format_number(f64 v, int decimals, f64 fixed_min = 0.001, f64 fixed_max = 100000) {
         char buffer[32];
-        double abs_v = std::abs(v);
+        f64 abs_v = std::abs(v);
 
         char fmt[8];
 
@@ -1118,7 +1108,7 @@ private:
 
         return s;
     }
-    [[nodiscard]] std::string format_number(f128 v, int decimals, double fixed_min = 0.001, double fixed_max = 100000) {
+    [[nodiscard]] std::string format_number(f128 v, int decimals, f64 fixed_min = 0.001, f64 fixed_max = 100000) {
         f128 abs_v = abs(v);
 
         std::string s;
@@ -1137,12 +1127,12 @@ private:
             return '-' + s;
     }
 
-    const double exponent_font_scale = 0.85;
-    const double exponent_spacing_x = 0.06;
-    const double exponent_spacing_y = -0.3;
+    const f64 exponent_font_scale = 0.85;
+    const f64 exponent_spacing_x = 0.06;
+    const f64 exponent_spacing_y = -0.3;
 
 public:
-    template<typename PosT=double, typename ValT> void fillNumberScientific(std::string& txt, Vec2<PosT> pos, /*int decimals,*/ double fontSize = 12.0)
+    template<typename PosT=f64, typename ValT> void fillNumberScientific(std::string& txt, Vec2<PosT> pos, /*int decimals,*/ f64 fontSize = 12.0)
     {
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
@@ -1151,7 +1141,7 @@ public:
             std::string mantissa_txt = txt.substr(0, ePos) + "e";
             std::string exponent_txt = std::to_string(exponent);
 
-            double mantissaWidth = boundingBox<PosT>(mantissa_txt).x2 + exponent_spacing_x;
+            f64 mantissaWidth = boundingBox<PosT>(mantissa_txt).x2 + exponent_spacing_x;
 
             /// todo: Take whatever alignment you're given and adjust right bound
             setTextAlign(TextAlign::ALIGN_CENTER);
@@ -1178,7 +1168,7 @@ public:
         }
     }
     
-	template<typename PosT=double, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(std::string& txt, /*int decimals,*/ double fontSize = 12.0)
+	template<typename PosT=f64, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(std::string& txt, /*int decimals,*/ f64 fontSize = 12.0)
     {
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
@@ -1232,15 +1222,15 @@ public:
     // ======== Axis ========
 
     void drawWorldAxis(
-        double axis_opacity = 0.3,
-        double grid_opacity = 0.075,
-        double text_opacity = 0.45
+        f64 axis_opacity = 0.3,
+        f64 grid_opacity = 0.075,
+        f64 text_opacity = 0.45
     );
 
-    void drawCursor(double x, double y, double size = 24.0)
+    void drawCursor(f64 x, f64 y, f64 size = 24.0)
     {
-        const double s = size;
-        const double lw = std::max(1.0, s * 0.075);
+        const f64 s = size;
+        const f64 lw = std::max(1.0, s * 0.075);
 
         save();
 
@@ -1349,9 +1339,11 @@ class Canvas : public SimplePainter
     // The default painter which draws to this canvas
     PainterContext context;
 
+    std::atomic<bool> dirty = false;
+
 public:
 
-    void create(double global_scale);
+    void create(f64 global_scale);
     bool resize(int w, int h);
 
     ~Canvas();
@@ -1359,8 +1351,11 @@ public:
     IRect clientRect() const { return client_rect; }
     void setClientRect(IRect r) { client_rect = r; }
 
-    void begin(float r, float g, float b, float a = 1.0);
+    void begin(f32 r, f32 g, f32 b, f32 a = 1.0);
     void end();
+
+    void setDirty(bool b=true) { dirty.store(b, std::memory_order_relaxed); }
+    bool isDirty() const { return dirty.load(std::memory_order_acquire); }
 
     PainterContext* getPainterContext() { return &context; }
     GLuint texture() { return tex; }

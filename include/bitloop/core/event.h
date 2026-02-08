@@ -8,6 +8,7 @@
 BL_BEGIN_NS
 
 class ProjectBase;
+class SceneBase;
 class CameraInfo;
 class Viewport;
 
@@ -74,6 +75,8 @@ public:
     [[nodiscard]] Viewport* ctx_owner()   const { return _owner_ctx; }
     [[nodiscard]] SDL_Event* sdl()        const { return &sdl_event; }
     [[nodiscard]] std::string toString();
+
+    bool ownedBy(const SceneBase* scene);
 };
 
 class PointerEvent : public Event
@@ -89,6 +92,8 @@ public:
     [[nodiscard]] constexpr SDL_FingerID fingerID() { return sdl_event.tfinger.fingerID; }
     [[nodiscard]] double x();
     [[nodiscard]] double y();
+
+    [[nodiscard]] bool hoveredOver(const SceneBase* scene);
 };
 
 typedef SDL_Keycode KeyCode;

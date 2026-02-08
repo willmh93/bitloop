@@ -1,6 +1,7 @@
 #include <bitloop/core/event.h>
 #include <bitloop/platform/platform.h>
 #include <bitloop/core/viewport.h>
+#include <bitloop/core/scene.h>
 
 BL_BEGIN_NS
 
@@ -105,6 +106,19 @@ double PointerEvent::y()
         return ctx_owner()->toSurfaceY((double)sdl_event.motion.y);
     }
     return 0;
+}
+
+bool Event::ownedBy(const SceneBase* scene)
+{
+    return (ctx_owner() && ctx_owner()->mountedScene() == scene);
+}
+
+bool PointerEvent::hoveredOver(const SceneBase* scene)
+{
+    return (ctx_hovered() && ctx_hovered()->mountedScene() == scene);
+    //auto& viewports = scene->mountedToViewports();
+    //auto it = std::find(viewports.begin(), viewports.end(), ctx_hovered());
+    //return (it != viewports.end());
 }
 
 BL_END_NS

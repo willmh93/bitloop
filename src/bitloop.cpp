@@ -282,7 +282,9 @@ int bitloop_main(int, char* [])
     {
         gl_context = SDL_GL_CreateContext(window);
         SDL_GL_MakeCurrent(window, gl_context);
-        SDL_GL_SetSwapInterval(1); // enforces 60fps / v-sync
+		
+        //SDL_GL_SetSwapInterval(1); // enforces 60fps / v-sync
+        SDL_GL_SetSwapInterval(0);
 
         #ifndef __EMSCRIPTEN__
         if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {

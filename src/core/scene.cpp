@@ -59,44 +59,28 @@ void SceneBase::mountToAll(Layout& viewports)
         viewport->mountScene(this);
 }
 
-bool SceneBase::ownsEvent(const Event& e)
+void SceneBase::requestImmediateUpdate()
 {
-    return e.ctx_owner() && e.ctx_owner()->scene == this;
+    project->requestImmediateUpdate();
 }
 
-double SceneBase::frame_dt(int average_samples) const
+double SceneBase::frame_dt() const
 {
-    if (dt_call_index >= dt_scene_ma_list.size())
-        dt_scene_ma_list.push_back(math::SMA<double>(average_samples));
-
-    auto& ma = dt_scene_ma_list[dt_call_index++];
-    return ma.push(project->dt_frameProcess);
+    return project->frame_dt;
 }
 
-double SceneBase::scene_dt(int average_samples) const
+double SceneBase::project_dt() const
 {
-    if (dt_call_index >= dt_scene_ma_list.size())
-        dt_scene_ma_list.push_back(math::SMA<double>(average_samples));
-
-    auto& ma = dt_scene_ma_list[dt_call_index++];
-    return ma.push(dt_sceneProcess);
-}
-
-double SceneBase::project_dt(int average_samples) const
-{
-    if (dt_process_call_index >= dt_project_ma_list.size())
-        dt_project_ma_list.push_back(math::SMA<double>(average_samples));
-
-    auto& ma = dt_project_ma_list[dt_process_call_index++];
-    return ma.push(project->dt_projectProcess);
+    return project->project_dt;
 }
 
 double SceneBase::fpsFactor() const
 {
     if (!main_window()->isFixedFrameTimeDelta())
     {
-        double actual_fps = 1000.0 / frame_dt(1);
+        double actual_fps = fps();
         double target_fps = main_window()->getFPS();
+
         return (target_fps / actual_fps);
     }
     else
@@ -178,10 +162,16 @@ void SceneBase::permitCaptureFrame(bool b)
     main_window()->captureFrame(b);
 }
 
-bool SceneBase::capturedLastFrame()
+bool SceneBase::capturedLastFrame() const
 {
     return main_window()->capturedLastFrame();
 }
+
+int SceneBase::capturedFrameCount() const
+{
+    return main_window()->capturedFrameCount();
+}
+
 
 void SceneBase::logClear()
 {

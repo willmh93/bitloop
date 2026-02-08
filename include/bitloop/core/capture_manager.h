@@ -225,6 +225,9 @@ class CaptureManager
     std::mutex pending_mutex;
     EncodeFrame pending_frame; // grabbed by encoder thread with std::move
 
+    // number of provided frames (including frames not yet processed, incremented immediately by encodeFrame)
+    int frame_count = 0;
+
     std::atomic<bool> capture_enabled{ true };
 
     std::atomic<bool> recording{ false };
@@ -233,6 +236,7 @@ class CaptureManager
     // WebPWorker stores final encoded data in encoded_data and sets capture_to_memory_complete=true
     std::atomic<bool> capture_to_memory_complete{ false };
     std::atomic<bool> any_capture_complete{ false };
+    std::atomic<bool> capture_error{ false };
     std::mutex encoded_data_mutex;
     bytebuf    encoded_data;
 
@@ -244,7 +248,7 @@ class CaptureManager
 
     bool     shouldFinalize() const  { return finalize_requested.load(std::memory_order_acquire); }
     void     clearFinalizeRequest()  { finalize_requested.store(false, std::memory_order_release); }
-    void     onFinalized();
+    void     onFinalized(bool error);
 
     void     preProcessFrameForEncoding(const uint8_t* src_data, bytebuf& out);
 
@@ -258,21 +262,27 @@ public:
     int            fps() const            { return config.fps;        }
     std::string    filename() const       { return config.filename;   }
     CaptureFormat  format() const         { return config.format;     }
-                                     
-    bool  isRecording() const           { return recording.load(std::memory_order_acquire);        }
-    bool  isSnapshotting() const        { return snapshotting.load(std::memory_order_acquire);     }
-    bool  isCapturing() const           { return isRecording() || isSnapshotting();                }
-    bool  isCaptureEnabled() const      { return capture_enabled.load(std::memory_order_acquire);  }
-    void  setCaptureEnabled(bool b)     { capture_enabled.store(b, std::memory_order_release);     }
-                                        
-    bool  isBusy() const                { return encoder_busy.load(std::memory_order_acquire);     }
 
-    bool  handleCaptureComplete(bool& captured_to_memory)
+    int   frameCount() const              { return frame_count; }
+                                          
+    bool  isRecording() const             { return recording.load(std::memory_order_acquire);        }
+    bool  isSnapshotting() const          { return snapshotting.load(std::memory_order_acquire);     }
+    bool  isCapturing() const             { return isRecording() || isSnapshotting();                }
+    bool  isCaptureEnabled() const        { return capture_enabled.load(std::memory_order_acquire);  }
+    void  setCaptureEnabled(bool b)       { capture_enabled.store(b, std::memory_order_release);     }
+                                          
+    bool  isBusy() const                  { return encoder_busy.load(std::memory_order_acquire);     }
+
+    bool  handleCaptureComplete(bool* captured_to_memory, bool* error)
     {
         bool complete = any_capture_complete.load(std::memory_order_acquire);
         if (complete)
         {
-            captured_to_memory = capture_to_memory_complete.load(std::memory_order_acquire);
+            if (error)
+                *error = capture_error.load(std::memory_order_acquire);
+
+            if (captured_to_memory)
+                *captured_to_memory = capture_to_memory_complete.load(std::memory_order_acquire);
 
             // reset flags
             capture_to_memory_complete.store(false, std::memory_order_release);

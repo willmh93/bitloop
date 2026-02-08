@@ -322,7 +322,7 @@ void Test2_Scene::viewportDraw(Viewport* ctx) const
 
 void Test2_Scene::onEvent(Event e)
 {
-    if (this->ownsEvent(e))
+    if (e.ownedBy(this))
         handleWorldNavigation(e, true);
 }
 

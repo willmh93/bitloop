@@ -16,7 +16,7 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
     /// ─────── Your methods ───────
     // void customMethod();
 
-    /// ─────── launch config (overridable by Project) ───────
+    /// ─────── Launch config (overridable by Project) ───────
     struct Config { /* double gravity = 9.8; */ };
 
     {SIM_NAME}_Scene(Config& info [[maybe_unused]])
@@ -24,11 +24,11 @@ struct {SIM_NAME}_Scene : public Scene<{SIM_NAME}_Scene>
     {}
 
     /// ─────── Thread-safe UI for editing Scene inputs with ImGui ───────
-    struct UI : DoubleBufferedAccessor
+    struct UI : BufferedInterfaceModel
     {
-        using DoubleBufferedAccessor::DoubleBufferedAccessor;
-        void sidebar();
-        //void overlay();
+        using BufferedInterfaceModel::BufferedInterfaceModel;
+        void sidebar() override; // ImGui Scene 
+        //void overlay() override; // ImGui viewport overlay
 
         /// ─────── Your UI-only variables ───────
         // bool test_popup_open = false;

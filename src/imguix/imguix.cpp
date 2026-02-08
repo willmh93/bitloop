@@ -844,6 +844,11 @@ namespace ImGui
         collapsing_head_box_contents_disabled = false;
     }
 
+    bool CollapsingHeaderContentsDisabled()
+    {
+        return collapsing_head_box_contents_disabled;
+    }
+
     bool CollapsingHeaderBox(const char* id, bool open_by_default, float pad, float extra)
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();

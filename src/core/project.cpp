@@ -235,6 +235,7 @@ void ProjectBase::_projectStart()
     for (Viewport* viewport : viewports)
     {
         viewport->scene->sceneMounted(viewport);
+        viewport->scene->requestRedraw(true);
     }
 
     started = true;
@@ -272,9 +273,12 @@ void ProjectBase::_projectDestroy()
     projectDestroy();
 
     // force any UI / deferred destructions to happen on the main GUI thread *before* deleting the project/scenes
+    // destroy scene->ui's, but not project->ui (since it can still be reconfigered and start again)
     main_window()->threadQueue().invokeBlocking([&]()
     {
-        _destroyGUI();
+        for (SceneBase* scene : viewports.all_scenes)
+            scene->_destroyGUI();
+
         main_window()->threadQueue().drain();
     });
 
@@ -282,14 +286,22 @@ void ProjectBase::_projectDestroy()
     viewports.clear();
 }
 
-void ProjectBase::updateViewportRects()
+bool ProjectBase::updateViewportRects()
 {
     assert(viewports.count() > 0);
+
+    bool resized = false;
 
     DRect client_rect = (DRect)canvas->clientRect();
 
     DVec2 surface_size = canvas->fboSize();
     DVec2 client_size = client_rect.size();
+
+    if (surface_size != old_surface_size)
+    {
+        old_surface_size = surface_size;
+        resized = true;
+    }
 
     // stretch factor from surface_size to rendered client_size
     DVec2 sf = client_size / surface_size; 
@@ -304,6 +316,7 @@ void ProjectBase::updateViewportRects()
     // Update viewport rects
     for (Viewport* viewport : viewports)
     {
+        // todo: resizing splitter? Only makes sense if DPR hasn't changed
         viewport->setSurfacePos(
             floor(viewport->viewport_grid_x * (viewport_width + splitter_thickness)),
             floor(viewport->viewport_grid_y * (viewport_height + splitter_thickness))
@@ -321,18 +334,16 @@ void ProjectBase::updateViewportRects()
             viewport->height() * sf.y
         );
     }
+
+    return resized;
 }
 
 void ProjectBase::_projectProcess()
 {
-    auto frame_dt = std::chrono::steady_clock::now() - last_frame_time;
-    dt_frameProcess = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(frame_dt).count());
-    
-    last_frame_time = std::chrono::steady_clock::now();
+    frame_dt = frame_timer.tick();
 
-    updateViewportRects();
-
-    
+    bool canvas_dirty = false;
+    bool viewport_rects_updated = updateViewportRects();
 
     // 'did_first_process' is only true for the FIRST frame we process (when unpaused) so that we
     // don't do any drawing until this sets:  done_single_process=true
@@ -364,21 +375,18 @@ void ProjectBase::_projectProcess()
 
     if (!paused)
     {
-        auto project_t0 = std::chrono::steady_clock::now();
+        project_timer.begin();
 
         // Process each scene
         for (SceneBase* scene : viewports.all_scenes)
         {
-            scene->dt_call_index = 0;
-            auto scene_t0 = std::chrono::steady_clock::now();
+            scene_timer.begin();
 
+            ///scene->needs_redraw = true; // force redraw unless told otherwise
             scene->mouse = &mouse;
             scene->sceneProcess();
 
-            auto scene_dt = std::chrono::steady_clock::now() - scene_t0;
-            scene->dt_sceneProcess = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(scene_dt).count()
-            );
+            scene->dt_sceneProcess = scene_timer.elapsed();
         }
 
 
@@ -387,20 +395,22 @@ void ProjectBase::_projectProcess()
         {
             //viewport->camera.panZoomProcess();
 
-            //viewport->just_resized =
-            //    (viewport->w != viewport->old_w) ||
-            //    (viewport->h != viewport->old_h);
-
             double dt;
             if (main_window()->getCaptureManager()->isRecording() )
                 dt = 1.0 / main_window()->getCaptureManager()->fps();
             else
-                dt = dt_frameProcess / 1000.0;
+                dt = frame_dt / 1000.0;
 
             viewport->scene->viewportProcess(viewport, dt);
 
-            //viewport->old_w = viewport->w;
-            //viewport->old_h = viewport->h;
+            // all viewports need redraw if surface changes size
+            if (viewport_rects_updated)
+                viewport->scene->needs_redraw = true;
+
+            // if any scene needs a redraw (including from surface size change), mark the canvas
+            // as dirty so it gets redrawn by imgui
+            if (viewport->scene->needs_redraw)
+                canvas_dirty = true;
         }
 
         /// --- Post-Process each scene ---
@@ -410,10 +420,7 @@ void ProjectBase::_projectProcess()
             scene->ChangeTracker::updateCurrent();
 
         // Measure time taken to process whole project
-        auto project_dt = std::chrono::steady_clock::now() - project_t0;
-        dt_projectProcess = static_cast<int>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(project_dt).count()
-        );
+        project_dt = project_timer.elapsed();
 
         // Prepare to encode the next frame
         ///encode_next_paint = true;
@@ -423,100 +430,123 @@ void ProjectBase::_projectProcess()
 
     if (did_first_process)
         done_single_process = true;
+
+    if (canvas_dirty)
+        canvas->setDirty();
 }
 void ProjectBase::_projectDraw()
 {
     if (!done_single_process) return;
     if (!started) return;
-    
-    ///if (!shaders_loaded)
-    ///{
-    ///    _loadShaders();
-    ///    shaders_loaded = true;
-    ///}
 
-    //Canvas* ctx = canvas;
     DVec2 surface_size = canvas->fboSize();
 
-    // Draw background
-    canvas->setFillStyle(10, 10, 15);
-    canvas->fillRect(0, 0, surface_size.x, surface_size.y);
 
-    canvas->setFillStyle(255,255,255);
-    canvas->setStrokeStyle(255,255,255);
-
-    canvas->setFontSize(16.0f);
-
-    ///timer_projectDraw.start();
-
-    // Draw each viewport
+    // todo: No per-viewport redrawing for now. Would require:
+    // - or give each viewport a separate Canvas (ideal)
+    //   - let ImGui draw viewport splitters
+    //   - blit each viewport (when dirty) to merged "project_image" so you can record all in one frame
+    //   - optional [hard]: add Scene-specific logic to capture only that scene.
+    //     - queue captures, see if FFmpeg can handle multiple recordings at once (multiple capture managers?)
+    // 
+    // - additional surfaces to target (switch same nanovg instance)
+    
+    // If any viewport is dirty, redraw all viewports
+    bool any_viewports_dirty = false;
     for (Viewport* viewport : viewports)
     {
-        // Reuse derived painter for the primary canvas context
-        viewport->usePainter(canvas->getPainterContext());
-
-        viewport->resetTransform();
-
-        canvas->setClipRect(viewport->left(), viewport->top(), viewport->width(), viewport->height());
-        canvas->save();
-
-        // Starting viewport position
-        canvas->translate(std::floor(viewport->left()), std::floor(viewport->top()));
-
-        // Set default world transform
-        viewport->worldMode();
-
-        // Draw Scene to Viewport
-        viewport->draw();
-
-        // Restore initial canvas transform
-        canvas->restore();
-        canvas->resetClipping();
+        if (viewport->scene->needs_redraw || viewport->focused_dt > 0)
+        {
+            any_viewports_dirty = true;
+            viewport->scene->needs_redraw = false;
+        }
     }
 
-    ///dt_projectDraw = timer_projectDraw.elapsed();
-
-    // Draw viewport splitters
-    for (Viewport* viewport : viewports)
+    // Draw background
+    if (any_viewports_dirty)
     {
-        canvas->setLineWidth(splitter_thickness);
-        canvas->setStrokeStyle(30, 30, 40);
-        canvas->beginPath();
+        canvas->setFillStyle(10, 10, 15);
+        canvas->fillRect(0, 0, surface_size.x, surface_size.y);
 
-        
 
-        // Draw vert line
-        if (viewport->viewport_grid_x < viewports.cols - 1)
+        canvas->setFillStyle(255, 255, 255);
+        canvas->setStrokeStyle(255, 255, 255);
+
+        canvas->setFontSize(16.0f);
+
+        ///timer_projectDraw.start();
+
+        // Draw each viewport
+        for (Viewport* viewport : viewports)
         {
-            double line_x = viewport->right() + splitter_thickness / 2;
-            canvas->moveTo(line_x, viewport->top());
-            canvas->lineTo(line_x, viewport->bottom() + splitter_thickness); // +splitter_thickness to fill sqare gap between lines
-        }
+            // Reuse derived painter for the primary canvas context
+            viewport->usePainter(canvas->getPainterContext());
 
-        // Draw horiz line
-        if (viewport->viewport_grid_y < viewports.rows - 1)
-        {
-            double line_y = viewport->bottom() + splitter_thickness / 2;
-            canvas->moveTo(viewport->left(), line_y);
-            canvas->lineTo(viewport->right(), line_y);
-        }
+            viewport->resetTransform();
 
-        canvas->stroke();
+            canvas->setClipRect(viewport->left(), viewport->top(), viewport->width(), viewport->height());
+            canvas->save();
 
-        if (ctx_focused == viewport)
-        {
-            int flash_extra = 0;
-            if (viewport->focused_dt > 0)
+            // Starting viewport position
+            canvas->translate(std::floor(viewport->left()), std::floor(viewport->top()));
+
+            // Set default world transform
+            viewport->worldMode();
+
+            // Draw Scene to Viewport
+            ///if (viewport->scene->needs_redraw)
             {
-                viewport->focused_dt -= 1.0f;
-
-                float focus_flash_brightness = viewport->focused_dt / Viewport::focus_flash_frames;
-                flash_extra = (int)(focus_flash_brightness * 155.0f);
+                viewport->draw();
+                ///viewport->scene->needs_redraw = false;
             }
 
-            canvas->setLineWidth(1);
-            canvas->setStrokeStyle(75 + flash_extra, 75, 100 + flash_extra);
-            canvas->strokeRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
+            // Restore initial canvas transform
+            canvas->restore();
+            canvas->resetClipping();
+        }
+
+        ///dt_projectDraw = timer_projectDraw.elapsed();
+
+        // Draw viewport splitters
+        for (Viewport* viewport : viewports)
+        {
+            canvas->setLineWidth(splitter_thickness);
+            canvas->setStrokeStyle(30, 30, 40);
+            canvas->beginPath();
+
+            // Draw vert line
+            if (viewport->viewport_grid_x < viewports.cols - 1)
+            {
+                double line_x = viewport->right() + splitter_thickness / 2;
+                canvas->moveTo(line_x, viewport->top());
+                canvas->lineTo(line_x, viewport->bottom() + splitter_thickness); // +splitter_thickness to fill sqare gap between lines
+            }
+
+            // Draw horiz line
+            if (viewport->viewport_grid_y < viewports.rows - 1)
+            {
+                double line_y = viewport->bottom() + splitter_thickness / 2;
+                canvas->moveTo(viewport->left(), line_y);
+                canvas->lineTo(viewport->right(), line_y);
+            }
+
+            canvas->stroke();
+
+            if (ctx_focused == viewport)
+            {
+                int flash_extra = 0;
+                if (viewport->focused_dt > 0)
+                {
+                    viewport->focused_dt -= 1.0f;
+
+                    float focus_flash_brightness = viewport->focused_dt / Viewport::focus_flash_frames;
+                    flash_extra = (int)(focus_flash_brightness * 155.0f);
+                }
+
+                canvas->setLineWidth(1);
+                canvas->setStrokeStyle(75 + flash_extra, 75, 100 + flash_extra);
+                canvas->strokeRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
+            }
         }
     }
 
