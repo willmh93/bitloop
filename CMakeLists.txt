@@ -143,10 +143,10 @@ find_package(NanoSVG CONFIG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-brotli CONFIG REQUIRED)
+find_package(tsl-ordered-map CONFIG REQUIRED)
 
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
 find_path(GCEM_INCLUDE_DIRS "gcem.hpp")
-find_path(TSL_ORDERED_MAP_INCLUDE_DIRS "tsl/ordered_hash.h")
 
 
 target_link_libraries(bitloop
@@ -165,6 +165,7 @@ target_link_libraries(bitloop
     nlohmann_json::nlohmann_json
     unofficial::brotli::brotlidec
     unofficial::brotli::brotlienc
+    tsl::ordered_map
 )
 target_include_directories(bitloop PRIVATE ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS})
 target_include_directories(bitloop PRIVATE ${GCEM_INCLUDE_DIRS})
