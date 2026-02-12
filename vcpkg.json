@@ -22,6 +22,7 @@
     "nanovg",
     "nanosvg",
 
+
     "libwebp",
     "nlohmann-json",
     "brotli",
