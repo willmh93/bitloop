@@ -22,6 +22,7 @@ static inline bool is_x265(CaptureFormat format)
     #if BITLOOP_FFMPEG_X265_ENABLED
     return (format == CaptureFormat::x265);
     #else
+    (void)format;
     return false;
     #endif
 }
