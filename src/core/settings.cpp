@@ -19,7 +19,11 @@ static inline double lerp_log(double a, double b, double t) {
 
 static inline bool is_x265(CaptureFormat format)
 {
+    #if BITLOOP_FFMPEG_X265_ENABLED
     return (format == CaptureFormat::x265);
+    #else
+    return false;
+    #endif
 }
 
 // Range depends ONLY on resolution, fps, codec
