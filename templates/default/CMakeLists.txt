@@ -5,10 +5,29 @@ if (NOT TARGET bitloop::bitloop)
   find_package(bitloop CONFIG REQUIRED)
 endif()
 
-file(GLOB SIM_SOURCES CONFIGURE_DEPENDS "{SIM_NAME}/*.cpp" "{SIM_NAME}/*.h")
+# ------------------------------------------------------------------
+# -------------- configure project hierarchy/sources ---------------
+# ------------------------------------------------------------------
+
+set(SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/{SIM_NAME}")
+file(GLOB_RECURSE SIM_SOURCES CONFIGURE_DEPENDS
+	"${SRC_DIR}/*.cpp"
+	"${SRC_DIR}/*.h"
+	"${SRC_DIR}/*.hpp"
+)
 
 # Create new project
 bitloop_new_project({SIM_NAME} ${SIM_SOURCES})
+
+# Add dependency projects
+#bitloop_add_dependency({SIM_NAME}  "./path/to/project")
+
+ # finalize (project discovery pass stops here)
+bitloop_finalize()
+
+# ------------------------------------------------------------------
+# ----- configure your target (compile options, packages, etc) -----
+# ------------------------------------------------------------------
 
 # fast math
 #if (NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
@@ -21,7 +40,3 @@ bitloop_new_project({SIM_NAME} ${SIM_SOURCES})
 #	target_compile_options({SIM_NAME} PRIVATE -O3 -flto -msimd128 -mrelaxed-simd -ffast-math -ffp-contract=fast -fno-math-errno)
 #endif()
 
-# Add dependency projects
-#bitloop_add_dependency({SIM_NAME}  "./path/to/project")
-
-bitloop_finalize()

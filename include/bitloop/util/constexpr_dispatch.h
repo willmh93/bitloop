@@ -15,6 +15,48 @@
 #endif
 #endif
 
+/// ────────── usage: free function / local method ──────────
+///
+///  format:
+///  > real template types first:                                            table_invoke<bool, float>(
+///  > arg 1: dispatch table (or dispatch_table_targ if obj method)              dispatch_table(func, runtime_arg1, runtime_arg2),
+///  > arg N: mapped types (e.g. FloatingPointType) THEN template non-types:     FloatingPointType::F32, MyEnum::FOO, (MyEnum)m_bar
+///                                                                          );
+///
+///    template<typename T1, typename T2>
+///    void testFunc(bool B)
+///    {
+///        T1 x = 5;
+///        T2 y = 5;
+///    }
+///    
+///    template<typename T1, typename T2>
+///    void MyClass::testMethod(bool B)
+///    {
+///        T1 x = 5;
+///        T2 y = 5;
+///    }
+///    
+///    void MyClass::foo()
+///    {
+///        table_invoke<f32,f128>( dispatch_table(testFunc, true) );
+///        table_invoke(           dispatch_table(testFunc, true), FloatingPointType::F32, FloatingPointType::F128 );
+///        table_invoke<f32>(      dispatch_table(testFunc, true), FloatingPointType::F128);
+///    
+///        // local method
+///        table_invoke<f32,f128>( dispatch_table(testMethod, true) );
+///        table_invoke(           dispatch_table(testMethod, true), FloatingPointType::F32, FloatingPointType::F128 );
+///        table_invoke<f32>(      dispatch_table(testMethod, true), FloatingPointType::F128 );
+///    }
+///
+/// 
+/// ────────── usage: targetted method ──────────
+///  
+///    table_invoke( dispatch_table_targ(obj, MyClass::testMethod, arg1, arg2), template_arg1, template_arg2 );
+///
+/// 
+
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 //    DispatchArg concept/trait + domain size utilities
@@ -287,44 +329,3 @@ decltype(auto) table_invoke(F&& f,
         }((std::tuple<decltype(Cs)...>*)nullptr);               \
     }
 
-
-/// ────────── usage: free function / local method ──────────
-///
-///  format:
-///  > real template types first:                                            table_invoke<bool, float>(
-///  > arg1: dispatch table (or dispatch_table_targ if obj method)               dispatch_table(func, runtime_arg1, runtime_arg2),
-///  > argN: mapped types (e.g. FloatingPointType) THEN template non-types:      FloatingPointType::F32, MyEnum::FOO, (MyEnum)m_bar
-///                                                                          );
-///
-///    template<typename T1, typename T2>
-///    void testFunc(bool B)
-///    {
-///        T1 x = 5;
-///        T2 y = 5;
-///    }
-///    
-///    template<typename T1, typename T2>
-///    void MyClass::testMethod(bool B)
-///    {
-///        T1 x = 5;
-///        T2 y = 5;
-///    }
-///    
-///    void MyClass::foo()
-///    {
-///        table_invoke<f32,f128>( dispatch_table(testFunc, true) );
-///        table_invoke(           dispatch_table(testFunc, true), FloatingPointType::F32, FloatingPointType::F128 );
-///        table_invoke<f32>(      dispatch_table(testFunc, true), FloatingPointType::F128);
-///    
-///        // local method
-///        table_invoke<f32,f128>( dispatch_table(testMethod, true) );
-///        table_invoke(           dispatch_table(testMethod, true), FloatingPointType::F32, FloatingPointType::F128 );
-///        table_invoke<f32>(      dispatch_table(testMethod, true), FloatingPointType::F128 );
-///    }
-///
-/// 
-/// ────────── usage: targetted method ──────────
-///  
-///    table_invoke( dispatch_table_targ(obj, MyClass::testMethod, arg1, arg2), template_arg1, template_arg2 );
-///
-/// 

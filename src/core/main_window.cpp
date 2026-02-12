@@ -1526,7 +1526,7 @@ void MainWindow::populateExpandedLayout()
 
     ImGui::End();
 }
-void MainWindow::populateViewport()
+void MainWindow::populateViewport(bool& projectDrawn)
 {
     /// todo: Make more thread-safe by only handling commands when we draw? (where both GUI and live buffers are unused)
     ///       As long as you queue commands for project_worker, you're safe here, but if invoke a project callback directly
@@ -1682,6 +1682,8 @@ void MainWindow::populateViewport()
 
             // Let worker continue
             shared_sync.cv.notify_one();
+
+            projectDrawn = true;
         }
 
         // "canvas" refers to internal canvas dimensions
@@ -1731,8 +1733,12 @@ void MainWindow::populateViewport()
 }
 void MainWindow::populateUI()
 {
+    auto frame_t0 = std::chrono::steady_clock::now();
+
     if (!manageDockingLayout())
         return;
+
+    bool project_drawn = false;
 
     //thread_queue.pump();
 
@@ -1801,7 +1807,7 @@ void MainWindow::populateUI()
                 wc.DockNodeFlagsOverrideSet = (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiWindowFlags_NoDocking;
                 ImGui::SetNextWindowClass(&wc);
 
-                populateViewport();
+                populateViewport(project_drawn);
 
                 //thread_queue.pump();
             }
@@ -1887,6 +1893,19 @@ void MainWindow::populateUI()
     }
 
     ///gui_destruction_queue.flush();
+
+    
+    if (shared_sync.immediateUpdateRequested())
+        shared_sync.setImmediateUpdate(false);
+    else if (!project_drawn)
+    {
+        // prevent spinning aggressively on main thread (if project drawn, delay was already handled by worker/lock)
+        auto frame_dt = std::chrono::steady_clock::now() - frame_t0;
+        constexpr uint64_t target_ns = 1000000000llu / 60;
+        uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(frame_dt).count());
+        uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
+        if (delay_ns) SDL_DelayPrecise(delay_ns);
+    }
 }
 
 BL_END_NS

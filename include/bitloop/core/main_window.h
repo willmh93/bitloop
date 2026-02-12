@@ -209,6 +209,7 @@ public:
     IVec2 viewportSize() const { return (IVec2)client_size; }
 
     void setSidebarVisible(bool b) { sidebar_visible = b; }
+    bool getSidebarVisible() { return sidebar_visible; }
 
     /// Thread-safe message queue
     void queueMainWindowCommand(MainWindowCommandEvent e) {
@@ -242,7 +243,7 @@ public:
     bool focusWindow(const char* id);
 
     void populateCollapsedLayout();
-    void populateViewport();
+    void populateViewport(bool& projectDrawn);
     
     void populateExpandedLayout();
     void populateUI();

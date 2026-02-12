@@ -145,6 +145,14 @@ void gui_loop()
                 if (!imguiWantsKeyboard) 
                     project_worker()->queueEvent(es);
                 break;
+            
+            case SDL_EVENT_DROP_FILE: {
+                std::string path = e.drop.data;
+                blPrint() << path; // valid
+
+                // okay?
+                project_worker()->queueEvent(es);
+            } break;
 
             default:
                 project_worker()->queueEvent(es);
@@ -231,6 +239,11 @@ int bitloop_main(int, char* [])
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+
+        SDL_SetEventEnabled(SDL_EVENT_DROP_FILE, true);
+        SDL_SetEventEnabled(SDL_EVENT_DROP_TEXT, true);
+        SDL_SetEventEnabled(SDL_EVENT_DROP_BEGIN, true);
+        SDL_SetEventEnabled(SDL_EVENT_DROP_COMPLETE, true);
 
         int fb_w = 1280, fb_h = 720;
 

@@ -689,16 +689,17 @@ public:
             : paint_ctx->global_scale;  // Stage-transform, fall back to DPR scaling
     }
 
+private:
 
-    struct ScopedTransform
+    struct ScopedResetTransform
     {
         Painter* painter;
-        ScopedTransform(Painter* p) : painter(p) {
+        ScopedResetTransform(Painter* p) : painter(p) {
             p->SimplePainter::save();
             p->SimplePainter::resetTransform();
             p->SimplePainter::transform(painter->default_viewport_transform);
         }
-        ~ScopedTransform() { painter->SimplePainter::restore(); }
+        ~ScopedResetTransform() { painter->SimplePainter::restore(); }
     };
 
     // ======== Position/Size wrappers (applies only enabled camera transforms) ========
@@ -708,8 +709,6 @@ public:
 
     template<typename T> DVec2    PT(T x, T y)    const { return transform_coordinates ? m.toStage<T>(x, y) : Vec2{ (f64)x, (f64)y }; }
     template<typename T> DVec2    PT(Vec2<T> p)   const { return transform_coordinates ? m.toStage<T>(p) : static_cast<DVec2>(p); }
-    //template<typename T> DVec2  PT(T x, T y)    const { return m.toStage<T>(x, y); }
-    //template<typename T> DVec2  PT(Vec2<T> p)   const { return m.toStage<T>(p); }
                                   
     template<typename T> DVec2    SIZE(T w, T h)  const { return scale_sizes ? m.toStageSideLengths<T>({w, h}) : DVec2{(f64)w, (f64)h}; }
     template<typename T> DVec2    SIZE(Vec2<T> s) const { return scale_sizes ? m.toStageSideLengths<T>(s) : s; }
@@ -726,6 +725,7 @@ public:
         return SIZE(w, h);
     }
 
+public:
 
     // ======== Styles ========
 
@@ -816,80 +816,80 @@ public:
     }
 
     // Linear (Fill)
-    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f) { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
-    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4])                 { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                                 { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer, a); }
-    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4])                                         { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
-
-    // Linear (Stroke)
-    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
-    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
-    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4])               { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                               { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer, a); }
-    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4])                                       { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
-
-    // Radial (Fill)
-    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)   { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                 { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
-    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer)                                      { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
-    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                              { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
-
-    // Radial (Stroke)
-    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const Color& inner, const Color& outer)                       { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
-    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])               { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
-    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer)                                    { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
-    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
-    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                            { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
-
-    // Box (Fill)
-    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer)            { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
-    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])    { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer)                             { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)       { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
-    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])                     { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
-
-    // Box (Stroke)
-    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer)          { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)        { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
+    void setFillLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4])                      { SimplePainter::setFillLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                      { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)                    { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer, a); }
+    void setFillLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4])                                  { SimplePainter::setFillLinearGradient(PT(p0), PT(p1), inner, outer); }
+                                                                                                                                
+    // Linear (Stroke)                                                                                                          
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const Color& inner, const Color& outer)                        { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)        { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer, a); }
+    void setStrokeLinearGradient(f64 x0, f64 y0, f64 x1, f64 y1, const f32(&inner)[4], const f32(&outer)[4])                    { SimplePainter::setStrokeLinearGradient(PT(x0, y0), PT(x1, y1), inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const Color& inner, const Color& outer)                                    { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)                  { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer, a); }
+    void setStrokeLinearGradient(DVec2 p0, DVec2 p1, const f32(&inner)[4], const f32(&outer)[4])                                { SimplePainter::setStrokeLinearGradient(PT(p0), PT(p1), inner, outer); }
+                                                                                                                                
+    // Radial (Fill)                                                                                                            
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)          { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setFillRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                      { SimplePainter::setFillRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer)                                 { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)               { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setFillRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                             { SimplePainter::setFillRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+                                                                                                                                
+    // Radial (Stroke)                                                                                                          
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const Color& inner, const Color& outer)                        { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)        { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setStrokeRadialGradient(f64 cx, f64 cy, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                    { SimplePainter::setStrokeRadialGradient(PT(cx, cy), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const Color& inner, const Color& outer)                               { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[3], const f32(&outer)[3], f32 a = 1.0f)             { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer, a); }
+    void setStrokeRadialGradient(DVec2 c, f64 r0, f64 r1, const f32(&inner)[4], const f32(&outer)[4])                           { SimplePainter::setStrokeRadialGradient(PT(c), SIZE(r0), SIZE(r1), inner, outer); }
+                                                                                                                                
+    // Box (Fill)                                                                                                               
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer)                   { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)   { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
+    void setFillBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])               { SimplePainter::setFillBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer)                        { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)        { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
+    void setFillBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])                    { SimplePainter::setFillBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+                                                                                                                                
+    // Box (Stroke)                                                                                                             
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const Color& inner, const Color& outer)                 { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
     void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f) { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer, a); }
-    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])  { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer)                           { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)     { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
-    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])                   { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(f64 x, f64 y, f64 w, f64 h, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])             { SimplePainter::setStrokeBoxGradient(PT(x, y), SIZE(w, h), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const Color& inner, const Color& outer)                      { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[3], const f32(&outer)[3], f32 a=1.0f)      { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer, a); }
+    void setStrokeBoxGradient(DVec2 pos, DVec2 size, f64 r, f64 f, const f32(&inner)[4], const f32(&outer)[4])                  { SimplePainter::setStrokeBoxGradient(PT(pos), SIZE(size), SIZE(r), SIZE(f), inner, outer); }
 
 
     // ======== Shapes ========
 
     template<typename T> void strokeRect(T x, T y, T w, T h)
     {
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, m._angle());
         SimplePainter::strokeRect(0, 0, s.x, s.y);
     }
     template<typename T> void fillRect(T x, T y, T w, T h)
     {
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, m._angle());
         SimplePainter::fillRect(0, 0, s.x, s.y);
     }
     template<typename T> void strokeRoundedRect(T x, T y, T w, T h, T r) {
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, m._angle());
         SimplePainter::strokeRoundedRect(0, 0, s.x, s.y, SIZE(r));
     }
     template<typename T> void fillRoundedRect(T x, T y, T w, T h, T r)
     {
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         DVec2 s = TRANSFORMED(x, y, w, h, m._angle());
         SimplePainter::fillRoundedRect(0, 0, s.x, s.y, SIZE(r));
     }
     template<typename T> void strokeEllipse(T cx, T cy, T rx, T ry)
     {
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         DVec2 s = TRANSFORMED(cx, cy, rx, ry, m._angle());
         SimplePainter::beginPath();
         SimplePainter::ellipse(0, 0, s.x, s.y);
@@ -897,7 +897,7 @@ public:
     }
     template<typename T> void fillEllipse(T cx, T cy, T rx, T ry)
     {
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         DVec2 s = TRANSFORMED(cx, cy, rx, ry, m._angle());
         SimplePainter::beginPath();
         SimplePainter::ellipse(0, 0, s.x, s.y);
@@ -1030,20 +1030,12 @@ public:
 
     void setFontSize(f64 size_pts) {
         SimplePainter::setFontSizePx((f32)(sizeScale() * size_pts));
-        //nvgFontSize(vg, (f32)(sizeScale() * size_pts));
 
     }
 
     template<typename T> void fillText(std::string_view txt, T px, T py)
     {
-        //DVec2 p = PT(px, py);
-
-        //if (camera->scale_text)
-        //    SimplePainter::setFontSize(SIZE(font_size));
-        //else
-        //    SimplePainter::setFontSize(font_size);
-
-        ScopedTransform t(this);
+        ScopedResetTransform t(this);
         TRANSLATE(px, py);
 
         if (rotate_text)
@@ -1072,67 +1064,18 @@ public:
     }
 
 private:
-    [[nodiscard]] std::string format_number(f64 v, int decimals, f64 fixed_min = 0.001, f64 fixed_max = 100000) {
-        char buffer[32];
-        f64 abs_v = std::abs(v);
 
-        char fmt[8];
-
-        if ((abs_v != 0.0 && abs_v < fixed_min) || abs_v >= fixed_max) {
-            // Use scientific notation
-            std::snprintf(fmt, sizeof(fmt), "%%.%de", decimals);
-            std::snprintf(buffer, sizeof(buffer), fmt, v);
-        }
-        else {
-            // Use fixed-point
-            std::snprintf(fmt, sizeof(fmt), "%%.%df", decimals);
-            std::snprintf(buffer, sizeof(buffer), fmt, v);
-        }
-
-        std::string s(buffer);
-
-        // Trim trailing zeros (both fixed and scientific cases)
-        size_t dot_pos = s.find('.');
-        if (dot_pos != std::string::npos) {
-            size_t end = s.find_first_of("eE", dot_pos); // handle scientific part separately
-            size_t trim_end = (end == std::string::npos) ? s.size() : end;
-
-            // Trim zeros in the fractional part
-            size_t last_nonzero = s.find_last_not_of('0', trim_end - 1);
-            if (last_nonzero != std::string::npos && s[last_nonzero] == '.') {
-                last_nonzero--; // also remove the decimal point
-            }
-
-            s.erase(last_nonzero + 1, trim_end - last_nonzero - 1);
-        }
-
-        return s;
-    }
-    [[nodiscard]] std::string format_number(f128 v, int decimals, f64 fixed_min = 0.001, f64 fixed_max = 100000) {
-        f128 abs_v = abs(v);
-
-        std::string s;
-        if ((abs_v != 0 && abs_v < fixed_min) || abs_v >= fixed_max)
-        {
-            // Use scientific notation (strip zeros)
-            s = to_string(abs_v, decimals, false, true, true);
-        }
-        else {
-            // Use fixed-point (keep trailing zeros for consistency)
-            s = to_string(abs_v, decimals, true, false, false);
-        }
-        if (v >= 0)
-            return s;
-        else
-            return '-' + s;
-    }
+    [[nodiscard]] std::string formatNumberScientific(f64 v, int decimals, f64 fixed_min = 0.001, f64 fixed_max = 100000);
+    [[nodiscard]] std::string formatNumberScientific(f128 v, int decimals, f64 fixed_min = 0.001, f64 fixed_max = 100000);
 
     const f64 exponent_font_scale = 0.85;
     const f64 exponent_spacing_x = 0.06;
     const f64 exponent_spacing_y = -0.3;
 
 public:
-    template<typename PosT=f64, typename ValT> void fillNumberScientific(std::string& txt, Vec2<PosT> pos, /*int decimals,*/ f64 fontSize = 12.0)
+
+    // convert value to string first with ctx->prepareNumberScientific(n) or bl::to_string()
+    template<typename PosT=f64, typename ValT> void fillNumberScientific(std::string& txt, Vec2<PosT> pos, f64 fontSize = 12.0)
     {
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
@@ -1168,7 +1111,7 @@ public:
         }
     }
     
-	template<typename PosT=f64, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(std::string& txt, /*int decimals,*/ f64 fontSize = 12.0)
+	template<typename PosT=f64, typename ValT> [[nodiscard]] Rect<PosT> boundingBoxScientific(std::string& txt, f64 fontSize = 12.0)
     {
         size_t ePos = txt.find("e");
         if (ePos != std::string::npos)
@@ -1227,39 +1170,9 @@ public:
         f64 text_opacity = 0.45
     );
 
-    void drawCursor(f64 x, f64 y, f64 size = 24.0)
-    {
-        const f64 s = size;
-        const f64 lw = std::max(1.0, s * 0.075);
+    // ======== Extras ========
 
-        save();
-
-        // Fill
-        auto drawPath = [&]()
-        {
-            beginPath();
-            moveTo(x + 0.0, y + 0.0);
-            lineTo(x + 0.0, y + 0.95 * s); // bottom
-            lineTo(x + 0.30 * s, y + 0.57 * s); // << dip
-            lineTo(x + 0.8 * s, y + 0.50 * s); // right
-            closePath();
-        };
-
-        drawPath();
-        setFillStyle(255, 255, 255);
-        fill();
-
-        // Outline
-        setLineWidth(lw);
-        setStrokeStyle(0, 0, 0);
-        setLineJoin(LineJoin::JOIN_MITER);
-        setMiterLimit(6.0);
-
-        drawPath();
-        stroke();
-
-        restore();
-    }
+    void drawCursor(f64 x, f64 y, f64 size = 24.0);
 
 
     // ======== Expose unchanged methods ========

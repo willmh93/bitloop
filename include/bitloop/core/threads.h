@@ -338,6 +338,8 @@ struct SharedSync
     bool frame_ready_to_draw = false;
     bool frame_consumed = false;
 
+    std::atomic<bool> immediate_update{ false };
+
     void flag_ready_to_draw()
     {
         std::lock_guard<std::mutex> lock(state_mutex);
@@ -363,6 +365,16 @@ struct SharedSync
     {
         quitting.store(true);
         cv.notify_all();
+    }
+
+    void setImmediateUpdate(bool b)
+    {
+        immediate_update.store(b, std::memory_order_release);
+    }
+
+    bool immediateUpdateRequested()
+    {
+        return immediate_update.load(std::memory_order_acquire);
     }
 };
 

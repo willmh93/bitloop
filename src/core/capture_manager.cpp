@@ -813,17 +813,17 @@ bool CaptureManager::startCapture(CaptureConfig _config)
     frame_count = 0;
     capture_to_memory_complete.store(false, std::memory_order_release);
 
+    #if BITLOOP_FFMPEG_ENABLED
     if (config.format == CaptureFormat::x264 || config.format == CaptureFormat::x265)
     {
-        #if BITLOOP_FFMPEG_ENABLED
         recording.store(true, std::memory_order_release);
 
         encoder_thread = std::jthread(&FFmpegWorker::process, &ffmpeg_worker, this, config);
-        #else
-        blPrint() << "Error: FFmpeg not enabled";
-        #endif
     }
-    else if (config.format == CaptureFormat::WEBP_VIDEO)
+    else
+    #endif
+
+    if (config.format == CaptureFormat::WEBP_VIDEO)
     {
         recording.store(true, std::memory_order_release);
 

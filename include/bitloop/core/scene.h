@@ -156,6 +156,7 @@ public:
     virtual void sceneProcess() {}
     virtual void viewportProcess(Viewport*, double) {}
     virtual void viewportDraw(Viewport*) const = 0;
+    virtual void onEndFrame() {}
 
     virtual void onEvent(Event) {}
 

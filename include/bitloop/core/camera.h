@@ -392,8 +392,10 @@ public:
     }
 };
 
-struct CameraNavigator
+class CameraNavigator
 {
+public:
+
     CameraInfo* camera = nullptr;
 
     void setTarget(CameraInfo& cam)

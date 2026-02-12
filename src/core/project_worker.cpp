@@ -85,7 +85,6 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
                 current_project->_projectStart();
             }
 
-
             current_project->updateShadowBuffers();
 
             main_window()->queueMainWindowCommand({ MainWindowCommandType::ON_PLAY_PROJECT });
@@ -141,9 +140,6 @@ void ProjectWorker::worker_loop()
         shared_sync.wait_until_gui_consumes_frame();
 
         capture_manager->setCaptureEnabled(true);
-
-        // Start frame timer
-        SimpleTimer frame_timer;
 
         auto frame_t0 = std::chrono::steady_clock::now();
 
@@ -213,6 +209,21 @@ void ProjectWorker::worker_loop()
                 capture_manager->waitUntilReadyForNewFrame();
         }
 
+        // delay to achieve target fps (minus time taken to draw the frame)
+        if (!immediate_update_requested)
+        {
+            auto dt = std::chrono::steady_clock::now() - frame_t0;
+            uint64_t target_ns = 1000000000llu / main_window()->getFPS();
+            uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(dt).count());
+            uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
+            if (delay_ns > 0) SDL_DelayPrecise(delay_ns);
+        }
+        else
+        {
+            shared_sync.setImmediateUpdate(true);
+            immediate_update_requested = false;
+        }
+
         /// ────── Flag ready to draw ──────
         shared_sync.flag_ready_to_draw();
 
@@ -222,21 +233,8 @@ void ProjectWorker::worker_loop()
         /// ────── Wait for GUI to draw the freshly prepared data ──────
         shared_sync.wait_until_gui_consumes_frame();
 
-        // delay to achieve target fps (minus time taken to draw the frame)
-        if (!immediate_update_requested)
-        {
-            using namespace std::chrono;
-            auto frame_dt = steady_clock::now() - frame_t0;
-            Uint64 frame_ns = static_cast<Uint64>(duration_cast<nanoseconds>(frame_dt).count());
-            Uint64 target_ns = 1000000000llu / main_window()->getFPS();
-            Uint64 delay_ns = std::max(0llu, target_ns - frame_ns);
-            if (delay_ns > 0)
-                SDL_DelayPrecise(delay_ns);
-        }
-        else
-        {
-            immediate_update_requested = false;
-        }
+        if (current_project)
+            current_project->_onEndFrame();
     }
 }
 
@@ -290,9 +288,6 @@ void ProjectWorker::pollEvents()
         std::lock_guard<std::mutex> lock(event_queue_mutex);
         local.swap(input_event_queue);
     }
-
-    //if (current_project)
-    //    current_project->_clearEventQueue();
 
     for (SDL_Event& e : local)
         _onEvent(e);

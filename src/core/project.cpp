@@ -113,8 +113,185 @@ void ProjectBase::_populateAllAttributes()
         }
     }
 }
+
+bool DrawFullscreenOverlayButton(bool* fullscreen, bool* was_held, ImVec2 screen_pos, float size = 30.0f, float alpha = 0.66f)
+{
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+
+    const ImRect r(screen_pos, screen_pos + ImVec2(size, size));
+
+    // Colors
+    const ImU32 col_bg = ImGui::GetColorU32(ImVec4(0, 0, 0, alpha));
+    const ImU32 col_bg_h = ImGui::GetColorU32(ImVec4(0, 0, 0, alpha + 0.15f));
+    const ImU32 col_bg_p = ImGui::GetColorU32(ImVec4(0, 0, 0, alpha + 0.25f));
+    const ImU32 col_bd = ImGui::GetColorU32(ImVec4(1, 1, 1, 0.25f));
+    const ImU32 col_fg = ImGui::GetColorU32(ImGui::GetStyle().Colors[ImGuiCol_Text]);
+
+    // Hit test
+    const bool hovered = r.Contains(io.MousePos);
+    const bool held = hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    const bool clicked = hovered && *was_held && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    *was_held = held;
+
+    // Background
+    const float rounding = size / 6.0f;
+    dl->AddRectFilled(r.Min, r.Max, held ? col_bg_p : (hovered ? col_bg_h : col_bg), rounding);
+    dl->AddRect(r.Min, r.Max, col_bd, rounding);
+
+    // Icon geometry
+    const float t = scale_size(2.0f);     // stroke thickness
+    const float inset = size * 0.08f;         // distance from edges
+    const float len = size * 0.15f;         // target leg length
+
+    const float max_len = ImMax(0.0f, (size - 2.0f * inset) * 0.5f);
+    const float L = ImMin(len, max_len);
+
+    auto lineL = [&](const ImVec2& c, const ImVec2& dx, const ImVec2& dy)
+    {
+        dl->AddLine(c, c + dx * L, col_fg, t);
+        dl->AddLine(c, c + dy * L, col_fg, t);
+    };
+
+    // Outer inset corners
+    const ImVec2 tl = r.Min + ImVec2(inset, inset);
+    const ImVec2 tr = ImVec2(r.Max.x - inset, r.Min.y + inset);
+    const ImVec2 bl = ImVec2(r.Min.x + inset, r.Max.y - inset);
+    const ImVec2 br = r.Max - ImVec2(inset, inset);
+
+    if (!*fullscreen)
+    {
+        // Expand: inner box corners (open outward)
+        const ImVec2 ia = r.Min + ImVec2(inset + L, inset + L);
+        const ImVec2 ib = r.Max - ImVec2(inset + L, inset + L);
+
+        lineL(ImVec2(ia.x, ia.y), ImVec2(+1, 0), ImVec2(0, +1)); // top-left
+        lineL(ImVec2(ib.x, ia.y), ImVec2(-1, 0), ImVec2(0, +1)); // top-right
+        lineL(ImVec2(ia.x, ib.y), ImVec2(+1, 0), ImVec2(0, -1)); // bottom-left
+        lineL(ImVec2(ib.x, ib.y), ImVec2(-1, 0), ImVec2(0, -1)); // bottom-right
+    }
+    else
+    {
+        // Collapse: from outer corners inward
+        const float inset2 = inset * 2.0f;
+        const ImVec2 ia = r.Min + ImVec2(inset2 + L, inset2 + L);
+        const ImVec2 ib = r.Max - ImVec2(inset2 + L, inset2 + L);
+
+        lineL(ImVec2(ia.x, ia.y), ImVec2(-1, 0), ImVec2(0, -1)); // top-left inward
+        lineL(ImVec2(ib.x, ia.y), ImVec2(+1, 0), ImVec2(0, -1)); // top-right inward
+        lineL(ImVec2(ia.x, ib.y), ImVec2(-1, 0), ImVec2(0, +1)); // bottom-left inward
+        lineL(ImVec2(ib.x, ib.y), ImVec2(+1, 0), ImVec2(0, +1)); // bottom-right inward
+    }
+
+    if (clicked)
+    {
+        *fullscreen = !*fullscreen;
+        return true;
+    }
+    return false;
+}
+
+inline bool DrawSidebarOverlayButton(
+    bool* sidebar_visible,
+    ImVec2 screen_pos,
+    float btn_w = 22.0f,
+    float btn_h = 30.0f,
+    float alpha = 0.66f)
+{
+    if (!sidebar_visible)
+        return false;
+
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+
+    const ImVec2 rmin = screen_pos;                    // top-left
+    const ImVec2 rmax = screen_pos + ImVec2(btn_w, btn_h);
+
+    const ImU32 col_bg = ImGui::GetColorU32(ImVec4(0, 0, 0, alpha));
+    const ImU32 col_bg_h = ImGui::GetColorU32(ImVec4(0, 0, 0, ImClamp(alpha + 0.15f, 0.0f, 1.0f)));
+    const ImU32 col_bg_p = ImGui::GetColorU32(ImVec4(0, 0, 0, ImClamp(alpha + 0.25f, 0.0f, 1.0f)));
+    const ImU32 col_bd = ImGui::GetColorU32(ImVec4(1, 1, 1, 0.25f));
+    const ImU32 col_fg = ImGui::GetColorU32(ImGui::GetStyle().Colors[ImGuiCol_Text]);
+
+    const bool hovered = (io.MousePos.x >= rmin.x && io.MousePos.x < rmax.x &&
+        io.MousePos.y >= rmin.y && io.MousePos.y < rmax.y);
+    const bool held = hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+    ImGui::PushID(sidebar_visible);
+    const ImGuiID hold_id = ImGui::GetID("##sidebar_overlay_hold");
+    ImGui::PopID();
+
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const bool was_held = st->GetBool(hold_id, false);
+    const bool clicked = hovered && was_held && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    st->SetBool(hold_id, held);
+
+    const float rounding = btn_h / 6.0f;
+    const ImDrawFlags round_left =
+        ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft;
+
+    dl->AddRectFilled(rmin, rmax, held ? col_bg_p : (hovered ? col_bg_h : col_bg), rounding, round_left);
+    dl->AddRect(rmin, rmax, col_bd, rounding, round_left);
+
+    const ImVec2 c((rmin.x + rmax.x) * 0.5f, (rmin.y + rmax.y) * 0.5f);
+    const float t = scale_size(2.0f);
+
+    const float chevron_w = btn_w * 0.20f;
+    const float chevron_h = btn_h * 0.13f;
+
+    if (*sidebar_visible)
+    {
+        const ImVec2 p0(c.x - chevron_w, c.y - chevron_h);
+        const ImVec2 p1(c.x + chevron_w, c.y);
+        const ImVec2 p2(c.x - chevron_w, c.y + chevron_h);
+        dl->AddLine(p0, p1, col_fg, t);
+        dl->AddLine(p2, p1, col_fg, t);
+    }
+    else
+    {
+        const ImVec2 p0(c.x + chevron_w, c.y - chevron_h);
+        const ImVec2 p1(c.x - chevron_w, c.y);
+        const ImVec2 p2(c.x + chevron_w, c.y + chevron_h);
+        dl->AddLine(p0, p1, col_fg, t);
+        dl->AddLine(p2, p1, col_fg, t);
+    }
+
+    if (clicked)
+    {
+        *sidebar_visible = !*sidebar_visible;
+        return true;
+    }
+    return false;
+}
+
 void ProjectBase::_populateOverlay()
 {
+    if (show_fullscreen_btn)
+    {
+        IVec2 ctx_size = main_window()->viewportSize();
+        float btn_space = scale_size(6.0f);
+        float fullscreen_btn_size = scale_size(56.0f);
+        float sidebar_btn_size = scale_size(22.0f);
+
+        // fullscreen button
+        SDL_WindowFlags flags = SDL_GetWindowFlags(platform()->sdl_window());
+        bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN);
+        static bool fullscreen_btn_held = false;
+        if (DrawFullscreenOverlayButton(&fullscreen, &fullscreen_btn_held,
+            ImVec2(ctx_size.x - fullscreen_btn_size - sidebar_btn_size - btn_space, btn_space), fullscreen_btn_size))
+        {
+            SDL_SetWindowFullscreen(platform()->sdl_window(), fullscreen);
+            main_window()->setSidebarVisible(!fullscreen);
+        }
+
+        // show/hide sidebar button
+        bool sidebar_visible = main_window()->getSidebarVisible();
+        if (DrawSidebarOverlayButton(&sidebar_visible, ImVec2(ctx_size.x - sidebar_btn_size, btn_space), sidebar_btn_size, fullscreen_btn_size))
+        {
+            main_window()->setSidebarVisible(sidebar_visible);
+        }
+    }
+
     for (SceneBase* scene : viewports.all_scenes)
         scene->_populateOverlay();
 }
@@ -415,10 +592,6 @@ void ProjectBase::_projectProcess()
 
         /// --- Post-Process each scene ---
 
-        // Update 'live' values of all ChangeTracker variables (to compare against next frame)
-        for (SceneBase* scene : viewports.all_scenes)
-            scene->ChangeTracker::updateCurrent();
-
         // Measure time taken to process whole project
         project_dt = project_timer.elapsed();
 
@@ -436,6 +609,8 @@ void ProjectBase::_projectProcess()
 }
 void ProjectBase::_projectDraw()
 {
+    // note: called from main GUI thread
+
     if (!done_single_process) return;
     if (!started) return;
 
@@ -553,7 +728,17 @@ void ProjectBase::_projectDraw()
     for (Viewport* viewport : viewports)
         viewport->setOldSize();
 }
+void ProjectBase::_onEndFrame()
+{
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->onEndFrame();
 
+    // Update 'live' values of all ChangeTracker variables (to compare against next frame)
+    for (SceneBase* scene : viewports.all_scenes)
+        scene->ChangeTracker::updateCurrent();
+
+    mouse.clearStaleButtonStates();
+}
 
 void ProjectBase::_clearEventQueue()
 {
@@ -593,22 +778,30 @@ void ProjectBase::_onEvent(SDL_Event& e)
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         {
             if (platform()->is_mobile()) return;
-            mouse.pressed = true;
-            mouse.client_x = e.motion.x;
-            mouse.client_y = e.motion.y;
+            SDL_MouseButtonEvent& b = e.button;
+
+            mouse.buttonState((MouseButton)b.button).is_down = true;
+            mouse.buttonState((MouseButton)b.button).clicked = true;
+
+            mouse.client_x = e.button.x;
+            mouse.client_y = e.button.y;
         } break;
         case SDL_EVENT_MOUSE_BUTTON_UP:
         {
             if (platform()->is_mobile()) return;
-            mouse.pressed = false;
-            mouse.client_x = e.motion.x;
-            mouse.client_y = e.motion.y;
+            SDL_MouseButtonEvent& b = e.button;
+
+            mouse.buttonState((MouseButton)b.button).is_down = false;
+            mouse.client_x = b.x;
+            mouse.client_y = b.y;
         } break;
         case SDL_EVENT_MOUSE_MOTION:
         {
             if (platform()->is_mobile()) return;
-            mouse.client_x = e.motion.x;
-            mouse.client_y = e.motion.y;
+            SDL_MouseButtonEvent& b = e.button;
+
+            mouse.client_x = b.x;
+            mouse.client_y = b.y;
         } break;
 
         // Touch
@@ -670,7 +863,6 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
     // Update pressed_fingers
     {
-
         // Does this finger already have an "owner" viewport?
         // If so, loop over fingers and restore it for 
         Viewport* ctx_owner = nullptr;
@@ -800,7 +992,13 @@ void ProjectBase::_onEvent(SDL_Event& e)
 
     if (platform()->is_mobile())
     {
-        mouse.pressed = pressed_fingers.size() > 0;
+        // simulate left-mouse button on mobile
+        bool any_pressed = pressed_fingers.size() > 0;
+        mouse.buttonState(MouseButton::LEFT).is_down = any_pressed;
+        mouse.buttonState(MouseButton::LEFT).clicked = any_fingers_pressed && !any_pressed;
+
+        // store old state
+        any_fingers_pressed = any_pressed;
     }
     
     event.setFocusedViewport(ctx_focused);
@@ -810,6 +1008,22 @@ void ProjectBase::_onEvent(SDL_Event& e)
     //{
     //    event.ctx_owner()->scene->input.addEvent(event, pressed_fingers);
     //}
+
+    // enter/exit fullscreen hotkeys (F11 / Escape)
+    if (event.type() == SDL_EVENT_KEY_DOWN)
+    {
+        if (event.sdl()->key.key == SDLK_F11)
+        {
+            SDL_WindowFlags flags = SDL_GetWindowFlags(platform()->sdl_window());
+            bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN);
+
+            SDL_SetWindowFullscreen(platform()->sdl_window(), !fullscreen);
+        }
+        else if (event.sdl()->key.key == SDLK_ESCAPE)
+        {
+            SDL_SetWindowFullscreen(platform()->sdl_window(), false);
+        }
+    }
 
     onEvent(event);
 

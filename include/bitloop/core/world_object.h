@@ -1,13 +1,9 @@
 #pragma once
 
-/// OpenGL
-
 #include <bitloop/util/math_util.h>
 #include <bitloop/core/camera.h>
 
 BL_BEGIN_NS
-
-
 
 template<typename T>
 class WorldObjectT
@@ -41,7 +37,7 @@ public:
     ~WorldObjectT() {}
 
     void setCamera(const CameraInfo& cam) { camera = const_cast<CameraInfo*>(&cam); }
-    const CameraInfo* getCamera() { return camera; }
+    const CameraInfo* getCamera() const { return camera; }
 
     void setAlign(int ax, int ay) { align_x = ax; align_y = ay; }
     void setAlign(const DVec2& _align) { align = _align; }
@@ -95,7 +91,7 @@ public:
         return pos + offset;
     }
 
-    [[nodiscard]] Vec2<T> worldAlignOffset() const { return Vec2<T>{-(align + 1.0) * 0.5} *worldSize(); }
+    [[nodiscard]] Vec2<T> worldAlignOffset() const { return Vec2<T>{-(align + 1.0) * 0.5} * worldSize(); }
     [[nodiscard]] T worldAlignOffsetX() const { return T(-(align_x + 1) * 0.5) * worldWidth(); }
     [[nodiscard]] T worldAlignOffsetY() const { return T(-(align_y + 1) * 0.5) * worldHeight(); }
 

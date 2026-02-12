@@ -208,15 +208,10 @@ class ProjectBase
 
     const int splitter_thickness = 6;
 
-    //std::chrono::steady_clock::time_point last_frame_time 
-    //    = std::chrono::steady_clock::now();
-
-
     // Keep track of focused/hovered project viewports
     Viewport* ctx_focused = nullptr;
     Viewport* ctx_hovered = nullptr;
 
-protected:
 
     friend class ProjectWorker;
     friend class Layout;
@@ -231,16 +226,14 @@ protected:
     bool paused = false;
     bool done_single_process = false;
     DVec2 old_surface_size{};
-
+    bool show_fullscreen_btn = true;
     bool immediate_update_requested = false;
-    void requestImmediateUpdate()
-    {
-        immediate_update_requested = true;
-    }
 
     void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
 
     bool updateViewportRects();
+
+protected:
 
     // ----- populating Project/Scene ImGui attributes -----
     void _populateAllAttributes();
@@ -259,6 +252,7 @@ protected:
     void _projectDestroy();
     void _projectProcess();
     void _projectDraw();
+    void _onEndFrame();
 
     // ----- capturing -----
 
@@ -266,6 +260,7 @@ protected:
 
     // ----- input -----
     std::vector<FingerInfo> pressed_fingers;
+    bool any_fingers_pressed = false;
     void _clearEventQueue();
     void _onEvent(SDL_Event& e);
 
@@ -451,6 +446,16 @@ public:
 
     /// ----- states -----
 
+    void requestImmediateUpdate()
+    {
+        immediate_update_requested = true;
+    }
+
+    void setFullscreenButtonVisibile(bool b)
+    {
+        show_fullscreen_btn = b;
+    }
+
     [[nodiscard]] bool isPaused() const { return paused; }
     [[nodiscard]] bool isActive() const { return started; } // in "started/paused" state (but not stopped)
 
@@ -468,15 +473,15 @@ public:
     }
     #endif
 
-    /// TODO: add IDBFS support for virtual file system on web?
-    //
+    /// todo: add IDBFS support for virtual file system on web?
+    
     // root_path("/path/to/file")
     // - useful to modify source data during development, but still behaves in release builds where no project folder exist
     // - for web builds, files are read-only
     // 
     // If DEFINED     (BITLOOP_DEV_MODE):  "root" = project folder
     // If NOT DEFINED (BITLOOP_DEV_MODE):  "root" = exe folder
-    //
+    
     [[nodiscard]] std::string root_path(std::string_view virtual_path) const
     {
         #ifdef BITLOOP_DEV_MODE
@@ -509,7 +514,7 @@ public:
 
 class BasicProject : public ProjectBase, public DirectInterfaceModel
 {
-    // todo: Not thread-safe, only for simple projects without buffered variables
+    // todo: UI Not thread-safe, only for simple projects without buffered variables
     void _projectAttributes() override final
     {
         ProjectBase::_projectAttributes();
@@ -561,7 +566,6 @@ protected:
     {
         if (!ui)
         {
-            // safer to initialize UI on same thread as UI populate
             ui = new ProjectType::UI(static_cast<const ProjectType*>(this));
             ui->init();
         }
@@ -583,12 +587,17 @@ protected:
 
     void _projectAttributes() override final
     {
+        // todo: Project 'ui' should exist before project has started? (but not scenes ui)
+        //if (!ui) return;
+        assert(ui != nullptr);
         ProjectBase::_projectAttributes();
         ui->sidebar();
     }
 
     void _populateOverlay() override final
     {
+        // todo: Project 'ui' should exist before project has started? (but not scenes ui)
+        assert(ui != nullptr);
         ProjectBase::_populateOverlay();
         ui->overlay();
     }

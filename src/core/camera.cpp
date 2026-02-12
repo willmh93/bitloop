@@ -128,6 +128,9 @@ void CameraInfo::cameraToViewport(
     zoom_y = surface->height() / world_h;
     x_128  = (surface->width() / 2) / zoom_x;
     y_128  = (surface->height() / 2) / zoom_y;
+
+    posDirty();
+    zoomDirty();
 }
 
 void CameraInfo::focusWorldRect(

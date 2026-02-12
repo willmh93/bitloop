@@ -3,7 +3,7 @@
 
 BL_BEGIN_NS
 
-constexpr double nice_steps[] = { 1.0, 2.0, 5.0, 10.0 };
+constexpr f64 nice_steps[] = { 1.0, 2.0, 5.0, 10.0 };
 constexpr int    nice_steps_count = 4;
 
 template<typename flt>
@@ -51,19 +51,72 @@ inline flt niceStepDivisible(flt ideal, flt& coarse, flt& fade)
     return step;
 }
 
-void Painter::drawWorldAxis(
-    double axis_opacity,
-    double grid_opacity,
-    double text_opacity)
+std::string Painter::formatNumberScientific(f64 v, int decimals, f64 fixed_min, f64 fixed_max) {
+    char buffer[32];
+    f64 abs_v = std::abs(v);
+
+    char fmt[8];
+
+    if ((abs_v != 0.0 && abs_v < fixed_min) || abs_v >= fixed_max) {
+        // Use scientific notation
+        std::snprintf(fmt, sizeof(fmt), "%%.%de", decimals);
+        std::snprintf(buffer, sizeof(buffer), fmt, v);
+    }
+    else {
+        // Use fixed-point
+        std::snprintf(fmt, sizeof(fmt), "%%.%df", decimals);
+        std::snprintf(buffer, sizeof(buffer), fmt, v);
+    }
+
+    std::string s(buffer);
+
+    // Trim trailing zeros (both fixed and scientific cases)
+    size_t dot_pos = s.find('.');
+    if (dot_pos != std::string::npos) {
+        size_t end = s.find_first_of("eE", dot_pos); // handle scientific part separately
+        size_t trim_end = (end == std::string::npos) ? s.size() : end;
+
+        // Trim zeros in the fractional part
+        size_t last_nonzero = s.find_last_not_of('0', trim_end - 1);
+        if (last_nonzero != std::string::npos && s[last_nonzero] == '.') {
+            last_nonzero--; // also remove the decimal point
+        }
+
+        s.erase(last_nonzero + 1, trim_end - last_nonzero - 1);
+    }
+
+    return s;
+}
+std::string Painter::formatNumberScientific(f128 v, int decimals, f64 fixed_min, f64 fixed_max) {
+    f128 abs_v = abs(v);
+
+    std::string s;
+    if ((abs_v != 0 && abs_v < fixed_min) || abs_v >= fixed_max)
+    {
+        // Use scientific notation (strip zeros)
+        s = to_string(abs_v, decimals, false, true, true);
+    }
+    else {
+        // Use fixed-point (keep trailing zeros for consistency)
+        s = to_string(abs_v, decimals, true, false, false);
+    }
+    if (v >= 0)
+        return s;
+    else
+        return '-' + s;
+}
+
+void Painter::drawWorldAxis(f64 axis_opacity, f64 grid_opacity, f64 text_opacity)
 {
     save();
     saveCameraTransform();
 
+    // todo: dynamically choose precision based on axis visible range
     typedef f64 flt;
-    typedef Vec2<flt> vec2 ;
+    typedef Vec2<flt> vec2;
 
     //Viewport* ctx = camera.viewport;
-    const double angle = m._angle();
+    const f64 angle = m._angle();
     //const DDVec2 zoom(camera.zoom<f128>(), camera.zoom<f128>());
     const vec2 zoom(m._zoom<flt>());
 
@@ -129,7 +182,7 @@ void Painter::drawWorldAxis(
     // ======== Tick marks and labels ========
     if (axis_opacity > 0.0 || text_opacity > 0.0) 
     {
-        const double tick_length = scale_size(6);
+        const f64 tick_length = scale_size(6);
 
         // Align all text by center
         stageMode();
@@ -147,9 +200,9 @@ void Painter::drawWorldAxis(
             DVec2 perpDir = m.axisStagePerpDirection(isX);
             const flt wStart = isX ? wMinX : wMinY;
             const flt wEnd = isX ? wMaxX : wMaxY;
-            double txt_sample_angle = isX ? angle : (angle + math::half_pi);
-            double txt_size_weight_x = std::abs(std::cos(txt_sample_angle));
-            double txt_size_weight_y = std::abs(std::sin(txt_sample_angle));
+            f64 txt_sample_angle = isX ? angle : (angle + math::half_pi);
+            f64 txt_size_weight_x = std::abs(std::cos(txt_sample_angle));
+            f64 txt_size_weight_y = std::abs(std::sin(txt_sample_angle));
 
             int decimals = 0;
             if (isX)
@@ -178,11 +231,11 @@ void Painter::drawWorldAxis(
                 setStrokeStyle(255, 255, 255, aTick);
                 strokeLineSharp(DVec2{stage_pos - perpDir * tick_length}, DVec2{stage_pos + perpDir * tick_length});
 
-                std::string txt = format_number(w, decimals);
+                std::string txt = formatNumberScientific(w, decimals);
 
-                constexpr double spacing = 3;
+                constexpr f64 spacing = 3;
                 DVec2 txt_size = DVec2{ boundingBoxScientific<f64, flt>(txt).size().x * 0.75, standard_txt_size.y };
-                double txt_dist = (txt_size_weight_x * txt_size.y) + (txt_size_weight_y * txt_size.x) * 0.5 + spacing;
+                f64 txt_dist = (txt_size_weight_x * txt_size.y) + (txt_size_weight_y * txt_size.x) * 0.5 + spacing;
 
                 DVec2 txt_anchor = stage_pos + (perpDir * (tick_length + txt_dist));
                 setFillStyle(255, 255, 255, txt_alpha);
@@ -198,7 +251,41 @@ void Painter::drawWorldAxis(
     restoreCameraTransform();
 }
 
-void Canvas::create(double _global_scale)
+void Painter::drawCursor(f64 x, f64 y, f64 size)
+{
+    const f64 s = size;
+    const f64 lw = std::max(1.0, s * 0.075);
+
+    save();
+
+    // Fill
+    auto drawPath = [&]()
+    {
+        beginPath();
+        moveTo(x + 0.0, y + 0.0);
+        lineTo(x + 0.0, y + 0.95 * s); // bottom
+        lineTo(x + 0.30 * s, y + 0.57 * s); // dip
+        lineTo(x + 0.8 * s, y + 0.50 * s); // right
+        closePath();
+    };
+
+    drawPath();
+    setFillStyle(255, 255, 255);
+    fill();
+
+    // Outline
+    setLineWidth(lw);
+    setStrokeStyle(0, 0, 0);
+    setLineJoin(LineJoin::JOIN_MITER);
+    setMiterLimit(6.0);
+
+    drawPath();
+    stroke();
+
+    restore();
+}
+
+void Canvas::create(f64 _global_scale)
 {
     context.vg = nvgCreate(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     usePainter(&context);
@@ -257,7 +344,7 @@ bool Canvas::resize(int w, int h)
     return true;
 }
 
-void Canvas::begin(float r, float g, float b, float a)
+void Canvas::begin(f32 r, f32 g, f32 b, f32 a)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, fbo_width, fbo_height);
@@ -265,9 +352,9 @@ void Canvas::begin(float r, float g, float b, float a)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     nvgBeginFrame(context.vg, 
-        static_cast<float>(fbo_width), 
-        static_cast<float>(fbo_height),
-        static_cast<float>(context.global_scale) // Improve render quality on high DPR devices
+        static_cast<f32>(fbo_width), 
+        static_cast<f32>(fbo_height),
+        static_cast<f32>(context.global_scale) // Improve render quality on high DPR devices
     );
 }
 

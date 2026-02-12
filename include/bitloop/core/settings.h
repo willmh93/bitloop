@@ -22,7 +22,13 @@ struct SettingsConfig
     float   default_sharpen = 0.0f;
 
     int     snapshot_format = (int)CaptureFormat::WEBP_SNAPSHOT; // CaptureFormat
-    int     record_format = (int)CaptureFormat::x264;
+
+    int     record_format =
+    #if BITLOOP_FFMPEG_ENABLED
+        (int)CaptureFormat::x264;
+    #else
+        (int)CaptureFormat::WEBP_VIDEO;
+    #endif
 
     int     record_fps = 60;
     int     record_frame_count = 0;
