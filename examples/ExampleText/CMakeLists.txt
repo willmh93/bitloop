@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 project(ExampleText LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/tooling/cmake/findBitloop.cmake")
+
+
+# ---------------------------------  flags  ----------------------------------
+
+# if this Cmake project open as root, BITLOOP_DEV_MODE overrides child projects
+# set(BITLOOP_DEV_MODE TRUE)
+
+# ------------------  configure project hierarchy/sources  -------------------
 
 # Link to bitloop
 if (NOT TARGET bitloop::bitloop)

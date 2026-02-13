@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
-project(Tiger  LANGUAGES CXX)
+project(Tiger LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/tooling/cmake/findBitloop.cmake")
 
-# Link to bitloop
-if (NOT TARGET bitloop::bitloop)
-  find_package(bitloop CONFIG REQUIRED)
-endif()
+
+# ---------------------------------  flags  ----------------------------------
+
+# if this Cmake project open as root, BITLOOP_DEV_MODE overrides child projects
+# set(BITLOOP_DEV_MODE TRUE)
+
+# ------------------  configure project hierarchy/sources  -------------------
 
 file(GLOB SIM_SOURCES CONFIGURE_DEPENDS
 	"Tiger/*.cpp"

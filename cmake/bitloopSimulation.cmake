@@ -436,33 +436,33 @@ function(bitloop_new_project sim_name)
 endfunction()
 
 function(bitloop_add_dependency _TARGET _SIM_DIR)
-	# get_property(_type DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY _TYPE)
+	get_property(_type DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY _TYPE)
 	
 	# Grab simulation name from path
 	get_filename_component(sim_name "${_SIM_DIR}" NAME)
 	
-	# # Resolve the subproject source dir robustly
-	# get_filename_component(_sim_abs "${_SIM_DIR}" REALPATH BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-	# set(_child_manifest "${_sim_abs}/vcpkg.json")
-	# set(_child_config   "${_sim_abs}/vcpkg-configuration.json")
-	# 
-	# if(NOT TARGET ${sim_name}::${sim_name})
-	# 	# Register configure dependencies so edits to child manifests/config trigger reconfigure
-	# 	if(EXISTS "${_child_manifest}")
-	# 		set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_child_manifest}")
-	# 	endif()
-	# 	if(EXISTS "${_child_config}")
-	# 		set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_child_config}")
-	# 	endif()
-	# 
-	# 	# Only called once, includes dependency project, which in turn calls:  bitloop_add_project()
-	# 	msg_indent_push()
-	# 	add_subdirectory(${_SIM_DIR} "${CMAKE_BINARY_DIR}/${sim_name}_build")
-	# 	msg_indent_pop()
-	# endif()
-	# 
-	# # In discovery we only care about building the project tree + manifest list.
-	# # We do NOT need link interfaces.
+	# Resolve the subproject source dir robustly
+	get_filename_component(_sim_abs "${_SIM_DIR}" REALPATH BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+	set(_child_manifest "${_sim_abs}/vcpkg.json")
+	set(_child_config   "${_sim_abs}/vcpkg-configuration.json")
+	
+	if(NOT TARGET ${sim_name}::${sim_name})
+		# Register configure dependencies so edits to child manifests/config trigger reconfigure
+		if(EXISTS "${_child_manifest}")
+			set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_child_manifest}")
+		endif()
+		if(EXISTS "${_child_config}")
+			set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_child_config}")
+		endif()
+	
+		# Only called once, includes dependency project, which in turn calls:  bitloop_add_project()
+		msg_indent_push()
+		add_subdirectory(${_SIM_DIR} "${CMAKE_BINARY_DIR}/${sim_name}_build")
+		msg_indent_pop()
+	endif()
+	
+	# In discovery we only care about building the project tree + manifest list.
+	# We do NOT need link interfaces.
 	# if (BITLOOP_DISCOVERY)
 	# 	return()
 	# endif()
@@ -477,7 +477,7 @@ endfunction()
 
 # Auto-generated finalization step; adds includes to autogen header and bundles data into executable
 macro(bitloop_finalize)
-# -------------------------
+	# -------------------------
 	# Discovery mode: write out discovered manifests (root only) and stop processing
 	# -------------------------
 	#if (BITLOOP_DISCOVERY)

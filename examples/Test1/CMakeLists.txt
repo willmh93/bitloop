@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
-project(Test1  LANGUAGES CXX)
+project(Test1 LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/tooling/cmake/findBitloop.cmake")
 
-if (NOT TARGET bitloop::bitloop)
-  find_package(bitloop CONFIG REQUIRED)
-endif()
+# ---------------------------------  flags  ----------------------------------
+
+# if this Cmake project open as root, BITLOOP_DEV_MODE overrides child projects
+# set(BITLOOP_DEV_MODE TRUE)
+
+# ------------------  configure project hierarchy/sources  -------------------
+
 
 file(GLOB SIM_SOURCES CONFIGURE_DEPENDS
 	"Test1/*.cpp"
