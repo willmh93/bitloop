@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.21)
 project(Tiger LANGUAGES CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/tooling/findBitloop.cmake")
 
-
 # ---------------------------------  flags  ----------------------------------
 
 # if this Cmake project open as root, BITLOOP_DEV_MODE overrides child projects

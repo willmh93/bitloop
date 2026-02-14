@@ -10,7 +10,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/tooling/findBitloop.cmake")
 
 # ------------------  configure project hierarchy/sources  -------------------
 
-
 file(GLOB SIM_SOURCES CONFIGURE_DEPENDS "Test2/*.cpp" "Test2/*.h")
 
 # 1. Setup project dependencies (if any)
