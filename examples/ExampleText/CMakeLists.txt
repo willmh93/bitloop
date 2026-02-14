@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(ExampleText LANGUAGES CXX)
-include("${CMAKE_CURRENT_LIST_DIR}/tooling/cmake/findBitloop.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/tooling/findBitloop.cmake")
 
 
 # ---------------------------------  flags  ----------------------------------
