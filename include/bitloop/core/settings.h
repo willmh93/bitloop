@@ -21,13 +21,12 @@ struct SettingsConfig
     int     default_ssaa = 1;
     float   default_sharpen = 0.0f;
 
-    int     snapshot_format = (int)CaptureFormat::WEBP_SNAPSHOT; // CaptureFormat
-
-    int     record_format =
+    CaptureFormatSnapshot snapshot_format = CaptureFormatSnapshot::WEBP_SNAPSHOT; // CaptureFormat
+    CaptureFormatVideo    record_format =
     #if BITLOOP_FFMPEG_ENABLED
-        (int)CaptureFormat::x264;
+        CaptureFormatVideo::x264;
     #else
-        (int)CaptureFormat::WEBP_VIDEO;
+        CaptureFormatVideo::WEBP_VIDEO;
     #endif
 
     int     record_fps = 60;
@@ -72,7 +71,6 @@ struct SettingsConfig
     }
 
     CaptureFormat getRecordFormat() const { return (CaptureFormat)record_format; }
-
     CaptureFormat getSnapshotFormat() const { return (CaptureFormat)snapshot_format; }
     IVec2         getRecordResolution() const { return enabledVideoPreset().getResolution(); }
 };

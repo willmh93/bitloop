@@ -279,6 +279,37 @@ void SettingsPanel::populateCapturePresetsEditor()
         ImGui::EndDisabled();
 }
 
+inline bool CaptureFormatVideoCombo(const char* id, CaptureFormatVideo& value)
+{
+    const char* preview = "Unknown";
+    CaptureFormatName((CaptureFormat)value, &preview);
+
+    bool changed = false;
+
+    if (ImGui::BeginCombo(id, preview))
+    {
+        for (CaptureFormatVideo opt : CaptureFormatVideoOptions())
+        {
+            const bool selected = (opt == value);
+            const char* label = "Unknown";
+            CaptureFormatName((CaptureFormat)opt, &label);
+
+            if (ImGui::Selectable(label, selected))
+            {
+                value = opt;
+                changed = true;
+            }
+
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+        }
+
+        ImGui::EndCombo();
+    }
+
+    return changed;
+}
+
 void SettingsPanel::populateSettings()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
@@ -396,7 +427,7 @@ void SettingsPanel::populateSettings()
             ImGui::Spacing(); 
 
             ImGui::Text("Codec:");
-            if (ImGui::Combo("##codec", &config.record_format, CaptureFormatComboString()))
+            if (CaptureFormatVideoCombo("##codec", config.record_format))
             {
                 #if BITLOOP_FFMPEG_ENABLED
                 config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());

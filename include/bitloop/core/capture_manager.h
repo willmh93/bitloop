@@ -39,33 +39,81 @@ class WebPAnimEncoder;
 
 BL_BEGIN_NS;
 
-enum struct CaptureFormat
+// all available capture formats (fixed values)
+enum struct CaptureFormat : int
 {
-    // Video
     #if BITLOOP_FFMPEG_ENABLED
-        x264,
+        x264      = 0,
         #if BITLOOP_FFMPEG_X265_ENABLED
-            x265,
+            x265  = 1,
         #endif
     #endif
 
-    WEBP_VIDEO,
-    WEBP_SNAPSHOT
+    WEBP_VIDEO    = 2,
+    WEBP_SNAPSHOT = 3,
+
+    _COUNT
 };
 
-inline const char* CaptureFormatComboString()
+// all available snapshot formats
+enum struct CaptureFormatSnapshot : int
 {
-    static const char* ret =
-        #if BITLOOP_FFMPEG_ENABLED
-            "H.264 (x264)\0"
-            #if BITLOOP_FFMPEG_X265_ENABLED
-                "H.265 / HEVC (x265)\0"
-            #endif
-        #endif
-        "WebP Animation\0"
-        "WebP Snapshot\0";
+    WEBP_SNAPSHOT = CaptureFormat::WEBP_SNAPSHOT
+};
 
-    return ret;
+// all available video formats
+enum struct CaptureFormatVideo : int
+{
+    #if BITLOOP_FFMPEG_ENABLED
+    x264 = CaptureFormat::x264,
+    #if BITLOOP_FFMPEG_X265_ENABLED
+    x265 = CaptureFormat::x265,
+    #endif
+    #endif
+
+    WEBP_VIDEO = CaptureFormat::WEBP_VIDEO,
+};
+
+inline void CaptureFormatName(CaptureFormat format, const char** out)
+{
+    switch (format)
+    {
+        #if BITLOOP_FFMPEG_ENABLED
+        case CaptureFormat::x264:          *out = "H.264 (x264)";        return;
+        #if BITLOOP_FFMPEG_X265_ENABLED
+        case CaptureFormat::x265:          *out = "H.265 / HEVC (x265)"; return;
+        #endif
+        #endif
+        case CaptureFormat::WEBP_VIDEO:    *out = "WebP Animation";      return;
+        case CaptureFormat::WEBP_SNAPSHOT: *out = "WebP Snapshot";       return;
+        default:                           *out = "Unknown";             return;
+    }
+}
+
+inline std::span<const CaptureFormatSnapshot> CaptureFormatSnapshotOptions()
+{
+    static constexpr CaptureFormatSnapshot opts[] = {
+        CaptureFormatSnapshot::WEBP_SNAPSHOT
+    };
+
+    constexpr int count = sizeof(opts) / sizeof(*opts);
+    return std::span<const CaptureFormatSnapshot>(opts, count);
+}
+
+inline std::span<const CaptureFormatVideo> CaptureFormatVideoOptions()
+{
+    static constexpr CaptureFormatVideo opts[] = {
+        #if BITLOOP_FFMPEG_ENABLED
+        CaptureFormatVideo::x264,
+        #if BITLOOP_FFMPEG_X265_ENABLED
+        CaptureFormatVideo::x265,
+        #endif
+        #endif
+        CaptureFormatVideo::WEBP_VIDEO,
+    };
+
+    constexpr int count = sizeof(opts) / sizeof(*opts);
+    return std::span<const CaptureFormatVideo>(opts, count);
 }
 
 struct BitrateRange
