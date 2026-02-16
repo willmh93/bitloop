@@ -156,7 +156,7 @@
   "buildPresets": [
     { "name": "ninja-debug",                "configurePreset": "ninja-debug" },
     { "name": "ninja-release",              "configurePreset": "ninja-release" },
-    { "name": "ninja-release-dbg",          "configurePreset": "ninja-release-dbg" },
+    { "name": "ninja-release-dbg",          "configurePreset": "ninja-release-debug-info" },
     { "name": "ninja-release-win-static",   "configurePreset": "ninja-release-win-static" },
     { "name": "wasm32-debug",               "configurePreset": "wasm32-debug" },
     { "name": "wasm32-release",             "configurePreset": "wasm32-release" },
