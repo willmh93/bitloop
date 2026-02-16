@@ -43,13 +43,13 @@ BL_BEGIN_NS;
 enum struct CaptureFormat : int
 {
     #if BITLOOP_FFMPEG_ENABLED
-        x264      = 0,
-        #if BITLOOP_FFMPEG_X265_ENABLED
-            x265  = 1,
-        #endif
+        x264 = 0,
+      #if BITLOOP_FFMPEG_X265_ENABLED
+        x265 = 1,
+      #endif
     #endif
 
-    WEBP_VIDEO    = 2,
+    WEBP_VIDEO = 2,
     WEBP_SNAPSHOT = 3,
 
     _COUNT
@@ -58,20 +58,20 @@ enum struct CaptureFormat : int
 // all available snapshot formats
 enum struct CaptureFormatSnapshot : int
 {
-    WEBP_SNAPSHOT = CaptureFormat::WEBP_SNAPSHOT
+    WEBP_SNAPSHOT = (int)CaptureFormat::WEBP_SNAPSHOT
 };
 
 // all available video formats
 enum struct CaptureFormatVideo : int
 {
     #if BITLOOP_FFMPEG_ENABLED
-    x264 = CaptureFormat::x264,
-    #if BITLOOP_FFMPEG_X265_ENABLED
-    x265 = CaptureFormat::x265,
-    #endif
+      x264 = (int)CaptureFormat::x264,
+      #if BITLOOP_FFMPEG_X265_ENABLED
+        x265 = (int)CaptureFormat::x265,
+      #endif
     #endif
 
-    WEBP_VIDEO = CaptureFormat::WEBP_VIDEO,
+    WEBP_VIDEO = (int)CaptureFormat::WEBP_VIDEO,
 };
 
 inline void CaptureFormatName(CaptureFormat format, const char** out)
@@ -79,14 +79,14 @@ inline void CaptureFormatName(CaptureFormat format, const char** out)
     switch (format)
     {
         #if BITLOOP_FFMPEG_ENABLED
-        case CaptureFormat::x264:          *out = "H.264 (x264)";        return;
-        #if BITLOOP_FFMPEG_X265_ENABLED
-        case CaptureFormat::x265:          *out = "H.265 / HEVC (x265)"; return;
-        #endif
-        #endif
-        case CaptureFormat::WEBP_VIDEO:    *out = "WebP Animation";      return;
-        case CaptureFormat::WEBP_SNAPSHOT: *out = "WebP Snapshot";       return;
-        default:                           *out = "Unknown";             return;
+          case CaptureFormat::x264:         *out = "H.264 (x264)";        return;
+          #if BITLOOP_FFMPEG_X265_ENABLED   
+            case CaptureFormat::x265:       *out = "H.265 / HEVC (x265)"; return;
+          #endif                            
+        #endif                              
+        case CaptureFormat::WEBP_VIDEO:     *out = "WebP Animation";      return;
+        case CaptureFormat::WEBP_SNAPSHOT:  *out = "WebP Snapshot";       return;
+        default:                            *out = "Unknown";             return;
     }
 }
 

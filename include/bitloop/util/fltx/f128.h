@@ -30,6 +30,16 @@
     #endif
 #endif
 
+// avoid inlining precise print helpers into fast-math callers on MSVC
+#ifndef BL_PRINT_NOINLINE
+    #if defined(_MSC_VER) && defined(BL_FAST_MATH)
+        #define BL_PRINT_NOINLINE __declspec(noinline)
+    #else
+        #define BL_PRINT_NOINLINE
+    #endif
+#endif
+
+
 #if defined(_MSC_VER)
 
     #ifndef BL_PUSH_PRECISE
@@ -517,14 +527,25 @@ FORCE_INLINE f128 fabs(const f128& a)
 FORCE_INLINE f128 floor(const f128& a)
 {
     double f = std::floor(a.hi);
-    /*     hi already integral ?  trailing part < 0  →  round one below   */
-    if (f == a.hi && a.lo < 0.0) f -= 1.0;
+
+    // for integral hi, decide using the rounded-to-double sum to avoid false decrement from tiny lo noise
+    if (f == a.hi) {
+        const double sum = a.hi + a.lo;
+        if (sum < f) f -= 1.0;
+    }
+
     return { f, 0.0 };
 }
 FORCE_INLINE f128 ceil(const f128& a)
 {
     double c = std::ceil(a.hi);
-    if (c == a.hi && a.lo > 0.0) c += 1.0;
+
+    // for integral hi, decide using the rounded-to-double sum to avoid false increment from tiny lo noise
+    if (c == a.hi) {
+        const double sum = a.hi + a.lo;
+        if (sum > c) c += 1.0;
+    }
+
     return { c, 0.0 };
 }
 FORCE_INLINE f128 trunc(const f128& a)
@@ -987,7 +1008,7 @@ FORCE_INLINE f128 pow10_128(int k)
 
 FORCE_INLINE void normalize10(const f128& x, f128& m, int& exp10)
 {
-    if (x.hi == 0.0) { m = f128(0.0); exp10 = 0; return; }
+    if (x.hi == 0.0 && x.lo == 0.0) { m = f128(0.0); exp10 = 0; return; }
 
     f128 ax = abs(x);
 
@@ -1020,7 +1041,7 @@ FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept
 }
 
 BL_PUSH_PRECISE
-FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexcept
+BL_PRINT_NOINLINE FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexcept
 {
     double p, err;
 #ifdef FMA_AVAILABLE
@@ -1035,7 +1056,7 @@ FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexcept
     return f128{s, e};
 }
 
-FORCE_INLINE f128 sub_by_double_print(f128 a, double b) noexcept
+BL_PRINT_NOINLINE FORCE_INLINE f128 sub_by_double_print(f128 a, double b) noexcept
 {
     double s, e;
     two_sum_precise(a.hi, -b, s, e);
@@ -1131,7 +1152,7 @@ FORCE_INLINE f128_chars_result append_exp10_to_chars(char* p, char* end, int e10
 
 FORCE_INLINE f128_chars_result emit_fixed_dec_to_chars(char* first, char* last, f128 x, int prec, bool strip_trailing_zeros) noexcept
 {
-    if (x.hi == 0.0) {
+    if (x.hi == 0.0 && x.lo == 0.0) {
         if (first >= last) return {first, false};
         *first = '0';
         return {first + 1, true};
@@ -1141,9 +1162,14 @@ FORCE_INLINE f128_chars_result emit_fixed_dec_to_chars(char* first, char* last, 
 
     const bool neg = (x.hi < 0.0);
     if (neg) x = f128{-x.hi, -x.lo};
+    x = renorm(x.hi, x.lo);
 
     f128 ip = floor(x);
-    f128 fp = x - ip;
+    f128 fp = sub_by_double_print(x, ip.hi);
+
+    // compensate for non-canonical hi/lo splits where floor based on hi underestimates the integer part
+    if (fp >= f128(1.0)) { fp = fp - f128(1.0); ip = ip + f128(1.0); }
+    else if (fp < f128(0.0)) { fp = f128(0.0); }
 
     // fractional digits scratch (rounded in-place)
     constexpr int kFracStack = 2048;
@@ -1253,7 +1279,7 @@ FORCE_INLINE f128_chars_result emit_fixed_dec_to_chars(char* first, char* last, 
 
 FORCE_INLINE f128_chars_result emit_scientific_to_chars(char* first, char* last, const f128& x, std::streamsize prec, bool strip_trailing_zeros) noexcept
 {
-    if (x.hi == 0.0) {
+    if (x.hi == 0.0 && x.lo == 0.0) {
         if (first >= last) return {first, false};
         *first = '0';
         return {first + 1, true};
@@ -1341,7 +1367,7 @@ FORCE_INLINE f128_chars_result to_chars(char* first, char* last, const f128& x, 
         return emit_scientific_to_chars(first, last, x, precision, strip_trailing_zeros);
     }
 
-    if (x.hi == 0.0) {
+    if (x.hi == 0.0 && x.lo == 0.0) {
         if (first >= last) return {first, false};
         *first = '0';
         return {first + 1, true};
@@ -1367,9 +1393,9 @@ FORCE_INLINE void to_string_into(std::string& out, const f128& x, int precision,
 {
     if (precision < 0) precision = 0;
 
-    // avoid reallocation in hot loop
-    const size_t cap_fixed = 1u + 309u + 1u + ((size_t)precision + 16u) + 32u;
-    const size_t cap_sci   = 1u + 1u + 1u + ((size_t)precision + 2u) + 32u;
+    // avoids reallocation in the hot loop
+    const size_t cap_fixed = 1u + 309u + 1u + (size_t)precision + 32u;
+    const size_t cap_sci   = 1u + 1u   + 1u + (size_t)precision + 32u;
     const size_t cap = (cap_fixed > cap_sci) ? cap_fixed : cap_sci;
 
     out.resize(cap);
@@ -1572,7 +1598,7 @@ FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
         return os;
     }
 
-    if (x.hi == 0.0) { os << (showpoint ? "0.0" : "0"); return os; }
+    if (x.hi == 0.0 && x.lo == 0.0) { os << (showpoint ? "0.0" : "0"); return os; }
 
     f128 ax = (x.hi < 0.0) ? f128{-x.hi, -x.lo} : x;
     f128 m; int e10 = 0;

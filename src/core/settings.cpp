@@ -5,7 +5,7 @@
 
 BL_BEGIN_NS;
 
-#ifndef __EMSCRIPTEN__
+#ifndef BL_WEB_BUILD
 static void on_folder_chosen([[maybe_unused]] void* userdata, const char* const* filelist, [[maybe_unused]] int filter)
 {
     if (!filelist) { SDL_Log("Dialog error"); return; }
@@ -316,7 +316,7 @@ void SettingsPanel::populateSettings()
     //ImGui::BeginChild("RecordingFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
 
     // Paths
-    #ifndef __EMSCRIPTEN__
+    #ifndef BL_WEB_BUILD
     ImGui::BeginLabelledBox("Paths");
     ImGui::Text("Media Output Directory:");
     ImGui::InputText("##folder", &config.capture_dir, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_ElideLeft);

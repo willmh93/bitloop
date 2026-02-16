@@ -79,7 +79,8 @@ class MainWindow
 
     bool need_draw = false;
 
-    FPSTimer fps_timer;
+    FPSTimer worker_fps_timer;
+    std::chrono::steady_clock::time_point last_frame_time = std::chrono::steady_clock::now();
 
     //ImRect viewport_rect;
     ImVec2 client_size{};
@@ -159,7 +160,7 @@ public:
 
     void beginRecording(const CapturePreset& preset, const char* rel_path_fmt);
 
-    #ifndef __EMSCRIPTEN__
+    #ifndef BL_WEB_BUILD
     std::filesystem::path getProjectSnapshotsDir();
     std::filesystem::path getProjectVideosDir();
     std::filesystem::path getProjectAnimationsDir();

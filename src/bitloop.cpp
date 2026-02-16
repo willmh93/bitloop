@@ -100,7 +100,7 @@ void gui_loop()
     {
         SDL_Event es = e;
 
-        #ifdef BL_SIMULATE_DISPLAY
+        #ifdef BL_SIMULATED_DEVICE
         platform()->upscale_mouse_event_to_offscreen(es);
         #endif
 
@@ -201,6 +201,10 @@ void gui_loop()
         ImGui::GetIO().AddKeyEvent(ImGuiKey_V, false);
     }
     #endif
+
+    #if defined BL_SIMULATE_BROWSER && !defined(__EMSCRIPTEN__)
+    std::this_thread::sleep_for(std::chrono::milliseconds(5)); // simulate lower max FPS on browser
+    #endif
 }
 
 #ifdef __EMSCRIPTEN__
@@ -262,9 +266,9 @@ int bitloop_main(int, char* [])
 
         auto window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
 
-        #ifdef BL_SIMULATE_DISPLAY
-        fb_w = BL_SIMULATE_DISPLAY.w;
-        fb_h = BL_SIMULATE_DISPLAY.h;
+        #ifdef BL_SIMULATED_DEVICE
+        fb_w = BL_SIMULATED_DEVICE.w;
+        fb_h = BL_SIMULATED_DEVICE.h;
         fb_w = (int)((float)fb_w * BL_SIMULATE_DISPLAY_VIEW_SCALE);
         fb_h = (int)((float)fb_h * BL_SIMULATE_DISPLAY_VIEW_SCALE);
         #else

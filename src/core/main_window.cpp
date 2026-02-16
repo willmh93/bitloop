@@ -6,7 +6,7 @@
 
 #include <filesystem>
 
-#ifndef __EMSCRIPTEN__
+#ifndef BL_WEB_BUILD
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -35,8 +35,7 @@ void ImDebugPrint(const char* fmt, ...)
     va_end(ap);
 }
 
-#ifndef __EMSCRIPTEN__
-
+#ifndef BL_WEB_BUILD
 struct Token
 {
     enum class Kind { Lit, Index, Alias } kind = Kind::Lit;
@@ -681,7 +680,12 @@ void MainWindow::populateOverlay()
     project_worker()->populateOverlay();
 }
 
-std::string MainWindow::prepareFullCapturePath(const CapturePreset& preset, std::filesystem::path base_dir, const char* rel_path_fmt, int file_idx, const char* fallback_extension)
+std::string MainWindow::prepareFullCapturePath(
+    const CapturePreset& preset,
+    std::filesystem::path base_dir,
+    const char* rel_path_fmt,
+    int file_idx,
+    const char* fallback_extension)
 {
     namespace fs = std::filesystem;
 
@@ -689,7 +693,8 @@ std::string MainWindow::prepareFullCapturePath(const CapturePreset& preset, std:
 
     std::string base_filename = rel_filepath.filename().string();     // e.g. "seahorse_valley"
 
-    #ifdef __EMSCRIPTEN__
+    #ifdef BL_WEB_BUILD
+    (void)base_dir; (void)file_idx; (void)rel_path_fmt; (void)fallback_extension;
     /// todo: Use capture format for name
     std::string qualified_filename = (base_filename + '_') + preset.alias_cstr(); // e.g. "seahorse_valley_pixel9a"
 
@@ -743,7 +748,7 @@ void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_pat
     capture_manager.setCaptureEnabled(false);
 
     // If not web, decide on save path
-    #ifndef __EMSCRIPTEN__
+    #ifndef BL_WEB_BUILD
     fs::path capture_dir;
     fs::path filename;
 
@@ -791,7 +796,7 @@ void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_pat
     config.bitrate = getSettingsConfig()->record_bitrate;
     #endif
 
-    #ifndef __EMSCRIPTEN__
+    #ifndef BL_WEB_BUILD
     config.filename = filename.string();
     #endif
 
@@ -802,7 +807,7 @@ void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_pat
     capture_manager.startCapture(config);
 }
 
-void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float sharpen)
+void MainWindow::_beginSnapshot(const char* filepath [[maybe_unused]], IVec2 res, int ssaa, float sharpen)
 {
     // begin snapshot with provided args (lowest level, no awareness of presets)
 
@@ -829,7 +834,7 @@ void MainWindow::_beginSnapshot(const char* filepath, IVec2 res, int ssaa, float
     config.quality = 100.0f;
     config.lossless = true;
 
-    #ifndef __EMSCRIPTEN__
+    #ifndef BL_WEB_BUILD
     config.filename = filepath;
     #endif
 
@@ -841,7 +846,7 @@ void MainWindow::beginSnapshot(const CapturePreset& preset, const char* rel_path
 
     /// todo: Check extension is valid image format
     std::filesystem::path base_dir;
-    #ifdef __EMSCRIPTEN__
+    #ifdef BL_WEB_BUILD
     base_dir = "";
     #else
     base_dir = getProjectSnapshotsDir();
@@ -864,7 +869,7 @@ void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char
     active_snapshot_preset_request_id = request_id;
 
     // Determine snapshot group index for this batch for the target directory (ignored on web)
-    #ifndef __EMSCRIPTEN__
+    #ifndef BL_WEB_BUILD
     namespace fs = std::filesystem;
     fs::path rel_filepath = rel_path_fmt;
     fs::path dir = getPreferredCapturesDirectory();                        // e.g. "C:/dev/bitloop-gallery/captures/"
@@ -919,8 +924,10 @@ void MainWindow::checkCaptureComplete()
                 bytebuf data;
                 capture_manager.takeCompletedCaptureFromMemory(data);
 
-                #ifdef __EMSCRIPTEN__
+                #ifdef BL_WEB_BUILD
+                #ifdef __EMSCRIPTEN__ // do nothing if simulating web with Emscripten, otherwise in real web build, trigger download
                 platform()->download_snapshot_webp(data, "snapshot.webp");
+                #endif
                 #else
                 std::ofstream out(capture_manager.filename(), std::ios::out | std::ios::binary);
                 out.write((const char*)data.data(), data.size());
@@ -1014,7 +1021,7 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
         if (first)
         {
             // set initial preferred folder once
-            #ifndef __EMSCRIPTEN__
+            #ifndef BL_WEB_BUILD
             getSettingsConfig()->capture_dir = getPreferredCapturesDirectory();
             #endif
 
@@ -1275,7 +1282,7 @@ void MainWindow::populateToolbar()
         ImVec2 p = ImGui::GetCursorPos();
         ImGui::SetCursorPos(ImVec2(p.x, p.y + y_off - pad_y));
 
-        ImGui::Text("FPS: %.1f", fps_timer.getFPS());
+        ImGui::Text("FPS: %.1f", worker_fps_timer.getFPS());
     }
 
     ImGui::EndChild();
@@ -1640,9 +1647,11 @@ void MainWindow::populateViewport(bool& projectDrawn)
                     canvas.end();
 
                     canvas.setDirty(false);
+
+                    // todo: Set projectDrawn here? and early out of this scope?
                 }
 
-                fps_timer.tick();
+                worker_fps_timer.tick();
 
                 // Even if not recording, behave as though we are for consistency
                 if (project_worker()->getCurrentProject() &&
@@ -1733,14 +1742,10 @@ void MainWindow::populateViewport(bool& projectDrawn)
 }
 void MainWindow::populateUI()
 {
-    auto frame_t0 = std::chrono::steady_clock::now();
-
     if (!manageDockingLayout())
         return;
 
     bool project_drawn = false;
-
-    //thread_queue.pump();
 
     // determine if we are ready to draw *before* populating simulation imgui attributes
     {
@@ -1752,9 +1757,6 @@ void MainWindow::populateUI()
     shared_sync.wait_until_live_buffer_updated();
 
     {
-        // force stall on live thread while we mutate the (now-synced) UI data
-        ///std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex); // was this
-
         // prevent deadlock if worker thread is waiting
         std::unique_lock<std::mutex> shadow_lock(shared_sync.shadow_buffer_mutex, std::defer_lock);
         while (!shadow_lock.try_lock())
@@ -1797,8 +1799,6 @@ void MainWindow::populateUI()
                 }
 
                 populateOverlay();
-
-                //thread_queue.pump();
             }
 
             // Draw viewport
@@ -1808,8 +1808,6 @@ void MainWindow::populateUI()
                 ImGui::SetNextWindowClass(&wc);
 
                 populateViewport(project_drawn);
-
-                //thread_queue.pump();
             }
         }
 
@@ -1821,8 +1819,6 @@ void MainWindow::populateUI()
                 settings_panel.populateSettings();
             }
             ImGui::End();
-
-            //thread_queue.pump();
         }
 
         // end mutex lock
@@ -1897,14 +1893,25 @@ void MainWindow::populateUI()
     
     if (shared_sync.immediateUpdateRequested())
         shared_sync.setImmediateUpdate(false);
-    else if (!project_drawn)
+    else
     {
-        // prevent spinning aggressively on main thread (if project drawn, delay was already handled by worker/lock)
-        auto frame_dt = std::chrono::steady_clock::now() - frame_t0;
-        constexpr uint64_t target_ns = 1000000000llu / 60;
-        uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(frame_dt).count());
-        uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
-        if (delay_ns) SDL_DelayPrecise(delay_ns);
+        #ifdef BL_WEB_BUILD
+        bool should_delay = true;
+        #else
+        bool should_delay = !project_drawn; // if project drawn, delay is already handled by worker/lock (assuming desktop build)
+        #endif
+
+        if (should_delay)
+        {
+            // prevent spinning aggressively on main thread (if project drawn, delay was already handled by worker/lock)
+            auto frame_dt = std::chrono::steady_clock::now() - last_frame_time;
+            constexpr uint64_t target_ns = 1000000000llu / 60;
+            uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(frame_dt).count());
+            uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
+            if (delay_ns) SDL_DelayPrecise(delay_ns);
+
+            last_frame_time = std::chrono::steady_clock::now();
+        }
     }
 }
 

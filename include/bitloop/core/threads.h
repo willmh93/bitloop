@@ -43,6 +43,10 @@ namespace Thread
 
     [[nodiscard]] inline unsigned int idealThreadCount()
     {
+        #ifdef BL_SIMULATED_DEVICE
+        return BL_SIMULATED_DEVICE.threads;
+        #endif
+
         // 1. Try the standard C++ hint
         unsigned int n = std::thread::hardware_concurrency();
         if (n) return (n-1);
@@ -73,7 +77,11 @@ namespace Thread
         if (_pool)
             _pool.release();
 
+        #ifdef BL_SIMULATED_DEVICE
+        max_threads = std::min(c, BL_SIMULATED_DEVICE.threads);
+        #else
         max_threads = c;
+        #endif
 
         _pool = std::make_unique<BS::thread_pool<BS::tp::none>>(Thread::threadCount());
     }

@@ -116,6 +116,7 @@ void ProjectWorker::worker_loop()
     //bool shadow_changed = false;
 
     bool immediate_update_requested = false;
+    auto last_frame_time = std::chrono::steady_clock::now();
 
     while (!shared_sync.quitting.load())
     {
@@ -141,7 +142,6 @@ void ProjectWorker::worker_loop()
 
         capture_manager->setCaptureEnabled(true);
 
-        auto frame_t0 = std::chrono::steady_clock::now();
 
         /// ────── Do heavy work (while GUI thread redraws cached frame) ──────
         if (current_project && current_project->started) 
@@ -181,12 +181,14 @@ void ProjectWorker::worker_loop()
                 /// ────── Process simulation (potentially heavy work) ──────
                 current_project->_projectProcess();
 
+                #ifndef BL_WEB_BUILD // does nothing on web
                 if (current_project->immediate_update_requested)
                 {
                     immediate_update_requested = true;
                     current_project->immediate_update_requested = false;
                 }
-                
+                #endif
+
                 /// ────── Update shadow buffer with *changed* live variables ──────
                 {
                     // we push live changes to shadow IF shadow itself wasn't changed by UI
@@ -212,7 +214,7 @@ void ProjectWorker::worker_loop()
         // delay to achieve target fps (minus time taken to draw the frame)
         if (!immediate_update_requested)
         {
-            auto dt = std::chrono::steady_clock::now() - frame_t0;
+            auto dt = std::chrono::steady_clock::now() - last_frame_time;
             uint64_t target_ns = 1000000000llu / main_window()->getFPS();
             uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(dt).count());
             uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
@@ -223,6 +225,8 @@ void ProjectWorker::worker_loop()
             shared_sync.setImmediateUpdate(true);
             immediate_update_requested = false;
         }
+
+        last_frame_time = std::chrono::steady_clock::now();
 
         /// ────── Flag ready to draw ──────
         shared_sync.flag_ready_to_draw();

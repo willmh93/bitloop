@@ -62,8 +62,8 @@ void PlatformManager::update()
     SDL_GetWindowSizeInPixels(window, &gl_w, &gl_h);
     SDL_GetWindowSize(window, &win_w, &win_h);
 
-    #ifdef BL_SIMULATE_DISPLAY
-    win_dpr = BL_SIMULATE_DISPLAY.dpr;
+    #ifdef BL_SIMULATED_DEVICE
+    win_dpr = BL_SIMULATED_DEVICE.dpr;
     #else
     win_dpr = SDL_GetWindowDisplayScale(window);
     #endif
@@ -120,9 +120,9 @@ static void ensure_offscreen_fbo(GLuint& fbo, GLuint& color, GLuint& depth, int 
 
 void PlatformManager::gl_begin_frame()
 {
-    #ifdef BL_SIMULATE_DISPLAY
-    offscreen_w = BL_SIMULATE_DISPLAY.w;
-    offscreen_h = BL_SIMULATE_DISPLAY.h;
+    #ifdef BL_SIMULATED_DEVICE
+    offscreen_w = BL_SIMULATED_DEVICE.w;
+    offscreen_h = BL_SIMULATED_DEVICE.h;
 
     // ensure offscreen FBO exists
     if (!offscreen_fbo)
@@ -138,7 +138,7 @@ void PlatformManager::gl_begin_frame()
 
 void PlatformManager::gl_end_frame()
 {
-    #ifdef BL_SIMULATE_DISPLAY
+    #ifdef BL_SIMULATED_DEVICE
     // downscale into the real window backbuffer
     glBindFramebuffer(GL_READ_FRAMEBUFFER, offscreen_fbo);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -153,7 +153,7 @@ void PlatformManager::gl_end_frame()
 
 void PlatformManager::imgui_fix_offscreen_mouse_position()
 {
-    #ifdef BL_SIMULATE_DISPLAY
+    #ifdef BL_SIMULATED_DEVICE
     // imgui_impl_sdl3 calls UpdateMouseData() in NewFrame and queries global mouse state,
     // which can overwrite scaled coordinates
     float mx = 0.0f, my = 0.0f;
@@ -287,7 +287,7 @@ bool PlatformManager::is_mobile() const
 
 bool PlatformManager::is_desktop_native() const
 {
-    #if defined __EMSCRIPTEN__ || defined BL_SIMULATE_BROWSER
+    #if defined BL_WEB_BUILD
     return false;
     #else
     return !is_mobile();

@@ -13,15 +13,15 @@
 //#define BL_ENABLE_SIMULATED_DEVICE
 
 #ifdef BL_ENABLE_SIMULATED_DEVICE
-    struct DebugDevicePreset { int w; int h; float dpr; };
+struct DebugDevicePreset { int w; int h; float dpr; int threads; };
 
     /// --- flags ---
     #define BL_SIMULATE_MOBILE  // platform()->is_mobile() == true + use mouse to emulate touch
     #define BL_SIMULATE_BROWSER // emscripten
 
     /// --- presets ---
-    #define BL_SIMULATE_DISPLAY                DebugDevicePreset{1080, 1998, 2.625f}  // Google Pixel 9a (Chrome)
-    //#define BL_SIMULATE_DISPLAY              DebugDevicePreset{1080, 2424, 2.625f}  // Google Pixel 9a (fullscreen)
+    #define BL_SIMULATED_DEVICE     DebugDevicePreset{1080, 1998, 2.625f, 8}  // Google Pixel 9a (Chrome)
+    //#define BL_SIMULATED_DEVICE   DebugDevicePreset{1080, 2424, 2.625f, 8}  // Google Pixel 9a (fullscreen)
 
     /// --- scale to comfortable size on screen ---
     //#define BL_SIMULATE_DISPLAY_VIEW_SCALE     0.205f // accurate

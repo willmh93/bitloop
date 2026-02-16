@@ -53,17 +53,24 @@
 
 #define UNUSED(x) ((void)(x))
 
-//#ifdef NDEBUG
-//#define BL_RELEASE
-//#else
-//#define BL_DEBUG
-//#endif
-
+/// configure defines based on provided build config
 #if defined BL_RELWITHDEBINFO || defined BL_DEBUG
 #define BL_DEBUG_INFO
 #endif
 
-#ifndef __EMSCRIPTEN__
+// don't attempt to simulate devices on web
+#if defined __EMSCRIPTEN__
+#undef BL_SIMULATED_DEVICE
+#endif
+
+// configure web environment (including simulated browser)
+#if defined __EMSCRIPTEN__ || defined BL_SIMULATE_BROWSER
+#define BL_WEB_BUILD
+#undef BITLOOP_FFMPEG_ENABLED
+#undef BITLOOP_FFMPEG_X265_ENABLED
+#endif
+
+#ifndef BL_WEB_BUILD
 // For RelWithDebInfo, to force compiler to avoid optimizing variables
 // to make them inspectable while debugging
 template<class T>

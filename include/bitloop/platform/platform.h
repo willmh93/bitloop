@@ -90,7 +90,7 @@ public:
 
     [[nodiscard]] bool offscreen_active() const
     {
-        #ifdef BL_SIMULATE_DISPLAY
+        #ifdef BL_SIMULATED_DEVICE
         return true;
         #else
         return false;
@@ -100,7 +100,7 @@ public:
     // what the app should render to (offscreen, or direct)
     [[nodiscard]] IVec2 fbo_size() const
     {
-        #ifdef BL_SIMULATE_DISPLAY
+        #ifdef BL_SIMULATED_DEVICE
         return {offscreen_w, offscreen_h};
         #else
         return {fb_w, fb_h};
