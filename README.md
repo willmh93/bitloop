@@ -1,3 +1,5 @@
+[![CMake on multiple platforms](https://github.com/willmh93/bitloop/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/willmh93/bitloop/actions/workflows/cmake-multi-platform.yml)
+
 # Overview
 
 Bitloop is a modular cross-platform CMake project manager tailored toward scientific simulations/visualizations and rapid prototyping.
