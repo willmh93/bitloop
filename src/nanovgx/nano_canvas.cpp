@@ -285,17 +285,17 @@ void Painter::drawCursor(f64 x, f64 y, f64 size)
     restore();
 }
 
-void Canvas::create(f64 _global_scale)
+void NanoCanvas::create(f64 _global_scale)
 {
     context.vg = nvgCreate(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
-    usePainter(&context);
+    setTargetPainterContext(&context);
     
     setGlobalScale(_global_scale);
 
     context.default_font = NanoFont::create("/data/fonts/UbuntuMono.ttf");
 }
 
-Canvas::~Canvas()
+NanoCanvas::~NanoCanvas()
 {
     if (fbo) glDeleteFramebuffers(1, &fbo);
     if (tex) glDeleteTextures(1, &tex);
@@ -307,7 +307,7 @@ Canvas::~Canvas()
     }
 }
 
-bool Canvas::resize(int w, int h)
+bool NanoCanvas::resize(int w, int h)
 {
     if ((w == fbo_width && fbo_height == h) ||
         (w <= 0 || h <= 0))
@@ -344,7 +344,7 @@ bool Canvas::resize(int w, int h)
     return true;
 }
 
-void Canvas::begin(f32 r, f32 g, f32 b, f32 a)
+void NanoCanvas::begin(f32 r, f32 g, f32 b, f32 a)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, fbo_width, fbo_height);
@@ -358,13 +358,13 @@ void Canvas::begin(f32 r, f32 g, f32 b, f32 a)
     );
 }
 
-void Canvas::end()
+void NanoCanvas::end()
 {
     nvgEndFrame(context.vg);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-bool Canvas::readPixels(std::vector<uint8_t>& out_rgba)
+bool NanoCanvas::readPixels(std::vector<uint8_t>& out_rgba)
 {
     if (!fbo || fbo_width <= 0 || fbo_height <= 0) return false;
     const size_t bytes = (size_t)fbo_width * fbo_height * 4;

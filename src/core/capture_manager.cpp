@@ -879,55 +879,12 @@ void CaptureManager::onFinalized(bool error)
     blPrint() << "finalizeCapture()";
 }
 
-void CaptureManager::preProcessFrameForEncoding(const uint8_t* src_data, bytebuf& out)
-{
-    CapturePreprocessParams params;
-    params.src_resolution = srcResolution();
-    params.dst_resolution = dstResolution();
-    params.ssaa = std::max(1, config.ssaa);
-    params.sharpen = std::clamp(config.sharpen, 0.0f, 1.0f);
-    params.flip_y = config.flip;
-
-    if (!preprocessor.preprocessRGBA8(src_data, params, out))
-    {
-        // fail-safe so the encoder thread can continue even if GL preprocessing fails
-        out.resize(config.dstBytes());
-        for (size_t i = 0; i + 3 < out.size(); i += 4)
-        {
-            out[i + 0] = 0;
-            out[i + 1] = 0;
-            out[i + 2] = 0;
-            out[i + 3] = 255;
-        }
-    }
-}
-
-bool CaptureManager::encodeFrame(
-    const uint8_t* data,
-    std::function<void(EncodeFrame&)> postProcessedFrame
-)
+bool CaptureManager::encodeFrame(const EncodeFrame& preprocessed_frame)
 {
     if (!isCaptureEnabled())
     {
         return false;
     }
-
-    // Preprocess frame (supersampling, sharpening, flipping, etc...)
-    /// todo: Move to worker?
-    blPrint() << "preProcessFrameForEncoding()...";
-    EncodeFrame preprocessed_frame;
-
-    timer0(PREPROCESS);
-
-    preProcessFrameForEncoding(data, preprocessed_frame);
-
-    // debug test (no preprocessing)
-    //preprocessed_frame.resize(config.dstBytes());
-    //memcpy(preprocessed_frame.frameData(), data, config.dstBytes());
-
-    postProcessedFrame(preprocessed_frame);
-
-    timer1(PREPROCESS);
 
     // If encoder still busy with previous frame, do not block here
     if (encoder_busy.load(std::memory_order_acquire))
@@ -947,89 +904,6 @@ bool CaptureManager::encodeFrame(
 
         // Mark busy only after the buffer is fully populated
         blPrint() << "encoder_busy.store(true)";
-        encoder_busy.store(true, std::memory_order_release);
-    }
-
-    work_available_cond.notify_one();
-
-    ///if (isSnapshotting())
-    ///{
-    ///    // Auto-finalize snapshots on the first frame
-    ///    finalizeCapture();
-    ///}
-
-    return true;
-
-    /*#if BITLOOP_FFMPEG_ENABLED
-    if (isRecording())
-    {
-        // Wake the FFmpeg worker, a new frame is ready to encode
-
-        return true;
-    }
-    else
-    #endif
-    if (isSnapshotting())
-    {
-        bytebuf encoded;
-        webp_snapshot_encode_rgba(preprocessed_frame.data(), config.resolution.x, config.resolution.y, 100, 6, true, 100, encoded);
-        finalizeSnapshot(encoded);
-
-        return true;
-    }
-
-    return false;*/
-}
-
-bool CaptureManager::encodeFrameTexture(
-    uint32_t src_texture,
-    //std::function<void(EncodeFrame&)> preprocessedFrame,
-    std::function<void(EncodeFrame&)> postProcessedFrame
-)
-{
-    if (!isCaptureEnabled())
-        return false;
-
-    CapturePreprocessParams params;
-    params.src_resolution = srcResolution();
-    params.dst_resolution = dstResolution();
-    params.ssaa = std::max(1, config.ssaa);
-    params.sharpen = std::clamp(config.sharpen, 0.0f, 1.0f);
-    params.flip_y = config.flip;
-
-    blPrint() << "preprocessTexture()...";
-    EncodeFrame preprocessed_frame;
-
-    timer0(PREPROCESS);
-
-    //preProcessedFrame(preprocessed_frame);
-    if (!preprocessor.preprocessTexture(src_texture, params, preprocessed_frame))
-    {
-        // fail-safe so the encoder thread can continue even if GL preprocessing fails.
-        preprocessed_frame.resize(config.dstBytes());
-        for (size_t i = 0; i + 3 < preprocessed_frame.size(); i += 4)
-        {
-            preprocessed_frame[i + 0] = 0;
-            preprocessed_frame[i + 1] = 0;
-            preprocessed_frame[i + 2] = 0;
-            preprocessed_frame[i + 3] = 255;
-        }
-    }
-
-    timer1(PREPROCESS);
-
-    if (postProcessedFrame)
-        postProcessedFrame(preprocessed_frame);
-
-    if (encoder_busy.load(std::memory_order_acquire))
-        return false;
-
-    {
-        std::lock_guard<std::mutex> lock(pending_mutex);
-
-        pending_frame.loadFrom(preprocessed_frame);
-        frame_count++;
-
         encoder_busy.store(true, std::memory_order_release);
     }
 

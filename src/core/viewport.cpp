@@ -67,7 +67,7 @@ void Viewport::draw()
     IVec2 ret = size();
     const CaptureManager* capture_manager = main_window()->getCaptureManager();
     if (capture_manager->isRecording() || capture_manager->isSnapshotting())
-        ret = capture_manager->dstResolution();
+        ret = capture_manager->resolution();
 
     return ret;
 }

@@ -43,7 +43,7 @@ ProjectBase* ProjectBase::activeProject()
 }
 
 
-void ProjectBase::configure(int _sim_uid, Canvas* _canvas, ImDebugLog* shared_log)
+void ProjectBase::configure(int _sim_uid, NanoCanvas* _canvas, ImDebugLog* shared_log)
 {
     blPrint() << "Project::configure";
 
@@ -536,9 +536,9 @@ void ProjectBase::_projectProcess()
 
         if (//cam.panning ||
             (viewport_mx >= 0 &&
-                viewport_my >= 0 &&
-                viewport_mx <= viewport->width() &&
-                viewport_my <= viewport->height()))
+             viewport_my >= 0 &&
+             viewport_mx <= viewport->width() &&
+             viewport_my <= viewport->height()))
         {
             mouse.viewport = viewport;
             mouse.stage_x = viewport_mx;
@@ -616,7 +616,6 @@ void ProjectBase::_projectDraw()
 
     DVec2 surface_size = canvas->fboSize();
 
-
     // todo: No per-viewport redrawing for now. Would require:
     // - or give each viewport a separate Canvas (ideal)
     //   - let ImGui draw viewport splitters
@@ -643,7 +642,6 @@ void ProjectBase::_projectDraw()
         canvas->setFillStyle(10, 10, 15);
         canvas->fillRect(0, 0, surface_size.x, surface_size.y);
 
-
         canvas->setFillStyle(255, 255, 255);
         canvas->setStrokeStyle(255, 255, 255);
 
@@ -655,7 +653,7 @@ void ProjectBase::_projectDraw()
         for (Viewport* viewport : viewports)
         {
             // Reuse derived painter for the primary canvas context
-            viewport->usePainter(canvas->getPainterContext());
+            viewport->setTargetPainterContext(canvas->getPainterContext());
 
             viewport->resetTransform();
 

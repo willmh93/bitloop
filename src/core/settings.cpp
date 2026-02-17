@@ -60,12 +60,17 @@ static inline double choose_bitrate_mbps_from_range(const BitrateRange& r, int q
 }
 #endif
 
-void SettingsPanel::init()
+void SettingsConfig::updateRecordBitrate()
 {
     #if BITLOOP_FFMPEG_ENABLED
-    config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
-    config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
+    record_bitrate_mbps_range = recommended_bitrate_range_mbps(getRecordResolution(), record_fps, getRecordFormat());
+    record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(record_bitrate_mbps_range, record_quality));
     #endif
+}
+
+void SettingsPanel::init()
+{
+    config.updateRecordBitrate();
 
     SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
     SnapshotPresetList& presets = manager->allPresets();
@@ -133,6 +138,11 @@ void SettingsPanel::populateCapturePresetsEditor()
             ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
+            // don't allow modifying default viewport preset
+            bool is_viewport_preset = selected_preset->isViewportPreset();
+            if (is_viewport_preset)
+                ImGui::BeginDisabled();
+
             // Alias (only permit unique, otherwise revert)
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -185,11 +195,19 @@ void SettingsPanel::populateCapturePresetsEditor()
             ImGui::TextUnformatted("Width");
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputInt("##res_x", &input_resolution.x, 10))
+            if (is_viewport_preset)
             {
-                input_resolution.x = std::clamp(input_resolution.x, 16, 16384);
-                input_resolution.x = (input_resolution.x & ~1); // force even
-                selected_preset->setResolution(input_resolution);
+                int w = selected_preset->width();
+                ImGui::InputInt("##res_x", &w, 10);
+            }
+            else
+            {
+                if (ImGui::InputInt("##res_x", &input_resolution.x, 10))
+                {
+                    input_resolution.x = std::clamp(input_resolution.x, 16, 16384);
+                    input_resolution.x = (input_resolution.x & ~1); // force even
+                    selected_preset->setResolution(input_resolution);
+                }
             }
 
             // Height
@@ -199,11 +217,19 @@ void SettingsPanel::populateCapturePresetsEditor()
             ImGui::TextUnformatted("Height");
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputInt("##res_y", &input_resolution.y, 10))
+            if (is_viewport_preset)
             {
-                input_resolution.y = std::clamp(input_resolution.y, 16, 16384);
-                input_resolution.y = (input_resolution.y & ~1); // force even
-                selected_preset->setResolution(input_resolution);
+                int h = selected_preset->height();
+                ImGui::InputInt("##res_y", &h, 10);
+            }
+            else
+            {
+                if (ImGui::InputInt("##res_y", &input_resolution.y, 10))
+                {
+                    input_resolution.y = std::clamp(input_resolution.y, 16, 16384);
+                    input_resolution.y = (input_resolution.y & ~1); // force even
+                    selected_preset->setResolution(input_resolution);
+                }
             }
 
             // Supersampling
@@ -269,6 +295,9 @@ void SettingsPanel::populateCapturePresetsEditor()
             {
                 selected_preset->setSharpening(input_sharpen);
             }
+
+            if (is_viewport_preset)
+                ImGui::EndDisabled();
 
             if (!use_specific_sharpen) ImGui::EndDisabled();
             ImGui::EndTable();
@@ -343,148 +372,125 @@ void SettingsPanel::populateSettings()
         if (ImGui::InputInt("##fps", &config.record_fps, 1))
         {
             config.record_fps = std::clamp(config.record_fps, 1, 100);
-
-            #if BITLOOP_FFMPEG_ENABLED
-            config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
-            config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
-            #endif
+            config.updateRecordBitrate();
         }
         ImGui::Checkbox("Show FPS in toolbar", &config.show_fps);
-
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Text("Supersample Factor (SSAA)");
-        //ImGui::SliderInt("##ssaa", &snapshot_supersample_factor, 1, 8, "%dx");
-        ImGui::SliderInt("##ssaa", &config.default_ssaa, 1, 8, "%dx");
-
-        ImGui::Spacing(); ImGui::Spacing();
-        ImGui::Text("Sharpen");
-        //ImGui::SliderFloat("##sharpen", &snapshot_sharpen, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("##sharpen", &config.default_sharpen, 0.0f, 1.0f, "%.2f");
-
         ImGui::EndLabelledBox();
     }
 
-    ///// Capture Presets
-    ///{
-    ///    ImGui::BeginLabelledBox("Capture Presets");
-    ///
-    ///    //static int sel_aspect = -1;
-    ///    //static int sel_tier = -1;
-    ///    //constexpr IVec2 pixels_8k{ 7680, 4320 };
-    ///    //static u64 max_pixels = (u64)pixels_8k.x * (u64)pixels_8k.y;
-    ///    //static bool first = true;
-    ///    ///populateResolutionOptions(snapshot_resolution, first, sel_aspect, sel_tier, max_pixels);
-    ///
-    ///    populateCapturePresetsEditor();
-    ///
-    ///    ImGui::EndLabelledBox();
-    ///}
-
-
-    if (ImGui::BeginTabBar("capture_tabs"))
+    // Capture Presets
     {
-        if (ImGui::TabBox("Image"))
+        ImGui::BeginLabelledBox("Capture Presets");
+
+        ImGui::Text("Default SSAA (Supersampling Factor)");
+        ImGui::SliderInt("##ssaa", &config.default_ssaa, 1, 8, "%dx");
+
+        ImGui::Spacing(); ImGui::Spacing();
+        ImGui::Text("Default Sharpen");
+        ImGui::SliderFloat("##sharpen", &config.default_sharpen, 0.0f, 1.0f, "%.2f");
+
+        ImGui::Spacing(); ImGui::Spacing();
+        
+        if (ImGui::BeginTabBar("capture_tabs"))
         {
-            ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
-
-            selected_preset_is_video = false;
-
-            SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
-            SnapshotPresetList& presets = manager->allPresets();
-
-            populateCapturePresetsList<CapturePresetsSelectMode::MULTI>(
-                [&](int i) -> CapturePreset& {
-                return presets[i];
-            }, (int)presets.size(), &config.target_image_presets, selected_image_preset);
-
-            ImGui::EndTabBox();
-        }
-
-        if (ImGui::TabBox("Video"))
-        {
-            ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
-
-            selected_preset_is_video = true;
-
-            SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
-            SnapshotPresetList& presets = manager->allPresets();
-
-            // Use target_video_preset as both selected item index and chosen radio button index
-            int new_index = populateCapturePresetsList<CapturePresetsSelectMode::SINGLE>(
-                [&](int i) -> CapturePreset& {
-                return presets[i];
-            }, (int)presets.size(), nullptr, config.target_video_preset);
-
-            if (new_index >= 0)
+            if (ImGui::TabBox("Image"))
             {
-                #if BITLOOP_FFMPEG_ENABLED
-                config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
-                config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
-                #endif
+                ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
+
+                selected_preset_is_video = false;
+
+                SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
+                SnapshotPresetList& presets = manager->allPresets();
+
+                populateCapturePresetsList<CapturePresetsSelectMode::MULTI>(
+                    [&](int i) -> CapturePreset& {
+                    return presets[i];
+                }, (int)presets.size(), &config.target_image_presets, selected_image_preset);
+
+                ImGui::EndTabBox();
             }
 
-            ImGui::Spacing(); 
-
-            ImGui::Text("Codec:");
-            if (CaptureFormatVideoCombo("##codec", config.record_format))
+            if (ImGui::TabBox("Video"))
             {
-                #if BITLOOP_FFMPEG_ENABLED
-                config.record_bitrate_mbps_range = recommended_bitrate_range_mbps(config.getRecordResolution(), config.record_fps, config.getRecordFormat());
-                config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
-                #endif
-            }
+                ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
 
-            ImGui::Spacing();
-            ImGui::Spacing();
-            ImGui::Text("Quality:");
+                selected_preset_is_video = true;
 
-            if (ImGui::SliderInt("##quality", &config.record_quality, 0, 100))
-            {
-                /// TODO: Apply quality to WebP
+                SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
+                SnapshotPresetList& presets = manager->allPresets();
 
-                #if BITLOOP_FFMPEG_ENABLED
-                config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
-                #endif
-            }
+                // Use target_video_preset as both selected item index and chosen radio button index
+                int new_index = populateCapturePresetsList<CapturePresetsSelectMode::SINGLE>(
+                    [&](int i) -> CapturePreset& {
+                    return presets[i];
+                }, (int)presets.size(), nullptr, config.target_video_preset);
 
-            #if BITLOOP_FFMPEG_ENABLED
-            ImGui::Text("= %.1f Mbps", (double)config.record_bitrate / 1000000.0);
-            #endif
+                if (new_index >= 0)
+                {
+                    config.updateRecordBitrate();
+                }
 
-            ImGui::Spacing();
-            ImGui::Spacing();
-            ImGui::Checkbox("Lossless", &config.record_lossless);
+                ImGui::Spacing(); 
 
-            if (config.record_lossless)
-            {
+                ImGui::Text("Codec:");
+                if (CaptureFormatVideoCombo("##codec", config.record_format))
+                {
+                    config.updateRecordBitrate();
+                }
+
                 ImGui::Spacing();
                 ImGui::Spacing();
-                ImGui::Text("Lossless quality:");
-                ImGui::SliderInt("##near_lossless", &config.record_near_lossless, 0, 100);
+                ImGui::Text("Quality:");
+
+                if (ImGui::SliderInt("##quality", &config.record_quality, 0, 100))
+                {
+                    /// TODO: Apply quality to WebP
+
+                    #if BITLOOP_FFMPEG_ENABLED
+                    config.record_bitrate = (int64_t)(1000000.0 * choose_bitrate_mbps_from_range(config.record_bitrate_mbps_range, config.record_quality));
+                    #endif
+                }
+
+                #if BITLOOP_FFMPEG_ENABLED
+                ImGui::Text("= %.1f Mbps", (double)config.record_bitrate / 1000000.0);
+                #endif
+
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Checkbox("Lossless", &config.record_lossless);
+
+                if (config.record_lossless)
+                {
+                    ImGui::Spacing();
+                    ImGui::Spacing();
+                    ImGui::Text("Lossless quality:");
+                    ImGui::SliderInt("##near_lossless", &config.record_near_lossless, 0, 100);
+                }
+
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Text("Frame Count (0 = No Limit):");
+                if (ImGui::InputInt("##frame_count", &config.record_frame_count, 1))
+                {
+                    config.record_frame_count = std::clamp(config.record_frame_count, 0, 10000000);
+                }
+
+                ImGui::EndTabBox();
             }
 
-            ImGui::Spacing();
-            ImGui::Spacing();
-            ImGui::Text("Frame Count (0 = No Limit):");
-            if (ImGui::InputInt("##frame_count", &config.record_frame_count, 1))
+            if (ImGui::TabBox("Edit Presets"))
             {
-                config.record_frame_count = std::clamp(config.record_frame_count, 0, 10000000);
+                populateCapturePresetsEditor();
+
+                ImGui::EndTabBox();
             }
-
-            ImGui::EndTabBox();
-        }
-
-        if (ImGui::TabBox("Edit Presets"))
-        {
-            populateCapturePresetsEditor();
-
-            ImGui::EndTabBox();
-        }
 
         
 
-        ImGui::EndTabBar();
+            ImGui::EndTabBar();
+        }
+
+        ImGui::EndLabelledBox();
     }
     
 

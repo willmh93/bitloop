@@ -776,17 +776,11 @@ void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_pat
         }
         break;
     }
-
     #endif
-
-    int ssaa      = (preset.getSSAA() > 0)       ? preset.getSSAA()       : getSettingsConfig()->default_ssaa;
-    float sharpen = (preset.getSharpening() > 0) ? preset.getSharpening() : getSettingsConfig()->default_sharpen;
 
     CaptureConfig config;
     config.format             =       getSettingsConfig()->getRecordFormat();
     config.resolution         =       preset.getResolution();
-    config.ssaa               =       ssaa;
-    config.sharpen            =       sharpen;
     config.fps                =       getSettingsConfig()->record_fps;
     config.record_frame_count =       getSettingsConfig()->record_frame_count;
     config.quality            = (f32) getSettingsConfig()->record_quality;
@@ -800,14 +794,15 @@ void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_pat
     config.filename = filename.string();
     #endif
 
-    enabled_snapshot_presets = SnapshotPresetList(preset);
+    enabled_capture_presets = SnapshotPresetList(preset);
+    enabled_capture_presets_current_idx = 0;
     active_snapshot_preset_request_id = 0; // no assigned callback for recording
 
-    /// TODO: check for ffmpeg/webp initialization error
+    /// TODO: check for any ffmpeg/webp initialization errors
     capture_manager.startCapture(config);
 }
 
-void MainWindow::_beginSnapshot(const char* filepath [[maybe_unused]], IVec2 res, int ssaa, float sharpen)
+void MainWindow::_beginSnapshot(const char* filepath [[maybe_unused]], IVec2 res)
 {
     // begin snapshot with provided args (lowest level, no awareness of presets)
 
@@ -829,8 +824,8 @@ void MainWindow::_beginSnapshot(const char* filepath [[maybe_unused]], IVec2 res
     CaptureConfig config;
     config.format = getSettingsConfig()->getSnapshotFormat();
     config.resolution = res;
-    config.ssaa = ssaa;
-    config.sharpen = sharpen;
+    //config.ssaa = ssaa;
+    //config.sharpen = sharpen;
     config.quality = 100.0f;
     config.lossless = true;
 
@@ -853,18 +848,15 @@ void MainWindow::beginSnapshot(const CapturePreset& preset, const char* rel_path
     #endif
 
     std::string full_path = prepareFullCapturePath(preset, base_dir, rel_path_fmt, file_idx, ".webp");
-    int ssaa      = (preset.getSSAA() > 0)       ? preset.getSSAA()       : getSettingsConfig()->default_ssaa;
-    float sharpen = (preset.getSharpening() > 0) ? preset.getSharpening() : getSettingsConfig()->default_sharpen;
-
-    _beginSnapshot(full_path.c_str(), preset.getResolution(), ssaa, sharpen);
+    _beginSnapshot(full_path.c_str(), preset.getResolution()/*, ssaa, sharpen*/);
 }
 void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id)
 {
     assert(presets.size() > 0);
 
-    enabled_snapshot_presets = presets;
-    is_snapshotting = true;
-    active_capture_preset = 0;
+    enabled_capture_presets = presets;
+    is_snapshotting_list = true;
+    enabled_capture_presets_current_idx = 0;
     active_capture_rel_path_fmt = rel_path_fmt;
     active_snapshot_preset_request_id = request_id;
 
@@ -880,7 +872,7 @@ void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char
     shared_batch_fileindex = 0;
     #endif
 
-    beginSnapshot(enabled_snapshot_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex);
+    beginSnapshot(enabled_capture_presets[enabled_capture_presets_current_idx], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex);
 }
 void MainWindow::endRecording()
 {
@@ -900,8 +892,6 @@ void MainWindow::endRecording()
         capture_manager.finalizeCapture();
     }
 }
-
-
 
 void MainWindow::checkCaptureComplete()
 {
@@ -938,15 +928,15 @@ void MainWindow::checkCaptureComplete()
                 if (capture_manager.format() == CaptureFormat::WEBP_SNAPSHOT)
                 {
                     // do we have another preset to capture?
-                    active_capture_preset++;
-                    if (active_capture_preset < enabled_snapshot_presets.size())
+                    enabled_capture_presets_current_idx++;
+                    if (enabled_capture_presets_current_idx < enabled_capture_presets.size())
                     {
                         // todo: maybe queue to begin capture at more suitable time
                         queueMainWindowCommand({ MainWindowCommandType::BEGIN_SNAPSHOT_ACTIVE_PRESET });
                     }
                     else
                     {
-                        is_snapshotting = false;
+                        is_snapshotting_list = false;
                     }
                 }
             }
@@ -1065,8 +1055,8 @@ void MainWindow::handleCommand(MainWindowCommandEvent e)
     {
         // "private" command triggered on completing a snapshot - triggers a snapshot on the next batch preset
         SnapshotPresetList presets;
-        presets.add(enabled_snapshot_presets[active_capture_preset]);
-        beginSnapshot(enabled_snapshot_presets[active_capture_preset], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex);
+        presets.add(enabled_capture_presets[enabled_capture_presets_current_idx]);
+        beginSnapshot(enabled_capture_presets[enabled_capture_presets_current_idx], active_capture_rel_path_fmt.c_str(), shared_batch_fileindex);
     }
     break;
 
@@ -1560,46 +1550,60 @@ void MainWindow::populateViewport(bool& projectDrawn)
     {
         client_size = ImGui::GetContentRegionAvail();
 
-        // set canvas size to viewport size by default
-        IVec2 canvas_size(client_size);
-
         bool capture_preview_mode = main_window()->getSettingsConfig()->preview_mode;
         bool is_capturing = capture_manager.isCapturing();
-        bool use_capture_resolution =
-            capture_manager.isRecording() ||
-            capture_manager.isSnapshotting() ||
-            capture_preview_mode;
 
-        // switch to record resolution if recording
-        if (use_capture_resolution)
+        SnapshotPresetList& presets = getSnapshotPresetManager()->allPresets();
+        int selected_preset_idx = settings_panel.getSelectedPresetIndex(); //  selected "allPresets" index
+
+        if (!is_capturing)
         {
-            // only preview when not recording
-            if (capture_preview_mode && !is_capturing)
-            {
-                SnapshotPresetList& presets = getSnapshotPresetManager()->allPresets();
-
-                // get selected "allPresets" index
-                int selected_preset_idx = settings_panel.getSelectedPresetIndex();
-
-                if (selected_preset_idx >= 0)
-                {
-                    CapturePreset& preset = presets[selected_preset_idx];
-                    canvas_size = preset.getResolution();
-                }
-            }
-            else
-            {
-                canvas_size = capture_manager.srcResolution();
-            }
+            // if capturing, lock "viewport" preset resolution until finished
+            if (presets[0].setResolution(client_size))
+                getSettingsConfig()->updateRecordBitrate();
         }
 
+        CapturePreset* preset = nullptr; // first preset always represents viewport. Use by default
+
+        if (is_capturing)
+        {
+            // *always* use capture preset if capturing, even if "preview" mode on
+            assert(enabled_capture_presets_current_idx < enabled_capture_presets.size());
+            preset = &enabled_capture_presets[enabled_capture_presets_current_idx];
+        }
+        else if (capture_preview_mode && selected_preset_idx > 0)
+        {
+            // if "preview" mode on, use selected preset (if one is selected)
+            assert(selected_preset_idx < presets.size());
+            preset = &presets[selected_preset_idx];
+        }
+        else
+        {
+            // otherwise, use default viewport preset (index 0)
+            assert(presets.size() > 0);
+            preset = &presets[0];
+        }
+
+        assert(preset != nullptr);
+
+        int   ssaa    = (preset->getSSAA() > 0)       ? preset->getSSAA()       : getSettingsConfig()->default_ssaa;
+        float sharpen = (preset->getSharpening() > 0) ? preset->getSharpening() : getSettingsConfig()->default_sharpen;
+        IVec2 target_size = preset->getResolution();
+        IVec2 canvas_size = preset->getResolution() * ssaa;
+
         bool resized = canvas.resize(canvas_size.x, canvas_size.y);
+        bool changed_scale = canvas.setGlobalScale(platform()->dpr() * ssaa);
+        bool changed_sharpening = sharpen != old_sharpen;
+        old_sharpen = sharpen;
+
         if (resized)
         {
             canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
             canvas.setFillStyle(0, 0, 0);
             canvas.fillRect(0, 0, (float)canvas.fboWidth(), (float)canvas.fboHeight());
             canvas.end();
+
+            // todo: Force need_draw. Don't switch resolution until next frame?
         }
 
         if (!done_first_size)
@@ -1619,6 +1623,8 @@ void MainWindow::populateViewport(bool& projectDrawn)
                 need_draw = true;
             }
         }
+
+        bool preprocess_frame = (changed_scale || resized || changed_sharpening);
 
         if (need_draw)
         {
@@ -1646,6 +1652,8 @@ void MainWindow::populateViewport(bool& projectDrawn)
                     project_worker()->draw();
                     canvas.end();
 
+                    preprocess_frame = true;
+                    
                     canvas.setDirty(false);
 
                     // todo: Set projectDrawn here? and early out of this scope?
@@ -1659,25 +1667,17 @@ void MainWindow::populateViewport(bool& projectDrawn)
                 {
                     captured_last_frame = encode_next_sim_frame;
 
-                    if (capture_manager.isRecording() || capture_manager.isSnapshotting())
+                    if (capture_manager.isCapturing())
                     {
                         if (encode_next_sim_frame)
                         {
-                            canvas.readPixels(frame_data);
+                            // give project a chance to attach metadata to the frame before sending it to the encoder
+                            CapturePreset preset_info = *preset;
+                            preset_info.setVideo(capture_manager.isRecording()); // Tell user whether preset is being used a video or snapshot
+                            project_worker()->onEncodeFrame(preprocessed_frame, active_snapshot_preset_request_id, preset_info);
 
-                            // capture_manager might ignore frame if setCaptureEnabled(true) hasn't been called yet,
-                            // which only happens at the start of the *next* worker frame (to avoid capturing an old invalid frame)
-                            capture_manager.encodeFrame(frame_data.data(), [&](EncodeFrame& data)
-                            {
-                                CapturePreset preset = capture_manager.isSnapshotting() ?
-                                    enabled_snapshot_presets[active_capture_preset] :
-                                    enabled_snapshot_presets[0]; // recording preset (multi-preset recording not supported)
-
-                                // convenience: Tell user whether preset is being used a video or snapshot
-                                preset.setVideo(capture_manager.isRecording());
-
-                                project_worker()->onEncodeFrame(data, active_snapshot_preset_request_id, preset);
-                            });
+                            // send to encoder
+                            capture_manager.encodeFrame(preprocessed_frame);
                         }
                     }
 
@@ -1695,45 +1695,55 @@ void MainWindow::populateViewport(bool& projectDrawn)
             projectDrawn = true;
         }
 
+        if (preprocess_frame)
+        {
+            // preprocess
+            CapturePreprocessParams params{};
+            params.src_resolution = canvas_size;
+            params.dst_resolution = target_size;
+            params.ssaa = ssaa;
+            params.sharpen = sharpen;
+            params.flip_y = true;
+
+            // todo: Bypass preprocessing pipeline if ssaa==1 && sharpen==0
+            if (capture_manager.isCapturing())
+                preprocessor.preprocessTexture(canvas.texture(), params, preprocessed_frame);
+            else
+                preprocessor.preprocessTextureToTexture(canvas.texture(), params);
+
+        }
+
         // "canvas" refers to internal canvas dimensions
         // "image" in this context = ImGui image
         // "client" viewport size (max image size)
         ImVec2 image_pos = ImGui::GetCursorScreenPos();
         ImVec2 image_size;
 
-        if (use_capture_resolution)
+        float sw = client_size.x, sh = client_size.y; // calculates to image size (after scaling)
+        float ox = 0, oy = 0;
+
+        float client_aspect  = (client_size.x / client_size.y);
+        float canvas_aspect = ((float)canvas_size.x / (float)canvas_size.y);
+
+        if (canvas_aspect > client_aspect)
         {
-            float sw = client_size.x, sh = client_size.y; // calculates to image size (after scaling)
-            float ox = 0, oy = 0;
-
-            float client_aspect  = (client_size.x / client_size.y);
-            float canvas_aspect = ((float)canvas_size.x / (float)canvas_size.y);
-
-            if (canvas_aspect > client_aspect)
-            {
-                sh = client_size.y * (client_aspect / canvas_aspect); // Render aspect is too wide
-                oy = 0.5f * (client_size.y - sh);                     // Center vertically
-            }
-            else
-            {
-                sw = client_size.x * (canvas_aspect / client_aspect); // Render aspect is too tall
-                ox = 0.5f * (client_size.x - sw);                     // Center horizontally
-            }
-
-            image_pos += { ox, oy };
-            image_size = { sw, sh };
-
-            canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)(image_pos.x + sw), (int)(image_pos.y + sh)));
+            sh = client_size.y * (client_aspect / canvas_aspect); // Render aspect is too wide
+            oy = 0.5f * (client_size.y - sh);                     // Center vertically
         }
         else
         {
-            image_size = (ImVec2)canvas_size;
-            canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)image_pos.x + canvas_size.x, (int)image_pos.y + canvas_size.y));
+            sw = client_size.x * (canvas_aspect / client_aspect); // Render aspect is too tall
+            ox = 0.5f * (client_size.x - sw);                     // Center horizontally
         }
 
+        image_pos += { ox, oy };
+        image_size = { sw, sh };
+
+        canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)(image_pos.x + sw), (int)(image_pos.y + sh)));
+     
         // Draw cached (or freshly generated) frame
         ImGui::SetCursorScreenPos(image_pos);
-        ImGui::Image(canvas.texture(), image_size, ImVec2(0,1), ImVec2(1,0));
+        ImGui::Image((ImTextureID)preprocessor.outputTexture(), image_size, ImVec2(0, 0), ImVec2(1, 1));
 
         viewport_hovered = ImGui::IsWindowHovered();
     }

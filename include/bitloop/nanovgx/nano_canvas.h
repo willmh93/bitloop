@@ -156,7 +156,7 @@ protected:
 public:
 
 
-    void usePainter(PainterContext* target)
+    void setTargetPainterContext(PainterContext* target)
     {
         paint_ctx = target;
         vg = target->vg;
@@ -169,7 +169,11 @@ public:
 
     [[nodiscard]] NanoFont getDefaultFont() { return paint_ctx->default_font; }
     [[nodiscard]] f64 getGlobalScale() { return paint_ctx->global_scale; }
-    void setGlobalScale(f64 scale) { paint_ctx->global_scale = scale; }
+    bool setGlobalScale(f64 scale) {
+        bool changed = scale != paint_ctx->global_scale;
+        paint_ctx->global_scale = scale;
+        return changed;
+    }
     void setGlobalAlpha(f64 alpha) { nvgGlobalAlpha(vg, (f32)alpha); }
 
     // ======== Transforms ========
@@ -1177,7 +1181,7 @@ public:
 
     // ======== Expose unchanged methods ========
 
-    using SimplePainter::usePainter;
+    using SimplePainter::setTargetPainterContext;
     using SimplePainter::setGlobalScale;
     using SimplePainter::getGlobalScale;
     using SimplePainter::setGlobalAlpha;
@@ -1240,16 +1244,72 @@ public:
     using SimplePainter::closePath;
 };
 
-class Canvas : public SimplePainter
+// todo: currently unused, but lots of places could do with using this instead (e.g. preprocessor, shader surfaces, Canvas, etc)
+struct GLSurface
+{
+    GLuint fbo = 0;
+    GLuint tex = 0;
+    GLuint rbo = 0;
+    int width = 0;
+    int height = 0;
+    bool has_depth_stencil = false;
+
+    void destroy()
+    {
+        if (fbo) glDeleteFramebuffers(1, &fbo);
+        if (tex) glDeleteTextures(1, &tex);
+        if (rbo) glDeleteRenderbuffers(1, &rbo);
+        fbo = tex = rbo = 0;
+        width = height = 0;
+        has_depth_stencil = false;
+    }
+
+    bool resize(int w, int h, bool want_depth_stencil)
+    {
+        if (w <= 0 || h <= 0) return false;
+        if (w == width && h == height && want_depth_stencil == has_depth_stencil) return false;
+
+        destroy();
+
+        width = w;
+        height = h;
+        has_depth_stencil = want_depth_stencil;
+
+        glGenFramebuffers(1, &fbo);
+        glGenTextures(1, &tex);
+
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+
+        if (want_depth_stencil)
+        {
+            glGenRenderbuffers(1, &rbo);
+            glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return true;
+    }
+};
+
+
+class NanoCanvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
     bool has_fbo = false;
     int fbo_width = 0, fbo_height = 0;  // Local Canvas dimensions (FBO size)
 
-    //int render_width = 0, render_height = 0;  // Actual size Canvas gets drawn on to screen
+    // actual size Canvas gets drawn on to screen
     IRect client_rect{};
 
-    // The default painter which draws to this canvas
+    // persistent states shared with any painters that target this canvas
     PainterContext context;
 
     std::atomic<bool> dirty = false;
@@ -1259,7 +1319,7 @@ public:
     void create(f64 global_scale);
     bool resize(int w, int h);
 
-    ~Canvas();
+    ~NanoCanvas();
 
     IRect clientRect() const { return client_rect; }
     void setClientRect(IRect r) { client_rect = r; }
@@ -1271,11 +1331,11 @@ public:
     bool isDirty() const { return dirty.load(std::memory_order_acquire); }
 
     PainterContext* getPainterContext() { return &context; }
-    GLuint texture() { return tex; }
-    [[nodiscard]] int fboWidth() { return fbo_width; }
-    [[nodiscard]] int fboHeight() { return fbo_height; }
-    [[nodiscard]] IVec2 fboSize() { return { fbo_width, fbo_height }; }
-    [[nodiscard]] int fboExists() { return has_fbo; }
+    GLuint texture() const { return tex; }
+    [[nodiscard]] int fboWidth()  const { return fbo_width; }
+    [[nodiscard]] int fboHeight() const { return fbo_height; }
+    [[nodiscard]] IVec2 fboSize() const { return { fbo_width, fbo_height }; }
+    [[nodiscard]] int fboExists() const { return has_fbo; }
 
     bool readPixels(std::vector<uint8_t>& out_rgba);
 };

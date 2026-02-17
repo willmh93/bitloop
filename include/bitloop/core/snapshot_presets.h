@@ -19,15 +19,18 @@ inline void assign_fixed_string(char(&dest)[N], std::string_view src)
 }
 
 // Snapshot presets (reusable display description / render opts)
+// todo: No longer tied to image/video capturing, rename to RenderPreset?
 class CapturePreset : public Hashable
 {
+    bool  is_viewport_preset = false; // special preset type (always matches viewport size, uses "default" ssaa/sharpen)
+
     char  alias[32]{}; // must be unique
     char  name[64]{};
     IVec2 size{};
     int   ssaa = 0;
     float sharpen = -1.0f;
 
-    std::string list_name;
+    mutable std::string list_name;
     bl::hash_t  hashed_alias = 0;
 
     bool video = false;
@@ -43,26 +46,30 @@ public:
         ssaa = rhs.ssaa;
         sharpen = rhs.sharpen;
         video = rhs.video;
+        is_viewport_preset = rhs.is_viewport_preset;
         updateCache();
     }
-    CapturePreset(std::string_view _name, std::string_view _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f)
+    CapturePreset(std::string_view _name, std::string_view _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f, bool is_viewport=false)
     {
         strcpy(alias, _alias.data());
         strcpy(name, _name.data());
         size = _size;
         ssaa = _ssaa;
         sharpen = _sharpen;
+        is_viewport_preset = is_viewport;
         updateCache();
     }
 
     // getters
     [[nodiscard]] std::string_view getAlias() const noexcept { return std::string_view{ alias, std::char_traits<char>::length(alias) }; }
     [[nodiscard]] std::string_view getName()  const noexcept { return std::string_view{ name, std::char_traits<char>::length(name) }; }
+    //[[nodiscard]] IVec2 getResolution()       const noexcept; // implemented in .cpp to allow viewport preset to query canvas size
     [[nodiscard]] IVec2 getResolution()       const noexcept { return size; }
-    [[nodiscard]] int width()                 const noexcept { return size.x; }
-    [[nodiscard]] int height()                const noexcept { return size.y; }
+    [[nodiscard]] int width()                 const noexcept { return getResolution().x; }
+    [[nodiscard]] int height()                const noexcept { return getResolution().y; }
     [[nodiscard]] int getSSAA()               const noexcept { return ssaa; }
     [[nodiscard]] float getSharpening()       const noexcept { return sharpen; }
+    [[nodiscard]] bool isViewportPreset()     const noexcept { return is_viewport_preset; }
 
     [[nodiscard]] const char* alias_cstr()    const noexcept { return alias; }
     [[nodiscard]] const char* name_cstr()     const noexcept { return name; }
@@ -76,8 +83,15 @@ public:
     // setters
     void setAlias(std::string_view value) { assign_fixed_string(alias, value); updateCache(); }
     void setName(std::string_view value)  { assign_fixed_string(name, value);  updateCache(); }
-    void setResolution(IVec2 res)         { size = res;                        updateCache(); }
-    void setResolution(int w, int h)      { size = { w, h };                   updateCache(); }
+    bool setResolution(IVec2 res) {                                            
+        bool changed = (res != size);                                          
+        if (changed) {                                                         
+            size = res; updateCache();                                         
+            return true;                                                       
+        }                                                                      
+        return false;                                                          
+    }                                                                          
+    bool setResolution(int w, int h)      { return setResolution({w, h}); }    
     void setSSAA(int _ssaa)               { ssaa = _ssaa;                      updateCache(); }
     void setSharpening(float _sharpen)    { sharpen = _sharpen;                updateCache(); }
 
@@ -241,6 +255,8 @@ public:
 
     SnapshotPresetManager()
     {
+        capture_presets.add(CapturePreset("Active Viewport (default)", "viewport", { 0,  0 }, 0, -1.0f, true));
+
         // ------------------------------
         // Generic / common render targets
         // ------------------------------

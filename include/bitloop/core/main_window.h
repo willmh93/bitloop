@@ -86,6 +86,7 @@ class MainWindow
     ImVec2 client_size{};
     bool viewport_hovered = false;
     bool is_editing_ui = false;
+    float old_sharpen = 0.0f; // needed to determine if we need to re-run preprocessor pipeline on change
 
     ToolbarButtonState play     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(0.4f, 1.0f, 0.4f, 1.0f), true };
     ToolbarButtonState pause    = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f), false };
@@ -93,14 +94,16 @@ class MainWindow
     ToolbarButtonState record   = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1.0f, 0.2f, 0.0f, 1.0f), true };
     ToolbarButtonState snapshot = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(0.8f, 0.8f, 0.8f, 1.0f), true };
 
-    CaptureManager capture_manager;
+    CaptureManager   capture_manager;
     
     SettingsPanel    settings_panel;
     CaptureConfig    config;
 
-    SnapshotPresetList enabled_snapshot_presets;
-    bool               is_snapshotting = false; // remains true for whole batch
-    int                active_capture_preset = 0;
+    // capture preset list (once we start capturing, this remains unchanged until we finish)
+    SnapshotPresetList enabled_capture_presets;
+    int                enabled_capture_presets_current_idx = 0; // index of active preset in enabled_capture_presets (NOT index in allPresets)
+
+    bool               is_snapshotting_list = false; // remains true while processing whole batch (enabled_capture_presets)
     int                active_snapshot_preset_request_id = 0;
     std::string        active_capture_rel_path_fmt;
     int                shared_batch_fileindex = 0; // dir scanned for next highest index, used for batch
@@ -109,8 +112,10 @@ class MainWindow
     bool               encode_next_sim_frame = false;
     bool               captured_last_frame = false;
 
-    Canvas canvas;
-    std::vector<uint8_t> frame_data; // intermediate buffer to read canvas pixels before encoding
+    // render (+capture) pipeline components
+    NanoCanvas           canvas;
+    CapturePreprocessor  preprocessor;
+    EncodeFrame          preprocessed_frame; // intermediate buffer for preprocessor output (rescaled, sharpened, etc before encoding)
 
     SharedSync& shared_sync;
     ThreadQueue thread_queue;
@@ -134,7 +139,8 @@ public:
     }
     ~MainWindow() { thread_queue.pump(); }
 
-    [[nodiscard]] Canvas* getCanvas() { return &canvas; }
+    [[nodiscard]] NanoCanvas* getCanvas() { return &canvas; }
+    [[nodiscard]] const NanoCanvas* getCanvas() const { return &canvas; }
     [[nodiscard]] CaptureManager* getCaptureManager() { return &capture_manager; }
     [[nodiscard]] SettingsConfig* getSettingsConfig() { return &settings_panel.getConfig(); }
     [[nodiscard]] const SettingsConfig* getSettingsConfig() const { return &settings_panel.getConfig(); }
@@ -142,7 +148,7 @@ public:
 
     [[nodiscard]] bool isSnapshotting() const
     {
-        return is_snapshotting;
+        return is_snapshotting_list;
     }
 
     int getFPS() const { return getSettingsConfig()->record_fps; }
@@ -177,7 +183,7 @@ public:
 
 private:
     // uses provided args and exact path (lowest level, no awareness of presets)
-    void _beginSnapshot(const char* filepath, IVec2 res, int ssaa=1, float sharpen=0.0f);
+    void _beginSnapshot(const char* filepath, IVec2 res);
 public:
     // begins snapshot using preset (uses default global ssaa/sharpen unless explicitly set in preset)
     void beginSnapshot(const CapturePreset& preset, const char* rel_path_fmt, int file_idx);

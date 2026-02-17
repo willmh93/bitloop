@@ -122,7 +122,6 @@ struct ScopedGLState
     }
 };
 
-
 static bool compile_shader(GLuint& out_shader, GLenum stage, const char* src)
 {
     out_shader = glCreateShader(stage);
@@ -200,6 +199,7 @@ void CapturePreprocessor::destroyGL()
 
     initialized = false;
     upload_size = {};
+    down_size = {};
     target_size = {};
 }
 
@@ -424,23 +424,15 @@ bool CapturePreprocessor::ensureUploadTexture(const IVec2& src_resolution)
     return true;
 }
 
-bool CapturePreprocessor::ensureTargets(const IVec2& dst_resolution)
+bool CapturePreprocessor::ensureDownTarget(const IVec2& dst_resolution)
 {
-    if (down_tex != 0 && output_tex != 0 &&
-        target_size.x == dst_resolution.x && target_size.y == dst_resolution.y)
+    if (down_tex != 0 && down_size.x == dst_resolution.x && down_size.y == dst_resolution.y)
         return true;
 
     gl_delete_texture(reinterpret_cast<GLuint&>(down_tex));
-    gl_delete_texture(reinterpret_cast<GLuint&>(output_tex));
 
     glGenTextures(1, reinterpret_cast<GLuint*>(&down_tex));
     tex_params_nearest_clamp((GLuint)down_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-        dst_resolution.x, dst_resolution.y,
-        0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-
-    glGenTextures(1, reinterpret_cast<GLuint*>(&output_tex));
-    tex_params_nearest_clamp((GLuint)output_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
         dst_resolution.x, dst_resolution.y,
         0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -452,6 +444,23 @@ bool CapturePreprocessor::ensureTargets(const IVec2& dst_resolution)
         blPrint() << "CapturePreprocessor: downscale FBO incomplete";
         return false;
     }
+
+    down_size = dst_resolution;
+    return true;
+}
+
+bool CapturePreprocessor::ensureOutputTarget(const IVec2& dst_resolution)
+{
+    if (output_tex != 0 && target_size.x == dst_resolution.x && target_size.y == dst_resolution.y)
+        return true;
+
+    gl_delete_texture(reinterpret_cast<GLuint&>(output_tex));
+
+    glGenTextures(1, reinterpret_cast<GLuint*>(&output_tex));
+    tex_params_nearest_clamp((GLuint)output_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+        dst_resolution.x, dst_resolution.y,
+        0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
     glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo_out);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, (GLuint)output_tex, 0);
@@ -465,7 +474,7 @@ bool CapturePreprocessor::ensureTargets(const IVec2& dst_resolution)
     return true;
 }
 
-bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf* out_rgba)
+bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf* out_rgba, uint32_t dst_fbo_override)
 {
     ScopedGLState _gl;
 
@@ -476,9 +485,21 @@ bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreproc
         return false;
     if (params.src_resolution.x <= 0 || params.src_resolution.y <= 0)
         return false;
-    if (!ensureTargets(params.dst_resolution))
-        return false;
 
+    const bool use_external_output = (dst_fbo_override != 0);
+    const bool need_sharpen = (params.sharpen > 0.0f);
+
+    if (need_sharpen)
+    {
+        if (!ensureDownTarget(params.dst_resolution))
+            return false;
+    }
+
+    if (!use_external_output)
+    {
+        if (!ensureOutputTarget(params.dst_resolution))
+            return false;
+    }
 
 #if defined(GL_FRAMEBUFFER_SRGB)
     glDisable(GL_FRAMEBUFFER_SRGB);
@@ -491,32 +512,44 @@ bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreproc
     glBindVertexArray((GLuint)vao);
     glActiveTexture(GL_TEXTURE0);
 
-    // Downscale pass
-    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo_down);
-    glViewport(0, 0, params.dst_resolution.x, params.dst_resolution.y);
+    const GLuint final_fbo = use_external_output ? (GLuint)dst_fbo_override : (GLuint)fbo_out;
+
+    // downscale pass
     glUseProgram((GLuint)prog_down);
     glBindTexture(GL_TEXTURE_2D, (GLuint)src_texture);
     if (loc_down_src >= 0) glUniform1i(loc_down_src, 0);
     if (loc_down_srcSize >= 0) glUniform2i(loc_down_srcSize, params.src_resolution.x, params.src_resolution.y);
     if (loc_down_ssaa >= 0) glUniform1i(loc_down_ssaa, params.ssaa);
     if (loc_down_flipY >= 0) glUniform1i(loc_down_flipY, params.flip_y ? 1 : 0);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    // Unsharp/copy pass
-    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo_out);
-    glViewport(0, 0, params.dst_resolution.x, params.dst_resolution.y);
-    glUseProgram((GLuint)prog_unsharp);
-    glBindTexture(GL_TEXTURE_2D, (GLuint)down_tex);
-    if (loc_unsharp_tex >= 0) glUniform1i(loc_unsharp_tex, 0);
-    if (loc_unsharp_size >= 0) glUniform2i(loc_unsharp_size, params.dst_resolution.x, params.dst_resolution.y);
-    if (loc_unsharp_amount >= 0) glUniform1f(loc_unsharp_amount, params.sharpen);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    if (!need_sharpen)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, final_fbo);
+        glViewport(0, 0, params.dst_resolution.x, params.dst_resolution.y);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    else
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo_down);
+        glViewport(0, 0, params.dst_resolution.x, params.dst_resolution.y);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        // unsharp pass
+        glBindFramebuffer(GL_FRAMEBUFFER, final_fbo);
+        glViewport(0, 0, params.dst_resolution.x, params.dst_resolution.y);
+        glUseProgram((GLuint)prog_unsharp);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)down_tex);
+        if (loc_unsharp_tex >= 0) glUniform1i(loc_unsharp_tex, 0);
+        if (loc_unsharp_size >= 0) glUniform2i(loc_unsharp_size, params.dst_resolution.x, params.dst_resolution.y);
+        if (loc_unsharp_amount >= 0) glUniform1f(loc_unsharp_amount, params.sharpen);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
 
     if (out_rgba)
     {
         out_rgba->resize((size_t)params.dst_resolution.x * (size_t)params.dst_resolution.y * 4);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo_out);
+        glBindFramebuffer(GL_FRAMEBUFFER, final_fbo);
         glReadPixels(0, 0, params.dst_resolution.x, params.dst_resolution.y,
             GL_RGBA, GL_UNSIGNED_BYTE, out_rgba->data());
     }
@@ -526,7 +559,22 @@ bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreproc
 
 bool CapturePreprocessor::preprocessTexture(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf& out_rgba)
 {
-    return runPipeline(src_texture, params, &out_rgba);
+    return runPipeline(src_texture, params, &out_rgba, 0);
+}
+
+bool CapturePreprocessor::preprocessTextureToTexture(uint32_t src_texture, const CapturePreprocessParams& params)
+{
+    return runPipeline(src_texture, params, nullptr, 0);
+}
+
+bool CapturePreprocessor::preprocessTextureToFbo(uint32_t src_texture, const CapturePreprocessParams& params, uint32_t dst_fbo)
+{
+    return runPipeline(src_texture, params, nullptr, dst_fbo);
+}
+
+bool CapturePreprocessor::preprocessTextureToFbo(uint32_t src_texture, const CapturePreprocessParams& params, uint32_t dst_fbo, bytebuf& out_rgba)
+{
+    return runPipeline(src_texture, params, &out_rgba, dst_fbo);
 }
 
 bool CapturePreprocessor::preprocessRGBA8(const uint8_t* src_rgba, const CapturePreprocessParams& params, bytebuf& out_rgba)
@@ -549,7 +597,7 @@ bool CapturePreprocessor::preprocessRGBA8(const uint8_t* src_rgba, const Capture
         GL_RGBA, GL_UNSIGNED_BYTE, src_rgba);
     glPixelStorei(GL_UNPACK_ALIGNMENT, prev_unpack);
 
-    return runPipeline(upload_tex, params, &out_rgba);
+    return runPipeline(upload_tex, params, &out_rgba, 0);
 }
 
 BL_END_NS;

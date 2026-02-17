@@ -130,9 +130,6 @@ struct CaptureConfig
     // Generic
     std::string     filename;
     IVec2           resolution;
-    int             ssaa = 1;    // supersample_factor
-    float           sharpen = 0; // 0 - 1
-
     float           quality = 100.0;
 
     // WebP generic
@@ -149,7 +146,7 @@ struct CaptureConfig
     int64_t         bitrate = 0;
     bool            ten_bit = true;
 
-    size_t srcBytes() const { return (size_t)(resolution.x * ssaa) * (size_t)(resolution.y * ssaa) * 4; }
+    //size_t srcBytes() const { return (size_t)(resolution.x * ssaa) * (size_t)(resolution.y * ssaa) * 4; }
     size_t dstBytes() const { return (size_t)resolution.x * (size_t)resolution.y * 4; }
 };
 
@@ -290,23 +287,20 @@ class CaptureManager
 
     // ────── methods used by the worker thread ──────
 
-    bool         waitForWorkAvailable(); // waits until a frame is pending (or returns false if not recording / no work)
-    EncodeFrame  takePendingFrame();     // then swaps out the pending frame (takes ownership)
-    void         markEncoderIdle();      // then marks as idle when finished encoding
-
-    bool     shouldFinalize() const  { return finalize_requested.load(std::memory_order_acquire); }
-    void     clearFinalizeRequest()  { finalize_requested.store(false, std::memory_order_release); }
-    void     onFinalized(bool error);
-
-    void     preProcessFrameForEncoding(const uint8_t* src_data, bytebuf& out);
-
+    bool           waitForWorkAvailable(); // waits until a frame is pending (or returns false if not recording / no work)
+    EncodeFrame    takePendingFrame();     // then swaps out the pending frame (takes ownership)
+    void           markEncoderIdle();      // then marks as idle when finished encoding
+                   
+    bool           shouldFinalize() const  { return finalize_requested.load(std::memory_order_acquire); }
+    void           clearFinalizeRequest()  { finalize_requested.store(false, std::memory_order_release); }
+    void           onFinalized(bool error);
+     
 public:
 
     // CaptureManager should exist for entire MainWindow lifecycle, but finalize recording in case of forceful exit.
-    ~CaptureManager()                { finalizeCapture(); }
+    ~CaptureManager()                     { finalizeCapture(); }
                                      
-    IVec2          srcResolution() const  { return config.resolution * config.ssaa; }
-    IVec2          dstResolution() const  { return config.resolution; }
+    IVec2          resolution() const     { return config.resolution; }
     int            fps() const            { return config.fps;        }
     std::string    filename() const       { return config.filename;   }
     CaptureFormat  format() const         { return config.format;     }
@@ -352,14 +346,7 @@ public:
     // ────── [start capture] => [encode frames] => [finalize capture] ──────
 
     bool startCapture(CaptureConfig _config);
-    bool encodeFrame(const uint8_t* data,
-        //std::function<void(EncodeFrame&)> preProcessedFrame = nullptr,
-        std::function<void(EncodeFrame&)> postProcessedFrame = nullptr);
-
-    bool encodeFrameTexture(uint32_t src_texture,
-        //std::function<void(EncodeFrame&)> preProcessedFrame = nullptr,
-        std::function<void(EncodeFrame&)> postProcessedFrame = nullptr);
-
+    bool encodeFrame(const EncodeFrame& frame);
     void finalizeCapture();
 
 };

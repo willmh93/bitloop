@@ -8,7 +8,7 @@
 BL_BEGIN_NS
 
 class ProjectBase;
-class Canvas;
+class NanoCanvas;
 class CaptureManager;
 struct ImDebugLog;
 

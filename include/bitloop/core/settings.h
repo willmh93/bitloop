@@ -48,7 +48,8 @@ struct SettingsConfig
     SettingsConfig()
     {
         const SnapshotPresetList& capture_presets = snapshot_preset_manager.allPresets();
-        target_image_presets[capture_presets["fhd"]->hashedAlias()] = true;
+        target_image_presets[capture_presets["viewport"]->hashedAlias()] = true;
+        //target_image_presets[capture_presets["fhd"]->hashedAlias()] = true;
     }
 
     SnapshotPresetList enabledImagePresets() const
@@ -73,6 +74,8 @@ struct SettingsConfig
     CaptureFormat getRecordFormat() const { return (CaptureFormat)record_format; }
     CaptureFormat getSnapshotFormat() const { return (CaptureFormat)snapshot_format; }
     IVec2         getRecordResolution() const { return enabledVideoPreset().getResolution(); }
+
+    void updateRecordBitrate();
 };
 
 // Settings UI
@@ -117,7 +120,7 @@ public:
     SettingsConfig& getConfig() { return config; }
     const SettingsConfig& getConfig() const { return config; }
 
-    // image or video capture preset index, depending on visible tab
+    // image or video capture preset index, depending on visible tab. (source list is the same, so index is valid for either)
     int getSelectedPresetIndex() const {
         if (selected_preset_is_video)
             return config.target_video_preset;

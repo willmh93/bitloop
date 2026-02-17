@@ -33,7 +33,7 @@ BL_BEGIN_NS
 class Viewport;
 class ProjectBase;
 class ProjectManager;
-class Canvas;
+class NanoCanvas;
 
 struct ImDebugLog;
 
@@ -218,7 +218,7 @@ class ProjectBase
     friend class SceneBase;
     friend class Viewport;
 
-    Canvas* canvas = nullptr;
+    NanoCanvas* canvas = nullptr;
     ImDebugLog* project_log = nullptr;
 
     // ----- states -----
@@ -229,7 +229,7 @@ class ProjectBase
     bool show_fullscreen_btn = true;
     bool immediate_update_requested = false;
 
-    void configure(int sim_uid, Canvas* canvas, ImDebugLog* project_log);
+    void configure(int sim_uid, NanoCanvas* canvas, ImDebugLog* project_log);
 
     bool updateViewportRects();
 

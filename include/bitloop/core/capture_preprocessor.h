@@ -26,24 +26,36 @@ public:
     ~CapturePreprocessor();
 
     // source is a GL_TEXTURE_2D containing RGBA8 in sRGB space.
-    // 'src_texture' is intentionally uint32_t to avoid forcing a specific GL header
     bool preprocessTexture(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf& out_rgba);
+
+    // gpu-only preprocess into internal output texture
+    bool preprocessTextureToTexture(uint32_t src_texture, const CapturePreprocessParams& params);
+
+    // preprocess into an externally owned framebuffer (expects color attachment 0)
+    bool preprocessTextureToFbo(uint32_t src_texture, const CapturePreprocessParams& params, uint32_t dst_fbo);
+
+    // preprocess into an externally owned framebuffer and read back RGBA8
+    bool preprocessTextureToFbo(uint32_t src_texture, const CapturePreprocessParams& params, uint32_t dst_fbo, bytebuf& out_rgba);
 
     // upload + preprocess from CPU RGBA8
     bool preprocessRGBA8(const uint8_t* src_rgba, const CapturePreprocessParams& params, bytebuf& out_rgba);
 
-    // returns the most recent output GL_TEXTURE_2D. Valid after any successful preprocess call
+    // internal output GL_TEXTURE_2D. Valid after any successful internal-output preprocess call
     uint32_t outputTexture() const { return output_tex; }
 
-    // explicit teardown while a GL context is current.
+    // internal output resolution
+    IVec2 outputResolution() const { return target_size; }
+
+    // explicit teardown while a GL context is current
     void destroyGL();
 
 private:
     bool ensureInitialized();
-    bool ensureTargets(const IVec2& dst_resolution);
+    bool ensureDownTarget(const IVec2& dst_resolution);
+    bool ensureOutputTarget(const IVec2& dst_resolution);
     bool ensureUploadTexture(const IVec2& src_resolution);
 
-    bool runPipeline(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf* out_rgba);
+    bool runPipeline(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf* out_rgba, uint32_t dst_fbo_override);
 
     bool compilePrograms();
     void updateShaderVersionStrings();
@@ -58,6 +70,8 @@ private:
     IVec2    upload_size{};
 
     uint32_t down_tex = 0;
+    IVec2    down_size{};
+
     uint32_t output_tex = 0;
     IVec2    target_size{};
 
