@@ -557,12 +557,12 @@ bool CapturePreprocessor::runPipeline(uint32_t src_texture, const CapturePreproc
     return true;
 }
 
-bool CapturePreprocessor::preprocessTexture(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf& out_rgba)
+bool CapturePreprocessor::preprocessToFrame(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf& out_rgba)
 {
     return runPipeline(src_texture, params, &out_rgba, 0);
 }
 
-bool CapturePreprocessor::preprocessTextureToTexture(uint32_t src_texture, const CapturePreprocessParams& params)
+bool CapturePreprocessor::preprocessToTexture(uint32_t src_texture, const CapturePreprocessParams& params)
 {
     return runPipeline(src_texture, params, nullptr, 0);
 }

@@ -26,10 +26,10 @@ public:
     ~CapturePreprocessor();
 
     // source is a GL_TEXTURE_2D containing RGBA8 in sRGB space.
-    bool preprocessTexture(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf& out_rgba);
+    bool preprocessToFrame(uint32_t src_texture, const CapturePreprocessParams& params, bytebuf& out_rgba);
 
     // gpu-only preprocess into internal output texture
-    bool preprocessTextureToTexture(uint32_t src_texture, const CapturePreprocessParams& params);
+    bool preprocessToTexture(uint32_t src_texture, const CapturePreprocessParams& params);
 
     // preprocess into an externally owned framebuffer (expects color attachment 0)
     bool preprocessTextureToFbo(uint32_t src_texture, const CapturePreprocessParams& params, uint32_t dst_fbo);

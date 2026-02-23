@@ -252,7 +252,7 @@ protected:
     void _projectDestroy();
     void _projectProcess();
     void _projectDraw();
-    void _onEndFrame();
+    void _onEndFrame(); // called after worker process & after gui render, just before next project process
 
     // ----- capturing -----
 
@@ -460,7 +460,8 @@ public:
     [[nodiscard]] bool isActive() const { return started; } // in "started/paused" state (but not stopped)
 
     #ifdef BITLOOP_DEV_MODE
-    [[nodiscard]] std::string proj_path(std::string_view virtual_path) const
+    private:
+    [[nodiscard]] std::string projectPath(std::string_view virtual_path) const
     {
         std::filesystem::path p = getProjectInfo()->dev_root;
 
@@ -471,21 +472,22 @@ public:
         p = p.lexically_normal(); // clean up
         return p.string();
     }
+    public:
     #endif
 
     /// todo: add IDBFS support for virtual file system on web?
     
-    // root_path("/path/to/file")
+    // rootPath("/path/to/file")
     // - useful to modify source data during development, but still behaves in release builds where no project folder exist
     // - for web builds, files are read-only
     // 
     // If DEFINED     (BITLOOP_DEV_MODE):  "root" = project folder
     // If NOT DEFINED (BITLOOP_DEV_MODE):  "root" = exe folder
     
-    [[nodiscard]] std::string root_path(std::string_view virtual_path) const
+    [[nodiscard]] std::string rootPath(std::string_view virtual_path) const
     {
         #ifdef BITLOOP_DEV_MODE
-        return proj_path(virtual_path);
+        return projectPath(virtual_path);
         #else
         return platform()->path(virtual_path);
         #endif
@@ -572,7 +574,6 @@ protected:
 
         ProjectBase::_initGUI();
     }
-
     void _destroyGUI() override final
     {
         if (ui)
@@ -584,7 +585,6 @@ protected:
 
         ProjectBase::_destroyGUI();
     }
-
     void _projectAttributes() override final
     {
         // todo: Project 'ui' should exist before project has started? (but not scenes ui)
@@ -593,7 +593,6 @@ protected:
         ProjectBase::_projectAttributes();
         ui->sidebar();
     }
-
     void _populateOverlay() override final
     {
         // todo: Project 'ui' should exist before project has started? (but not scenes ui)

@@ -103,6 +103,7 @@ public:
     // ======== Project Control ========
     [[nodiscard]] ProjectBase* getCurrentProject() { return current_project; }
     [[nodiscard]] bool hasCurrentProject();
+    [[nodiscard]] bool hasRunningProject();
 
     std::mutex command_mutex;
     void addProjectCommand(ProjectCommandEvent e)

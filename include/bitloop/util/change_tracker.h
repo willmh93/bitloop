@@ -147,7 +147,7 @@ class ChangeTracker
         if (it == maps.previous.end()) {
             // not in baseline yet => stage and report "no change" until snapshot
             maps.current[key] = 0;
-            return false;
+            return true;
         }
 
         if constexpr (HasHashMethod<NonConstT>) {
@@ -172,7 +172,9 @@ public:
     template <typename... Args>
     [[nodiscard]] bool Changed(Args&&... args) const
     {
-        return (variableChanged(std::forward<Args>(args)) || ...);
+        bool any_changed = false;
+        ((any_changed = variableChanged(std::forward<Args>(args)) || any_changed), ...);
+        return any_changed;
     }
 
     template <typename T>

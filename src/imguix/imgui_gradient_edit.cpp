@@ -561,14 +561,16 @@ namespace ImGui
     bool GradientEditor(
         ImGradient* gradient,
         float bar_scale,
-        float mark_scale,
-        float color_picker_size)
+        float mark_scale//,
+        //float color_picker_size
+    )
     {
         if (!gradient) return false;
 
         bool modified = false;
 
-        ImVec2 bar_pos = ImGui::GetCursorScreenPos();
+        ImVec2 orig_cursor_pos = ImGui::GetCursorScreenPos();
+        ImVec2 bar_pos = orig_cursor_pos;
         float margin = 10 * bar_scale;
         bar_pos.x += margin;
         float availWidth = ImGui::GetContentRegionAvail().x;
@@ -634,22 +636,33 @@ namespace ImGui
             //selectedMark = &gradient->getMarks().front();
         }
 
+        ImGui::SetCursorScreenPos(ImVec2(orig_cursor_pos.x, ImGui::GetCursorScreenPos().y));
+
+        return modified;
+    }
+
+    bool GradientEditorMarkColorPicker(
+        ImGradient* gradient,
+        float color_picker_size,
+        ImGuiColorEditFlags flags)
+    {
         if (gradient->hasSelectedMark())
         {
+            //float margin = 10 * bar_scale;
+            float availWidth = ImGui::GetContentRegionAvail().x;
+
             ImGradientMark* selectedMark = gradient->getSelectedMark();
             if (color_picker_size > 0.0f)
-                ImGui::SetNextItemWidth(std::min(availWidth - margin - ImGui::GetStyle().FramePadding.x, color_picker_size));
-            bool colorModified = ImGui::ColorPicker3("Color", selectedMark->color, 
-                ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoSidePreview);
-            //bool colorModified = ImGui::ColorPicker3(selectedMark-color);
+                ImGui::SetNextItemWidth(std::min(availWidth - /*margin*/ - ImGui::GetStyle().FramePadding.x, color_picker_size));
+
+            bool colorModified = ImGui::ColorPicker3("Color", selectedMark->color, flags);
 
             if (selectedMark && colorModified)
             {
-                modified = true;
                 gradient->refreshCache();
+                return true;
             }
         }
-
-        return modified;
+        return false;
     }
 };

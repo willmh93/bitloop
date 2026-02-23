@@ -134,16 +134,11 @@ public:
 
     static void lerp(ImGradient& out, const ImGradient& a, const ImGradient& b, float x)
     {
-        // Return gradient with same number of marks as 'b'
-        // If 'b' > marks than 'a': Find nearest mark to 'a' and split it up
-        // If 'b' < marks than 'a': Find nearest mark to 'a' and merge there
-
         if (x <= 0.0f) { out = a; return; };
         if (x >= 1.0f) { out = b; return; };
 
         out.m_marks.clear();
 
-        //ImGradient out(true);
         for (int i=0; i<=10; i++)
         {
             float t = static_cast<float>(i) / 10.0f;
@@ -163,14 +158,8 @@ public:
         }
 
         out.refreshCache();
-        //return out;
-
-        /*
-        for (int i=0; i<a.m_marks.size(); i++) out.addMark(a.m_marks[i].position, );
-        for (int i=0; i<b.m_marks.size(); i++) out.addMark(b.m_marks[i]);*/
     }
 
-    /* Threading helpers ----------------------------------------------------- */
     static int uid_counter;
 
     ImGradientMark* markFromUID(int uid) const
@@ -183,6 +172,14 @@ public:
         }
 
         return nullptr;
+    }
+
+    int markIndex(ImGradientMark* mark) const
+    {
+        size_t index = (mark - m_marks.data());
+        if (index >= 0 && index < m_marks.size())
+            return (int)index;
+        return -1;
     }
     
     inline void unguardedRGBA(float position, uint32_t& c) const
@@ -258,7 +255,11 @@ private:
 namespace ImGui
 {
     bool GradientButton(ImGradient* gradient, float dpr);
-    bool GradientEditor(ImGradient* gradient, float bar_scale, float mark_scale, float color_picker_size = 0.0f);
+    bool GradientEditor(ImGradient* gradient, float bar_scale, float mark_scale);
+    bool GradientEditorMarkColorPicker(
+        ImGradient* gradient,
+        float color_picker_size = 0.0f,
+        ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoSidePreview);
 }
 
 /*#include <list>

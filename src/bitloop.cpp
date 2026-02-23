@@ -101,7 +101,7 @@ void gui_loop()
         SDL_Event es = e;
 
         #ifdef BL_SIMULATED_DEVICE
-        platform()->upscale_mouse_event_to_offscreen(es);
+        platform()->upscaleMouseEventToOffscreen(es);
         #endif
 
         // this gets called more when active
@@ -110,7 +110,7 @@ void gui_loop()
         ImGui_ImplSDL3_ProcessEvent(&es);
 
         #ifdef BL_SIMULATE_MOBILE
-        platform()->convert_mouse_to_touch(es);
+        platform()->convertMouseToTouch(es);
         #endif
 
         bool imguiWantsKeyboard = io.WantCaptureKeyboard;
@@ -167,10 +167,10 @@ void gui_loop()
 
     ImGui_ImplSDL3_NewFrame();
 
-    ImGui::GetIO().DisplaySize = (ImVec2)platform()->fbo_size();
+    ImGui::GetIO().DisplaySize = (ImVec2)platform()->fboSize();
     ImGui::GetIO().DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
-    platform()->imgui_fix_offscreen_mouse_position();
+    platform()->imguiFixOffscreenMousePosition();
 
     /// this gets called most while idling
     main_window()->threadQueue().pump();
@@ -180,7 +180,7 @@ void gui_loop()
     // ======== Draw window ========
     main_window()->populateUI();
 
-    platform()->gl_begin_frame();
+    platform()->glBeginFrame();
 
     // ======== Render ========
     ImGui::Render();
@@ -189,7 +189,7 @@ void gui_loop()
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    platform()->gl_end_frame();
+    platform()->glEndFrame();
     SDL_GL_SwapWindow(window);
 
 

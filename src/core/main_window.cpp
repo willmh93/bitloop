@@ -460,7 +460,7 @@ std::string constructCapturePath(std::string_view rel_format, int index, std::st
     return std::filesystem::path(out).lexically_normal().string();
 }
 std::string getPreferredCapturesDirectory() {
-    std::filesystem::path path = platform()->executable_dir();
+    std::filesystem::path path = platform()->executableDir();
     std::filesystem::path project_root = std::filesystem::path(CMAKE_SOURCE_DIR).lexically_normal();
 
     // If executable dir lives inside the cmake project dir, clamp to root cmake project dir
@@ -542,6 +542,7 @@ void MainWindow::init()
     // Always initializes window on first call
     checkChangedDPR();
 
+    updateActivePreset();
     canvas.create(platform()->dpr());
     //canvas.create(5.0);
     //canvas.create(0.75);
@@ -581,8 +582,8 @@ void MainWindow::initStyles()
     style.ScrollbarSize = 20.0f * platform()->thumbScale(0.85f);
     style.GrabMinSize = 35.0f * platform()->thumbScale(0.85f);
 
-    //style.ScrollbarRounding = platform()->is_mobile() ? 12.0f : 6.0f; // Extra scrollbar size for mobile
-    //style.ScrollbarSize = platform()->is_mobile() ? 30.0f : 20.0f;    // Extra scrollbar size for mobile
+    //style.ScrollbarRounding = platform()->isMobile() ? 12.0f : 6.0f; // Extra scrollbar size for mobile
+    //style.ScrollbarSize = platform()->isMobile() ? 30.0f : 20.0f;    // Extra scrollbar size for mobile
 
     // update by dpr
     style.ScaleAllSizes(platform()->dpr());
@@ -657,8 +658,8 @@ void MainWindow::initFonts()
     config.OversampleV = 3;
     
     io.Fonts->Clear();
-    main_font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), base_pt * platform()->dpr() * platform()->font_scale(), &config);
-    mono_font = io.Fonts->AddFontFromFileTTF(font_path_mono.c_str(), base_pt * platform()->dpr() * platform()->font_scale(), &config);
+    main_font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), base_pt * platform()->dpr() * platform()->fontScale(), &config);
+    mono_font = io.Fonts->AddFontFromFileTTF(font_path_mono.c_str(), base_pt * platform()->dpr() * platform()->fontScale(), &config);
     io.Fonts->Build();
 }
 
@@ -744,8 +745,8 @@ void MainWindow::beginRecording(const CapturePreset& preset, const char* rel_pat
     // Mainly used for snapshot lists, but set anyway for consistency
     active_capture_rel_path_fmt = rel_path_fmt;
 
-    // don't capture until next frame starts (and sets this true)
-    capture_manager.setCaptureEnabled(false);
+    // don't capture until simulation is ready to draw at the new resolution
+    new_frame_prepared = false;
 
     // If not web, decide on save path
     #ifndef BL_WEB_BUILD
@@ -818,14 +819,12 @@ void MainWindow::_beginSnapshot(const char* filepath [[maybe_unused]], IVec2 res
     snapshot.toggled = true;
     record.toggled = false;
 
-    // don't capture until *next* frame starts (when capture_enabled turns true)
-    capture_manager.setCaptureEnabled(false);
+    // don't capture until simulation is ready to draw at the new resolution
+    new_frame_prepared = false;
 
     CaptureConfig config;
     config.format = getSettingsConfig()->getSnapshotFormat();
     config.resolution = res;
-    //config.ssaa = ssaa;
-    //config.sharpen = sharpen;
     config.quality = 100.0f;
     config.lossless = true;
 
@@ -852,9 +851,14 @@ void MainWindow::beginSnapshot(const CapturePreset& preset, const char* rel_path
 }
 void MainWindow::beginSnapshotList(const SnapshotPresetList& presets, const char* rel_path_fmt, int request_id)
 {
-    assert(presets.size() > 0);
+    enabled_capture_presets = presets.filterSupported(getSettingsConfig()->default_ssaa);
 
-    enabled_capture_presets = presets;
+    if (enabled_capture_presets.size() == 0)
+    {
+        blPrint("No supported presets to snapshot. Aborting.\n");
+        return;
+    }
+    
     is_snapshotting_list = true;
     enabled_capture_presets_current_idx = 0;
     active_capture_rel_path_fmt = rel_path_fmt;
@@ -1164,7 +1168,7 @@ bool MainWindow::toolbarButton(const char* id, const char* symbol, const Toolbar
 }
 void MainWindow::populateToolbar()
 {
-    //if (platform()->is_mobile())
+    //if (platform()->isMobile())
     //    return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 0));
@@ -1225,7 +1229,7 @@ void MainWindow::populateToolbar()
         project_worker()->stopProject();
     }
 
-    if (!platform()->is_mobile())
+    if (!platform()->isMobile())
     {
         ImGui::SameLine();
         if (toolbarButton("##record", "record", record, ImVec2(size, size)))
@@ -1550,53 +1554,18 @@ void MainWindow::populateViewport(bool& projectDrawn)
     {
         client_size = ImGui::GetContentRegionAvail();
 
-        bool capture_preview_mode = main_window()->getSettingsConfig()->preview_mode;
-        bool is_capturing = capture_manager.isCapturing();
-
-        SnapshotPresetList& presets = getSnapshotPresetManager()->allPresets();
-        int selected_preset_idx = settings_panel.getSelectedPresetIndex(); //  selected "allPresets" index
-
+        bool is_capturing = capture_manager.isCapturing();        
         if (!is_capturing)
         {
             // if capturing, lock "viewport" preset resolution until finished
+            SnapshotPresetList& presets = getSnapshotPresetManager()->allPresets();
             if (presets[0].setResolution(client_size))
                 getSettingsConfig()->updateRecordBitrate();
         }
 
-        CapturePreset* preset = nullptr; // first preset always represents viewport. Use by default
+        assert(active_preset != nullptr);
 
-        if (is_capturing)
-        {
-            // *always* use capture preset if capturing, even if "preview" mode on
-            assert(enabled_capture_presets_current_idx < enabled_capture_presets.size());
-            preset = &enabled_capture_presets[enabled_capture_presets_current_idx];
-        }
-        else if (capture_preview_mode && selected_preset_idx > 0)
-        {
-            // if "preview" mode on, use selected preset (if one is selected)
-            assert(selected_preset_idx < presets.size());
-            preset = &presets[selected_preset_idx];
-        }
-        else
-        {
-            // otherwise, use default viewport preset (index 0)
-            assert(presets.size() > 0);
-            preset = &presets[0];
-        }
-
-        assert(preset != nullptr);
-
-        int   ssaa    = (preset->getSSAA() > 0)       ? preset->getSSAA()       : getSettingsConfig()->default_ssaa;
-        float sharpen = (preset->getSharpening() > 0) ? preset->getSharpening() : getSettingsConfig()->default_sharpen;
-        IVec2 target_size = preset->getResolution();
-        IVec2 canvas_size = preset->getResolution() * ssaa;
-
-        bool resized = canvas.resize(canvas_size.x, canvas_size.y);
-        bool changed_scale = canvas.setGlobalScale(platform()->dpr() * ssaa);
-        bool changed_sharpening = sharpen != old_sharpen;
-        old_sharpen = sharpen;
-
-        if (resized)
+        if (changed_size)
         {
             canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
             canvas.setFillStyle(0, 0, 0);
@@ -1624,8 +1593,36 @@ void MainWindow::populateViewport(bool& projectDrawn)
             }
         }
 
-        bool preprocess_frame = (changed_scale || resized || changed_sharpening);
+        // returns true if preprocessor texture was needed
+        auto preprocessFrame = [&](bool capturing_frame) -> bool
+        {
+            if (active_ssaa == 1 && active_sharpen == 0)
+            {
+                // no preprocessing needed, just copy canvas to preprocessed_frame if capturing
+                if (capturing_frame)
+                    canvas.readPixels(preprocessed_frame);
+                
+                return false;
+            }
 
+            // preprocess frame before encoding
+            CapturePreprocessParams params{};
+            params.src_resolution = active_canvas_size;
+            params.dst_resolution = active_target_size;
+            params.ssaa = active_ssaa;
+            params.sharpen = active_sharpen;
+            params.flip_y = true;
+
+            // todo: Bypass preprocessing pipeline if ssaa==1 && sharpen==0
+            if (capturing_frame)
+                preprocessor.preprocessToFrame(canvas.texture(), params, preprocessed_frame);
+            else
+                preprocessor.preprocessToTexture(canvas.texture(), params);
+
+            return true;
+        };
+
+        bool preprocess_frame = (changed_scale || changed_size || changed_sharpening);
         if (need_draw)
         {
             // Draw the fresh frame
@@ -1646,47 +1643,51 @@ void MainWindow::populateViewport(bool& projectDrawn)
                 /// vars, invoke scheduled calls and then repush with pushDataToUnchangedShadowVars? (just like you currently do
                 /// for _projectProcess)
 
-                if (canvas.isDirty())
+                worker_fps_timer.tick();
+
+                bool capturing_frame = capture_manager.isCapturing() && permit_frame_capture && new_frame_prepared;
+                if (canvas.isDirty() || capturing_frame)
                 {
                     canvas.begin(0.05f, 0.05f, 0.1f, 1.0f);
                     project_worker()->draw();
                     canvas.end();
 
                     preprocess_frame = true;
-                    
-                    canvas.setDirty(false);
 
-                    // todo: Set projectDrawn here? and early out of this scope?
+                    canvas.setDirty(false);
+                    // set projectDrawn=true here?
                 }
 
-                worker_fps_timer.tick();
+                // preprocess canvas on ssaa/sharpen change OR project signals it redrew (before encoding frame)
+                if (preprocess_frame)
+                    use_preprocessor_texture = preprocessFrame(capturing_frame);
 
-                // Even if not recording, behave as though we are for consistency
-                if (project_worker()->getCurrentProject() &&
-                    !project_worker()->getCurrentProject()->isPaused())
+                if (project_worker()->hasRunningProject())
                 {
-                    captured_last_frame = encode_next_sim_frame;
+                    // Even if not recording, behave as though we are for consistency
+                    captured_last_frame = permit_frame_capture;
 
-                    if (capture_manager.isCapturing())
+                    if (capturing_frame)
                     {
-                        if (encode_next_sim_frame)
-                        {
-                            // give project a chance to attach metadata to the frame before sending it to the encoder
-                            CapturePreset preset_info = *preset;
-                            preset_info.setVideo(capture_manager.isRecording()); // Tell user whether preset is being used a video or snapshot
-                            project_worker()->onEncodeFrame(preprocessed_frame, active_snapshot_preset_request_id, preset_info);
+                        // give project a chance to attach metadata to the frame before sending it to the encoder
+                        CapturePreset preset_info = *active_preset;
+                        preset_info.setVideo(capture_manager.isRecording()); // Tell user whether preset is being used a video or snapshot
+                        project_worker()->onEncodeFrame(preprocessed_frame, active_snapshot_preset_request_id, preset_info);
 
-                            // send to encoder
-                            capture_manager.encodeFrame(preprocessed_frame);
-                        }
+                        // send to encoder
+                        capture_manager.encodeFrame(preprocessed_frame);
                     }
 
                     // Force worker to tell us when it wants to encode a new frame
-                    encode_next_sim_frame = false;
+                    permit_frame_capture = false;
                 }
 
                 shared_sync.frame_ready_to_draw = false;
                 shared_sync.frame_consumed = true;
+
+                // update settings for the next frame (and flag that we can correctly capture the next frame)
+                updateActivePreset();
+                new_frame_prepared = true; // frame should be ready to capture after next worker draw call
             }
 
             // Let worker continue
@@ -1694,24 +1695,15 @@ void MainWindow::populateViewport(bool& projectDrawn)
 
             projectDrawn = true;
         }
-
-        if (preprocess_frame)
+        else
         {
-            // preprocess
-            CapturePreprocessParams params{};
-            params.src_resolution = canvas_size;
-            params.dst_resolution = target_size;
-            params.ssaa = ssaa;
-            params.sharpen = sharpen;
-            params.flip_y = true;
+            if (preprocess_frame)
+                use_preprocessor_texture = preprocessFrame(false);
 
-            // todo: Bypass preprocessing pipeline if ssaa==1 && sharpen==0
-            if (capture_manager.isCapturing())
-                preprocessor.preprocessTexture(canvas.texture(), params, preprocessed_frame);
-            else
-                preprocessor.preprocessTextureToTexture(canvas.texture(), params);
-
+            // update settings for the next frame
+            updateActivePreset();
         }
+
 
         // "canvas" refers to internal canvas dimensions
         // "image" in this context = ImGui image
@@ -1723,7 +1715,7 @@ void MainWindow::populateViewport(bool& projectDrawn)
         float ox = 0, oy = 0;
 
         float client_aspect  = (client_size.x / client_size.y);
-        float canvas_aspect = ((float)canvas_size.x / (float)canvas_size.y);
+        float canvas_aspect = ((float)active_canvas_size.x / (float)active_canvas_size.y);
 
         if (canvas_aspect > client_aspect)
         {
@@ -1741,9 +1733,21 @@ void MainWindow::populateViewport(bool& projectDrawn)
 
         canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)(image_pos.x + sw), (int)(image_pos.y + sh)));
      
-        // Draw cached (or freshly generated) frame
         ImGui::SetCursorScreenPos(image_pos);
-        ImGui::Image((ImTextureID)preprocessor.outputTexture(), image_size, ImVec2(0, 0), ImVec2(1, 1));
+
+        if (use_preprocessor_texture)
+            // use the preprocessor's output texture (no flip needed)
+            ImGui::Image((ImTextureID)preprocessor.outputTexture(), image_size, ImVec2(0, 0), ImVec2(1, 1));
+        else
+            // render canvas texture directly (flip y)
+            ImGui::Image(canvas.texture(), image_size, ImVec2(0, 1), ImVec2(1, 0));
+
+        // check if anything that requires updating the canvas/frame preprocessor
+        changed_size = canvas.resize(active_canvas_size.x, active_canvas_size.y);
+        changed_scale = canvas.setGlobalScale(platform()->dpr() * active_ssaa);
+        changed_sharpening = active_sharpen != old_sharpen;
+
+        old_sharpen = active_sharpen;
 
         viewport_hovered = ImGui::IsWindowHovered();
     }
@@ -1779,7 +1783,7 @@ void MainWindow::populateUI()
         // For the rest of this scope, it's safe to mutate GUI data buffers in preparation for the next worker frame...
         // ------------------------------------------------------------------------------------------------------------
 
-        bool collapse_layout = vertical_layout || platform()->max_char_rows() < 40.0f;
+        bool collapse_layout = vertical_layout || platform()->maxCharRows() < 40.0f;
 
         if (ProjectBase::projectInfoList().size() <= 1)
             collapse_layout = false;
@@ -1923,6 +1927,58 @@ void MainWindow::populateUI()
             last_frame_time = std::chrono::steady_clock::now();
         }
     }
+}
+
+const CapturePreset* MainWindow::determineRenderedPreset() const
+{
+    bool is_capturing = capture_manager.isCapturing();
+
+    const SnapshotPresetList& presets = getSnapshotPresetManager()->allPresets();
+    int selected_preset_idx = settings_panel.getSelectedPresetIndex(); //  selected "allPresets" index
+
+    const CapturePreset* ret = nullptr; // first preset always represents viewport. Use by default
+
+    if (is_capturing)
+    {
+        // *always* use capture preset if capturing, even if "preview" mode on
+        assert(enabled_capture_presets_current_idx < enabled_capture_presets.size());
+        ret = &enabled_capture_presets[enabled_capture_presets_current_idx];
+    }
+    else
+    {
+        // if "preview" mode on, use selected preset (if one is selected)
+        assert(selected_preset_idx >= 0 && selected_preset_idx < presets.size());
+        ret = &presets[selected_preset_idx];
+    }
+
+    assert(ret != nullptr);
+
+    return ret;
+}
+
+bool MainWindow::updateActivePreset()
+{
+    const CapturePreset* next_preset = determineRenderedPreset();
+    int   next_ssaa        = (next_preset->getSSAA() > 0)       ? next_preset->getSSAA()       : getSettingsConfig()->default_ssaa;
+    float next_sharpen     = (next_preset->getSharpening() > 0) ? next_preset->getSharpening() : getSettingsConfig()->default_sharpen;
+    IVec2 next_canvas_size = next_preset->getResolution() * next_ssaa;
+    IVec2 next_target_size = next_preset->getResolution();
+
+    if (next_preset      != active_preset ||
+        next_ssaa        != active_ssaa ||
+        next_sharpen     != active_sharpen ||
+        next_canvas_size != active_canvas_size ||
+        next_target_size != active_target_size)
+    {
+        active_preset      = next_preset;
+        active_ssaa        = next_ssaa;
+        active_sharpen     = next_sharpen;
+        active_canvas_size = next_canvas_size;
+        active_target_size = next_target_size;
+
+        return true;
+    }
+    return false;
 }
 
 BL_END_NS

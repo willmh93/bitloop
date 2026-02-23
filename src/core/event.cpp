@@ -44,8 +44,8 @@ std::string Event::toString()
         finger_attribs:
         sprintf(attribs, "{F_%llu, %d, %d}",
             (unsigned long long) sdl_event.tfinger.fingerID,
-            (int)(sdl_event.tfinger.x * (float)platform()->fbo_width()),
-            (int)(sdl_event.tfinger.y * (float)platform()->fbo_height()));
+            (int)(sdl_event.tfinger.x * (float)platform()->fboWidth()),
+            (int)(sdl_event.tfinger.y * (float)platform()->fboHeight()));
 
         break;
 
@@ -72,7 +72,7 @@ double PointerEvent::x()
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_MOTION:
     {
-        double client_x = (double)(sdl_event.tfinger.x * (float)platform()->fbo_width());
+        double client_x = (double)(sdl_event.tfinger.x * (float)platform()->fboWidth());
         return ctx_owner()->toSurfaceX(client_x);
     }
 
@@ -94,7 +94,7 @@ double PointerEvent::y()
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_MOTION:
     {
-        double client_y = (double)(sdl_event.tfinger.y * (float)platform()->fbo_height());
+        double client_y = (double)(sdl_event.tfinger.y * (float)platform()->fboHeight());
         return ctx_owner()->toSurfaceY(client_y);
     }
 

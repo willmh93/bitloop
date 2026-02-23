@@ -1,8 +1,9 @@
 #pragma once
 
 #include <bitloop/core/types.h>
-#include <bitloop/util/hashable.h>
+#include <bitloop/platform/platform.h>
 #include <bitloop/core/capture_manager.h>
+#include <bitloop/util/hashable.h>
 
 BL_BEGIN_NS;
 
@@ -33,7 +34,12 @@ class CapturePreset : public Hashable
     mutable std::string list_name;
     bl::hash_t  hashed_alias = 0;
 
-    bool video = false;
+    // applied to a copy when preset is used for video recording (vs snapshot).
+    // (otherwise useless since same allPresets() is used by both snapshot and video presets)
+    bool is_video = false;
+
+    // manually refreshed on size change
+    mutable bool is_supported_size = false;
 
 public:
 
@@ -45,9 +51,14 @@ public:
         size = rhs.size;
         ssaa = rhs.ssaa;
         sharpen = rhs.sharpen;
-        video = rhs.video;
+
+        // dynamic/cache
+        list_name = rhs.list_name;
+        hashed_alias = rhs.hashed_alias;
+
         is_viewport_preset = rhs.is_viewport_preset;
-        updateCache();
+        is_supported_size = rhs.is_supported_size;
+        is_video = rhs.is_video;
     }
     CapturePreset(std::string_view _name, std::string_view _alias, IVec2 _size, int _ssaa = 0, float _sharpen = -1.0f, bool is_viewport=false)
     {
@@ -70,6 +81,7 @@ public:
     [[nodiscard]] int getSSAA()               const noexcept { return ssaa; }
     [[nodiscard]] float getSharpening()       const noexcept { return sharpen; }
     [[nodiscard]] bool isViewportPreset()     const noexcept { return is_viewport_preset; }
+    [[nodiscard]] bool isSupportedSize()      const noexcept { return is_supported_size; }
 
     [[nodiscard]] const char* alias_cstr()    const noexcept { return alias; }
     [[nodiscard]] const char* name_cstr()     const noexcept { return name; }
@@ -96,9 +108,9 @@ public:
     void setSharpening(float _sharpen)    { sharpen = _sharpen;                updateCache(); }
 
     // dynamic (set last minute on CapturePreset copy, convenient for user)
-    void setVideo(bool v)                       { video = v; }
-    [[nodiscard]] bool isImage() const noexcept { return !video; }
-    [[nodiscard]] bool isVideo() const noexcept { return video; }
+    void setVideo(bool v)                       { is_video = v; }
+    [[nodiscard]] bool isImage() const noexcept { return !is_video; }
+    [[nodiscard]] bool isVideo() const noexcept { return is_video; }
 
     // compute hash for entire preset info
     hash_t compute_hash() const noexcept override
@@ -129,6 +141,14 @@ public:
             list_name += " sharp:";
             list_name += std::to_string(sharpen);
         }
+    }
+
+    bool updateSupportedSize(const GLCaps& caps, int default_ssaa) const
+    {
+        int full_w = width() * (ssaa > 0 ? ssaa : default_ssaa);
+        int full_h = height() * (ssaa > 0 ? ssaa : default_ssaa);
+        is_supported_size = (full_w <= caps.max_viewport_w) && (full_h <= caps.max_viewport_h);
+        return is_supported_size;
     }
 };
 
@@ -241,6 +261,26 @@ public:
                 filtered_presets.add(item);
         }
         return filtered_presets;
+    }
+
+    SnapshotPresetList filterSupported(int default_ssaa) const
+    {
+        updateSupportedSizes(default_ssaa);
+
+        SnapshotPresetList filtered_presets;
+        for (auto& item : items)
+        {
+            if (item.isSupportedSize())
+                filtered_presets.add(item);
+        }
+        return filtered_presets;
+    }
+
+    void updateSupportedSizes(int default_ssaa) const
+    {
+        GLCaps caps = platform()->glCaps();
+        for (auto& item : items)
+            item.updateSupportedSize(caps, default_ssaa);
     }
 };
 

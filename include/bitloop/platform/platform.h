@@ -33,6 +33,15 @@
 
 BL_BEGIN_NS
 
+struct GLCaps
+{
+    int max_texture_size = 0;
+    int max_renderbuffer_size = 0;
+    int max_samples = 0;
+    int max_viewport_w = 0;
+    int max_viewport_h = 0;
+};
+
 class PlatformManager
 {
     static PlatformManager *singleton;
@@ -47,12 +56,14 @@ class PlatformManager
 
     bool is_mobile_device = false;
 
-
     GLuint offscreen_fbo = 0;
     GLuint offscreen_color = 0;
     GLuint offscreen_depth = 0;
     int    offscreen_w = 0;
     int    offscreen_h = 0;
+
+    GLCaps gl_caps;
+    GLCaps query_gl_caps();
 
 public:
 
@@ -72,23 +83,23 @@ public:
     void update();
     void resized();
 
-    [[nodiscard]] SDL_Window* sdl_window() const { return window; }
+    [[nodiscard]] SDL_Window* sdlWindow() const { return window; }
 
-    [[nodiscard]] int gl_width()      const { return gl_w; }
-    [[nodiscard]] int gl_height()     const { return gl_h; }
-    [[nodiscard]] int fbo_width()     const { return fbo_size().x; }
-    [[nodiscard]] int fbo_height()    const { return fbo_size().y; }
-    [[nodiscard]] int window_width()  const { return win_w; }
-    [[nodiscard]] int window_height() const { return win_h; }
+    [[nodiscard]] int glWidth()      const { return gl_w; }
+    [[nodiscard]] int glHeight()     const { return gl_h; }
+    [[nodiscard]] int fboWidth()     const { return fboSize().x; }
+    [[nodiscard]] int fboHeight()    const { return fboSize().y; }
+    [[nodiscard]] int windowWidth()  const { return win_w; }
+    [[nodiscard]] int windowHeight() const { return win_h; }
 
-    [[nodiscard]] IVec2 gl_size()     const { return {gl_w, gl_h}; }
-    [[nodiscard]] IVec2 window_size() const { return {win_w, win_h}; }
+    [[nodiscard]] IVec2 glSize()     const { return {gl_w, gl_h}; }
+    [[nodiscard]] IVec2 windowSize() const { return {win_w, win_h}; }
 
     // Device Info
 
     [[nodiscard]] float dpr() const { return win_dpr; }
 
-    [[nodiscard]] bool offscreen_active() const
+    [[nodiscard]] bool offscreenActive() const
     {
         #ifdef BL_SIMULATED_DEVICE
         return true;
@@ -98,7 +109,7 @@ public:
     }
 
     // what the app should render to (offscreen, or direct)
-    [[nodiscard]] IVec2 fbo_size() const
+    [[nodiscard]] IVec2 fboSize() const
     {
         #ifdef BL_SIMULATED_DEVICE
         return {offscreen_w, offscreen_h};
@@ -107,40 +118,43 @@ public:
         #endif
     }
 
-    // input scaling to fbo-space
-    [[nodiscard]] float input_scale_x() const { return (gl_w > 0) ? (float)fbo_size().x / (float)gl_w : 1.0f; }
-    [[nodiscard]] float input_scale_y() const { return (gl_h > 0) ? (float)fbo_size().y / (float)gl_h : 1.0f; }
+    GLCaps glCaps() const { return gl_caps; }
+    bool glValidTextureSize(int internal_w, int internal_h);
 
-    void imgui_fix_offscreen_mouse_position();
-    void upscale_mouse_event_to_offscreen(SDL_Event& e);
-    void convert_mouse_to_touch(SDL_Event& e);
+    // input scaling to fbo-space
+    [[nodiscard]] float inputScaleX() const { return (gl_w > 0) ? (float)fboSize().x / (float)gl_w : 1.0f; }
+    [[nodiscard]] float inputScaleY() const { return (gl_h > 0) ? (float)fboSize().y / (float)gl_h : 1.0f; }
+
+    void imguiFixOffscreenMousePosition();
+    void upscaleMouseEventToOffscreen(SDL_Event& e);
+    void convertMouseToTouch(SDL_Event& e);
 
     // begin gl (for offscreen, or direct)
-    void gl_begin_frame();
-    void gl_end_frame();
+    void glBeginFrame();
+    void glEndFrame();
 
-    [[nodiscard]] bool device_vertical();
-    void device_orientation(int* orientation_angle, int* orientation_index = nullptr);
-    bool device_orientation_changed(std::function<void(int, int)> onChanged);
+    [[nodiscard]] bool deviceVertical();
+    void deviceOrientation(int* orientation_angle, int* orientation_index = nullptr);
+    bool deviceOrientationChanged(std::function<void(int, int)> onChanged);
     
     // Platform detection
-    [[nodiscard]] bool is_mobile() const;
-    [[nodiscard]] bool is_desktop_native() const;
-    [[nodiscard]] bool is_desktop_browser() const;
+    [[nodiscard]] bool isMobile() const;
+    [[nodiscard]] bool isDesktopNative() const;
+    [[nodiscard]] bool isDesktopBrowser() const;
 
     // Scale
-    [[nodiscard]] float font_scale() const;
+    [[nodiscard]] float fontScale() const;
     [[nodiscard]] float thumbScale(float extra_mobile_mult=1.0f) const;
 
     // Layout helpers
-    [[nodiscard]] float line_height() const;
-    [[nodiscard]] float input_height() const;
-    [[nodiscard]] float max_char_rows() const;
-    [[nodiscard]] float max_char_cols() const;
+    [[nodiscard]] float lineHeight() const;
+    [[nodiscard]] float inputHeight() const;
+    [[nodiscard]] float maxCharRows() const;
+    [[nodiscard]] float maxCharCols() const;
 
     // File system helpers
-    [[nodiscard]] std::filesystem::path executable_dir() const;
-    [[nodiscard]] std::filesystem::path resource_root() const;
+    [[nodiscard]] std::filesystem::path executableDir() const;
+    [[nodiscard]] std::filesystem::path resourceDir() const;
     [[nodiscard]] std::string path(std::string_view virtual_path) const;
 
 

@@ -32,12 +32,12 @@ inline void dpiDebugInfo()
 
     ImGui::Text("---- Environment ----");
 
-    if (platform()->is_mobile())
+    if (platform()->isMobile())
         ImGui::Text("Handheld:               TRUE");
     else
         ImGui::Text("Handheld:               FALSE");
 
-    if (platform()->device_vertical())
+    if (platform()->deviceVertical())
         ImGui::Text("Vertical:                   TRUE");
     else
         ImGui::Text("Vertical:                   FALSE");
@@ -54,16 +54,16 @@ inline void dpiDebugInfo()
     ImGui::Text("DPR:                        %.3f", platform()->dpr());
     ImGui::Text("DisplaySize:            %.1f x %.1f", io.DisplaySize.x, io.DisplaySize.y);
     ImGui::Text("WindowSize:           %d x %d",
-        platform()->window_width(),
-        platform()->window_height()
+        platform()->windowWidth(),
+        platform()->windowHeight()
     );
     ImGui::Text("DrawableSize:         %d x %d",
-        platform()->fbo_width(),
-        platform()->fbo_height()
+        platform()->fboWidth(),
+        platform()->fboHeight()
     );
     ImGui::Text("GLSize:                 %d x %d",
-        platform()->gl_width(),
-        platform()->gl_height()
+        platform()->glWidth(),
+        platform()->glHeight()
     );
     //ImGui::Text("DrawableSize (GL):   %d x %d", gl_dw, gl_dh);
 

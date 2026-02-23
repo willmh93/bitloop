@@ -65,6 +65,16 @@ public:
         return false;
     }
 
+    [[nodiscard]] bool isPressEvent() const
+    {
+        switch (sdl_event.type)
+        {
+        case SDL_EVENT_FINGER_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            return true;
+        }
+        return false;
+    }
 
     Event(SDL_Event& e) : sdl_event(e) {}
     Event(const Event& e) = default;

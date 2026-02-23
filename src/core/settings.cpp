@@ -74,6 +74,8 @@ void SettingsPanel::init()
 
     SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
     SnapshotPresetList& presets = manager->allPresets();
+    presets.updateSupportedSizes(config.default_ssaa);
+
     CapturePreset* selected_preset = presets.at_safe(selected_capture_preset);
     setInputPreset(selected_preset);
 }
@@ -117,7 +119,7 @@ void SettingsPanel::populateCapturePresetsEditor()
         }
     }
 
-    int changed_selected_index = populateCapturePresetsList([&](int i) -> CapturePreset& {
+    int changed_selected_index = populateCapturePresetsList<CapturePresetsSelectMode::NONE, false>([&](int i) -> CapturePreset& {
         return presets[i];
     }, (int)presets.size(), nullptr, selected_capture_preset);
 
@@ -188,6 +190,8 @@ void SettingsPanel::populateCapturePresetsEditor()
                 selected_preset->setName(input_alias);
             }
 
+            bool updated_render_size = false;
+
             // Width
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -207,6 +211,7 @@ void SettingsPanel::populateCapturePresetsEditor()
                     input_resolution.x = std::clamp(input_resolution.x, 16, 16384);
                     input_resolution.x = (input_resolution.x & ~1); // force even
                     selected_preset->setResolution(input_resolution);
+                    updated_render_size = true;
                 }
             }
 
@@ -229,6 +234,7 @@ void SettingsPanel::populateCapturePresetsEditor()
                     input_resolution.y = std::clamp(input_resolution.y, 16, 16384);
                     input_resolution.y = (input_resolution.y & ~1); // force even
                     selected_preset->setResolution(input_resolution);
+                    updated_render_size = true;
                 }
             }
 
@@ -245,11 +251,13 @@ void SettingsPanel::populateCapturePresetsEditor()
             {
                 input_ssaa = 1; // enable
                 selected_preset->setSSAA(input_ssaa);
+                updated_render_size = true;
             }
             else if (had_specific_ssaa && !use_specific_ssaa)
             {
                 input_ssaa = 0; // disable
                 selected_preset->setSSAA(input_ssaa);
+                updated_render_size = true;
             }
 
             ImGui::TableSetColumnIndex(1);
@@ -261,9 +269,13 @@ void SettingsPanel::populateCapturePresetsEditor()
                 use_specific_ssaa ? "%dx" : "Using global (%dx)"))
             {
                 selected_preset->setSSAA(input_ssaa);
+                updated_render_size = true;
             }
 
             if (!use_specific_ssaa) ImGui::EndDisabled();
+
+            if (updated_render_size)
+                selected_preset->updateSupportedSize(platform()->glCaps(), config.default_ssaa);
 
             // Sharpening
             ImGui::TableNextRow();
@@ -342,7 +354,10 @@ inline bool CaptureFormatVideoCombo(const char* id, CaptureFormatVideo& value)
 void SettingsPanel::populateSettings()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, scale_size(6, 6));
-    //ImGui::BeginChild("RecordingFrame", ImVec2(0, 0), 0, ImGuiWindowFlags_AlwaysUseWindowPadding);
+
+    bool capturing = main_window->getCaptureManager()->isCapturing();
+    if (capturing)
+        ImGui::BeginDisabled();
 
     // Paths
     #ifndef BL_WEB_BUILD
@@ -352,7 +367,7 @@ void SettingsPanel::populateSettings()
     ImGui::SameLine();
     if (ImGui::Button("..."))
     {
-        SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, platform()->sdl_window(), config.capture_dir.c_str(), false);
+        SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, platform()->sdlWindow(), config.capture_dir.c_str(), false);
     }
     ImGui::EndLabelledBox();
     #endif
@@ -361,7 +376,7 @@ void SettingsPanel::populateSettings()
     {
         ImGui::BeginLabelledBox("Global Capture Options");
 
-        if (!platform()->is_mobile())
+        if (!platform()->isMobile())
         {
             ImGui::Checkbox("Fixed frame time-delta", &config.fixed_time_delta);
         }
@@ -378,29 +393,46 @@ void SettingsPanel::populateSettings()
         ImGui::EndLabelledBox();
     }
 
+
     // Capture Presets
     {
+        SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
+        SnapshotPresetList& presets = manager->allPresets();
+
         ImGui::BeginLabelledBox("Capture Presets");
 
         ImGui::Text("Default SSAA (Supersampling Factor)");
-        ImGui::SliderInt("##ssaa", &config.default_ssaa, 1, 8, "%dx");
+        if (ImGui::SliderInt("##ssaa", &config.default_ssaa, 1, 8, "%dx"))
+        {
+            presets.updateSupportedSizes(config.default_ssaa);
+
+            for (int i = 0; i < presets.size(); i++)
+            {
+                if (!presets[i].isSupportedSize())
+                {
+                    if (i == selected_image_preset)
+                        selected_image_preset = 0;
+                    if (i == config.target_video_preset)
+                        config.target_video_preset = 0;
+                }
+            }
+        }
 
         ImGui::Spacing(); ImGui::Spacing();
         ImGui::Text("Default Sharpen");
         ImGui::SliderFloat("##sharpen", &config.default_sharpen, 0.0f, 1.0f, "%.2f");
 
         ImGui::Spacing(); ImGui::Spacing();
-        
+
+        ImGui::TextUnformatted("Select a preset to preview");
+
         if (ImGui::BeginTabBar("capture_tabs"))
         {
             if (ImGui::TabBox("Image"))
             {
-                ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
+                ImGui::TextUnformatted("Check all presets to include in snapshot batch");
 
-                selected_preset_is_video = false;
-
-                SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
-                SnapshotPresetList& presets = manager->allPresets();
+                selected_preset_type = SelectedPresetType::IMAGE_PRESET;
 
                 populateCapturePresetsList<CapturePresetsSelectMode::MULTI>(
                     [&](int i) -> CapturePreset& {
@@ -412,12 +444,7 @@ void SettingsPanel::populateSettings()
 
             if (ImGui::TabBox("Video"))
             {
-                ImGui::Checkbox("Preview Selected Preset", &config.preview_mode);
-
-                selected_preset_is_video = true;
-
-                SnapshotPresetManager* manager = main_window->getSnapshotPresetManager();
-                SnapshotPresetList& presets = manager->allPresets();
+                selected_preset_type = SelectedPresetType::VIDEO_PRESET;
 
                 // Use target_video_preset as both selected item index and chosen radio button index
                 int new_index = populateCapturePresetsList<CapturePresetsSelectMode::SINGLE>(
@@ -480,12 +507,18 @@ void SettingsPanel::populateSettings()
 
             if (ImGui::TabBox("Edit Presets"))
             {
+                // don't preview while editing
+                //selected_preset_type = SelectedPresetType::EDIT_PRESET;
+
                 populateCapturePresetsEditor();
+
+                if (!presets[selected_image_preset].isSupportedSize())
+                    selected_image_preset = 0;
+                if (!presets[config.target_video_preset].isSupportedSize())
+                    config.target_video_preset = 0;
 
                 ImGui::EndTabBox();
             }
-
-        
 
             ImGui::EndTabBar();
         }
@@ -493,9 +526,10 @@ void SettingsPanel::populateSettings()
         ImGui::EndLabelledBox();
     }
     
-
-    //ImGui::EndChild();
     ImGui::PopStyleVar();
+
+    if (capturing)
+        ImGui::EndDisabled();
 
     ImGui::Text("Compiled:  %s %s", __DATE__, __TIME__);
 }

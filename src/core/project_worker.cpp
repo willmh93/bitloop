@@ -82,6 +82,9 @@ void ProjectWorker::handleProjectCommands(ProjectCommandEvent& e)
             else
             {
                 current_project->_projectDestroy();
+
+                // todo: delete here to make inline class variable delcarations the same each restart?
+                
                 current_project->_projectStart();
             }
 
@@ -139,9 +142,6 @@ void ProjectWorker::worker_loop()
 
         // Wait for GUI to consume the freshly-rendered previous frame
         shared_sync.wait_until_gui_consumes_frame();
-
-        capture_manager->setCaptureEnabled(true);
-
 
         /// ────── Do heavy work (while GUI thread redraws cached frame) ──────
         if (current_project && current_project->started) 
@@ -297,9 +297,14 @@ void ProjectWorker::pollEvents()
         _onEvent(e);
 }
 
-bool bl::ProjectWorker::hasCurrentProject()
+bool ProjectWorker::hasCurrentProject()
 {
     return (current_project != nullptr);
+}
+
+bool ProjectWorker::hasRunningProject()
+{
+    return (current_project != nullptr && !current_project->isPaused());
 }
 
 void ProjectWorker::populateAttributes()

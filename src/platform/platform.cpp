@@ -18,6 +18,40 @@ BL_BEGIN_NS
 
 PlatformManager* PlatformManager::singleton = nullptr;
 
+
+
+GLCaps PlatformManager::query_gl_caps()
+{
+    GLCaps caps{};
+
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &caps.max_texture_size);
+    glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &caps.max_renderbuffer_size);
+
+    GLint vp[2] = {};
+    glGetIntegerv(GL_MAX_VIEWPORT_DIMS, vp);
+    caps.max_viewport_w = vp[0];
+    caps.max_viewport_h = vp[1];
+
+    caps.max_samples = 0;
+    if (glGetError() == GL_NO_ERROR) {
+        glGetIntegerv(GL_MAX_SAMPLES, &caps.max_samples);
+        glGetError(); // avoid stale error affecting later checks
+    }
+
+    return caps;
+}
+
+bool PlatformManager::glValidTextureSize(int internal_w, int internal_h)
+{
+    const int max_w = std::min(gl_caps.max_texture_size, gl_caps.max_renderbuffer_size);
+    const int max_h = std::min(gl_caps.max_texture_size, gl_caps.max_renderbuffer_size);
+
+    if (internal_w <= 0 || internal_h <= 0) return false;
+    if (internal_w > max_w || internal_h > max_h) return false;
+    if (internal_w > gl_caps.max_viewport_w || internal_h > gl_caps.max_viewport_h) return false;
+    return true;
+}
+
 #ifdef __EMSCRIPTEN__
 EM_JS(int, _is_mobile_device, (), {
   // 1. Prefer UA-Client-Hints when they exist (Chromium >= 89)
@@ -45,6 +79,7 @@ int _is_mobile_device()
 void PlatformManager::init()
 {
     is_mobile_device = _is_mobile_device();
+    gl_caps = query_gl_caps();
 
     #ifdef __EMSCRIPTEN__
     EM_ASM({
@@ -85,8 +120,6 @@ void PlatformManager::resized()
     platform()->update();
 }
 
-
-
 static void destroy_offscreen_fbo(GLuint& fbo, GLuint& color, GLuint& depth)
 {
     if (depth) { glDeleteRenderbuffers(1, &depth); depth = 0; }
@@ -118,7 +151,7 @@ static void ensure_offscreen_fbo(GLuint& fbo, GLuint& color, GLuint& depth, int 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void PlatformManager::gl_begin_frame()
+void PlatformManager::glBeginFrame()
 {
     #ifdef BL_SIMULATED_DEVICE
     offscreen_w = BL_SIMULATED_DEVICE.w;
@@ -136,7 +169,7 @@ void PlatformManager::gl_begin_frame()
     #endif
 }
 
-void PlatformManager::gl_end_frame()
+void PlatformManager::glEndFrame()
 {
     #ifdef BL_SIMULATED_DEVICE
     // downscale into the real window backbuffer
@@ -151,7 +184,7 @@ void PlatformManager::gl_end_frame()
     #endif
 }
 
-void PlatformManager::imgui_fix_offscreen_mouse_position()
+void PlatformManager::imguiFixOffscreenMousePosition()
 {
     #ifdef BL_SIMULATED_DEVICE
     // imgui_impl_sdl3 calls UpdateMouseData() in NewFrame and queries global mouse state,
@@ -160,15 +193,15 @@ void PlatformManager::imgui_fix_offscreen_mouse_position()
     SDL_GetMouseState(&mx, &my);
 
     ImGuiIO& io = ImGui::GetIO();
-    io.AddMousePosEvent(mx * input_scale_x(), my * input_scale_y());
+    io.AddMousePosEvent(mx * inputScaleX(), my * inputScaleY());
     #endif
 }
 
-void PlatformManager::upscale_mouse_event_to_offscreen(SDL_Event& e)
+void PlatformManager::upscaleMouseEventToOffscreen(SDL_Event& e)
 {
     // upscale mouse position from screen space to offscreen
-    const float sx = platform()->input_scale_x();
-    const float sy = platform()->input_scale_y();
+    const float sx = platform()->inputScaleX();
+    const float sy = platform()->inputScaleY();
 
     switch (e.type)
     {
@@ -195,7 +228,7 @@ void PlatformManager::upscale_mouse_event_to_offscreen(SDL_Event& e)
     }
 }
 
-void PlatformManager::convert_mouse_to_touch(SDL_Event& e)
+void PlatformManager::convertMouseToTouch(SDL_Event& e)
 {
     // emulate touch (from mouse)
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
@@ -203,28 +236,28 @@ void PlatformManager::convert_mouse_to_touch(SDL_Event& e)
         SDL_Event me = e;
         e.type = SDL_EVENT_FINGER_DOWN;
         e.tfinger.fingerID = 0;
-        e.tfinger.x = (me.button.x / (float)platform()->fbo_width());
-        e.tfinger.y = (me.button.y / (float)platform()->fbo_height());
+        e.tfinger.x = (me.button.x / (float)platform()->fboWidth());
+        e.tfinger.y = (me.button.y / (float)platform()->fboHeight());
     }
     else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP)
     {
         SDL_Event me = e;
         e.type = SDL_EVENT_FINGER_UP;
         e.tfinger.fingerID = 0;
-        e.tfinger.x = (me.button.x / (float)platform()->fbo_width());
-        e.tfinger.y = (me.button.y / (float)platform()->fbo_height());
+        e.tfinger.x = (me.button.x / (float)platform()->fboWidth());
+        e.tfinger.y = (me.button.y / (float)platform()->fboHeight());
     }
     else if (e.type == SDL_EVENT_MOUSE_MOTION)
     {
         SDL_Event me = e;
         e.type = SDL_EVENT_FINGER_MOTION;
         e.tfinger.fingerID = 0;
-        e.tfinger.x = (me.button.x / (float)platform()->fbo_width());
-        e.tfinger.y = (me.button.y / (float)platform()->fbo_height());
+        e.tfinger.x = (me.button.x / (float)platform()->fboWidth());
+        e.tfinger.y = (me.button.y / (float)platform()->fboHeight());
     }
 }
 
-bool PlatformManager::device_vertical()
+bool PlatformManager::deviceVertical()
 {
     #ifdef __EMSCRIPTEN__
     EmscriptenOrientationChangeEvent orientation;
@@ -240,7 +273,7 @@ bool PlatformManager::device_vertical()
     #endif
 }
 
-void PlatformManager::device_orientation(int* orientation_angle, int* orientation_index)
+void PlatformManager::deviceOrientation(int* orientation_angle, int* orientation_index)
 {
     #ifdef __EMSCRIPTEN__
     EmscriptenOrientationChangeEvent orientation;
@@ -265,7 +298,7 @@ EM_BOOL _orientationChanged(int type, const EmscriptenOrientationChangeEvent* e,
 }
 #endif
 
-bool PlatformManager::device_orientation_changed(std::function<void(int, int)> onChanged [[maybe_unused]])
+bool PlatformManager::deviceOrientationChanged(std::function<void(int, int)> onChanged [[maybe_unused]])
 {
     #ifdef __EMSCRIPTEN__
     _onOrientationChangedCB = onChanged;
@@ -276,7 +309,7 @@ bool PlatformManager::device_orientation_changed(std::function<void(int, int)> o
     #endif
 }
 
-bool PlatformManager::is_mobile() const
+bool PlatformManager::isMobile() const
 {
     #ifdef BL_SIMULATE_MOBILE
     return true;
@@ -285,16 +318,16 @@ bool PlatformManager::is_mobile() const
     #endif
 }
 
-bool PlatformManager::is_desktop_native() const
+bool PlatformManager::isDesktopNative() const
 {
     #if defined BL_WEB_BUILD
     return false;
     #else
-    return !is_mobile();
+    return !isMobile();
     #endif
 }
 
-bool PlatformManager::is_desktop_browser() const
+bool PlatformManager::isDesktopBrowser() const
 {
     #ifdef BL_SIMULATE_BROWSER
         // simulating browser
@@ -306,49 +339,49 @@ bool PlatformManager::is_desktop_browser() const
     #else
         // detect real environment
         #ifdef __EMSCRIPTEN__
-        return !is_mobile(); // Assumed desktop browser if mobile screen not detected
+        return !isMobile(); // Assumed desktop browser if mobile screen not detected
         #else
         return false; // Native desktop application
         #endif
     #endif
 }
 
-float PlatformManager::font_scale() const
+float PlatformManager::fontScale() const
 {
-    return is_mobile() ? 1.3f : 1.0f;
+    return isMobile() ? 1.3f : 1.0f;
 }
 
 
 float PlatformManager::thumbScale(float extra_mobile_mult) const
 {
-    return is_mobile() ? (2.0f * extra_mobile_mult) : 1.0f;
+    return isMobile() ? (2.0f * extra_mobile_mult) : 1.0f;
 }
 
-float PlatformManager::line_height() const
+float PlatformManager::lineHeight() const
 {
     return ImGui::GetFontSize();
 }
 
-float PlatformManager::input_height() const
+float PlatformManager::inputHeight() const
 {
     ImGuiIO& io = ImGui::GetIO();
     ImGuiStyle& s = ImGui::GetStyle();
     return io.DisplaySize.y / ImGui::GetFontSize() + s.FramePadding.y * 2.0f;
 }
 
-float PlatformManager::max_char_rows() const
+float PlatformManager::maxCharRows() const
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.DisplaySize.y / ImGui::GetFontSize();
 }
 
-float PlatformManager::max_char_cols() const
+float PlatformManager::maxCharCols() const
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.DisplaySize.x / ImGui::GetFontSize();
 }
 
-std::filesystem::path PlatformManager::executable_dir() const
+std::filesystem::path PlatformManager::executableDir() const
 {
     #if defined(_WIN32)
     std::wstring buf(MAX_PATH, L'\0');
@@ -378,18 +411,18 @@ std::filesystem::path PlatformManager::executable_dir() const
     #endif
 }
 
-std::filesystem::path PlatformManager::resource_root() const
+std::filesystem::path PlatformManager::resourceDir() const
 {
     #ifdef __EMSCRIPTEN__
     return "/";
     #else
-    return executable_dir();
+    return executableDir();
     #endif
 }
 
 std::string PlatformManager::path(std::string_view virtual_path) const
 {
-    std::filesystem::path p = resource_root();
+    std::filesystem::path p = resourceDir();
 
     if (!virtual_path.empty() && virtual_path.front() == '/')
         virtual_path.remove_prefix(1); // trim leading '/'

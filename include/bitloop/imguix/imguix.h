@@ -280,14 +280,14 @@ namespace ImGui
     void EndCollapsingHeaderContentsDisabled();
     bool CollapsingHeaderContentsDisabled();
 
-    bool CollapsingHeaderBox(const char* id, bool open_by_default = false, float pad = bl::scale_size(10.0f), float extra = 3.0f);
-    void EndCollapsingHeaderBox(float end_spacing = 4.0f);
+    bool CollapsingHeaderBox(const char* id, bool open_by_default = false, float pad = bl::scale_size(10.0f), float pad_extra_w = bl::scale_size(3.0f));
+    void EndCollapsingHeaderBox(float end_spacing = bl::scale_size(4.0f));
 
     // ---------------------
     // TabBox / EndTabBox
     // ---------------------
 
-    inline bool TabBox(const char* id, float pad = bl::scale_size(10.0f), float extra = 3.0f)
+    inline bool TabBox(const char* id, float pad = bl::scale_size(10.0f), float extra = bl::scale_size(3.0f))
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         DlCtx& c = box_dlctx(dl);
@@ -541,7 +541,7 @@ namespace ImGui
     {
         return;
 
-        if (!bl::platform()->is_mobile())
+        if (!bl::platform()->isMobile())
             return;
 
         ImGuiContext& g = *ImGui::GetCurrentContext();

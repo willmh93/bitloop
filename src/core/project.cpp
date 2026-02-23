@@ -274,13 +274,13 @@ void ProjectBase::_populateOverlay()
         float sidebar_btn_size = scale_size(22.0f);
 
         // fullscreen button
-        SDL_WindowFlags flags = SDL_GetWindowFlags(platform()->sdl_window());
+        SDL_WindowFlags flags = SDL_GetWindowFlags(platform()->sdlWindow());
         bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN);
         static bool fullscreen_btn_held = false;
         if (DrawFullscreenOverlayButton(&fullscreen, &fullscreen_btn_held,
             ImVec2(ctx_size.x - fullscreen_btn_size - sidebar_btn_size - btn_space, btn_space), fullscreen_btn_size))
         {
-            SDL_SetWindowFullscreen(platform()->sdl_window(), fullscreen);
+            SDL_SetWindowFullscreen(platform()->sdlWindow(), fullscreen);
             main_window()->setSidebarVisible(!fullscreen);
         }
 
@@ -559,7 +559,6 @@ void ProjectBase::_projectProcess()
         {
             scene_timer.begin();
 
-            ///scene->needs_redraw = true; // force redraw unless told otherwise
             scene->mouse = &mouse;
             scene->sceneProcess();
 
@@ -581,7 +580,7 @@ void ProjectBase::_projectProcess()
             viewport->scene->viewportProcess(viewport, dt);
 
             // all viewports need redraw if surface changes size
-            if (viewport_rects_updated)
+            if (viewport_rects_updated || viewport->focused_dt > 0)
                 viewport->scene->needs_redraw = true;
 
             // if any scene needs a redraw (including from surface size change), mark the canvas
@@ -596,7 +595,6 @@ void ProjectBase::_projectProcess()
         project_dt = project_timer.elapsed();
 
         // Prepare to encode the next frame
-        ///encode_next_paint = true;
         if (!done_single_process)
             did_first_process = true;
     }
@@ -616,110 +614,92 @@ void ProjectBase::_projectDraw()
 
     DVec2 surface_size = canvas->fboSize();
 
-    // todo: No per-viewport redrawing for now. Would require:
-    // - or give each viewport a separate Canvas (ideal)
-    //   - let ImGui draw viewport splitters
-    //   - blit each viewport (when dirty) to merged "project_image" so you can record all in one frame
-    //   - optional [hard]: add Scene-specific logic to capture only that scene.
-    //     - queue captures, see if FFmpeg can handle multiple recordings at once (multiple capture managers?)
-    // 
-    // - additional surfaces to target (switch same nanovg instance)
+    /// todo: No per-viewport redrawing for now. Would require:
+    /// - or give each viewport a separate Canvas (ideal)
+    ///   - let ImGui draw viewport splitters
+    ///   - blit each viewport (when dirty) to merged "project_image" so you can record all in one frame
+    ///   - optional [hard]: add Scene-specific logic to capture only that scene.
+    ///     - queue captures, see if FFmpeg can handle multiple recordings at once (multiple capture managers?)
+    /// 
+    /// - additional surfaces to target (switch same nanovg instance)
     
-    // If any viewport is dirty, redraw all viewports
-    bool any_viewports_dirty = false;
+    // Draw background
+    canvas->setFillStyle(10, 10, 15);
+    canvas->fillRect(0, 0, surface_size.x, surface_size.y);
+
+    canvas->setFillStyle(255, 255, 255);
+    canvas->setStrokeStyle(255, 255, 255);
+
+    canvas->setFontSize(16.0f);
+
+    // Draw each viewport
     for (Viewport* viewport : viewports)
     {
-        if (viewport->scene->needs_redraw || viewport->focused_dt > 0)
-        {
-            any_viewports_dirty = true;
-            viewport->scene->needs_redraw = false;
-        }
+        // Reuse derived painter for the primary canvas context
+        viewport->setTargetPainterContext(canvas->getPainterContext());
+
+        viewport->resetTransform();
+
+        canvas->setClipRect(viewport->left(), viewport->top(), viewport->width(), viewport->height());
+        canvas->save();
+
+        // Starting viewport position
+        canvas->translate(std::floor(viewport->left()), std::floor(viewport->top()));
+
+        // Set default world transform
+        viewport->worldMode();
+
+        // Draw Scene to Viewport
+        viewport->draw();
+
+        // Restore initial canvas transform
+        canvas->restore();
+        canvas->resetClipping();
     }
 
-    // Draw background
-    if (any_viewports_dirty)
+    // Draw viewport splitters
+    for (Viewport* viewport : viewports)
     {
-        canvas->setFillStyle(10, 10, 15);
-        canvas->fillRect(0, 0, surface_size.x, surface_size.y);
+        canvas->setLineWidth(splitter_thickness);
+        canvas->setStrokeStyle(30, 30, 40);
+        canvas->beginPath();
 
-        canvas->setFillStyle(255, 255, 255);
-        canvas->setStrokeStyle(255, 255, 255);
-
-        canvas->setFontSize(16.0f);
-
-        ///timer_projectDraw.start();
-
-        // Draw each viewport
-        for (Viewport* viewport : viewports)
+        // Draw vert line
+        if (viewport->viewport_grid_x < viewports.cols - 1)
         {
-            // Reuse derived painter for the primary canvas context
-            viewport->setTargetPainterContext(canvas->getPainterContext());
-
-            viewport->resetTransform();
-
-            canvas->setClipRect(viewport->left(), viewport->top(), viewport->width(), viewport->height());
-            canvas->save();
-
-            // Starting viewport position
-            canvas->translate(std::floor(viewport->left()), std::floor(viewport->top()));
-
-            // Set default world transform
-            viewport->worldMode();
-
-            // Draw Scene to Viewport
-            ///if (viewport->scene->needs_redraw)
-            {
-                viewport->draw();
-                ///viewport->scene->needs_redraw = false;
-            }
-
-            // Restore initial canvas transform
-            canvas->restore();
-            canvas->resetClipping();
+            double line_x = viewport->right() + splitter_thickness / 2;
+            canvas->moveTo(line_x, viewport->top());
+            canvas->lineTo(line_x, viewport->bottom() + splitter_thickness); // +splitter_thickness to fill sqare gap between lines
         }
 
-        ///dt_projectDraw = timer_projectDraw.elapsed();
-
-        // Draw viewport splitters
-        for (Viewport* viewport : viewports)
+        // Draw horiz line
+        if (viewport->viewport_grid_y < viewports.rows - 1)
         {
-            canvas->setLineWidth(splitter_thickness);
-            canvas->setStrokeStyle(30, 30, 40);
-            canvas->beginPath();
+            double line_y = viewport->bottom() + splitter_thickness / 2;
+            canvas->moveTo(viewport->left(), line_y);
+            canvas->lineTo(viewport->right(), line_y);
+        }
 
-            // Draw vert line
-            if (viewport->viewport_grid_x < viewports.cols - 1)
+        canvas->stroke();
+
+        if (ctx_focused == viewport)
+        {
+            int flash_lines_extra = 0;
+            float focus_flash_brightness = viewport->focused_dt / Viewport::focus_flash_frames;
+            flash_lines_extra = (int)(focus_flash_brightness * 155.0f);
+
+            if (viewport->focused_dt > 0)
             {
-                double line_x = viewport->right() + splitter_thickness / 2;
-                canvas->moveTo(line_x, viewport->top());
-                canvas->lineTo(line_x, viewport->bottom() + splitter_thickness); // +splitter_thickness to fill sqare gap between lines
+                viewport->focused_dt -= 1.0f;
+
+                int flash_fill_extra = (int)(focus_flash_brightness * 50.0f);
+                canvas->setFillStyle(255, 255, 255, flash_fill_extra);
+                canvas->fillRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
             }
 
-            // Draw horiz line
-            if (viewport->viewport_grid_y < viewports.rows - 1)
-            {
-                double line_y = viewport->bottom() + splitter_thickness / 2;
-                canvas->moveTo(viewport->left(), line_y);
-                canvas->lineTo(viewport->right(), line_y);
-            }
-
-            canvas->stroke();
-
-            if (ctx_focused == viewport)
-            {
-                int flash_extra = 0;
-                if (viewport->focused_dt > 0)
-                {
-                    viewport->focused_dt -= 1.0f;
-
-                    float focus_flash_brightness = viewport->focused_dt / Viewport::focus_flash_frames;
-                    flash_extra = (int)(focus_flash_brightness * 155.0f);
-                }
-
-                canvas->setLineWidth(1);
-                canvas->setStrokeStyle(75 + flash_extra, 75, 100 + flash_extra);
-                canvas->strokeRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
-            }
+            canvas->setLineWidth(1);
+            canvas->setStrokeStyle(75 + flash_lines_extra, 75, 100 + flash_lines_extra);
+            canvas->strokeRect(viewport->left() - 0.5, viewport->top() - 0.5, viewport->width() + 1, viewport->height() + 1);
         }
     }
 
@@ -733,7 +713,10 @@ void ProjectBase::_onEndFrame()
 
     // Update 'live' values of all ChangeTracker variables (to compare against next frame)
     for (SceneBase* scene : viewports.all_scenes)
+    {
+        scene->needs_redraw = false;
         scene->ChangeTracker::updateCurrent();
+    }
 
     mouse.clearStaleButtonStates();
 }
@@ -775,7 +758,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         // Mouse
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         {
-            if (platform()->is_mobile()) return;
+            if (platform()->isMobile()) return;
             SDL_MouseButtonEvent& b = e.button;
 
             mouse.buttonState((MouseButton)b.button).is_down = true;
@@ -786,7 +769,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         } break;
         case SDL_EVENT_MOUSE_BUTTON_UP:
         {
-            if (platform()->is_mobile()) return;
+            if (platform()->isMobile()) return;
             SDL_MouseButtonEvent& b = e.button;
 
             mouse.buttonState((MouseButton)b.button).is_down = false;
@@ -795,7 +778,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         } break;
         case SDL_EVENT_MOUSE_MOTION:
         {
-            if (platform()->is_mobile()) return;
+            if (platform()->isMobile()) return;
             SDL_MouseButtonEvent& b = e.button;
 
             mouse.client_x = b.x;
@@ -807,19 +790,19 @@ void ProjectBase::_onEvent(SDL_Event& e)
         case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_MOTION:
         {
-            mouse.client_x = (double)(e.tfinger.x * platform()->fbo_width());
-            mouse.client_y = (double)(e.tfinger.y * platform()->fbo_height());
+            mouse.client_x = (double)(e.tfinger.x * platform()->fboWidth());
+            mouse.client_y = (double)(e.tfinger.y * platform()->fboHeight());
         } break;
     }
 
     // Detect which viewport we're "focusing" / "hovering" on (to attach to event)
+    bool captured = false;
     switch (e.type)
     {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_FINGER_DOWN:
         {
             // Update "ctx_focused" when we touch/click
-            bool captured = false;
             for (Viewport* ctx : viewports)
             {
                 if (ctx->clientRect().hitTest(mouse.client_x, mouse.client_y))
@@ -834,14 +817,11 @@ void ProjectBase::_onEvent(SDL_Event& e)
                     break;
                 }
             }
-            if (!captured)
-                ctx_focused = nullptr;
         } break;
         case SDL_EVENT_MOUSE_MOTION:
         case SDL_EVENT_FINGER_MOTION:
         {
             // Detect which viewport we're "hovering" over
-            bool captured = false;
             for (Viewport* ctx : viewports)
             {
                 if (ctx->clientRect().hitTest(mouse.client_x, mouse.client_y))
@@ -856,8 +836,13 @@ void ProjectBase::_onEvent(SDL_Event& e)
         } break;
     }
 
+    // Don't process mouse-down/finger-down event if we don't click on a viewport
+    if (event.isPressEvent() && !captured)
+        return;
+
+    // If switched focus, or there is no "focused" viewport for mouse event, project has nothing to handle (likely imgui)
     if (captured_focus_event || (!ctx_focused && event.isPointerEvent()))
-        return; // If switched focus, or there is no "focused" viewport for mouse event, project has nothing to handle (likely imgui)
+        return; 
 
     // Update pressed_fingers
     {
@@ -988,7 +973,7 @@ void ProjectBase::_onEvent(SDL_Event& e)
         }
     }
 
-    if (platform()->is_mobile())
+    if (platform()->isMobile())
     {
         // simulate left-mouse button on mobile
         bool any_pressed = pressed_fingers.size() > 0;
@@ -1012,14 +997,14 @@ void ProjectBase::_onEvent(SDL_Event& e)
     {
         if (event.sdl()->key.key == SDLK_F11)
         {
-            SDL_WindowFlags flags = SDL_GetWindowFlags(platform()->sdl_window());
+            SDL_WindowFlags flags = SDL_GetWindowFlags(platform()->sdlWindow());
             bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN);
 
-            SDL_SetWindowFullscreen(platform()->sdl_window(), !fullscreen);
+            SDL_SetWindowFullscreen(platform()->sdlWindow(), !fullscreen);
         }
         else if (event.sdl()->key.key == SDLK_ESCAPE)
         {
-            SDL_SetWindowFullscreen(platform()->sdl_window(), false);
+            SDL_SetWindowFullscreen(platform()->sdlWindow(), false);
         }
     }
 

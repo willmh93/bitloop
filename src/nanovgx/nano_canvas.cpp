@@ -287,7 +287,13 @@ void Painter::drawCursor(f64 x, f64 y, f64 size)
 
 void NanoCanvas::create(f64 _global_scale)
 {
-    context.vg = nvgCreate(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    if (context.vg)
+        nvgDelete(context.vg);
+
+    // todo: Make params
+    //context.vg = nvgCreate(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    context.vg = nvgCreate(NVG_ANTIALIAS); // todo: only use antialiasing if not using ssaa
+	
     setTargetPainterContext(&context);
     
     setGlobalScale(_global_scale);
@@ -309,18 +315,19 @@ NanoCanvas::~NanoCanvas()
 
 bool NanoCanvas::resize(int w, int h)
 {
-    if ((w == fbo_width && fbo_height == h) ||
-        (w <= 0 || h <= 0))
-    {
+    if ((w == fbo_w && h == fbo_h) || (w <= 0 || h <= 0))
         return false;
-    }
 
-    fbo_width = w;
-    fbo_height = h;
+    fbo_w = w;
+    fbo_h = h;
 
     if (fbo) glDeleteFramebuffers(1, &fbo);
     if (tex) glDeleteTextures(1, &tex);
     if (rbo) glDeleteRenderbuffers(1, &rbo);
+
+    fbo = 0;
+    tex = 0;
+    rbo = 0;
 
     glGenFramebuffers(1, &fbo);
     glGenTextures(1, &tex);
@@ -328,7 +335,23 @@ bool NanoCanvas::resize(int w, int h)
 
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    if (glGetError() == GL_OUT_OF_MEMORY)
+    {
+        blPrint() << "NanoCanvas::resize failed to allocate texture of size " << w << "x" << h;
+        return false;
+    }
+
+    // force crisp pixel sampling
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    // avoid edge bleeding at UV borders
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // ensure no mip levels
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
 
     glBindRenderbuffer(GL_RENDERBUFFER, rbo);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
@@ -338,22 +361,23 @@ bool NanoCanvas::resize(int w, int h)
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
     has_fbo = true;
-
     return true;
 }
 
 void NanoCanvas::begin(f32 r, f32 g, f32 b, f32 a)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glViewport(0, 0, fbo_width, fbo_height);
+    glViewport(0, 0, fbo_w, fbo_h);
     glClearColor(r, g, b, a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     nvgBeginFrame(context.vg, 
-        static_cast<f32>(fbo_width), 
-        static_cast<f32>(fbo_height),
+        static_cast<f32>(fbo_w),
+        static_cast<f32>(fbo_h),
         static_cast<f32>(context.global_scale) // Improve render quality on high DPR devices
     );
 }
@@ -366,8 +390,8 @@ void NanoCanvas::end()
 
 bool NanoCanvas::readPixels(std::vector<uint8_t>& out_rgba)
 {
-    if (!fbo || fbo_width <= 0 || fbo_height <= 0) return false;
-    const size_t bytes = (size_t)fbo_width * fbo_height * 4;
+    if (!fbo || fbo_w <= 0 || fbo_h <= 0) return false;
+    const size_t bytes = (size_t)fbo_w * fbo_h * 4;
     out_rgba.resize(bytes);
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -375,7 +399,7 @@ bool NanoCanvas::readPixels(std::vector<uint8_t>& out_rgba)
     glGetIntegerv(GL_PACK_ALIGNMENT, &prev_pack);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
 
-    glReadPixels(0, 0, fbo_width, fbo_height, GL_RGBA, GL_UNSIGNED_BYTE, out_rgba.data());
+    glReadPixels(0, 0, fbo_w, fbo_h, GL_RGBA, GL_UNSIGNED_BYTE, out_rgba.data());
     glPixelStorei(GL_PACK_ALIGNMENT, prev_pack);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

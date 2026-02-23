@@ -849,7 +849,7 @@ namespace ImGui
         return collapsing_head_box_contents_disabled;
     }
 
-    bool CollapsingHeaderBox(const char* id, bool open_by_default, float pad, float extra)
+    bool CollapsingHeaderBox(const char* id, bool open_by_default, float pad, float pad_extra_w)
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         DlCtx& c = box_dlctx(dl);
@@ -868,7 +868,7 @@ namespace ImGui
         const ImVec2 hmin = ImGui::GetItemRectMin();
         const ImVec2 hmax = ImGui::GetItemRectMax();
 
-        float spacing = 0.5f;//  ImGui::GetStyle().ItemSpacing.y;
+        float spacing = 0.5f;
         ImGui::Dummy(ImVec2(0, spacing));
 
         if (!open)
@@ -882,7 +882,7 @@ namespace ImGui
         st.kind = BoxKind::Header;
         st.dl = dl;
         st.pad = pad;
-        st.extra = extra;
+        st.extra = pad_extra_w;
         st.depth = my_depth;
         st.content_ch = c.content_ch;
         st.header_min = hmin;
@@ -920,7 +920,7 @@ namespace ImGui
             window->ContentRegionRect.Max.x = st.old_content_rect_max_x;
         }
 
-        // outer frame (your old "midline of header" start)
+        // outer frame
         const float y0 = (st.header_min.y + st.header_max.y) * 0.5f;
         const float x0 = st.start_cursor.x - st.extra;
         const float x1 = x0 + st.span_w;
@@ -956,7 +956,7 @@ namespace ImGui
     bool ResetBtn(const char* id)
     {
         // todo: automatic GL destruction on exit
-        static int size = (int)bl::platform()->line_height();
+        static int size = (int)bl::platform()->lineHeight();
         static GLuint reset_icon = bl::loadGLTextureRGBA8("/data/icon/reset.svg", nullptr, nullptr, size, size);
         return ImGui::ImageButton(id, reset_icon, ImVec2((float)size, (float)size));
     }
@@ -1190,7 +1190,7 @@ namespace ImGui
         bool ret = false;
 
         ImGui::BeginGroup();
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->lineHeight());
         ret |= SliderScalar(label, ImGuiDataType_Double, v, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
 
@@ -1211,7 +1211,7 @@ namespace ImGui
         bool ret = false;
 
         ImGui::BeginGroup();
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->lineHeight());
         ret |= DragScalar(label, ImGuiDataType_Double, v, (float)v_speed, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
 
@@ -1232,7 +1232,7 @@ namespace ImGui
         bool ret = false;
 
         ImGui::BeginGroup();
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->lineHeight());
         ret |= DragFloat128(label, v, v_speed, v_min, v_max, format, flags);
         ImGui::PopItemWidth();
 
@@ -1253,7 +1253,7 @@ namespace ImGui
         bool ret = false;
 
         ImGui::BeginGroup();
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->lineHeight());
         ret |= SliderScalarN(label, ImGuiDataType_Double, v, 2, &v_min, &v_max, format, flags);
         ImGui::PopItemWidth();
 
@@ -1275,7 +1275,7 @@ namespace ImGui
         bool ret = false;
 
         ImGui::BeginGroup();
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->line_height());
+        ImGui::PushItemWidth(ImGui::CalcItemWidth() - bl::platform()->lineHeight());
         ret |= SliderAngle(label, v_rad, v_rad_min, v_rad_max, format, flags);
         ImGui::PopItemWidth();
 

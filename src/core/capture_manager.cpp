@@ -881,11 +881,6 @@ void CaptureManager::onFinalized(bool error)
 
 bool CaptureManager::encodeFrame(const EncodeFrame& preprocessed_frame)
 {
-    if (!isCaptureEnabled())
-    {
-        return false;
-    }
-
     // If encoder still busy with previous frame, do not block here
     if (encoder_busy.load(std::memory_order_acquire))
     {
@@ -895,6 +890,9 @@ bool CaptureManager::encodeFrame(const EncodeFrame& preprocessed_frame)
     // Move the frame into 'pending_frame' for the encoder thread to grab
     {
         blPrint() << "Set pending_frame...";
+
+        // snapshot encoder should only ever recieve ONE frame
+        assert(!(isSnapshotting() && frame_count == 1));
 
         std::lock_guard<std::mutex> lock(pending_mutex);
 
@@ -914,14 +912,7 @@ bool CaptureManager::encodeFrame(const EncodeFrame& preprocessed_frame)
 void CaptureManager::waitUntilReadyForNewFrame()
 {
     blPrint() << "waitUntilReadyForNewFrame()...";
-    if (!isCaptureEnabled())
-    {
-        blPrint() << "isCaptureEnabled() == false";
 
-        return;
-    }
-
-    blPrint() << "encoder_ready_mutex lock";
     std::unique_lock<std::mutex> lock(encoder_ready_mutex);
 
 

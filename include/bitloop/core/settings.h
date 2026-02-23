@@ -15,7 +15,6 @@ struct SettingsConfig
 
     std::string capture_dir;
 
-    bool    preview_mode = false;
     bool    fixed_time_delta = false;
 
     int     default_ssaa = 1;
@@ -38,8 +37,8 @@ struct SettingsConfig
     bool    show_fps = false;
 
     SnapshotPresetHashMap target_image_presets;
-    int                   target_video_preset = 0; // idx (todo: should probably be preset hash)
-
+    int target_video_preset = 0; // use the selected video preset as the target preset
+    
     #if BITLOOP_FFMPEG_ENABLED
     int64_t        record_bitrate = 128000000ll;
     BitrateRange   record_bitrate_mbps_range{ 1, 1000 };
@@ -95,10 +94,18 @@ class SettingsPanel
     // revert back to old alias if attempting to set to an existing alias
     char revert_alias[32]{};
 
+    enum struct SelectedPresetType
+    {
+        IMAGE_PRESET,
+        VIDEO_PRESET,
+        EDIT_PRESET
+    };
+
+    // 0 = defaults to active viewport
+    int selected_image_preset = 0; 
     int selected_capture_preset = 0;
-    int selected_image_preset = -1;
-    bool selected_preset_is_video = false;
-    
+
+    SelectedPresetType selected_preset_type = SelectedPresetType::IMAGE_PRESET;
 
 public:
 
@@ -120,12 +127,17 @@ public:
     SettingsConfig& getConfig() { return config; }
     const SettingsConfig& getConfig() const { return config; }
 
-    // image or video capture preset index, depending on visible tab. (source list is the same, so index is valid for either)
-    int getSelectedPresetIndex() const {
-        if (selected_preset_is_video)
-            return config.target_video_preset;
-        else
-            return selected_image_preset;
+    // image/video/exit capture preset index, depending on visible tab
+    // (source list is the same, so index is valid)
+    int getSelectedPresetIndex() const
+    {
+        switch (selected_preset_type)
+        {
+            case SelectedPresetType::IMAGE_PRESET: return selected_image_preset;
+            case SelectedPresetType::VIDEO_PRESET: return config.target_video_preset;
+            case SelectedPresetType::EDIT_PRESET:  return selected_capture_preset;
+        }
+        return -1;
     }
 
     void populateCapturePresetsEditor();
@@ -145,7 +157,11 @@ enum struct CapturePresetsSelectMode
 // > enabled_preset:        enabled presets provided by hash lookup
 //   - Useful if a sim saves a list of "valid" render targets but can't guarantee they exist in the provided list
 // > returns idx when selection changes (otherwise -1)
-template<CapturePresetsSelectMode select_mode=CapturePresetsSelectMode::NONE, typename Callback>
+template<
+    CapturePresetsSelectMode select_mode=CapturePresetsSelectMode::NONE,
+    bool disable_unsupported = true,
+    typename Callback
+>
 int populateCapturePresetsList(
     Callback&& getPresetRefFromIdx, int count,
     SnapshotPresetHashMap* enabled_presets,
@@ -183,10 +199,17 @@ int populateCapturePresetsList(
                 ImGui::PushID(i);
 
                 CapturePreset& preset = getPresetRefFromIdx(i);
+                bool is_supported_size = preset.isSupportedSize();
                 bool enabled = enabled_presets && enabled_presets->count(preset.hashedAlias()) > 0;
                 bool was_enabled = enabled;
 
-                // Checkbox at start of row
+                if constexpr (disable_unsupported)
+                {
+                    if (!is_supported_size)
+                        ImGui::BeginDisabled();
+                }
+
+                // checkbox at start of row
                 ImGui::AlignTextToFramePadding();
                 if constexpr (select_mode == CapturePresetsSelectMode::SINGLE)
                 {
@@ -220,6 +243,12 @@ int populateCapturePresetsList(
                         if (!was_enabled && enabled) (*enabled_presets)[preset.hashedAlias()] = true;
                         if (was_enabled && !enabled) enabled_presets->erase(preset.hashedAlias());
                     }
+                }
+
+                if constexpr (disable_unsupported)
+                {
+                    if (!is_supported_size)
+                        ImGui::EndDisabled();
                 }
 
                 ImGui::PopID();

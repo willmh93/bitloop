@@ -273,8 +273,6 @@ class CaptureManager
     // number of provided frames (including frames not yet processed, incremented immediately by encodeFrame)
     int frame_count = 0;
 
-    std::atomic<bool> capture_enabled{ true };
-
     std::atomic<bool> recording{ false };
     std::atomic<bool> snapshotting{ false };
 
@@ -310,9 +308,7 @@ public:
     bool  isRecording() const             { return recording.load(std::memory_order_acquire);        }
     bool  isSnapshotting() const          { return snapshotting.load(std::memory_order_acquire);     }
     bool  isCapturing() const             { return isRecording() || isSnapshotting();                }
-    bool  isCaptureEnabled() const        { return capture_enabled.load(std::memory_order_acquire);  }
-    void  setCaptureEnabled(bool b)       { capture_enabled.store(b, std::memory_order_release);     }
-                                          
+                                
     bool  isBusy() const                  { return encoder_busy.load(std::memory_order_acquire);     }
 
     bool  handleCaptureComplete(bool* captured_to_memory, bool* error)

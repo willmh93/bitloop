@@ -16,7 +16,7 @@
 struct DebugDevicePreset { int w; int h; float dpr; int threads; };
 
     /// --- flags ---
-    #define BL_SIMULATE_MOBILE  // platform()->is_mobile() == true + use mouse to emulate touch
+    #define BL_SIMULATE_MOBILE  // platform()->isMobile() == true + use mouse to emulate touch
     #define BL_SIMULATE_BROWSER // emscripten
 
     /// --- presets ---

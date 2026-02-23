@@ -1304,7 +1304,7 @@ class NanoCanvas : public SimplePainter
 {
     GLuint fbo = 0, tex = 0, rbo = 0;
     bool has_fbo = false;
-    int fbo_width = 0, fbo_height = 0;  // Local Canvas dimensions (FBO size)
+    int fbo_w = 0, fbo_h = 0;  // Local Canvas dimensions (FBO size)
 
     // actual size Canvas gets drawn on to screen
     IRect client_rect{};
@@ -1332,9 +1332,9 @@ public:
 
     PainterContext* getPainterContext() { return &context; }
     GLuint texture() const { return tex; }
-    [[nodiscard]] int fboWidth()  const { return fbo_width; }
-    [[nodiscard]] int fboHeight() const { return fbo_height; }
-    [[nodiscard]] IVec2 fboSize() const { return { fbo_width, fbo_height }; }
+    [[nodiscard]] int fboWidth()  const { return fbo_w; }
+    [[nodiscard]] int fboHeight() const { return fbo_h; }
+    [[nodiscard]] IVec2 fboSize() const { return {fbo_w, fbo_h}; }
     [[nodiscard]] int fboExists() const { return has_fbo; }
 
     bool readPixels(std::vector<uint8_t>& out_rgba);

@@ -67,63 +67,92 @@ class MainWindow
     std::mutex command_mutex;
     std::vector<MainWindowCommandEvent> command_queue;
 
-    ImFont* main_font = nullptr;
-    ImFont* mono_font = nullptr;
+    // timers
+    using time_point   = std::chrono::steady_clock::time_point;
+    using steady_clock = std::chrono::steady_clock;
 
-    bool initialized = false;
-    bool done_first_size = false;
-    bool done_first_focus = false;
-    bool update_docking_layout = false;
-    bool vertical_layout = false;
-    bool sidebar_visible = true;
+    FPSTimer             worker_fps_timer;
+    time_point           last_frame_time = steady_clock::now();
 
-    bool need_draw = false;
+    // fonts
+    ImFont*              main_font = nullptr;
+    ImFont*              mono_font = nullptr;
 
-    FPSTimer worker_fps_timer;
-    std::chrono::steady_clock::time_point last_frame_time = std::chrono::steady_clock::now();
+    // flags
+    bool                 initialized = false;
+    bool                 done_first_size = false;
+    bool                 done_first_focus = false;
+    bool                 update_docking_layout = false;
+    bool                 vertical_layout = false;
+    bool                 sidebar_visible = true;
+    bool                 need_draw = false; // set true by worker after each process frame
 
-    //ImRect viewport_rect;
-    ImVec2 client_size{};
-    bool viewport_hovered = false;
-    bool is_editing_ui = false;
-    float old_sharpen = 0.0f; // needed to determine if we need to re-run preprocessor pipeline on change
+    // viewport states
+    bool                 is_editing_ui = false;
+    ImVec2               client_size{};
+    bool                 viewport_hovered = false;
 
-    ToolbarButtonState play     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(0.4f, 1.0f, 0.4f, 1.0f), true };
-    ToolbarButtonState pause    = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f), false };
-    ToolbarButtonState stop     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), false };
-    ToolbarButtonState record   = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1.0f, 0.2f, 0.0f, 1.0f), true };
-    ToolbarButtonState snapshot = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(0.8f, 0.8f, 0.8f, 1.0f), true };
+    // toolbar
+    ToolbarButtonState   play     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.1f, 0.6f, 0.1f, 1.0f), ImVec4(0.4f, 1.0f, 0.4f, 1.0f), true };
+    ToolbarButtonState   pause    = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f), false };
+    ToolbarButtonState   stop     = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.6f, 0.1f, 0.1f, 1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), false };
+    ToolbarButtonState   record   = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(1.0f, 0.2f, 0.0f, 1.0f), true };
+    ToolbarButtonState   snapshot = { ImVec4(0.3f, 0.3f, 0.3f, 1.0f), ImVec4(0.8f, 0.0f, 0.0f, 1.0f), ImVec4(0.8f, 0.8f, 0.8f, 1.0f), true };
+                         
 
-    CaptureManager   capture_manager;
-    
-    SettingsPanel    settings_panel;
-    CaptureConfig    config;
+    // settings/config
+    SettingsPanel        settings_panel;
+    CaptureConfig        config;
 
-    // capture preset list (once we start capturing, this remains unchanged until we finish)
-    SnapshotPresetList enabled_capture_presets;
-    int                enabled_capture_presets_current_idx = 0; // index of active preset in enabled_capture_presets (NOT index in allPresets)
+    // capturing
+    CaptureManager       capture_manager;
 
-    bool               is_snapshotting_list = false; // remains true while processing whole batch (enabled_capture_presets)
-    int                active_snapshot_preset_request_id = 0;
-    std::string        active_capture_rel_path_fmt;
-    int                shared_batch_fileindex = 0; // dir scanned for next highest index, used for batch
-    
-    ///bool            window_capture = false;
-    bool               encode_next_sim_frame = false;
-    bool               captured_last_frame = false;
+    SnapshotPresetList   enabled_capture_presets; // capture preset list (once we start capturing, this remains unchanged until we finish)
+    int                  enabled_capture_presets_current_idx = 0; // index of active preset in enabled_capture_presets (NOT index in allPresets)
+                         
+    bool                 is_snapshotting_list = false; // remains true while processing whole batch (enabled_capture_presets)
+    int                  active_snapshot_preset_request_id = 0;
+    std::string          active_capture_rel_path_fmt;
+    int                  shared_batch_fileindex = 0; // dir scanned for next highest index, used for batch
+                         
+    ///bool              window_capture = false;
+    bool                 new_frame_prepared = false; // set by worker thread when it's had a chance to react to the new capture options (dimensions, ssaa, etc)
+    bool                 permit_frame_capture = false;
+    bool                 captured_last_frame = false;
 
-    // render (+capture) pipeline components
+    // active rendered preset (render/capture)
+    // Keep track of old values to detect changes to canvas
+    const CapturePreset* active_preset = nullptr;
+    int                  active_ssaa        = 1;
+    float                active_sharpen     = 0.0f;
+    IVec2                active_canvas_size{};
+    IVec2                active_target_size{};
+                         
+    bool                 changed_size = true;
+    bool                 changed_scale = true;
+    bool                 changed_sharpening = false;
+    float                old_sharpen = 0.0f; // needed to determine if we need to re-run preprocessor pipeline on change
+
+    // render/capture pipeline components
     NanoCanvas           canvas;
     CapturePreprocessor  preprocessor;
     EncodeFrame          preprocessed_frame; // intermediate buffer for preprocessor output (rescaled, sharpened, etc before encoding)
+    bool                 use_preprocessor_texture = false;
 
-    SharedSync& shared_sync;
-    ThreadQueue thread_queue;
+    // thread communication
+    SharedSync&          shared_sync;
+    ThreadQueue          thread_queue;
 
     const int window_flags = 0;
         // ImGuiWindowFlags_NoTitleBar |
         // ImGuiWindowFlags_NoDecoration;// |
         //ImGuiWindowFlags_NoMove;
+
+    // returns *which* preset to start using next frame
+    const CapturePreset* determineRenderedPreset() const;
+
+    // updates 'active_' preset values to start using next frame
+    bool updateActivePreset();
 
 public:
 
@@ -139,12 +168,13 @@ public:
     }
     ~MainWindow() { thread_queue.pump(); }
 
-    [[nodiscard]] NanoCanvas* getCanvas() { return &canvas; }
-    [[nodiscard]] const NanoCanvas* getCanvas() const { return &canvas; }
-    [[nodiscard]] CaptureManager* getCaptureManager() { return &capture_manager; }
-    [[nodiscard]] SettingsConfig* getSettingsConfig() { return &settings_panel.getConfig(); }
-    [[nodiscard]] const SettingsConfig* getSettingsConfig() const { return &settings_panel.getConfig(); }
-    [[nodiscard]] SnapshotPresetManager* getSnapshotPresetManager() { return &settings_panel.getConfig().snapshot_preset_manager; }
+    [[nodiscard]] NanoCanvas*                  getCanvas() { return &canvas; }
+    [[nodiscard]] const NanoCanvas*            getCanvas() const { return &canvas; }
+    [[nodiscard]] CaptureManager*              getCaptureManager() { return &capture_manager; }
+    [[nodiscard]] SettingsConfig*              getSettingsConfig() { return &settings_panel.getConfig(); }
+    [[nodiscard]] const SettingsConfig*        getSettingsConfig() const { return &settings_panel.getConfig(); }
+    [[nodiscard]] SnapshotPresetManager*       getSnapshotPresetManager() { return &settings_panel.getConfig().snapshot_preset_manager; }
+    [[nodiscard]] const SnapshotPresetManager* getSnapshotPresetManager() const { return &settings_panel.getConfig().snapshot_preset_manager; }
 
     [[nodiscard]] bool isSnapshotting() const
     {
@@ -194,8 +224,8 @@ public:
     void endRecording();
     void checkCaptureComplete();
 
-    void captureFrame(bool b) { encode_next_sim_frame = b; }
-    bool capturingNextFrame() const { return encode_next_sim_frame; }
+    void captureFrame(bool b) { permit_frame_capture = b; }
+    bool capturingNextFrame() const { return permit_frame_capture; }
     bool capturedLastFrame() const { return captured_last_frame; }
     int  capturedFrameCount() const { return capture_manager.frameCount(); }
 
