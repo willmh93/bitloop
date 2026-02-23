@@ -1,4 +1,4 @@
-# avoid running bitloop discovery/manifest merging inside CMake try_compile scratch projects
+﻿# avoid running bitloop discovery/manifest merging inside CMake try_compile scratch projects
 get_property(_bl_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)
 if(_bl_in_try_compile)
   return()
@@ -314,7 +314,7 @@ file(MAKE_DIRECTORY "${BL_MERGED_MANIFEST_DIR}")
 
 # BL_CHILD_MANIFESTS already prepared by projects
 
-include("${_project_dir}/cmake/toolchain/merge_vcpkg_manifests.cmake")
+include("${_project_dir}/tooling/toolchain/merge_vcpkg_manifests.cmake")
 bl_merge_vcpkg_manifests(
   ROOT_MANIFEST   "${_project_dir}/vcpkg.json"
   CHILD_MANIFESTS "${BL_CHILD_MANIFESTS}"

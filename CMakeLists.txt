@@ -23,11 +23,21 @@ if (BITLOOP_DISCOVERY)
     add_library(bitloop INTERFACE)
     add_library(bitloop::bitloop ALIAS bitloop)
 
-    # Match your normal public include root ($<BUILD_INTERFACE:.../include>)
+    # Match normal public include root ($<BUILD_INTERFACE:.../include>)
     target_include_directories(bitloop INTERFACE
       "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
     )
   endif()
+
+  include("${CMAKE_CURRENT_LIST_DIR}/cmake/toolchain/discovery_shims.cmake")
+
+  # discovery only; add_subdirectory(examples) called at end of file (once bitloop::bitloop is guaranteed to exist)
+  if(PROJECT_IS_TOP_LEVEL)
+    bitloop_new_project(BitloopExamples)
+    bitloop_add_dependency(BitloopExamples examples)
+    bitloop_finalize()
+  endif()
+
   return()
 endif()
 

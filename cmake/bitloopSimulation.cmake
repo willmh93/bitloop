@@ -261,6 +261,7 @@ function(bitloop_new_project sim_name)
 	if (BITLOOP_DISCOVERY)
 		# Record this project's manifest (only if this directory is actually configured)
 		if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg.json")
+			message(STATUS "bitloop_new_project(${sim_name}")
 
 			get_property(_m GLOBAL PROPERTY BL_CHILD_MANIFESTS)
 			if (NOT _m)
@@ -460,12 +461,6 @@ function(bitloop_add_dependency _TARGET _SIM_DIR)
 		add_subdirectory(${_SIM_DIR} "${CMAKE_BINARY_DIR}/${sim_name}_build")
 		msg_indent_pop()
 	endif()
-	
-	# In discovery we only care about building the project tree + manifest list.
-	# We do NOT need link interfaces.
-	# if (BITLOOP_DISCOVERY)
-	# 	return()
-	# endif()
 
 	# Link dependency into our target
 	if (_type STREQUAL "INTERFACE")
@@ -477,35 +472,6 @@ endfunction()
 
 # Auto-generated finalization step; adds includes to autogen header and bundles data into executable
 macro(bitloop_finalize)
-	# -------------------------
-	# Discovery mode: write out discovered manifests (root only) and stop processing
-	# -------------------------
-	#if (BITLOOP_DISCOVERY)
-	#	get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)
-	#
-	#	if (CMAKE_CURRENT_SOURCE_DIR STREQUAL BL_ROOT_PROJECT)
-	#		# Write a tiny cmake file the toolchain can include
-	#		if (DEFINED BITLOOP_DISCOVERY_OUT AND NOT BITLOOP_DISCOVERY_OUT STREQUAL "")
-	#			get_property(_m GLOBAL PROPERTY BL_CHILD_MANIFESTS)
-	#
-	#			if (NOT _m)
-	#				set(_m "")
-	#			endif()
-	#
-	#			file(WRITE  "${BITLOOP_DISCOVERY_OUT}" "set(BL_CHILD_MANIFESTS\n")
-	#
-	#			foreach(_p IN LISTS _m)
-	#				file(APPEND "${BITLOOP_DISCOVERY_OUT}" "  \"${_p}\"\n")
-	#			endforeach()
-	#
-	#			file(APPEND "${BITLOOP_DISCOVERY_OUT}" ")\n")
-	#		endif()
-	#	endif()
-	#
-	#	# Critical: stop processing the remainder of this CMakeLists.txt
-	#	return()
-	#endif()
-
 	get_property(_TARGET DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BL_TARGET_PROJECT)
 
 	get_property(BL_ROOT_PROJECT GLOBAL PROPERTY BL_ROOT_PROJECT)
