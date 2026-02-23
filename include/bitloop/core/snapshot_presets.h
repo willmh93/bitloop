@@ -366,7 +366,7 @@ public:
         // Thumbnails / Icons
         // ------------------------------
         capture_presets.add(CapturePreset("Thumbnail", "thumb128x72", { 128, 72 }));
-        capture_presets.add(CapturePreset("Thumbnail (HD)", "thumb128x72_hd", { 128, 72 }, 9));
+        capture_presets.add(CapturePreset("Thumbnail (Sharp HD)", "thumb128x72_hd", { 128, 72 }, 9, 1.0));
 
         capture_presets.updateLookup();
     }
