@@ -199,6 +199,9 @@ elseif (NOT FOUND_LOCAL_VCPKG)
     message(STATUS "No vcpkg found - cloning local vcpkg")
     clone_vcpkg(${LOCAL_VCPKG_DIR} ${VCPKG_PINNED_SHA})
     set(_vcpkg_dir ${LOCAL_VCPKG_DIR})
+elseif (FOUND_LOCAL_VCPKG)
+    message(STATUS "Local vcpkg found")
+    set(_vcpkg_dir ${LOCAL_VCPKG_DIR})
 endif()
 
 
