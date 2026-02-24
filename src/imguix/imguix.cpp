@@ -110,6 +110,13 @@ static int ImParseFormatPrecision128(const char* fmt, int default_precision, boo
     return pf.precision; // un-capped; up to INT_MAX
 }
 
+template<typename T>
+static inline T bl_round_to_decimals(int p, T v)
+{
+    if (p <= 0) return (T)(int)(v + (v >= (T)0.0 ? (T)0.5 : (T)-0.5));
+    const T s = bl::pow((T)10.0, (T)p);
+    return (T)((int)(v * s + (v >= (T)0.0 ? (T)0.5 : (T)-0.5))) / s;
+}
 
 
 // ---- helpers for SliderDouble_InvLog ----------------------------------------------------
@@ -308,7 +315,9 @@ bool SliderBehaviorT_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_
                 TYPE v_new = ScaleValueFromRatio_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, new_t, v_min, v_max, epsilon);
 
                 if (is_floating_point && !(flags & ImGuiSliderFlags_NoRoundToFormat))
-                    v_new = RoundScalarWithFormatT<TYPE>(format, data_type, v_new);
+                {
+                    v_new = bl_round_to_decimals(decimal_precision, v_new);
+                }
 
                 float realized_t = ScaleRatioFromValue_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, v_new, v_min, v_max, epsilon);
 
@@ -331,7 +340,7 @@ bool SliderBehaviorT_TowardMax(const ImRect& bb, ImGuiID id, ImGuiDataType data_
             TYPE v_new = ScaleValueFromRatio_TowardMax<TYPE, SIGNEDTYPE, FLOATTYPE>(data_type, clicked_t, v_min, v_max, epsilon);
 
             if (is_floating_point && !(flags & ImGuiSliderFlags_NoRoundToFormat))
-                v_new = RoundScalarWithFormatT<TYPE>(format, data_type, v_new);
+                v_new = bl_round_to_decimals(decimal_precision, v_new);
 
             if (*v != v_new)
             {
