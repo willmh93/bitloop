@@ -470,7 +470,7 @@ std::string getPreferredCapturesDirectory() {
     else {
         std::filesystem::path trimmed;
         if (!project_worker()->getCurrentProject()) {
-            DebugBreak();
+            blBreak();
         }
         std::string active_sim_name =
             project_worker()->getCurrentProject()->getProjectInfo()->name;
@@ -1919,9 +1919,9 @@ void MainWindow::populateUI()
         {
             // prevent spinning aggressively on main thread (if project drawn, delay was already handled by worker/lock)
             auto frame_dt = std::chrono::steady_clock::now() - last_frame_time;
-            constexpr uint64_t target_ns = 1000000000llu / 60;
+            constexpr uint64_t target_ns = 1000000000 / 60;
             uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(frame_dt).count());
-            uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
+            uint64_t delay_ns = std::max((uint64_t)0, target_ns - frame_ns);
             if (delay_ns) SDL_DelayPrecise(delay_ns);
 
             last_frame_time = std::chrono::steady_clock::now();

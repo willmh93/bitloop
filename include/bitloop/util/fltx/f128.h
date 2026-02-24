@@ -1636,7 +1636,7 @@ FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
 }
 
 FORCE_INLINE constexpr f128 operator"" _dd(unsigned long long v) noexcept {
-    return to_f128(v);
+    return to_f128(static_cast<uint64_t>(v));
 }
 FORCE_INLINE constexpr f128 operator"" _dd(long double v) noexcept {
     return f128{ static_cast<double>(v) };

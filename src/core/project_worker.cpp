@@ -215,9 +215,9 @@ void ProjectWorker::worker_loop()
         if (!immediate_update_requested)
         {
             auto dt = std::chrono::steady_clock::now() - last_frame_time;
-            uint64_t target_ns = 1000000000llu / main_window()->getFPS();
+            uint64_t target_ns = 1000000000 / main_window()->getFPS();
             uint64_t frame_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(dt).count());
-            uint64_t delay_ns = std::max(0llu, target_ns - frame_ns);
+            uint64_t delay_ns = std::max((uint64_t)0, target_ns - frame_ns);
             if (delay_ns > 0) SDL_DelayPrecise(delay_ns);
         }
         else

@@ -95,12 +95,14 @@ constexpr bool fast_math_enabled()
 /// ======== blBreak ========
 
 #if defined(_MSC_VER)
-#define blBreak() __debugbreak()
-#elif defined(__GNUC__) || defined(__clang__)
-#include <csignal>
-#define blBreak() std::raise(SIGTRAP)
+    #define blBreak() __debugbreak()
+#elif defined(__clang__)
+    #define blBreak() __builtin_debugtrap()
+#elif defined(__GNUC__)
+    #define blBreak() __builtin_trap()
 #else
-#define blBreak() ((void)0)  // fallback
+    #include <signal.h>
+    #define blBreak() raise(SIGTRAP)
 #endif
 
 /// ======== for-each macro ========

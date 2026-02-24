@@ -33,7 +33,7 @@ class MouseInfo
 {
     friend class ProjectBase;
 
-    MouseButtonState button_states[3];
+    MouseButtonState button_states[(int)MouseButton::_COUNT];
     MouseButtonState& buttonState(MouseButton btn_type)
     {
         return button_states[(int)btn_type - 1];
@@ -53,8 +53,8 @@ public:
     f64  client_y = 0;
     f64  stage_x  = 0;
     f64  stage_y  = 0;
-    f128 world_x  = 0;
-    f128 world_y  = 0;
+    f128 world_x  = 0.0_dd;
+    f128 world_y  = 0.0_dd;
     int  scroll_delta = 0;
 
     const MouseButtonState& buttonState(MouseButton btn_type) const
