@@ -4,6 +4,7 @@
 #include <bitloop/core/capture_preprocessor.h>
 #include <bitloop/util/hashable.h>
 
+#include <condition_variable>
 #include <string>
 #include <mutex>
 #include <thread>

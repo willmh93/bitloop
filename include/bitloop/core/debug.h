@@ -74,8 +74,13 @@
 // For RelWithDebInfo, to force compiler to avoid optimizing variables
 // to make them inspectable while debugging
 template<class T>
-__declspec(noinline) void dbg_keep_ref(const T& x) {
-    (void)*reinterpret_cast<volatile const char*>(&x);
+NO_INLINE void dbg_keep_ref(const T& x)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    asm volatile("" : : "g"(x) : "memory");
+#else
+    (void)*reinterpret_cast<volatile const unsigned char*>(&x);
+#endif
 }
 #else
 #define dbg_keep_ref(x)
@@ -201,7 +206,7 @@ public:
     void flush() {
         if (!len) return;
 
-        buf[len] = '\0';
+        buf[len-1] = '\0';
 
         #ifdef WIN32
         OutputDebugStringA(buf);
