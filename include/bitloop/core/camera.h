@@ -6,28 +6,31 @@
 
 BL_BEGIN_NS
 
-inline glm::ddmat3 glm_ddtranslate(f128 tx, f128 ty) {
-    glm::ddmat3 m(1.0);
-    m[2][0] = tx; // column 2, row 0
-    m[2][1] = ty; // column 2, row 1
+inline DDMat3 dd_translate(bl::f128 tx, bl::f128 ty)
+{
+    DDMat3 m = DDMat3::identity(1.0_dd);
+    m(0, 2) = tx;
+    m(1, 2) = ty;
     return m;
 }
 
-inline glm::ddmat3 glm_ddscale(f128 sx, f128 sy) {
-    glm::ddmat3 m(1.0);
-    m[0][0] = sx;
-    m[1][1] = sy;
+inline DDMat3 dd_scale(f128 sx, f128 sy)
+{
+    DDMat3 m = DDMat3::identity(1.0_dd);
+    m(0, 0) = sx;
+    m(1, 1) = sy;
     return m;
 }
 
-inline glm::ddmat3 glm_ddrotate(f128 r) {
+inline DDMat3 dd_rotate(f128 r)
+{
     f128 c = cos(r);
     f128 s = sin(r);
-    return glm::ddmat3(
-        c, s, 0.0,    // column 0
-        -s, c, 0.0,   // column 1
-        0.0, 0.0, 1.0 // column 2 (homogeneous)
-    );
+
+    DDMat3 m = DDMat3::identity(1.0_dd);
+    m(0, 0) = c;  m(0, 1) = -s;
+    m(1, 0) = s;  m(1, 1) = c;
+    return m;
 }
 
 class SurfaceInfo;
@@ -45,47 +48,50 @@ class WorldStageTransform
     friend class CameraInfo;
 
     // ────── world <-> stage (128 bit single souce of truth) ──────
-    glm::ddmat3 m128     = glm::ddmat3(1.0);
-    glm::ddmat3 inv_m128 = glm::ddmat3(1.0);
+    DDMat3 m128     = DDMat3(1_dd);
+    DDMat3 inv_m128 = DDMat3(1_dd);
 
     // ────── world <-> stage (cached 64-bit versions for performance) ──────
-    glm::dmat3 m64     = glm::dmat3(1.0);
-    glm::dmat3 inv_m64 = glm::dmat3(1.0);
+    DMat3 m64     = DMat3(1.0);
+    DMat3 inv_m64 = DMat3(1.0);
 
     void updateCache()
     {
         // invert
-        inv_m128 = glm::inverse(m128);
+        inv_m128 = m128.inversed();
 
         // downcast
-        m64 = static_cast<glm::dmat3>(m128);
-        inv_m64 = static_cast<glm::dmat3>(inv_m128);
+        m64     = static_cast<DDMat3>(m128);
+        inv_m64 = static_cast<DDMat3>(inv_m128);
     }
 
 public:
 
-    void reset()                         { m128 = glm::ddmat3(1);                           updateCache(); }
-    void transform(const glm::dmat3& m)  { m128 *= static_cast<glm::ddmat3>(m);             updateCache(); }
-    void transform(const glm::ddmat3& m) { m128 *= m;                                       updateCache(); }
-    void translate(f64 x, f64 y)         { m128 *= glm_ddtranslate(x, y);                   updateCache(); }
-    void translate(f128 x, f128 y)       { m128 *= glm_ddtranslate(x, y);                   updateCache(); }
-    void scale(f64 s)                    { auto s128 = s; m128 *= glm_ddscale(s128, s128);  updateCache(); }
-    void scale(f128 s)                   { m128 *= glm_ddscale(s, s);                       updateCache(); }
-    void scale(f64 sx, f64 sy)           { m128 *= glm_ddscale(sx, sy);                     updateCache(); }
-    void scale(f128 sx, f128 sy)         { m128 *= glm_ddscale(sx, sy);                     updateCache(); }
-    void rotate(f64 r)                   { m128 *= glm_ddrotate(r);                         updateCache(); }
+    void reset()                         { m128 = DDMat3(f128{1});                       updateCache(); }
+    void transform(const DMat3& m)       { m128 *= static_cast<DDMat3>(m);               updateCache(); }
+    void transform(const DDMat3& m)      { m128 *= m;                                    updateCache(); }
+    void translate(f64 x, f64 y)         { m128 *= dd_translate(f128{x}, f128{y});       updateCache(); }
+    void translate(f128 x, f128 y)       { m128 *= dd_translate(f128{x}, f128{y});       updateCache(); }
+    void scale(f64 s)                    { f128 s128{s}; m128 *= dd_scale(s128, s128);   updateCache(); }
+    void scale(f128 s)                   { m128 *= dd_scale(s, s);                       updateCache(); }
+    void scale(f64 sx, f64 sy)           { m128 *= dd_scale(f128{sx}, f128{sy});         updateCache(); }
+    void scale(f128 sx, f128 sy)         { m128 *= dd_scale(f128{sx}, f128{sy});         updateCache(); }
+    void rotate(f64 r)                   { m128 *= dd_rotate(f128{r});                   updateCache(); }
 
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr const glm::dmat3&  stageTransform() const { return m64; }
-    template<class T>       requires is_f128<T> [[nodiscard]] constexpr const glm::ddmat3& stageTransform() const { return m128; }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr const glm::dmat3&  worldTransform() const { return inv_m64; }
-    template<class T>       requires is_f128<T> [[nodiscard]] constexpr const glm::ddmat3& worldTransform() const { return inv_m128; }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr const DMat3&  stageTransform() const { return m64; }
+    template<class T>       requires is_f128<T> [[nodiscard]] constexpr const DDMat3& stageTransform() const { return m128; }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] constexpr const DMat3&  worldTransform() const { return inv_m64; }
+    template<class T>       requires is_f128<T> [[nodiscard]] constexpr const DDMat3& worldTransform() const { return inv_m128; }
 
-    constexpr operator const glm::ddmat3&() const { return m128; }
+    constexpr operator const DDMat3&() const { return m128; }
 
     f64 avgZoomScaleFactor() const
     {
-        f64 a = m64[0][0], b = m64[1][0];
-        f64 c = m64[0][1], d = m64[1][1];
+        const f64 a = m64(0, 0);
+        const f64 b = m64(0, 1);
+        const f64 c = m64(1, 0);
+        const f64 d = m64(1, 1);
+
         return std::sqrt(0.5 * (a * a + b * b + c * c + d * d));
     }
 
@@ -93,48 +99,55 @@ public:
     Vec2<T> _zoom() const
     {
         const auto& m = stageTransform<T>();
-        const T m00 = m[0][0], m01 = m[1][0], m10 = m[0][1], m11 = m[1][1];
 
-        // Column lengths give the local (pre-rotation)
+        const T m00 = m(0, 0);
+        const T m01 = m(0, 1);
+        const T m10 = m(1, 0);
+        const T m11 = m(1, 1);
+
+        // column lengths give the local (pre-rotation)
         const T sx = sqrt(m00 * m00 + m10 * m10);
         if (sx == T{ 0 }) return { T{0}, T{0} };
 
-        // Preserve reflection sign on Y via determinant
+        // preserve reflection sign on Y via determinant
         const T det = m00 * m11 - m01 * m10;
         const T sy = det / sx;
 
         return { sx, sy };
     }
 
-    f64 _angle() const { return glm::atan(m64[0][1], m64[0][0]); }
+    f64 _angle() const
+    {
+        return std::atan2(m64(1, 0), m64(0, 0));
+    }
 
     // ────── toStage ──────
-    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStage(f32 wx, f32 wy)    const { return DVec2{m64  * glm::dvec3(wx, wy, 1.0) }; }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStage(f64 wx, f64 wy)    const { return DVec2{m64  * glm::dvec3(wx, wy, 1.0) }; }
-    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStage(f128 wx, f128 wy)  const { return DVec2{m128 * glm::ddvec3(wx, wy, 1.0) }; }
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStage(f32 wx, f32 wy)    const { return m64.mulPoint(DVec2{ (f64)wx, (f64)wy }); }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStage(f64 wx, f64 wy)    const { return m64.mulPoint({ wx, wy }); }
+    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStage(f128 wx, f128 wy)  const { return m128.mulPoint({ wx, wy }); }
 
-    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStage(FVec2 p)           const { return DVec2(m64  * glm::dvec3(p.x, p.y, 1.0)); }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStage(DVec2 p)           const { return DVec2(m64  * glm::dvec3(p.x, p.y, 1.0)); }
-    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStage(DDVec2 p)          const { return DVec2(m128 * glm::ddvec3(p.x, p.y, 1.0)); }
-                                                                                                        
+    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStage(FVec2 p)  const { return m64.mulPoint(DVec2{ (f64)p.x, (f64)p.y }); }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStage(DVec2 p)  const { return m64.mulPoint(p); }
+    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStage(DDVec2 p) const { return static_cast<DVec2>(m128.mulPoint(p)); }
+
     // ────── toWorld ──────                                                                            
-    template<class T>       requires is_f32<T>  [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<FVec2>(  inv_m64  * glm::dvec3(sx, sy, 1.0)); }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(sx, sy, 1.0)); }
-    template<class T>       requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(sx, sy, 1.0)); }
+    template<class T>       requires is_f32<T>  [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<FVec2>(  inv_m64.mulPoint({ sx, sy }) ); }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<DVec2>(  inv_m64.mulPoint({ sx, sy }) ); }
+    template<class T>       requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(f64 sx, f64 sy)  const { return static_cast<DDVec2>( inv_m128.mulPoint(DDVec2{f128{sx}, f128{sy}}) ); }
 
-    template<class T>       requires is_f32<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<FVec2>(  inv_m64  * glm::dvec3(p.x, p.y, 1.0) ); }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(p.x, p.y, 1.0) ); }
-    template<class T>       requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(p.x, p.y, 1.0)); }
-                                                                                                        
+    template<class T>       requires is_f32<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<FVec2>(  inv_m64.mulPoint(p) ); }
+    template<class T = f64> requires is_f64<T>  [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<DVec2>(  inv_m64.mulPoint(p) ); }
+    template<class T>       requires is_f128<T> [[nodiscard]] Vec2<T> toWorld(DVec2 p)         const { return static_cast<DDVec2>( inv_m128.mulPoint(DDVec2(p)) ); }
+
     // ────── worldToStageOffset ──────                                                                 
-    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStageOffset(FVec2 o)     const { return static_cast<DVec2>(  m64  * glm::dvec3(o.x, o.y, 0.0)); }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageOffset(DVec2 o)     const { return static_cast<DVec2>(  m64  * glm::dvec3(o.x, o.y, 0.0)); }
-    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageOffset(DDVec2 o)    const { return static_cast<DDVec2>( m128 * glm::ddvec3(o.x, o.y, 0.0)); };
+    template<class T>       requires is_f32<T> [[nodiscard]] DVec2 toStageOffset(FVec2 o)   const { return static_cast<DVec2>( m64.mulVector(DVec2{(f64)o.x, (f64)o.y})); }
+    template<class T = f64> requires is_f64<T> [[nodiscard]] DVec2 toStageOffset(DVec2 o)   const { return static_cast<DVec2>( m64.mulVector(o)); }
+    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageOffset(DDVec2 o) const { return static_cast<DVec2>( m128.mulVector(o)); }
 
     // ────── stageToWorldOffset ──────                                                                 
-    template<class T>       requires is_f32<T>  [[nodiscard]] FVec2  toWorldOffset(DVec2 o)    const { return static_cast<FVec2>(  inv_m64  * glm::dvec3(o.x, o.y, 0.0)); }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2  toWorldOffset(DVec2 o)    const { return static_cast<DVec2>(  inv_m64  * glm::dvec3(o.x, o.y, 0.0)); }
-    template<class T>       requires is_f128<T> [[nodiscard]] DDVec2 toWorldOffset(DVec2 o)    const { return static_cast<DDVec2>( inv_m128 * glm::ddvec3(o.x, o.y, 0.0)); };
+    template<class T>       requires is_f32<T> [[nodiscard]] FVec2 toWorldOffset(DVec2 o)   const { return static_cast<FVec2>(  inv_m64.mulVector(o) ); }
+    template<class T = f64> requires is_f64<T> [[nodiscard]] DVec2 toWorldOffset(DVec2 o)   const { return static_cast<DVec2>(  inv_m64.mulVector(o) ); }
+    template<class T>       requires is_f128<T> [[nodiscard]] DDVec2 toWorldOffset(DVec2 o) const { return static_cast<DDVec2>( inv_m128.mulVector(DDVec2{f128{o.x}, f128{o.y}}) ); }
 
     template<typename T=f64>
     [[nodiscard]] Vec2<T> toWorldOffset(f64 sx, f64 sy) const {
@@ -162,38 +175,68 @@ public:
     template<class T = f64> Quad<T> toWorldQuad(const DRect& r)                      const { return toWorldQuad<T>(static_cast<DQuad>(r)); }
 
     // ────── DVec2 toStageSize<INPUT_WORLD_PRECISION>(...) ──────
-    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const {
-        auto a = m128[0][0], b = m128[1][0];
-        auto c = m128[0][1], d = m128[1][1];
-        auto nw = abs(a) * wh.x + abs(b) * wh.y;
-        auto nh = abs(c) * wh.x + abs(d) * wh.y;
+    template<class T> requires is_f128<T>
+    [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const
+    {
+        const auto a = m128(0, 0);
+        const auto b = m128(0, 1);
+        const auto c = m128(1, 0);
+        const auto d = m128(1, 1);
+
+        const auto nw = abs(a) * wh.x + abs(b) * wh.y;
+        const auto nh = abs(c) * wh.x + abs(d) * wh.y;
+
         return { (f64)nw, (f64)nh };
     }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const {
-        f64 a = m64[0][0], b = m64[1][0];
-        f64 c = m64[0][1], d = m64[1][1];
-        f64 nw = std::abs(a) * wh.x + std::abs(b) * wh.y;
-        f64 nh = std::abs(c) * wh.x + std::abs(d) * wh.y;
+
+    template<class T = f64> requires is_f64<T>
+    [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const
+    {
+        const f64 a = m64(0, 0);
+        const f64 b = m64(0, 1);
+        const f64 c = m64(1, 0);
+        const f64 d = m64(1, 1);
+
+        const f64 nw = std::abs(a) * wh.x + std::abs(b) * wh.y;
+        const f64 nh = std::abs(c) * wh.x + std::abs(d) * wh.y;
+
         return { nw, nh };
     }
-    template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const {
+
+    template<class T> requires is_f32<T>
+    [[nodiscard]] DVec2 toStageSizeAABB(Vec2<T> wh) const
+    {
         return toStageSizeAABB((DVec2)wh);
     }
 
-    template<class T>       requires is_f128<T> [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const {
-        auto a = m128[0][0], b = m128[1][0];
-        auto c = m128[0][1], d = m128[1][1];
-        auto sx = sqrt(a * a + b * b);
-        auto sy = sqrt(c * c + d * d);
+    template<class T> requires is_f128<T>
+    [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const
+    {
+        const auto a = m128(0, 0);
+        const auto b = m128(0, 1);
+        const auto c = m128(1, 0);
+        const auto d = m128(1, 1);
+
+        const auto sx = sqrt(a * a + b * b);
+        const auto sy = sqrt(c * c + d * d);
+
         return { (f64)(sx * wh.x), (f64)(sy * wh.y) };
     }
-    template<class T = f64> requires is_f64<T>  [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const {
-        f64 a = m64[0][0], b = m64[1][0];
-        f64 c = m64[0][1], d = m64[1][1];
-        f64 sx = sqrt(a * a + b * b);
-        f64 sy = sqrt(c * c + d * d);
+
+    template<class T = f64> requires is_f64<T>
+    [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const
+    {
+        const f64 a = m64(0, 0);
+        const f64 b = m64(0, 1);
+        const f64 c = m64(1, 0);
+        const f64 d = m64(1, 1);
+
+        const f64 sx = sqrt(a * a + b * b);
+        const f64 sy = sqrt(c * c + d * d);
+
         return { sx * wh.x, sy * wh.y };
     }
+
     template<class T>       requires is_f32<T>  [[nodiscard]] DVec2 toStageSideLengths(Vec2<T> wh) const {
         return toStageSideLengths((DVec2)wh);
     }
@@ -209,44 +252,52 @@ public:
     // ────── axis ──────
     [[nodiscard]] DVec2 axisStageDirection(bool isX) const
     {
-        const f64 m00 = m64[0][0], m01 = m64[0][1];
-        const f64 m10 = m64[1][0], m11 = m64[1][1];
+        const f64 m00 = m64(0, 0);
+        const f64 m01 = m64(1, 0);
+        const f64 m10 = m64(0, 1);
+        const f64 m11 = m64(1, 1);
 
-        if (isX) {
+        if (isX)
+        {
             const f64 sx = std::hypot(m00, m10);
             if (sx == 0) return { 0, 0 };
             return { m00 / sx, -m10 / sx };
         }
-        else {
+        else
+        {
             const f64 sy = std::hypot(m01, m11);
             if (sy == 0) return { 0, 0 };
             return { m01 / sy, -m11 / sy };
         }
     }
-    [[nodiscard]] DVec2 axisStagePerpDirection(bool isX) const { DVec2 d = axisStageDirection(isX).normalized(); return { -d.y, d.x }; }
+    [[nodiscard]] DVec2 axisStagePerpDirection(bool isX) const
+    {
+        DVec2 d = axisStageDirection(isX).normalized();
+        return { -d.y, d.x };
+    }
 };
 
 
 class CameraInfo
 {
     // ─────── camera data ────────────────────────────────────────────────────────────────────────────────────────────────
-    union { struct { f128 x_128;     f128 y_128; };     DDVec2 pos_128    { 0, 0 }; };
-    union { struct { f64  x_64;      f64  y_64;  };     DVec2  pos_64     { 0, 0 }; };
-    union { struct { f64  sx_64;     f64  sy_64; };     DVec2  stretch_64 { 1, 1 }; };
-    union { struct { f64  pan_x;     f64  pan_y; };     DVec2  cam_pan    { 0, 0 }; };
-    union { struct { f128 zoom_x;    f128 zoom_y; };    DDVec2 zoom_xy    { 1, 1 }; };
-    union { struct { f64  zoom_x_64; f64  zoom_y_64; }; DVec2  zoom_xy_64 { 1, 1 }; };
+    union { struct { f128 x_128;     f128 y_128; };     DDVec2 pos_128    { 0_dd, 0_dd }; };
+    union { struct { f64  x_64;      f64  y_64;  };     DVec2  pos_64     { 0.0,  0.0  }; };
+    union { struct { f64  sx_64;     f64  sy_64; };     DVec2  stretch_64 { 1.0,  1.0  }; };
+    union { struct { f64  pan_x;     f64  pan_y; };     DVec2  cam_pan    { 0.0,  0.0  }; };
+    union { struct { f128 zoom_x;    f128 zoom_y; };    DDVec2 zoom_xy    { 1_dd, 1_dd }; };
+    union { struct { f64  zoom_x_64; f64  zoom_y_64; }; DVec2  zoom_xy_64 { 1.0,  1.0  }; };
 
-    f128  zoom_128 = 1;
-    f64   zoom_64 = 1;
+    f128  zoom_128 = 1.0_dd;
+    f64   zoom_64 = 1.0;
     f64   rotation_64 = 0;
 
     SurfaceInfo* surface = nullptr;
     DVec2 viewport_anchor{ 0.5, 0.5 };
-    f128  ref_zoom = 1;
+    f128  ref_zoom = 1.0_dd;
 
     // UI
-    DDVec2 init_pos{ 0, 0 };
+    DDVec2 init_pos{ 0_dd, 0_dd };
     f128   init_zoom = zoom_128;
     DVec2  init_stretch = stretch_64;
     f64    init_rotation = rotation_64;
@@ -317,7 +368,7 @@ public:
     bool setStretchX(f64 x)     { if (sx_64 != x)        { sx_64 = x;         zoomDirty(); return true; }  return false; }
     bool setStretchY(f64 y)     { if (sy_64 != y)        { sy_64 = y;         zoomDirty(); return true; }  return false; }
     bool setStretch(DVec2 s)    { if (stretch_64 != s)   { stretch_64 = s;    zoomDirty(); return true; }  return false; }                                                                                              
-    bool setPos(f64 x, f64 y)   { if (!pos_64.eq(x, y))  { pos_128 = {x, y};  posDirty();  return true; }  return false; }
+    bool setPos(f64 x, f64 y)   { if (!pos_64.eq(x, y))  { pos_128 = pos_64;  posDirty();  return true; }  return false; }
     bool setPos(DVec2 p)        { if (pos_64 != p)       { pos_128 = p;       posDirty();  return true; }  return false; }                                                                                                    
     bool setPan(f64 x, f64 y)   { if (!cam_pan.eq(x, y)) { cam_pan = {x, y};  panDirty();  return true; }  return false; }
     bool setRotation(f64 r)     { if (rotation_64 != r)  { rotation_64 = r;   panDirty();  return true; }  return false; }
@@ -409,13 +460,13 @@ public:
     f64 pan_down_touch_dist = 0;
     f64 pan_down_touch_angle = 0;
 
-    f128 pan_beg_cam_x = 0;
-    f128 pan_beg_cam_y = 0;
-    f128 pan_beg_cam_zoom = 0;
-    f64  pan_beg_cam_angle = 0;
+    f128 pan_beg_cam_x = 0_dd;
+    f128 pan_beg_cam_y = 0_dd;
+    f128 pan_beg_cam_zoom = 0_dd;
+    f64  pan_beg_cam_angle = 0.0;
 
-    f128 min_zoom = -1e+300; // Relative to "focused" rect
-    f128 max_zoom = 1e+300; // Relative to "focused" rect
+    f128 min_zoom = -1e+300_dd; // Relative to "focused" rect
+    f128 max_zoom = 1e+300_dd; // Relative to "focused" rect
 
     bool panning = false;
     bool direct_cam_panning = true;

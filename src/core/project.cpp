@@ -532,7 +532,7 @@ void ProjectBase::_projectProcess()
     {
         double viewport_mx = viewport->toSurfaceX(mouse.client_x);
         double viewport_my = viewport->toSurfaceY(mouse.client_y);
-        auto m = viewport->inverseTransform<f128>();
+        auto m = viewport->worldStageTransform();
 
         if (//cam.panning ||
             (viewport_mx >= 0 &&
@@ -543,8 +543,8 @@ void ProjectBase::_projectProcess()
             mouse.viewport = viewport;
             mouse.stage_x = viewport_mx;
             mouse.stage_y = viewport_my;
-
-            auto world_mouse = static_cast<DDVec2>(m * glm::ddvec3(viewport_mx, viewport_my, 1.0));
+            
+            auto world_mouse = m.toWorld<f128>(viewport_mx, viewport_my);
             mouse.world_x = world_mouse.x;
             mouse.world_y = world_mouse.y;
         }

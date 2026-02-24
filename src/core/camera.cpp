@@ -63,11 +63,11 @@ const WorldStageTransform& CameraInfo::getTransform() const
     DDVec2 origin_offset = originPixelOffset();
     DDVec2 adjusted_zoom = zoom_xy * surface->initialSizeScale();
 
-    t->m128 = glm::ddmat3(1.0);
-    t->m128 *= glm_ddtranslate(origin_offset.x + pan_x, origin_offset.y + pan_y);
-    t->m128 *= glm_ddrotate(rotation_64);
-    t->m128 *= glm_ddtranslate(-x_128 * adjusted_zoom.x, -y_128 * adjusted_zoom.y);
-    t->m128 *= glm_ddscale(adjusted_zoom.x, adjusted_zoom.y);
+    t->m128 = DDMat3(1.0_dd);
+    t->m128 *= dd_translate(origin_offset.x + pan_x, origin_offset.y + pan_y);
+    t->m128 *= dd_rotate(f128{ rotation_64 });
+    t->m128 *= dd_translate(-x_128 * adjusted_zoom.x, -y_128 * adjusted_zoom.y);
+    t->m128 *= dd_scale(adjusted_zoom.x, adjusted_zoom.y);
 
     t->updateCache();
     is_dirty = false;
@@ -220,10 +220,10 @@ void CameraInfo::populateUI(DRect restrict_world_rect)
 
 
     ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("X", &x_128, &init_pos.x, 1.0 / zoom_128, restrict_world_rect.x1, restrict_world_rect.x2, format))
+    if (ImGui::RevertableDragFloat128("X", &x_128, &init_pos.x, 1.0 / zoom_128, f128{ restrict_world_rect.x1 }, f128{ restrict_world_rect.x2 }, format))
         changed = true;
     ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("Y", &y_128, &init_pos.y, 1.0 / zoom_128, restrict_world_rect.y1, restrict_world_rect.y2, format))
+    if (ImGui::RevertableDragFloat128("Y", &y_128, &init_pos.y, 1.0 / zoom_128, f128{ restrict_world_rect.y1 }, f128{ restrict_world_rect.y2 }, format))
         changed = true;
 
     ImGui::SetNextItemWidthForSpace(required_space);
@@ -233,7 +233,7 @@ void CameraInfo::populateUI(DRect restrict_world_rect)
     f128 relative_zoom = relativeZoom<f128>();
     f128 zoom_speed = relative_zoom / 100.0;
     ImGui::SetNextItemWidthForSpace(required_space);
-    if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1, 1e32, "%.2f"))
+    if (ImGui::RevertableDragFloat128("Zoom", &relative_zoom, &init_zoom, zoom_speed, 0.1_dd, 1e32_dd, "%.2f"))
     {
         zoom_speed = relative_zoom / 100.0;
         zoom_128 = relative_zoom * getReferenceZoom<f128>();

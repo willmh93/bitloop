@@ -75,13 +75,13 @@ namespace math
         return static_cast<int>(std::log10(static_cast<double>(v))) + 1;
     }
     
-    template <typename Float>
-    [[nodiscard]] int countWholeDigits(Float x)
+    template <typename T>
+    [[nodiscard]] int countWholeDigits(T x)
     {
-        static_assert(bl::is_floating_point_v<Float>, "Float must be a floating-point type");
-        if (!isfinite(x)) return 0;
+        static_assert(bl::is_floating_point_v<T>, "Float must be a floating-point type");
+        if (!bl::isfinite(x)) return 0;
         x = abs(x);
-        if (x < Float{ 1 }) return 1;
+        if (x < T{ 1 }) return 1;
         return static_cast<int>(floor(log10(x))) + 1;
     }
 

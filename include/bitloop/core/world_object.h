@@ -103,7 +103,7 @@ public:
 
         // Make sure uv vectors span 2D area
         T det = u.x * v.y - u.y * v.x;
-        if (det == 0) return  Vec2<T>{ 0.0, 0.0 };
+        if (det == 0) return  Vec2<T>{ T{ 0 }, T{ 0 } };
 
         // solve for a,b
         T inv_det = 1.0 / det;
@@ -117,16 +117,16 @@ public:
         rotation = 0;
         x = _x - worldAlignOffsetX();
         y = _y - worldAlignOffsetY();
-        u = { _w, 0 };
-        v = { 0, _h };
+        u = { _w, T{0} };
+        v = { T{0}, _h };
     }
     void setWorldRect(Vec2<T> pos, Vec2<T> size)
     {
         rotation = 0;
         x = pos.x - worldAlignOffsetX();
         y = pos.y - worldAlignOffsetY();
-        u = { size.x, 0 };
-        v = { 0, size.y };
+        u = { size.x, T{0} };
+        v = { T{0}, size.y };
     }
 };
 

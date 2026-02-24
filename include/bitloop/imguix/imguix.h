@@ -9,6 +9,7 @@ constexpr double pi = std::numbers::pi;
 
 #include <bitloop/core/project.h>
 #include <bitloop/core/image_loader.h>
+#include <bitloop/util/fltx/f128.h>
 
 #include <imgui_internal.h>
 #include <imgui_freetype.h>
@@ -74,7 +75,7 @@ std::ostream& operator<<(std::ostream& os, const ImGradient& gradient);
 namespace ImGui
 {
     using bl::f128;
-    using bl::f128;
+    using bl::operator""_dd;
 
     struct StartValue { void* initial; int size; };
     static std::unordered_map<void*, StartValue> starting_map;
@@ -102,7 +103,7 @@ namespace ImGui
     bool SliderDouble2(const char* label, double v[2], double v_min, double v_max, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool DragDouble2(const char* label, double v[2], double v_speed = 1.0f, double v_min = 0.0f, double v_max = 0.0f, const char* format = "%.6f", ImGuiSliderFlags flags = 0);
     bool SliderDouble_InvLog(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags flags = 0);
-    bool DragFloat128(const char* label, f128* v, f128 v_speed=0, f128 v_min=0, f128 v_max=0, const char* format = "%.32f", ImGuiSliderFlags flags = 0);
+    bool DragFloat128(const char* label, f128* v, f128 v_speed=0_dd, f128 v_min=0_dd, f128 v_max=0_dd, const char* format = "%.32f", ImGuiSliderFlags flags = 0);
 
     bool SliderAngle(const char* label, double* v_rad, double v_rad_min, double v_rad_max, const char* format = "%.1f\xC2\xB0", ImGuiSliderFlags flags = 0);
     bool SliderAngle(const char* label, double* v_rad, double v_rad_min = 0.0, double v_rad_max = std::numbers::pi*2.0, int decimals = 1, ImGuiSliderFlags flags = 0);

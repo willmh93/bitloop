@@ -2,7 +2,6 @@
 
 // dependencies:
 // - imgui
-// - glm
 // - gcem
 // - fltx
 
@@ -13,10 +12,6 @@
 #include <cstdint>
 #include <vector>
 
-#define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_UNRESTRICTED_GENTYPE
-#define GLM_FORCE_CTOR_INIT
-#include "glm/glm.hpp"
 
 // including gcem before custom float types (for potential constexpr support)
 #include <gcem.hpp>
@@ -56,8 +51,9 @@ namespace bl
 
     // drop gcem functions in 'bl' namespace where overloads already exist for f128/... (constexpr used where supported)
 
-    using std::isnan; // already constexpr
-    using std::isinf; // already constexpr
+    using std::isnan;
+    using std::isinf;
+    using std::isfinite;
     using std::remainder; // no gcem equivelant
 
     template<class T> constexpr T abs(T x)   { if consteval { return gcem::abs(x);   } else { return std::abs(x);   } }
@@ -126,7 +122,6 @@ namespace bl
         }
     }
 
-
     template<class T> constexpr T sq(T x) { return (x * x); }
 
     typedef int8_t   i8;
@@ -143,16 +138,6 @@ namespace bl
     typedef double f64;
     // ........... f128;
 
-}
-
-// Extend GLM types for f128/...
-
-namespace glm
-{
-    typedef mat<3, 3, bl::f128, defaultp>	ddmat3;
-    typedef vec<2, bl::f128, defaultp>		ddvec2;
-    typedef vec<3, bl::f128, defaultp>		ddvec3;
-    typedef vec<4, bl::f128, defaultp>		ddvec4;
 }
 
 BL_BEGIN_NS
@@ -187,39 +172,6 @@ enum struct FloatingPointType
     COUNT
 };
 
-/// ================= glm type mapping (with custom float support) =================
-
-template<typename T> struct GlmVec2Type;
-template<typename T> struct GlmVec3Type;
-template<typename T> struct GlmVec4Type;
-template<typename T> struct GlmMat3Type;
-
-template<> struct GlmVec2Type<f32>   { using type = glm::vec2;    };
-template<> struct GlmVec2Type<f64>   { using type = glm::dvec2;   };
-template<> struct GlmVec2Type<f128>  { using type = glm::ddvec2;  };
-template<> struct GlmVec2Type<i16>   { using type = glm::i16vec2; };
-template<> struct GlmVec2Type<int>   { using type = glm::ivec2;   };
-template<> struct GlmVec3Type<f32>   { using type = glm::vec3;    };
-template<> struct GlmVec3Type<f64>   { using type = glm::dvec3;   };
-template<> struct GlmVec3Type<f128>  { using type = glm::ddvec3;  };
-template<> struct GlmVec3Type<i16>   { using type = glm::i16vec3; };
-template<> struct GlmVec3Type<int>   { using type = glm::ivec3;   };
-template<> struct GlmVec4Type<f32>   { using type = glm::vec4;    };
-template<> struct GlmVec4Type<f64>   { using type = glm::dvec4;   };
-template<> struct GlmVec4Type<f128>  { using type = glm::ddvec4;  };
-template<> struct GlmVec4Type<i16>   { using type = glm::i16vec4; };
-template<> struct GlmVec4Type<int>   { using type = glm::ivec4;   };
-
-template<> struct GlmMat3Type<f32>   { using type = glm::fmat3; };
-template<> struct GlmMat3Type<f64>   { using type = glm::dmat3; };
-template<> struct GlmMat3Type<f128>  { using type = glm::ddmat3; };
-
-template<typename T> using GlmVec2 = typename GlmVec2Type<T>::type;
-template<typename T> using GlmVec3 = typename GlmVec3Type<T>::type;
-template<typename T> using GlmVec4 = typename GlmVec4Type<T>::type;
-template<typename T> using GlmMat3 = typename GlmMat3Type<T>::type;
-
-
 // ----- Vec2 -----
 
 template<typename T>
@@ -232,10 +184,6 @@ struct Vec2
     constexpr Vec2(T v) : x{ v }, y{ v } {}
     constexpr Vec2(T _x, T _y) : x{ _x }, y{ _y } {}
     constexpr Vec2(const ImVec2 rhs) : x{ (T)rhs.x }, y{ (T)rhs.y } {}
-    constexpr Vec2(const GlmVec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
-
-    template<typename T2>
-    constexpr explicit Vec2(const GlmVec3<T2>& rhs) : x((T)rhs.x), y((T)rhs.y) {} // discards z for 2D
 
     // convenience
     constexpr void set(T _x, T _y) { x = _x; y = _y; }
@@ -245,16 +193,11 @@ struct Vec2
     // conversions
     [[nodiscard]] constexpr explicit operator ImVec2()                   const { return ImVec2((f32)x, (f32)y); }
     template<typename T2> [[nodiscard]] constexpr operator Vec2<T2>()    const { return Vec2<T2>{(T2)x, (T2)y}; }
-    template<typename T2> [[nodiscard]] constexpr operator GlmVec2<T2>() const { return GlmVec2<T2>{(T2)x, (T2)y}; }
 
     // access
     [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
     [[nodiscard]] constexpr T& operator[](int i) { return (&x)[i]; }
     [[nodiscard]] constexpr T* data() { return &x; }
-    //friend double& get<0>(Vec2& v)       noexcept { return v.x; }
-    //friend double& get<1>(Vec2& v)       noexcept { return v.y; }
-    //friend const double& get<0>(const Vec2& v) noexcept { return v.x; }
-    //friend const double& get<1>(const Vec2& v) noexcept { return v.y; }
 
     // operator
     [[nodiscard]] constexpr Vec2 operator-() const { return Vec2(-x, -y); }
@@ -265,15 +208,16 @@ struct Vec2
     [[nodiscard]] constexpr Vec2 operator*(const Vec2& rhs) const { return { x * rhs.x, y * rhs.y }; }
     [[nodiscard]] constexpr Vec2 operator/(const Vec2& rhs) const { return { x / rhs.x, y / rhs.y }; }
 
-    // todo: Make template T2 type? e.g. f128*=f64, avoid unnecessary conversion f64->f128
-    constexpr void operator+=(Vec2 rhs) { x += rhs.x; y += rhs.y; }
-    constexpr void operator-=(Vec2 rhs) { x -= rhs.x; y -= rhs.y; }
-    constexpr void operator*=(Vec2 rhs) { x *= rhs.x; y *= rhs.y; }
-    constexpr void operator/=(Vec2 rhs) { x /= rhs.x; y /= rhs.y; }
-    constexpr void operator+=(T v) { x += v; y += v; }
-    constexpr void operator-=(T v) { x -= v; y -= v; }
-    constexpr void operator*=(T v) { x *= v; y *= v; }
-    constexpr void operator/=(T v) { x /= v; y /= v; }
+    template<typename U> requires requires(T a, U b) { a + b; } constexpr void operator+=(Vec2<U> rhs) { x = x + rhs.x; y = y + rhs.y; }
+    template<typename U> requires requires(T a, U b) { a - b; } constexpr void operator-=(Vec2<U> rhs) { x = x - rhs.x; y = y - rhs.y; }
+    template<typename U> requires requires(T a, U b) { a * b; } constexpr void operator*=(Vec2<U> rhs) { x = x * rhs.x; y = y * rhs.y; }
+    template<typename U> requires requires(T a, U b) { a / b; } constexpr void operator/=(Vec2<U> rhs) { x = x / rhs.x; y = y / rhs.y; }
+
+    template<typename U> requires requires(T a, U b) { a + b; } constexpr void operator+=(U v) { x = x + v; y = y + v; }
+    template<typename U> requires requires(T a, U b) { a - b; } constexpr void operator-=(U v) { x = x - v; y = y - v; }
+    template<typename U> requires requires(T a, U b) { a * b; } constexpr void operator*=(U v) { x = x * v; y = y * v; }
+    template<typename U> requires requires(T a, U b) { a / b; } constexpr void operator/=(U v) { x = x / v; y = y / v; }
+
     
     // properties
     [[nodiscard]] constexpr T angle() const { return atan2(y, x); }
@@ -312,11 +256,9 @@ struct Vec3
     // constructors
     Vec3() = default;
     constexpr Vec3(T _x, T _y, T _z) : x(_x), y(_y), z(_z) {}
-    constexpr Vec3(const GlmVec3<T>& rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
 
     // conversions
     template<typename T2> constexpr operator Vec3<T2>()    const { return Vec3<T2>{(T2)x, (T2)y, (T2)z}; }
-    template<typename T2> constexpr operator GlmVec3<T2>() const { return GlmVec3<T2>{(T2)x, (T2)y, (T2)z}; }
 
     // access
     [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
@@ -371,11 +313,9 @@ struct Vec4
     // constructors
     Vec4() = default;
     constexpr Vec4(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {}
-    constexpr Vec4(const GlmVec4<T>& rhs) : x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w) {}
 
     // conversions
     template<typename T2> constexpr operator Vec4<T2>()    const { return Vec4<T2>{(T2)x, (T2)y, (T2)z, (T2)w}; }
-    template<typename T2> constexpr operator GlmVec4<T2>() const { return GlmVec4<T2>{(T2)x, (T2)y, (T2)z, (T2)w}; }
 
     // access
     [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
@@ -433,10 +373,6 @@ struct Complex
     constexpr Complex(T _x, T _y) : x{ _x }, y{ _y } {}
     constexpr Complex(const Vec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
     constexpr Complex(const ImVec2 rhs) : x{ (T)rhs.x }, y{ (T)rhs.y } {}
-    constexpr Complex(const GlmVec2<T>& rhs) : x{ rhs.x }, y{ rhs.y } {}
-
-    template<typename T2>
-    constexpr explicit Complex(const GlmVec3<T2>& rhs) : x((T)rhs.x), y((T)rhs.y) {} // discards z for 2D
 
     // convenience
     constexpr void set(T _x, T _y) { x = _x; y = _y; }
@@ -447,7 +383,6 @@ struct Complex
     [[nodiscard]] constexpr explicit operator ImVec2()                          const { return ImVec2((f32)x, (f32)y); }
     template<typename T2> [[nodiscard]] constexpr explicit operator Vec2<T2>()  const { return Vec2<T2>(x, y); }
     template<typename T2> [[nodiscard]] constexpr operator Complex<T2>()        const { return Complex<T2>{ (T2)x, (T2)y }; }
-    template<typename T2> [[nodiscard]] constexpr operator GlmVec2<T2>()        const { return GlmVec2<T2>{ (T2)x, (T2)y }; }
 
     // access
     [[nodiscard]] constexpr const T& operator[](int i) const { return (&x)[i]; }
@@ -526,6 +461,374 @@ struct Complex
         return os << "(re: " << z.x << ", im: " << z.y << ")";
     }
 };
+
+
+// ----- Matrix -----
+
+template<typename T, int R, int C>
+struct Matrix
+{
+    static_assert(R > 0 && C > 0);
+
+    using value_type = T;
+    static constexpr int rows = R;
+    static constexpr int cols = C;
+    static constexpr int count = R * C;
+
+    // column-major storage
+    std::array<T, (size_t)count> m{};
+
+    // constructors
+    Matrix() = default;
+
+    // fill diagonal with v (identity for square matrices)
+    constexpr explicit Matrix(T v)
+    {
+        for (int i = 0; i < count; ++i) m[(size_t)i] = T{};
+        if constexpr (R == C)
+        {
+            for (int i = 0; i < R; ++i) (*this)(i, i) = v;
+        }
+        else
+        {
+            // non-square: fill all entries with v
+            for (int i = 0; i < count; ++i) m[(size_t)i] = v;
+        }
+    }
+
+    // from flat list in column-major order
+    template<typename... Ts>
+    constexpr Matrix(Ts... xs) requires (sizeof...(Ts) == (size_t)count && (std::convertible_to<Ts, T> && ...))
+        : m{ T(xs)... }
+    {
+    }
+
+    // conversions
+    template<typename U> requires (!std::is_same_v<U, T>)
+    constexpr explicit Matrix(const Matrix<U, R, C>& rhs)
+    {
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(rhs.m[(size_t)i]);
+    }
+
+    template<typename U> requires (!std::is_same_v<U, T>)
+    constexpr Matrix& operator=(const Matrix<U, R, C>& rhs)
+    {
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(rhs.m[(size_t)i]);
+        return *this;
+    }
+
+    // access
+    [[nodiscard]] constexpr T& operator()(int r, int c) noexcept { return m[(size_t)(c * R + r)]; }
+    [[nodiscard]] constexpr const T& operator()(int r, int c) const noexcept { return m[(size_t)(c * R + r)]; }
+
+    [[nodiscard]] constexpr T& operator[](int i) noexcept { return m[(size_t)i]; }
+    [[nodiscard]] constexpr const T& operator[](int i) const noexcept { return m[(size_t)i]; }
+
+    [[nodiscard]] constexpr T* data() { return m.data(); }
+    [[nodiscard]] constexpr const T* data() const { return m.data(); }
+
+    // convenience
+    constexpr void setZero() { for (auto& e : m) e = T{}; }
+
+    constexpr void setIdentity(T diag = T{ 1 }) requires (R == C)
+    {
+        setZero();
+        for (int i = 0; i < R; ++i) (*this)(i, i) = diag;
+    }
+
+    [[nodiscard]] constexpr bool isIdentity(T diag = T{ 1 }) const requires (R == C)
+    {
+        for (int c = 0; c < C; ++c)
+            for (int r = 0; r < R; ++r)
+                if ((*this)(r, c) != ((r == c) ? diag : T{}))
+                    return false;
+        return true;
+    }
+
+    // operators
+    [[nodiscard]] constexpr bool operator==(const Matrix& rhs) const { return m == rhs.m; }
+    [[nodiscard]] constexpr bool operator!=(const Matrix& rhs) const { return m != rhs.m; }
+
+    [[nodiscard]] constexpr Matrix operator-() const
+    {
+        Matrix out;
+        for (int i = 0; i < count; ++i) out.m[(size_t)i] = -m[(size_t)i];
+        return out;
+    }
+
+    [[nodiscard]] constexpr Matrix operator+(const Matrix& rhs) const
+    {
+        Matrix out;
+        for (int i = 0; i < count; ++i) out.m[(size_t)i] = m[(size_t)i] + rhs.m[(size_t)i];
+        return out;
+    }
+
+    [[nodiscard]] constexpr Matrix operator-(const Matrix& rhs) const
+    {
+        Matrix out;
+        for (int i = 0; i < count; ++i) out.m[(size_t)i] = m[(size_t)i] - rhs.m[(size_t)i];
+        return out;
+    }
+
+    [[nodiscard]] constexpr Matrix operator*(T s) const
+    {
+        Matrix out;
+        for (int i = 0; i < count; ++i) out.m[(size_t)i] = m[(size_t)i] * s;
+        return out;
+    }
+
+    [[nodiscard]] constexpr Matrix operator/(T s) const
+    {
+        Matrix out;
+        for (int i = 0; i < count; ++i) out.m[(size_t)i] = m[(size_t)i] / s;
+        return out;
+    }
+
+    constexpr void operator+=(const Matrix& rhs) { for (int i = 0; i < count; ++i) m[(size_t)i] += rhs.m[(size_t)i]; }
+    constexpr void operator-=(const Matrix& rhs) { for (int i = 0; i < count; ++i) m[(size_t)i] -= rhs.m[(size_t)i]; }
+    constexpr void operator*=(T s) { for (int i = 0; i < count; ++i) m[(size_t)i] *= s; }
+    constexpr void operator/=(T s) { for (int i = 0; i < count; ++i) m[(size_t)i] /= s; }
+
+    constexpr Matrix& operator*=(const Matrix& rhs)
+    {
+        *this = (*this) * rhs;
+        return *this;
+    }
+
+
+    template<typename U>
+    constexpr Matrix& operator*=(const Matrix<U, R, C>& rhs)
+        requires (R == C)
+    {
+        const auto prod = (*this) * rhs;
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(prod[i]);
+        return *this;
+    }
+
+
+    // scalar ops with different type, e.g. f128 *= f64
+    template<typename U>
+    constexpr Matrix& operator+=(const Matrix<U, R, C>& rhs)
+    {
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(m[(size_t)i] + rhs.m[(size_t)i]);
+        return *this;
+    }
+    template<typename U>
+    constexpr Matrix& operator-=(const Matrix<U, R, C>& rhs)
+    {
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(m[(size_t)i] - rhs.m[(size_t)i]);
+        return *this;
+    }
+    template<typename U>
+    constexpr Matrix& operator*=(U s)
+    {
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(m[(size_t)i] * s);
+        return *this;
+    }
+
+    template<typename U>
+    constexpr Matrix& operator/=(U s)
+    {
+        for (int i = 0; i < count; ++i)
+            m[(size_t)i] = static_cast<T>(m[(size_t)i] / s);
+        return *this;
+    }
+
+    // matrix multiply
+    template<int C2>
+    [[nodiscard]] constexpr Matrix<T, R, C2> operator*(const Matrix<T, C, C2>& rhs) const
+    {
+        Matrix<T, R, C2> out;
+        out.setZero();
+
+        for (int c2 = 0; c2 < C2; ++c2)
+        {
+            for (int r = 0; r < R; ++r)
+            {
+                T acc{};
+                for (int k = 0; k < C; ++k)
+                    acc += (*this)(r, k) * rhs(k, c2);
+                out(r, c2) = acc;
+            }
+        }
+        return out;
+    }
+
+    // mat * vec2 (only for 2x2)
+    [[nodiscard]] constexpr Vec2<T> operator*(const Vec2<T>& v) const requires (R == 2 && C == 2)
+    {
+        return Vec2<T>{
+            (*this)(0, 0)* v.x + (*this)(0, 1) * v.y,
+            (*this)(1, 0)* v.x + (*this)(1, 1) * v.y
+        };
+    }
+
+    [[nodiscard]] constexpr Vec2<T> operator*(const Vec2<T>& v) const requires (R == 3 && C == 3)
+    {
+        return mulPoint(v);
+    }
+
+    // homogeneous 2D point: (x,y,1)
+    [[nodiscard]] constexpr Vec2<T> mulPoint(const Vec2<T>& v) const requires (R == 3 && C == 3)
+    {
+        const T x = (*this)(0, 0) * v.x + (*this)(0, 1) * v.y + (*this)(0, 2);
+        const T y = (*this)(1, 0) * v.x + (*this)(1, 1) * v.y + (*this)(1, 2);
+        const T w = (*this)(2, 0) * v.x + (*this)(2, 1) * v.y + (*this)(2, 2);
+
+        if (w == T{ 0 } || w == T{ 1 })
+            return { x, y };
+
+        return { x / w, y / w };
+    }
+
+    // homogeneous 2D direction: (x,y,0) (no translation)
+    [[nodiscard]] constexpr Vec2<T> mulVector(const Vec2<T>& v) const requires (R == 3 && C == 3)
+    {
+        const T x = (*this)(0, 0) * v.x + (*this)(0, 1) * v.y;
+        const T y = (*this)(1, 0) * v.x + (*this)(1, 1) * v.y;
+        return { x, y };
+    }
+
+    // properties
+    [[nodiscard]] constexpr Matrix<T, C, R> transposed() const
+    {
+        Matrix<T, C, R> out;
+        for (int c = 0; c < C; ++c)
+            for (int r = 0; r < R; ++r)
+                out(c, r) = (*this)(r, c);
+        return out;
+    }
+
+    // ----- determinant -----
+
+    [[nodiscard]] constexpr T determinant() const requires (R == 2 && C == 2)
+    {
+        return (*this)(0, 0) * (*this)(1, 1)
+             - (*this)(0, 1) * (*this)(1, 0);
+    }
+
+    [[nodiscard]] constexpr T determinant() const requires (R == 3 && C == 3)
+    {
+        const T& a = (*this)(0, 0);
+        const T& b = (*this)(0, 1);
+        const T& c = (*this)(0, 2);
+
+        const T& d = (*this)(1, 0);
+        const T& e = (*this)(1, 1);
+        const T& f = (*this)(1, 2);
+
+        const T& g = (*this)(2, 0);
+        const T& h = (*this)(2, 1);
+        const T& i = (*this)(2, 2);
+
+        return a * (e * i - f * h)
+             - b * (d * i - f * g)
+             + c * (d * h - e * g);
+    }
+
+    [[nodiscard]] constexpr Matrix inversed() const requires (R == 2 && C == 2)
+    {
+        const T det = determinant();
+
+        Matrix inv;
+        inv(0,0) =  (*this)(1,1);
+        inv(0,1) = -(*this)(0,1);
+        inv(1,0) = -(*this)(1,0);
+        inv(1,1) =  (*this)(0,0);
+
+        return inv / det;
+    }
+
+    [[nodiscard]] constexpr Matrix inversed() const requires (R == 3 && C == 3)
+    {
+        const T& a = (*this)(0,0);
+        const T& b = (*this)(0,1);
+        const T& c = (*this)(0,2);
+
+        const T& d = (*this)(1,0);
+        const T& e = (*this)(1,1);
+        const T& f = (*this)(1,2);
+
+        const T& g = (*this)(2,0);
+        const T& h = (*this)(2,1);
+        const T& i = (*this)(2,2);
+
+        Matrix inv;
+
+        inv(0,0) =  (e*i - f*h);
+        inv(0,1) = -(b*i - c*h);
+        inv(0,2) =  (b*f - c*e);
+
+        inv(1,0) = -(d*i - f*g);
+        inv(1,1) =  (a*i - c*g);
+        inv(1,2) = -(a*f - c*d);
+
+        inv(2,0) =  (d*h - e*g);
+        inv(2,1) = -(a*h - b*g);
+        inv(2,2) =  (a*e - b*d);
+
+        const T det = a*(e*i - f*h)
+                    - b*(d*i - f*g)
+                    + c*(d*h - e*g);
+
+        return inv / det;
+    }
+
+    // static
+    [[nodiscard]] static constexpr Matrix identity(T diag = T{ 1 }) requires (R == C)
+    {
+        Matrix out;
+        out.setIdentity(diag);
+        return out;
+    }
+
+    [[nodiscard]] static constexpr Matrix zero()
+    {
+        Matrix out;
+        out.setZero();
+        return out;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Matrix& M)
+    {
+        os << "{";
+        for (int r = 0; r < R; ++r)
+        {
+            os << (r == 0 ? "" : " ");
+            os << "[";
+            for (int c = 0; c < C; ++c)
+            {
+                os << M(r, c);
+                if (c + 1 < C) os << ", ";
+            }
+            os << "]";
+            if (r + 1 < R) os << "\n";
+        }
+        return os << "}";
+    }
+};
+
+// scalar op matrix
+template<typename T, int R, int C>
+[[nodiscard]] constexpr Matrix<T, R, C> operator*(const T& s, const Matrix<T, R, C>& M)
+{
+    return M * s;
+}
+
+template<typename X> struct is_matrix : std::false_type {};
+template<typename T, int R, int C> struct is_matrix<Matrix<T, R, C>> : std::true_type {};
+template<typename X> inline constexpr bool is_matrix_v = is_matrix<std::remove_cvref_t<X>>::value;
+
+// convenience aliases
+template<typename T> using Mat2 = Matrix<T, 2, 2>;
+template<typename T> using Mat3 = Matrix<T, 3, 3>;
+template<typename T> using Mat4 = Matrix<T, 4, 4>;
 
 // ----- Range -----
 template<typename T>
@@ -1072,16 +1375,102 @@ struct Quad
 
 /// ================= free operator overloads =================
 
+/// ----- Vec2 overloads -----
+
+template<class X> struct is_vec2 : std::false_type {};
+template<class T> struct is_vec2<Vec2<T>> : std::true_type {};
+template<class X> inline constexpr bool is_vec2_v = is_vec2<std::remove_cvref_t<X>>::value;
+
+template<class T, class U> using plus_t  = decltype(std::declval<T>() + std::declval<U>());
+template<class T, class U> using minus_t = decltype(std::declval<T>() - std::declval<U>());
+template<class T, class U> using mul_t   = decltype(std::declval<T>() * std::declval<U>());
+template<class T, class U> using div_t   = decltype(std::declval<T>() / std::declval<U>());
+
+// Vec2 op scalar
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a + b; })
+constexpr auto operator+(const Vec2<T>& v, const U& s) -> Vec2<plus_t<T, U>> {
+    using R = plus_t<T, U>; return { R(v.x) + s, R(v.y) + s };
+}
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a - b; })
+constexpr auto operator-(const Vec2<T>& v, const U& s) -> Vec2<minus_t<T, U>> {
+    using R = minus_t<T, U>; return { R(v.x) - s, R(v.y) - s };
+}
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a* b; })
+constexpr auto operator*(const Vec2<T>& v, const U& s) -> Vec2<mul_t<T, U>> {
+    using R = mul_t<T, U>; return { R(v.x) * s, R(v.y) * s };
+}
+template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a / b; })
+constexpr auto operator/(const Vec2<T>& v, const U& s) -> Vec2<div_t<T, U>> {
+    using R = div_t<T, U>; return { R(v.x) / s, R(v.y) / s };
+}
+
+// scalar op Vec2
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a + b; })
+constexpr auto operator+(const T& s, const Vec2<U>& v) -> Vec2<plus_t<T, U>> {
+    using R = plus_t<T, U>; return { s + R(v.x), s + R(v.y) };
+}
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a - b; })
+constexpr auto operator-(const T& s, const Vec2<U>& v) -> Vec2<minus_t<T, U>> {
+    using R = minus_t<T, U>; return { s - R(v.x), s - R(v.y) };
+}
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a* b; })
+constexpr auto operator*(const T& s, const Vec2<U>& v) -> Vec2<mul_t<T, U>> {
+    using R = mul_t<T, U>; return { s * R(v.x), s * R(v.y) };
+}
+template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a / b; })
+constexpr auto operator/(const T& s, const Vec2<U>& v) -> Vec2<div_t<T, U>> {
+    using R = div_t<T, U>; return { s / R(v.x), s / R(v.y) };
+}
+
+// Vec2 op Vec2 (elementwise)
+template<class T, class U> requires requires(T a, U b) { a + b; }
+constexpr auto operator+(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<plus_t<T, U>> {
+    using R = plus_t<T, U>; return { R(a.x) + b.x, R(a.y) + b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a - b; }
+constexpr auto operator-(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<minus_t<T, U>> {
+    using R = minus_t<T, U>; return { R(a.x) - b.x, R(a.y) - b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a* b; }
+constexpr auto operator*(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<mul_t<T, U>> {
+    using R = mul_t<T, U>; return { R(a.x) * b.x, R(a.y) * b.y };
+}
+template<class T, class U> requires requires(T a, U b) { a / b; }
+constexpr auto operator/(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<div_t<T, U>> {
+    using R = div_t<T, U>; return { R(a.x) / b.x, R(a.y) / b.y };
+}
+
+
+/// ----- Vec3 overloads -----
+template<typename T> inline Vec3<T> operator*(T s, const Vec3<T>& v) { return v * s; }
+template<typename T> inline Vec3<T> operator*(const Vec3<T>& v, T s) { return v * s; }
+template<typename T> inline Vec3<T> operator/(T s, const Vec3<T>& v) { return v / s; }
+template<typename T> inline Vec3<T> operator/(const Vec3<T>& v, T s) { return v / s; }
+template<typename T> inline Vec3<T> operator+(T s, const Vec3<T>& v) { return v + s; }
+template<typename T> inline Vec3<T> operator+(const Vec3<T>& v, T s) { return v + s; }
+template<typename T> inline Vec3<T> operator-(T s, const Vec3<T>& v) { return v - s; }
+template<typename T> inline Vec3<T> operator-(const Vec3<T>& v, T s) { return v - s; }
+
+/// ----- Vec4 overloads -----
+template<typename T> inline Vec4<T> operator*(T s, const Vec4<T>& v) { return v * s; }
+template<typename T> inline Vec4<T> operator*(const Vec4<T>& v, T s) { return v * s; }
+template<typename T> inline Vec4<T> operator/(T s, const Vec4<T>& v) { return v / s; }
+template<typename T> inline Vec4<T> operator/(const Vec4<T>& v, T s) { return v / s; }
+template<typename T> inline Vec4<T> operator+(T s, const Vec4<T>& v) { return v + s; }
+template<typename T> inline Vec4<T> operator+(const Vec4<T>& v, T s) { return v + s; }
+template<typename T> inline Vec4<T> operator-(T s, const Vec4<T>& v) { return v - s; }
+template<typename T> inline Vec4<T> operator-(const Vec4<T>& v, T s) { return v - s; }
+
 /// ----- Complex overloads -----
 
 template<class X> struct is_cplx : std::false_type {};
 template<class T> struct is_cplx<Complex<T>> : std::true_type {};
 template<class X> inline constexpr bool is_cplx_v = is_cplx<std::remove_cvref_t<X>>::value;
 
-template<class T, class U> using plus_t = decltype(std::declval<T>() + std::declval<U>());
+template<class T, class U> using plus_t  = decltype(std::declval<T>() + std::declval<U>());
 template<class T, class U> using minus_t = decltype(std::declval<T>() - std::declval<U>());
-template<class T, class U> using mul_t = decltype(std::declval<T>()* std::declval<U>());
-template<class T, class U> using div_t = decltype(std::declval<T>() / std::declval<U>());
+template<class T, class U> using mul_t   = decltype(std::declval<T>() * std::declval<U>());
+template<class T, class U> using div_t   = decltype(std::declval<T>() / std::declval<U>());
 
 // Complex op scalar (scalar treated as real)
 template<class T, class U> requires (!is_cplx_v<U>&& requires(T a, U b) { a + b; })
@@ -1177,91 +1566,11 @@ constexpr auto operator/(const Complex<T>& a, const Complex<U>& b) -> Complex<di
     return { rx, ry };
 }
 
-/// ----- Vec2 overloads -----
+/// ----- Matrix overloads -----
 
-template<class X> struct is_vec2 : std::false_type {};
-template<class T> struct is_vec2<Vec2<T>> : std::true_type {};
-template<class X> inline constexpr bool is_vec2_v = is_vec2<std::remove_cvref_t<X>>::value;
-
-template<class T, class U> using plus_t  = decltype(std::declval<T>() + std::declval<U>());
-template<class T, class U> using minus_t = decltype(std::declval<T>() - std::declval<U>());
-template<class T, class U> using mul_t   = decltype(std::declval<T>() * std::declval<U>());
-template<class T, class U> using div_t   = decltype(std::declval<T>() / std::declval<U>());
-
-// Vec2 op scalar
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a + b; })
-constexpr auto operator+(const Vec2<T>& v, const U& s) -> Vec2<plus_t<T, U>> {
-    using R = plus_t<T, U>; return { R(v.x) + s, R(v.y) + s };
-}
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a - b; })
-constexpr auto operator-(const Vec2<T>& v, const U& s) -> Vec2<minus_t<T, U>> {
-    using R = minus_t<T, U>; return { R(v.x) - s, R(v.y) - s };
-}
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a* b; })
-constexpr auto operator*(const Vec2<T>& v, const U& s) -> Vec2<mul_t<T, U>> {
-    using R = mul_t<T, U>; return { R(v.x) * s, R(v.y) * s };
-}
-template<class T, class U> requires (!is_vec2_v<U>&& requires(T a, U b) { a / b; })
-constexpr auto operator/(const Vec2<T>& v, const U& s) -> Vec2<div_t<T, U>> {
-    using R = div_t<T, U>; return { R(v.x) / s, R(v.y) / s };
-}
-
-// scalar op Vec2
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a + b; })
-constexpr auto operator+(const T& s, const Vec2<U>& v) -> Vec2<plus_t<T, U>> {
-    using R = plus_t<T, U>; return { s + R(v.x), s + R(v.y) };
-}
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a - b; })
-constexpr auto operator-(const T& s, const Vec2<U>& v) -> Vec2<minus_t<T, U>> {
-    using R = minus_t<T, U>; return { s - R(v.x), s - R(v.y) };
-}
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a* b; })
-constexpr auto operator*(const T& s, const Vec2<U>& v) -> Vec2<mul_t<T, U>> {
-    using R = mul_t<T, U>; return { s * R(v.x), s * R(v.y) };
-}
-template<class T, class U> requires (!is_vec2_v<T>&& requires(T a, U b) { a / b; })
-constexpr auto operator/(const T& s, const Vec2<U>& v) -> Vec2<div_t<T, U>> {
-    using R = div_t<T, U>; return { s / R(v.x), s / R(v.y) };
-}
-
-// Vec2 op Vec2 (elementwise)
-template<class T, class U> requires requires(T a, U b) { a + b; }
-constexpr auto operator+(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<plus_t<T, U>> {
-    using R = plus_t<T, U>; return { R(a.x) + b.x, R(a.y) + b.y };
-}
-template<class T, class U> requires requires(T a, U b) { a - b; }
-constexpr auto operator-(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<minus_t<T, U>> {
-    using R = minus_t<T, U>; return { R(a.x) - b.x, R(a.y) - b.y };
-}
-template<class T, class U> requires requires(T a, U b) { a* b; }
-constexpr auto operator*(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<mul_t<T, U>> {
-    using R = mul_t<T, U>; return { R(a.x) * b.x, R(a.y) * b.y };
-}
-template<class T, class U> requires requires(T a, U b) { a / b; }
-constexpr auto operator/(const Vec2<T>& a, const Vec2<U>& b) -> Vec2<div_t<T, U>> {
-    using R = div_t<T, U>; return { R(a.x) / b.x, R(a.y) / b.y };
-}
-
-
-/// ----- Vec3 overloads -----
-template<typename T> inline Vec3<T> operator*(T s, const Vec3<T>& v) { return v * s; }
-template<typename T> inline Vec3<T> operator*(const Vec3<T>& v, T s) { return v * s; }
-template<typename T> inline Vec3<T> operator/(T s, const Vec3<T>& v) { return v / s; }
-template<typename T> inline Vec3<T> operator/(const Vec3<T>& v, T s) { return v / s; }
-template<typename T> inline Vec3<T> operator+(T s, const Vec3<T>& v) { return v + s; }
-template<typename T> inline Vec3<T> operator+(const Vec3<T>& v, T s) { return v + s; }
-template<typename T> inline Vec3<T> operator-(T s, const Vec3<T>& v) { return v - s; }
-template<typename T> inline Vec3<T> operator-(const Vec3<T>& v, T s) { return v - s; }
-
-/// ----- Vec4 overloads -----
-template<typename T> inline Vec4<T> operator*(T s, const Vec4<T>& v) { return v * s; }
-template<typename T> inline Vec4<T> operator*(const Vec4<T>& v, T s) { return v * s; }
-template<typename T> inline Vec4<T> operator/(T s, const Vec4<T>& v) { return v / s; }
-template<typename T> inline Vec4<T> operator/(const Vec4<T>& v, T s) { return v / s; }
-template<typename T> inline Vec4<T> operator+(T s, const Vec4<T>& v) { return v + s; }
-template<typename T> inline Vec4<T> operator+(const Vec4<T>& v, T s) { return v + s; }
-template<typename T> inline Vec4<T> operator-(T s, const Vec4<T>& v) { return v - s; }
-template<typename T> inline Vec4<T> operator-(const Vec4<T>& v, T s) { return v - s; }
+template<class T, class U> using mat_mul_t    = decltype(std::declval<T>() * std::declval<U>() + std::declval<T>() * std::declval<U>());
+template<class T, class U> using scalar_mul_t = decltype(std::declval<T>() * std::declval<U>());
+template<class T, class U> using scalar_div_t = decltype(std::declval<T>() / std::declval<U>());
 
 // ================= typedefs =================
 
@@ -1282,6 +1591,18 @@ typedef Vec4<int>          IVec4;
 typedef Vec4<f32>          FVec4;
 typedef Vec4<f64>          DVec4;
 typedef Vec4<f128>         DDVec4;
+
+typedef Mat2<f32>          FMat2;
+typedef Mat2<f64>          DMat2;
+typedef Mat2<f128>         DDMat2;
+
+typedef Mat3<f32>          FMat3;
+typedef Mat3<f64>          DMat3;
+typedef Mat3<f128>         DDMat3;
+
+typedef Mat4<f32>          FMat4;
+typedef Mat4<f64>          DMat4;
+typedef Mat4<f128>         DDMat4;
 
 typedef Range<int>         IRange;
 typedef Range<f32>         FRange;

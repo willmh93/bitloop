@@ -15,13 +15,11 @@
     "freetype",
     "sdl3",
     "glad",
-    "glm",
     "gcem",
     "concurrentqueue",
     "tsl-ordered-map",
     "nanovg",
     "nanosvg",
-
 
     "libwebp",
     "nlohmann-json",

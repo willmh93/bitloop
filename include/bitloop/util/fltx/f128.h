@@ -163,15 +163,16 @@ struct f128
     FORCE_INLINE constexpr f128& operator/=(f128 rhs) { *this = *this / rhs; return *this; }
     #endif
 
-    constexpr f128() noexcept = default;
-    constexpr f128(double hi_, double lo_) noexcept : hi(hi_), lo(lo_) {}
-    constexpr f128(float  x) noexcept : hi((double)x), lo(0.0) {}
-    constexpr f128(double x) noexcept : hi(x), lo(0.0) {}
+    /// constructors (disabled to keep f128 trivial)
+    //constexpr f128() noexcept = default;
+    //constexpr f128(double hi_, double lo_) noexcept : hi(hi_), lo(lo_) {}
+    //constexpr f128(float  x) noexcept : hi((double)x), lo(0.0) {}
+    //constexpr f128(double x) noexcept : hi(x), lo(0.0) {}
 
-    constexpr f128(int64_t  v) noexcept { *this = static_cast<int64_t>(v); }
-    constexpr f128(uint64_t u) noexcept { *this = static_cast<uint64_t>(u); }
-    constexpr f128(int32_t  v) noexcept : f128((int64_t)v) {}
-    constexpr f128(uint32_t u) noexcept : f128((int64_t)u) {}
+    //constexpr f128(int64_t  v) noexcept { *this = static_cast<int64_t>(v); }
+    //constexpr f128(uint64_t u) noexcept { *this = static_cast<uint64_t>(u); }
+    //constexpr f128(int32_t  v) noexcept : f128((int64_t)v) {}
+    //constexpr f128(uint32_t u) noexcept : f128((int64_t)u) {}
 
     //FORCE_INLINE constexpr f128(int v) { f128(int64_t(v)); }
 
@@ -315,6 +316,24 @@ FORCE_INLINE constexpr f128& f128::operator=(int64_t v) noexcept {
     hi = r.hi; lo = r.lo; return *this;
 }
 
+constexpr f128 to_f128(double x) noexcept { return f128{ x, 0.0 }; }
+constexpr f128 to_f128(float x) noexcept { return f128{ (double)x, 0.0 }; }
+constexpr f128 to_f128(int32_t v) noexcept { return f128{ (double)v, 0.0 }; }
+constexpr f128 to_f128(uint32_t v) noexcept { return f128{ (double)v, 0.0 }; }
+constexpr f128 to_f128(int64_t v) noexcept {
+    uint64_t u = (v < 0) ? uint64_t(0) - uint64_t(v) : uint64_t(v);
+    f128 r; r = u; // reuse uint64_t path
+    if (v < 0) { r.hi = -r.hi; r.lo = -r.lo; }
+    return r;
+}
+constexpr f128 to_f128(uint64_t u)  noexcept {
+    uint64_t hi32 = u >> 32, lo32 = u & 0xFFFFFFFFull;
+    double a = static_cast<double>(hi32) * 4294967296.0; // 2^32
+    double b = static_cast<double>(lo32);
+    double s, e; two_sum_precise(a, b, s, e);
+    return renorm(s, e);
+}
+
 // ------------------ f128 <=> f128 ------------------
 
 FORCE_INLINE constexpr bool operator <(const f128& a, const f128& b) { return (a.hi < b.hi) || (a.hi == b.hi && a.lo < b.lo); }
@@ -326,85 +345,85 @@ FORCE_INLINE constexpr bool operator!=(const f128& a, const f128& b) { return !(
 
 // ------------------ double <=> f128 ------------------
 
-FORCE_INLINE constexpr bool operator<(const f128& a, double b)  { return a < f128(b); }
-FORCE_INLINE constexpr bool operator<(double a, const f128& b)  { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator<(const f128& a, double b)  { return a < f128{b}; }
+FORCE_INLINE constexpr bool operator<(double a, const f128& b)  { return f128{a} < b; }
 FORCE_INLINE constexpr bool operator>(const f128& a, double b)  { return b < a; }
 FORCE_INLINE constexpr bool operator>(double a, const f128& b)  { return b < a; }
 FORCE_INLINE constexpr bool operator<=(const f128& a, double b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator<=(double a, const f128& b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator>=(const f128& a, double b) { return !(a < b); }
 FORCE_INLINE constexpr bool operator>=(double a, const f128& b) { return !(a < b); }
-FORCE_INLINE constexpr bool operator==(const f128& a, double b) { return a == f128(b); }
-FORCE_INLINE constexpr bool operator==(double a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator==(const f128& a, double b) { return a == f128{b}; }
+FORCE_INLINE constexpr bool operator==(double a, const f128& b) { return f128{a} == b; }
 FORCE_INLINE constexpr bool operator!=(const f128& a, double b) { return !(a == b); }
 FORCE_INLINE constexpr bool operator!=(double a, const f128& b) { return !(a == b); }
 
 // ------------------ float <=> f128 ------------------
 
-FORCE_INLINE constexpr bool operator<(const f128& a, float b) { return a < f128(b); }
-FORCE_INLINE constexpr bool operator<(float a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator<(const f128& a, float b) { return a < f128{b}; }
+FORCE_INLINE constexpr bool operator<(float a, const f128& b) { return f128{a} < b; }
 FORCE_INLINE constexpr bool operator>(const f128& a, float b) { return b < a; }
 FORCE_INLINE constexpr bool operator>(float a, const f128& b) { return b < a; }
 FORCE_INLINE constexpr bool operator<=(const f128& a, float b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator<=(float a, const f128& b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator>=(const f128& a, float b) { return !(a < b); }
 FORCE_INLINE constexpr bool operator>=(float a, const f128& b) { return !(a < b); }
-FORCE_INLINE constexpr bool operator==(const f128& a, float b) { return a == f128(b); }
-FORCE_INLINE constexpr bool operator==(float a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator==(const f128& a, float b) { return a == f128{b}; }
+FORCE_INLINE constexpr bool operator==(float a, const f128& b) { return f128{a} == b; }
 FORCE_INLINE constexpr bool operator!=(const f128& a, float b) { return !(a == b); }
 FORCE_INLINE constexpr bool operator!=(float a, const f128& b) { return !(a == b); }
 
 // --------------- ints <=> f128 ---------------
 
-FORCE_INLINE constexpr bool operator<(const f128& a, int32_t b) { return a < f128(b); }
-FORCE_INLINE constexpr bool operator<(int32_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator<(const f128& a, int32_t b) { return a < to_f128(b); }
+FORCE_INLINE constexpr bool operator<(int32_t a, const f128& b) { return to_f128(a) < b; }
 FORCE_INLINE constexpr bool operator>(const f128& a, int32_t b) { return b < a; }
 FORCE_INLINE constexpr bool operator>(int32_t a, const f128& b) { return b < a; }
 FORCE_INLINE constexpr bool operator<=(const f128& a, int32_t b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator<=(int32_t a, const f128& b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator>=(const f128& a, int32_t b) { return !(a < b); }
 FORCE_INLINE constexpr bool operator>=(int32_t a, const f128& b) { return !(a < b); }
-FORCE_INLINE constexpr bool operator==(const f128& a, int32_t b) { return a == f128(b); }
-FORCE_INLINE constexpr bool operator==(int32_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator==(const f128& a, int32_t b) { return a == to_f128(b); }
+FORCE_INLINE constexpr bool operator==(int32_t a, const f128& b) { return to_f128(a) == b; }
 FORCE_INLINE constexpr bool operator!=(const f128& a, int32_t b) { return !(a == b); }
 FORCE_INLINE constexpr bool operator!=(int32_t a, const f128& b) { return !(a == b); }
 
-FORCE_INLINE constexpr bool operator<(const f128& a, uint32_t b) { return a < f128(b); }
-FORCE_INLINE constexpr bool operator<(uint32_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator<(const f128& a, uint32_t b) { return a < to_f128(b); }
+FORCE_INLINE constexpr bool operator<(uint32_t a, const f128& b) { return to_f128(a) < b; }
 FORCE_INLINE constexpr bool operator>(const f128& a, uint32_t b) { return b < a; }
 FORCE_INLINE constexpr bool operator>(uint32_t a, const f128& b) { return b < a; }
 FORCE_INLINE constexpr bool operator<=(const f128& a, uint32_t b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator<=(uint32_t a, const f128& b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator>=(const f128& a, uint32_t b) { return !(a < b); }
 FORCE_INLINE constexpr bool operator>=(uint32_t a, const f128& b) { return !(a < b); }
-FORCE_INLINE constexpr bool operator==(const f128& a, uint32_t b) { return a == f128(b); }
-FORCE_INLINE constexpr bool operator==(uint32_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator==(const f128& a, uint32_t b) { return a == to_f128(b); }
+FORCE_INLINE constexpr bool operator==(uint32_t a, const f128& b) { return to_f128(a) == b; }
 FORCE_INLINE constexpr bool operator!=(const f128& a, uint32_t b) { return !(a == b); }
 FORCE_INLINE constexpr bool operator!=(uint32_t a, const f128& b) { return !(a == b); }
 
-FORCE_INLINE constexpr bool operator<(const f128& a, int64_t b) { return a < f128(b); }
-FORCE_INLINE constexpr bool operator<(int64_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator<(const f128& a, int64_t b) { return a < to_f128(b); }
+FORCE_INLINE constexpr bool operator<(int64_t a, const f128& b) { return to_f128(a) < b; }
 FORCE_INLINE constexpr bool operator>(const f128& a, int64_t b) { return b < a; }
 FORCE_INLINE constexpr bool operator>(int64_t a, const f128& b) { return b < a; }
 FORCE_INLINE constexpr bool operator<=(const f128& a, int64_t b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator<=(int64_t a, const f128& b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator>=(const f128& a, int64_t b) { return !(a < b); }
 FORCE_INLINE constexpr bool operator>=(int64_t a, const f128& b) { return !(a < b); }
-FORCE_INLINE constexpr bool operator==(const f128& a, int64_t b) { return a == f128(b); }
-FORCE_INLINE constexpr bool operator==(int64_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator==(const f128& a, int64_t b) { return a == to_f128(b); }
+FORCE_INLINE constexpr bool operator==(int64_t a, const f128& b) { return to_f128(a) == b; }
 FORCE_INLINE constexpr bool operator!=(const f128& a, int64_t b) { return !(a == b); }
 FORCE_INLINE constexpr bool operator!=(int64_t a, const f128& b) { return !(a == b); }
 
-FORCE_INLINE constexpr bool operator<(const f128& a, uint64_t b) { return a < f128(b); }
-FORCE_INLINE constexpr bool operator<(uint64_t a, const f128& b) { return f128(a) < b; }
+FORCE_INLINE constexpr bool operator<(const f128& a, uint64_t b) { return a < to_f128(b); }
+FORCE_INLINE constexpr bool operator<(uint64_t a, const f128& b) { return to_f128(a) < b; }
 FORCE_INLINE constexpr bool operator>(const f128& a, uint64_t b) { return b < a; }
 FORCE_INLINE constexpr bool operator>(uint64_t a, const f128& b) { return b < a; }
 FORCE_INLINE constexpr bool operator<=(const f128& a, uint64_t b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator<=(uint64_t a, const f128& b) { return !(b < a); }
 FORCE_INLINE constexpr bool operator>=(const f128& a, uint64_t b) { return !(a < b); }
 FORCE_INLINE constexpr bool operator>=(uint64_t a, const f128& b) { return !(a < b); }
-FORCE_INLINE constexpr bool operator==(const f128& a, uint64_t b) { return a == f128(b); }
-FORCE_INLINE constexpr bool operator==(uint64_t a, const f128& b) { return f128(a) == b; }
+FORCE_INLINE constexpr bool operator==(const f128& a, uint64_t b) { return a == to_f128(b); }
+FORCE_INLINE constexpr bool operator==(uint64_t a, const f128& b) { return to_f128(a) == b; }
 FORCE_INLINE constexpr bool operator!=(const f128& a, uint64_t b) { return !(a == b); }
 FORCE_INLINE constexpr bool operator!=(uint64_t a, const f128& b) { return !(a == b); }
 
@@ -578,14 +597,14 @@ FORCE_INLINE f128 remainder(const f128& x, const f128& y)
     f128 n = trunc(q);
     f128 rfrac = q - n;                // fractional part with sign of q
     const f128 half = f128(0.5);
-    const f128 one = 1;
+    const f128 one{ 1 };
 
     if (abs(rfrac) > half) {
         n += (rfrac.hi >= 0.0 ? one : -one);
     }
     else if (abs(rfrac) == half) {
         // tie: choose even n
-        const f128 n_mod2 = fmod(n, 2);
+        const f128 n_mod2 = fmod(n, f128{ 2 });
         if (n_mod2 != 0)
             n += (rfrac.hi >= 0.0 ? one : -one);
     }
@@ -910,7 +929,7 @@ FORCE_INLINE f128 atan2(const f128& y, const f128& x)
 }
 FORCE_INLINE f128 tan(const f128& a) { return sin(a) / cos(a); }
 FORCE_INLINE f128 pow(const f128& x, const f128& y) { return exp(y * log(x)); }
-FORCE_INLINE f128 atan(const f128& x) { return atan2(x, 1); }
+FORCE_INLINE f128 atan(const f128& x) { return atan2(x, f128{ 1 }); }
 
 
 /*------------ precise DP rounding -------------------------------------------*/
@@ -1034,7 +1053,7 @@ FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept
 
     const f128 half = f128(0.5);
     bool tie = (f == half);
-    if (f > half || (tie && fmod(n, 2) != 0))
+    if (f > half || (tie && fmod(n, f128{ 2 }) != 0))
         n = n + 1;
 
     return n;
@@ -1466,8 +1485,8 @@ FORCE_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr =
     // 4) digits (integer part)
     auto isdig = [](char c)->bool { return (c >= '0' && c <= '9'); };
 
-    f128 int_part = 0;
-    f128 frac_part = 0;
+    f128 int_part{ 0 };
+    f128 frac_part{ 0 };
     int    frac_digits = 0;
     bool   any_digit = false;
 
@@ -1486,7 +1505,7 @@ FORCE_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr =
             if (clen == 9) { int_part = int_part * base1e9 + f128((double)chunk); chunk = 0; clen = 0; }
         }
         if (clen > 0)
-            int_part = int_part * mul_pow10_small(1, clen) + f128((double)chunk);
+            int_part = int_part * mul_pow10_small(f128{ 1 }, clen) + f128((double)chunk);
     }
 
     // fractional: '.' then digits
@@ -1500,7 +1519,7 @@ FORCE_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr =
             if (clen == 9) { frac_part = frac_part * base1e9 + f128((double)chunk); chunk = 0; clen = 0; }
         }
         if (clen > 0)
-            frac_part = frac_part * mul_pow10_small(1, clen) + f128((double)chunk);
+            frac_part = frac_part * mul_pow10_small(f128{ 1 }, clen) + f128((double)chunk);
         frac_digits = local_digits;
     }
 
@@ -1530,7 +1549,7 @@ FORCE_INLINE bool   parse_flt128(const char* s, f128& out, const char** endptr =
     f128 value = int_part;
     if (frac_digits > 0) {
         // compute 10^frac_digits
-        f128 pow_frac = 1;
+        f128 pow_frac{ 1 };
         int fd = frac_digits;
         while (fd >= 9) { pow_frac = pow_frac * base1e9; fd -= 9; }
         if (fd > 0) {
@@ -1571,7 +1590,7 @@ FORCE_INLINE f128 from_string(const char* s)
     f128 ret;
     if (parse_flt128(s, ret))
         return ret;
-    return 0;
+    return f128{0};
 }
 
 FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
@@ -1616,16 +1635,14 @@ FORCE_INLINE std::ostream& operator<<(std::ostream& os, const f128& x)
     return os;
 }
 
-//
-//FORCE_INLINE constexpr f128 operator"" _f128(unsigned long long v) noexcept {
-//    return f128(static_cast<uint64_t>(v));
-//}
-//
-//FORCE_INLINE constexpr f128 operator"" _f128(long double v) noexcept {
-//    return f128(static_cast<double>(v));
-//}
-//FORCE_INLINE constexpr f128 operator"" _f128(const char* s, std::size_t) {
-//    return f128(s);
+FORCE_INLINE constexpr f128 operator"" _dd(unsigned long long v) noexcept {
+    return to_f128(v);
+}
+FORCE_INLINE constexpr f128 operator"" _dd(long double v) noexcept {
+    return f128{ static_cast<double>(v) };
+}
+//FORCE_INLINE constexpr f128 operator"" _dd(const char* s, std::size_t) {
+//    return from_string(s);
 //}
 
 } // end bl

@@ -486,6 +486,7 @@ bool SliderScalar_TowardMax(const char* label, ImGuiDataType data_type, void* p_
 }
 
 using bl::f128;
+using bl::operator""_dd;
 
 static const float DRAG_MOUSE_THRESHOLD_FACTOR = 0.50f;
 
@@ -575,16 +576,16 @@ static f128 ScaleValueFromRatio_flt128(float t, f128 v_min, f128 v_max, bool is_
         {
             float zc = (-(float)ImMin((double)v_min, (double)v_max)) / ImAbs((float)v_max - (float)v_min);
             if (tf < zc)
-                return -(eps * ImPow128(-vminf / eps, 1.0f - (tf / zc)));
+                return -(eps * ImPow128(-vminf / eps, f128{ 1.0f - (tf / zc) }));
             else if (tf > zc)
-                return (eps * ImPow128(vmaxf / eps, (tf - zc) / (1.0f - zc)));
+                return (eps * ImPow128(vmaxf / eps, f128{ (tf - zc) / (1.0f - zc) }));
             else
-                return 0;
+                return 0_dd;
         }
         else if ((v_min < 0) || (v_max < 0))
-            return -(-vmaxf * ImPow128(-vminf / -vmaxf, 1.0f - tf));
+            return -(-vmaxf * ImPow128(-vminf / -vmaxf, f128{ 1.0f - tf }));
         else
-            return (vminf * ImPow128(vmaxf / vminf, tf));
+            return (vminf * ImPow128(vmaxf / vminf, f128{ tf }));
     }
 
     // linear

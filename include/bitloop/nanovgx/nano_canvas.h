@@ -182,8 +182,29 @@ public:
     void restore() { nvgRestore(vg); }
     
     void resetTransform()                         { nvgResetTransform(vg); }
-    void transform(const glm::mat3& m)            { nvgTransform(vg, m[0][0], m[0][1], m[1][0], m[1][1], m[2][0], m[2][1]); }
-    glm::mat3 currentTransform() const            { f32 x[6]; nvgCurrentTransform(vg, x); return glm::mat3(x[0], x[1], 0, x[2], x[3], 0, x[4], x[5], 1); }
+    void transform(const FMat3& m)
+    {
+        const f32 a = m(0, 0);
+        const f32 b = m(1, 0);
+        const f32 c = m(0, 1);
+        const f32 d = m(1, 1);
+        const f32 e = m(0, 2);
+        const f32 f = m(1, 2);
+
+        nvgTransform(vg, a, b, c, d, e, f);
+    }
+    FMat3 currentTransform() const
+    {
+        f32 x[6];
+        nvgCurrentTransform(vg, x);
+
+        FMat3 m = FMat3::identity(1.0f);
+        m(0, 0) = x[0];  m(1, 0) = x[1];
+        m(0, 1) = x[2];  m(1, 1) = x[3];
+        m(0, 2) = x[4];  m(1, 2) = x[5];
+        m(2, 0) = 0.0f; m(2, 1) = 0.0f; m(2, 2) = 1.0f;
+        return m;
+    }
 
     void translate(f64 x, f64 y)                  { nvgTranslate(vg, (f32)(x), (f32)(y)); }
     void translate(DVec2 p)                       { nvgTranslate(vg, (f32)(p.x), (f32)(p.y)); }
@@ -559,7 +580,7 @@ class Painter : private SimplePainter
     DVec2 align_half(DVec2 p)         { return DVec2{ std::floor(p.x) + 0.5, std::floor(p.y) + 0.5 }; }
     DVec2 align_half(f64 px, f64 py)  { return DVec2{ std::floor(px)  + 0.5, std::floor(py)  + 0.5 }; }
 
-    glm::mat3 default_viewport_transform;
+    FMat3 default_viewport_transform;
     f64 line_width = 1;
 
     bool transform_coordinates = true;
@@ -646,36 +667,37 @@ public:
         setLineWidth(line_width);
     }
 
+    [[nodiscard]] WorldStageTransform worldStageTransform() const { return m; }
+    template<typename T = f128> [[nodiscard]] const Mat3<T>& currentTransform() const { return m.stageTransform<T>(); }
+    template<typename T = f128> [[nodiscard]] const Mat3<T>& inverseTransform() const { return m.worldTransform<T>(); }
+
     void resetTransform()
     {
         m.reset();
         SimplePainter::resetTransform();
     }
 
-    template<typename T = f128> GlmMat3<T> currentTransform() const { return m.stageTransform<T>(); }
-    template<typename T = f128> GlmMat3<T> inverseTransform() const { return m.worldTransform<T>(); }
-
-    void transform(const glm::ddmat3& _m) {
+    void transform(const DDMat3& _m) {
         if (transform_coordinates)
             m.transform(_m);
         else
-            SimplePainter::transform(_m);
+            SimplePainter::transform(static_cast<FMat3>(_m));
     }
 
-    void setTransform(const glm::ddmat3& _m) {
+    void setTransform(const DDMat3& _m) {
         if (transform_coordinates) {
             m.reset();
             m.transform(_m);
         }
         else {
             SimplePainter::resetTransform();
-            SimplePainter::transform(static_cast<glm::mat3>(_m));
+            SimplePainter::transform(static_cast<FMat3>(_m));
         }
     }
 
     template<typename T> void translate(T x, T y) { if (transform_coordinates) m.translate(x, y); else SimplePainter::translate(x, y); }
     template<typename T> void scale(T s)          { if (transform_coordinates) m.scale(s);        else SimplePainter::scale(s); }
-    void rotate(f64 r)                         { if (transform_coordinates) m.rotate(r);       else SimplePainter::rotate(r); }
+    void rotate(f64 r)                            { if (transform_coordinates) m.rotate(r);       else SimplePainter::rotate(r); }
 
     [[nodiscard]] DVec2 Offset(f64 stage_offX, f64 stage_offY) const
     {
