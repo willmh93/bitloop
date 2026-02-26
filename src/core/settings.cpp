@@ -390,6 +390,7 @@ void SettingsPanel::populateSettings()
             config.updateRecordBitrate();
         }
         ImGui::Checkbox("Show FPS in toolbar", &config.show_fps);
+        ImGui::Checkbox("Fill viewport", &config.fill_viewport);
         ImGui::EndLabelledBox();
     }
 

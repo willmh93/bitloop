@@ -1704,6 +1704,7 @@ void MainWindow::populateViewport(bool& projectDrawn)
             updateActivePreset();
         }
 
+        bool needs_scaling = false;
 
         // "canvas" refers to internal canvas dimensions
         // "image" in this context = ImGui image
@@ -1714,18 +1715,40 @@ void MainWindow::populateViewport(bool& projectDrawn)
         float sw = client_size.x, sh = client_size.y; // calculates to image size (after scaling)
         float ox = 0, oy = 0;
 
-        float client_aspect  = (client_size.x / client_size.y);
-        float canvas_aspect = ((float)active_canvas_size.x / (float)active_canvas_size.y);
-
-        if (canvas_aspect > client_aspect)
+        // If image small enough to render at 100% scale with no resizing?
+        if (!getSettingsConfig()->fill_viewport)
         {
-            sh = client_size.y * (client_aspect / canvas_aspect); // Render aspect is too wide
-            oy = 0.5f * (client_size.y - sh);                     // Center vertically
+            needs_scaling =
+                active_target_size.x > client_size.x ||
+                active_target_size.y > client_size.y;
         }
         else
         {
-            sw = client_size.x * (canvas_aspect / client_aspect); // Render aspect is too tall
-            ox = 0.5f * (client_size.x - sw);                     // Center horizontally
+            needs_scaling = true;
+        }
+
+        if (needs_scaling)
+        {
+            float client_aspect = (client_size.x / client_size.y);
+            float canvas_aspect = ((float)active_target_size.x / (float)active_target_size.y);
+
+            if (canvas_aspect > client_aspect)
+            {
+                sh = client_size.y * (client_aspect / canvas_aspect); // Render aspect is too wide
+                oy = 0.5f * (client_size.y - sh);                     // Center vertically
+            }
+            else
+            {
+                sw = client_size.x * (canvas_aspect / client_aspect); // Render aspect is too tall
+                ox = 0.5f * (client_size.x - sw);                     // Center horizontally
+            }
+        }
+        else
+        {
+            ox = 0.5f * (client_size.x - active_target_size.x);
+            oy = 0.5f * (client_size.y - active_target_size.y);
+            sw = (float)active_target_size.x;
+            sh = (float)active_target_size.y;
         }
 
         image_pos += { ox, oy };
@@ -1733,7 +1756,7 @@ void MainWindow::populateViewport(bool& projectDrawn)
 
         canvas.setClientRect(IRect((int)image_pos.x, (int)image_pos.y, (int)(image_pos.x + sw), (int)(image_pos.y + sh)));
      
-        ImGui::SetCursorScreenPos(image_pos);
+        ImGui::SetCursorScreenPos(ImFloor(image_pos));
 
         if (use_preprocessor_texture)
             // use the preprocessor's output texture (no flip needed)

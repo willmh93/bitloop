@@ -35,6 +35,7 @@ struct SettingsConfig
     int     record_near_lossless = 100;
 
     bool    show_fps = false;
+    bool    fill_viewport = false;
 
     SnapshotPresetHashMap target_image_presets;
     int target_video_preset = 0; // use the selected video preset as the target preset

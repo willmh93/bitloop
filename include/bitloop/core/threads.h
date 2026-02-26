@@ -18,7 +18,9 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/threading.h>
 #elif defined(_WIN32)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #elif defined(__unix__) || defined(__APPLE__)
 #include <unistd.h>

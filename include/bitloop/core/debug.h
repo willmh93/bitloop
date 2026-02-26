@@ -28,7 +28,9 @@
 #include <source_location>
 
 #if defined (_WIN32)
+  #ifndef NOMINMAX
   #define NOMINMAX
+  #endif
   #include <windows.h>
   #include <stacktrace>
 #elif defined(__EMSCRIPTEN__)

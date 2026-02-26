@@ -3,7 +3,7 @@
 #include <deque>
 #include <string>
 #include <imgui.h>
-#include "threads.h"
+#include <bitloop/core/threads.h>
 #include <mutex>
 
 BL_BEGIN_NS
