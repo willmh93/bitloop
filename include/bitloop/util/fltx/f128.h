@@ -80,20 +80,26 @@
     #ifndef BL_POP_PRECISE
         #define BL_POP_PRECISE   _Pragma("GCC pop_options")
     #endif
+
 #else
 
     #define BL_PUSH_PRECISE
     #define BL_POP_PRECISE
 
 #endif
+
+
+
 namespace bl {
 
 // For now, disabling std::fma seems to offer a 5-6x performance boost on web
 #ifndef __EMSCRIPTEN__
-    #if defined(__FMA__) || defined(__FMA4__) || defined(_MSC_VER) || defined(__clang__) || defined(__GNUC__)
+    #if defined(__FMA__) || defined(__FMA4__) || defined(_MSC_VER) || defined(__clang__)// || defined(__GNUC__)
     #define FMA_AVAILABLE
     #endif
 #endif
+
+//#undef FMA_AVAILABLE
 
 BL_PUSH_PRECISE
 FORCE_INLINE constexpr void two_sum_precise(double a, double b, double& s, double& e)
@@ -1060,7 +1066,7 @@ FORCE_INLINE f128 round_scaled(f128 x, int prec) noexcept
 }
 
 BL_PUSH_PRECISE
-BL_PRINT_NOINLINE FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexcept
+FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexcept
 {
     double p, err;
 #ifdef FMA_AVAILABLE
@@ -1075,7 +1081,7 @@ BL_PRINT_NOINLINE FORCE_INLINE f128 mul_by_double_print(f128 a, double b) noexce
     return f128{s, e};
 }
 
-BL_PRINT_NOINLINE FORCE_INLINE f128 sub_by_double_print(f128 a, double b) noexcept
+FORCE_INLINE f128 sub_by_double_print(f128 a, double b) noexcept
 {
     double s, e;
     two_sum_precise(a.hi, -b, s, e);

@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
-project(Tiger LANGUAGES CXX)
+project(Tiger NONE)
+
 include("${CMAKE_CURRENT_LIST_DIR}/tooling/findBitloop.cmake")
+
+bitloop_enable_languages(LANGUAGES C CXX)
 
 # ---------------------------------  flags  ----------------------------------
 

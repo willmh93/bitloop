@@ -4,6 +4,47 @@ if(_bl_in_try_compile)
   return()
 endif()
 
+set(_bl_ninja "")
+if (CMAKE_GENERATOR MATCHES "^Ninja")
+    if (DEFINED CMAKE_MAKE_PROGRAM AND NOT CMAKE_MAKE_PROGRAM STREQUAL "")
+        set(_bl_ninja "${CMAKE_MAKE_PROGRAM}")
+    else()
+        find_program(_bl_ninja NAMES ninja ninja.exe)
+
+        if (NOT _bl_ninja)
+            # _ChatGPT_ try VS-bundled Ninja relative to the cmake.exe being used
+            get_filename_component(_cmake_bin_dir "${CMAKE_COMMAND}" DIRECTORY)          # .../CMake/bin
+            get_filename_component(_cmake_root1   "${_cmake_bin_dir}" DIRECTORY)        # .../CMake
+            get_filename_component(_cmake_root2   "${_cmake_root1}" DIRECTORY)          # .../Microsoft/CMake (VS layout)
+
+            set(_cand_vs_ninja "${_cmake_root2}/Ninja/ninja.exe")
+            if (EXISTS "${_cand_vs_ninja}")
+                set(_bl_ninja "${_cand_vs_ninja}")
+            endif()
+        endif()
+
+        if (NOT _bl_ninja)
+            # _ChatGPT_ try CLion-bundled Ninja near CLion cmake.exe
+            get_filename_component(_cmake_bin_dir "${CMAKE_COMMAND}" DIRECTORY)          # .../cmake/win/x64/bin
+            get_filename_component(_cmake_root1   "${_cmake_bin_dir}" DIRECTORY)        # .../cmake/win/x64
+            get_filename_component(_cmake_root2   "${_cmake_root1}" DIRECTORY)          # .../cmake/win
+            get_filename_component(_cmake_root3   "${_cmake_root2}" DIRECTORY)          # .../cmake
+            get_filename_component(_cmake_root4   "${_cmake_root3}" DIRECTORY)          # .../bin
+
+            set(_cand_clion_ninja "${_cmake_root4}/ninja/win/x64/ninja.exe")
+            if (EXISTS "${_cand_clion_ninja}")
+                set(_bl_ninja "${_cand_clion_ninja}")
+            endif()
+        endif()
+    endif()
+
+    if (NOT _bl_ninja)
+        message(FATAL_ERROR "Ninja generator selected but ninja.exe not found and CMAKE_MAKE_PROGRAM is empty")
+    endif()
+
+    set(CMAKE_MAKE_PROGRAM "${_bl_ninja}" CACHE FILEPATH "" FORCE)
+endif()
+
 # vcpkg_autodetect.cmake
 #    - Searches for an existing vcpkg in the current directory/workspace
 #    - If one isn't found, it clones vcpkg at a pinned <sha>
@@ -199,6 +240,9 @@ elseif (NOT FOUND_LOCAL_VCPKG)
     message(STATUS "No vcpkg found - cloning local vcpkg")
     clone_vcpkg(${LOCAL_VCPKG_DIR} ${VCPKG_PINNED_SHA})
     set(_vcpkg_dir ${LOCAL_VCPKG_DIR})
+elseif (FOUND_LOCAL_VCPKG)
+    message(STATUS "Local vcpkg found")
+    set(_vcpkg_dir ${LOCAL_VCPKG_DIR})
 endif()
 
 
@@ -241,43 +285,37 @@ else()
 
     file(MAKE_DIRECTORY "${_bl_discovery_build_dir}")
 
-    set(_toolchain_dir "${CMAKE_CURRENT_LIST_DIR}")  # .../tooling/toolchain
+    set(_toolchain_dir "${CMAKE_CURRENT_LIST_DIR}")
     set(_bl_discovery_toolchain "${_toolchain_dir}/discovery_toolchain.cmake")
 
     set(_cmd
-        ${CMAKE_COMMAND}
-        -S ${_project_dir}
-        -B ${_bl_discovery_build_dir}
-        -DBITLOOP_DISCOVERY=ON
-        -DBITLOOP_INTERNAL_DISCOVERY_RUN=1
-        -DBITLOOP_DISCOVERY_OUT=${_bl_discovery_out_file}
-        -DCMAKE_TOOLCHAIN_FILE=${_bl_discovery_toolchain}
+            ${CMAKE_COMMAND}
+            -G ${CMAKE_GENERATOR}
+            -S ${_project_dir}
+            -B ${_bl_discovery_build_dir}
+            -DBITLOOP_DISCOVERY=ON
+            -DBITLOOP_INTERNAL_DISCOVERY_RUN=1
+            -DBITLOOP_DISCOVERY_OUT:FILEPATH=${_bl_discovery_out_file}
+            -DCMAKE_TOOLCHAIN_FILE:FILEPATH=${_bl_discovery_toolchain}
     )
 
-    # Preserve generator/toolset/platform so the discovery configure matches the real one.
-    if (CMAKE_GENERATOR)
-        list(APPEND _cmd -G "${CMAKE_GENERATOR}")
-    endif()
-    if (CMAKE_GENERATOR_PLATFORM)
-        list(APPEND _cmd -A "${CMAKE_GENERATOR_PLATFORM}")
-    endif()
-    if (CMAKE_GENERATOR_TOOLSET)
-        list(APPEND _cmd -T "${CMAKE_GENERATOR_TOOLSET}")
+    if (CMAKE_GENERATOR MATCHES "^Ninja")
+        list(APPEND _cmd "-DCMAKE_MAKE_PROGRAM:FILEPATH=${_bl_ninja}")
     endif()
 
     # Preserve triplet
     if (DEFINED VCPKG_TARGET_TRIPLET AND NOT VCPKG_TARGET_TRIPLET STREQUAL "")
-        list(APPEND _cmd -DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET})
+        list(APPEND _cmd "-DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}")
     endif()
 
     execute_process(
-      COMMAND ${_cmd}
-      RESULT_VARIABLE _r
-      OUTPUT_VARIABLE _out
-      ERROR_VARIABLE  _err
-      COMMAND_ECHO STDOUT
+            COMMAND ${_cmd}
+            RESULT_VARIABLE _r
+            OUTPUT_VARIABLE _out
+            ERROR_VARIABLE  _err
+            COMMAND_ECHO STDOUT
     )
-    
+
     if (NOT _r EQUAL 0)
         message(SEND_ERROR "Bitloop discovery LOG: ${_out}")
         message(SEND_ERROR "Bitloop discovery ERROR: ${_err}")
