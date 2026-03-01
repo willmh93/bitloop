@@ -82,12 +82,12 @@ struct enum_domain_traits<bool>
 {
     static constexpr std::size_t size = 2;
 
-    static FORCE_INLINE constexpr std::size_t index(bool v)
+    static constexpr std::size_t index(bool v)
     {
         return v ? 1u : 0u;
     }
 
-    static FORCE_INLINE constexpr bool value(std::size_t i)
+    static constexpr bool value(std::size_t i)
     {
         return i != 0;
     }
@@ -101,7 +101,7 @@ struct enum_domain_values
     static constexpr std::size_t size = sizeof...(Vs);
     static constexpr std::array<E, size> values = { Vs... };
 
-    static FORCE_INLINE constexpr std::size_t index(E v)
+    static constexpr std::size_t index(E v)
     {
         for (std::size_t i = 0; i < size; ++i)
         {
@@ -118,7 +118,7 @@ struct enum_domain_values
         return 0;
     }
 
-    static FORCE_INLINE constexpr E value(std::size_t i)
+    static constexpr E value(std::size_t i)
     {
         #if !defined(NDEBUG)
         if (i >= size)
@@ -137,7 +137,7 @@ struct enum_domain_values
 template<class T>
 inline constexpr std::size_t domain_size_v = enum_domain_traits<std::remove_cv_t<T>>::size;
 
-namespace _bl_detail
+namespace constexpr_dispatch_detail
 {
     template<class... Ts>
     struct type_list {};
@@ -169,7 +169,7 @@ namespace _bl_detail
 // enum => type mapping
 // 
 // specialize enum_type_map<E, V> to map a specific enum value V to a type
-// used by map_enum(...)
+// used by enum_type(...)
 // ─────────────────────────────────────────────────────────────────────────────
 
 template<class E, E V>
@@ -203,7 +203,7 @@ namespace bl
     };
 
     template<class E>
-    FORCE_INLINE constexpr mapped_enum<E> map_enum(E v)
+    FORCE_INLINE constexpr mapped_enum<E> enum_type(E v)
     {
         return mapped_enum<E>{ v };
     }
@@ -231,7 +231,7 @@ inline constexpr bool is_mapped_enum_v = is_mapped_enum<std::remove_cv_t<T>>::va
 // enum_expandN maps runtime enum values to types using enum_type_map + enum_domain_traits
 // ─────────────────────────────────────────────────────────────────────────────
 
-namespace _bl_detail
+namespace constexpr_dispatch_detail
 {
     template<class E, class Cont, class TsList, class... More>
     struct enum_expand_step;
@@ -283,14 +283,14 @@ template<class E, class Cont, class... Ts, class... More>
 FORCE_INLINE decltype(auto) enum_expandN(Cont& cont, More... xs)
 {
     static_assert(std::is_enum_v<E>, "E must be an enum");
-    return _bl_detail::enum_expandN_impl<E, Cont, _bl_detail::type_list<Ts...>>(cont, xs...);
+    return constexpr_dispatch_detail::enum_expandN_impl<E, Cont, constexpr_dispatch_detail::type_list<Ts...>>(cont, xs...);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // stepwise 1-D dispatch for value domains (bool + enums)
 // ─────────────────────────────────────────────────────────────────────────────
 
-namespace _bl_detail
+namespace constexpr_dispatch_detail
 {
     template<class E, std::size_t I>
     using domain_constant_t = std::conditional_t<
@@ -353,8 +353,8 @@ template<typename... Ts, typename F, typename... Es>
 decltype(auto) _table_invoke(F& func, Es... vs)
 {
     using Fun = std::decay_t<F>;
-    using RetProbe = decltype(func.template operator()<Ts...>(_bl_detail::default_constant_t<std::remove_cvref_t<Es>>{}...));
-    return _bl_detail::step_dispatch<RetProbe, Fun, _bl_detail::type_list<Ts...>, _bl_detail::type_list<>, std::remove_cvref_t<Es>...>::invoke(
+    using RetProbe = decltype(func.template operator()<Ts...>(constexpr_dispatch_detail::default_constant_t<std::remove_cvref_t<Es>>{}...));
+    return constexpr_dispatch_detail::step_dispatch<RetProbe, Fun, constexpr_dispatch_detail::type_list<Ts...>, constexpr_dispatch_detail::type_list<>, std::remove_cvref_t<Es>...>::invoke(
         func,
         static_cast<std::remove_cvref_t<Es>>(vs)...);
 }
@@ -364,12 +364,12 @@ decltype(auto) _table_invoke(F& func, Es... vs)
 // 
 // supported leading type selectors
 //   - bl::type_tag<T> (bl::type<T>)
-//   - bl::mapped_enum<E> (bl::map_enum(v))
+//   - bl::mapped_enum<E> (bl::enum_type(v))
 // 
 // after the first non-type-selector, all remaining args must be dispatch args
 // ─────────────────────────────────────────────────────────────────────────────
 
-namespace _bl_detail
+namespace constexpr_dispatch_detail
 {
     template<class Fun, class TsList, class... Args>
     struct table_invoke_parse;
@@ -411,7 +411,7 @@ namespace _bl_detail
         {
             return table_invoke_parse<Fun, type_list<Ts...>, bl::mapped_enum<bl::FloatingPointType>, Rest...>::invoke(
                 func,
-                bl::map_enum(fp),
+                bl::enum_type(fp),
                 rest...);
         }
     };
@@ -431,52 +431,77 @@ namespace _bl_detail
     };
 }
 
-template<typename... Ts, typename F, typename... Args>
-decltype(auto) table_invoke(F&& f, Args... args)
+namespace bl
 {
-    using Fun = std::decay_t<F>;
-    Fun& func = const_cast<Fun&>(static_cast<const Fun&>(f));
-    return _bl_detail::table_invoke_parse<Fun, _bl_detail::type_list<Ts...>, Args...>::invoke(func, args...);
+    template<typename... Ts, typename F, typename... Args>
+    decltype(auto) table_invoke(F&& f, Args... args)
+    {
+        using Fun = std::decay_t<F>;
+        Fun& func = const_cast<Fun&>(static_cast<const Fun&>(f));
+        return constexpr_dispatch_detail::table_invoke_parse<Fun, constexpr_dispatch_detail::type_list<Ts...>, Args...>::invoke(func, args...);
+    }
+
+    /// --- dummy functions to make below macros appear visible inside bl::namespace ---
+
+    // create dispatch table for given function + arguments
+    template<typename Fn, typename... Ts>
+    void dispatch_table(Fn&& f, Ts... args) {}
+
+    template<typename Obj, typename Fn, typename... Ts>
+    void dispatch_table_memfn(Obj& obj, Fn&& f, Ts... args) {}
+
+    template<typename Fn, typename... Ts>
+    void dispatch_table_callable(Fn&& f, Ts... args) {}
+
+    template<class F>
+    constexpr std::remove_cvref_t<F> passthrough(F&& f) {
+        return std::forward<F>(f);
+    }
 }
 
+
 // ─────────────────────────────────────────────────────────────────────────────
-// dispatch table helpers
+// macro helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-#define dispatch_table(func, ...)                                  \
-    [&] <typename... Ts>(auto... Cs) -> decltype(auto) {           \
-        return [&]<typename... Us>(std::tuple<Us...>*) {           \
-            if constexpr (sizeof...(Ts) == 0)                      \
-                return func<Us::value...>(__VA_ARGS__);            \
-            else                                                   \
-                return func<Ts..., Us::value...>(__VA_ARGS__);     \
-        }((std::tuple<decltype(Cs)...>*)nullptr);                  \
-    }
+#define dispatch_table(func, ...)                                                     \
+    passthrough([&] <typename... Ts>(auto... Cs) -> decltype(auto) {                  \
+        return [&]<typename... Us>(std::tuple<Us...>*) {                              \
+            if constexpr (sizeof...(Ts) == 0)                                         \
+                return func<Us::value...>(__VA_ARGS__);                               \
+            else                                                                      \
+                return func<Ts..., Us::value...>(__VA_ARGS__);                        \
+        }((std::tuple<decltype(Cs)...>*)nullptr);                                     \
+    })
 
-#define dispatch_table_targ(obj, method, ...)                                      \
-    [&] <typename... Ts>(auto... Cs) -> decltype(auto) {                           \
-        auto&& _obj = (obj);                                                       \
-        return [&]<typename... Us>(std::tuple<Us...>*) {                           \
-            if constexpr (sizeof...(Ts) == 0) {                                    \
-                return std::invoke(&method<Us::value...>, _obj, __VA_ARGS__);      \
-            } else {                                                               \
-                return std::invoke(&method<Ts..., Us::value...>, _obj, __VA_ARGS__);\
-            }                                                                      \
-        }((std::tuple<decltype(Cs)...>*)nullptr);                                  \
-    }
+#define dispatch_table_memfn(obj, method, ...)                                        \
+    passthrough([&] <typename... Ts>(auto... Cs) -> decltype(auto) {                  \
+        auto&& _obj = (obj);                                                          \
+        return [&]<typename... Us>(std::tuple<Us...>*) {                              \
+            if constexpr (sizeof...(Ts) == 0) {                                       \
+                return std::invoke(&method<Us::value...>, _obj, __VA_ARGS__);         \
+            } else {                                                                  \
+                return std::invoke(&method<Ts..., Us::value...>, _obj, __VA_ARGS__);  \
+            }                                                                         \
+        }((std::tuple<decltype(Cs)...>*)nullptr);                                     \
+    })
 
-#define lambda_table(func, ...)                                     \
-    [&] <typename... Ts>(auto... Cs) -> decltype(auto) {            \
-        return [&]<typename... Us>(std::tuple<Us...>*) {            \
-            if constexpr (sizeof...(Ts) == 0)                       \
-                return func.template operator()<Us::value...>(__VA_ARGS__);        \
-            else                                                    \
-                return func.template operator()<Ts..., Us::value...>(__VA_ARGS__); \
-        }((std::tuple<decltype(Cs)...>*)nullptr);                   \
-    }
+#define dispatch_table_callable(func, ...)                                            \
+    passthrough([&] <typename... Ts>(auto... Cs) -> decltype(auto) {                  \
+        return [&]<typename... Us>(std::tuple<Us...>*) {                              \
+            if constexpr (sizeof...(Ts) == 0)                                         \
+                return func.template operator()<Us::value...>(__VA_ARGS__);           \
+            else                                                                      \
+                return func.template operator()<Ts..., Us::value...>(__VA_ARGS__);    \
+        }((std::tuple<decltype(Cs)...>*)nullptr);                                     \
+    })
+
+#define bl_map_enum_to_type(EnumValue, T) \
+    template<> struct enum_type_map<decltype(EnumValue), EnumValue> { using type = T; }
 
 
-namespace dispatch_debug
+//  Debug helpers for dispatch domain sizes
+namespace bl::dispatch_table_info
 {
     template<class T>
     struct mapped_underlying;

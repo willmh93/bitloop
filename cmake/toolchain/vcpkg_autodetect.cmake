@@ -309,13 +309,13 @@ else()
     endif()
 
     execute_process(
-      COMMAND ${_cmd}
-      RESULT_VARIABLE _r
-      OUTPUT_VARIABLE _out
-      ERROR_VARIABLE  _err
-      COMMAND_ECHO STDOUT
+            COMMAND ${_cmd}
+            RESULT_VARIABLE _r
+            OUTPUT_VARIABLE _out
+            ERROR_VARIABLE  _err
+            COMMAND_ECHO STDOUT
     )
-    
+
     if (NOT _r EQUAL 0)
         message(SEND_ERROR "Bitloop discovery LOG: ${_out}")
         message(SEND_ERROR "Bitloop discovery ERROR: ${_err}")

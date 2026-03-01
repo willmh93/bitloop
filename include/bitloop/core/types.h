@@ -978,7 +978,7 @@ struct Segment
 // ----- Ray -----
 
 template<typename T>
-struct Ray : public Vec2<T> // todo: Some methods maybe aren't ideal for inheriting
+struct Ray : public Vec2<T> // todo: Some methods maybe aren't ideal for inheriting (e.g. angleTo)
 {
     f64 angle;
 

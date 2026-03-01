@@ -1300,11 +1300,11 @@ void MainWindow::populateProjectTreeNodeRecursive(ProjectInfoNode& node, int& i,
             project_worker()->setActiveProject(node.project_info->sim_uid);
             project_worker()->startProject();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("[...]"))
-        {
-            project_worker()->setActiveProject(node.project_info->sim_uid);
-        }
+        //ImGui::SameLine();
+        //if (ImGui::Button("[...]"))
+        //{
+        //    project_worker()->setActiveProject(node.project_info->sim_uid);
+        //}
     }
     else
     {
@@ -1596,12 +1596,10 @@ void MainWindow::populateViewport(bool& projectDrawn)
         // returns true if preprocessor texture was needed
         auto preprocessFrame = [&](bool capturing_frame) -> bool
         {
-            if (active_ssaa == 1 && active_sharpen == 0)
+            if (!capturing_frame && active_ssaa == 1 && active_sharpen == 0)
             {
-                // no preprocessing needed, just copy canvas to preprocessed_frame if capturing
-                if (capturing_frame)
-                    canvas.readPixels(preprocessed_frame);
-                
+                // no preprocessing/flipping needed, just copy canvas to preprocessed_frame
+                canvas.readPixels(preprocessed_frame);
                 return false;
             }
 
@@ -1613,7 +1611,6 @@ void MainWindow::populateViewport(bool& projectDrawn)
             params.sharpen = active_sharpen;
             params.flip_y = true;
 
-            // todo: Bypass preprocessing pipeline if ssaa==1 && sharpen==0
             if (capturing_frame)
                 preprocessor.preprocessToFrame(canvas.texture(), params, preprocessed_frame);
             else
